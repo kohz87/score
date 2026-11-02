@@ -6,15 +6,13 @@ import { useArrival } from '../../motion/Arrival.tsx'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from './queries.ts'
 import { newId } from '../../data/ids.ts'
-import { approvalChip, YOUR_CHOICE } from '../../live/resolved.ts'
+import { approvalChip } from '../../live/resolved.ts'
 import { ResolvedChip } from '../../live/ResolvedChip.tsx'
 import { pairingProblem } from '../../bold/bold-errors.ts'
 
 function idempotencyKey() {
   return newId()
 }
-
-export const choiceText = YOUR_CHOICE
 
 // The one line that says how this approval ended up, or null while it is still open.
 export function approvalOutcome(approval: Approval): string | null {

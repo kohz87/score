@@ -22,11 +22,6 @@ export type StatusInput = {
 const CALLING = 'Calling '
 const WRITING = 'Writing the reply…'
 
-/** Trims to `max` characters with a single ellipsis character. */
-export function trimLine(text: string, max = STATUS_MAX): string {
-  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…`
-}
-
 /** "Calling `tool()`…", with the tool name cut (not the code-style marks) when the line would be too long. */
 export function callingLine(tool: string, max = STATUS_MAX): string {
   const name = tool.trim()

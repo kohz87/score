@@ -13,7 +13,6 @@ import {
   parseShow,
   parseUnitState,
   resetUnit,
-  sameIncarnation,
   showUnit,
   stopUnit,
   unitNameFor,
@@ -258,8 +257,6 @@ test('manager incarnation is the user manager pid plus its /proc start time', as
   }
   const a = await managerIncarnation(run, 1000, () => '555')
   expect(a).toEqual({ pid: 900, start: '555' })
-  expect(sameIncarnation(a, await managerIncarnation(run, 1000, () => '555'))).toBe(true)
-  expect(sameIncarnation(a, await managerIncarnation(run, 1000, () => '556'))).toBe(false)
   expect(
     await managerIncarnation(
       async () => ({ code: 0, stdout: 'MainPID=0\n', stderr: '' }),
@@ -268,7 +265,6 @@ test('manager incarnation is the user manager pid plus its /proc start time', as
     ),
   ).toBeNull()
   expect(await managerIncarnation(run, 1000, () => null)).toBeNull()
-  expect(sameIncarnation(null, null)).toBe(false)
 })
 
 test('the capability check reports each failure: manager, cgroup v2, linger, socket path, properties', async () => {

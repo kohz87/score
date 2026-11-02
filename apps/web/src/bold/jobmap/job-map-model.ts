@@ -134,9 +134,6 @@ const MARKS: [AdvisorMark['key'], string][] = [
   ['before_done', 'before done'],
 ]
 
-export const formatTokens = (n: number): string =>
-  n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 

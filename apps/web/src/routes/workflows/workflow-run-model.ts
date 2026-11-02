@@ -5,14 +5,12 @@ import type {
   WaitingFor,
   WorkflowDefinition,
   WorkflowEvent,
-  WorkflowNeedsYou,
   WorkflowRunDetail,
   WorkflowRunSummary,
 } from '@score/contract'
 import { NodeStateSchema } from '@score/contract'
 import type { Effect, GraphEdge, GraphNode, NodeVisual } from '../orchestrations/orch-model.ts'
 import { describeCondition } from './workflow-model.ts'
-import { heldNeedsText } from '../orchestrations/quota-text.ts'
 
 // How a workflow run looks (PLAN 7.1b): the definition's graph with the run's node states, the tokens as edge states and
 // moving dots, and what each event of the run's history shows. Pure; the page reads the server's state and events and
@@ -298,48 +296,6 @@ export function outcomeLines(run: Pick<WorkflowRunSummary, 'graphOutcome' | 'out
   return {
     graph: run.graphOutcome ? graphOutcomeLabel[run.graphOutcome] : null,
     note: run.outcomeNote,
-  }
-}
-
-export function workflowNeedsText(
-  item: WorkflowNeedsYou,
-  nodeLabel: (id: string) => string,
-): string {
-  switch (item.kind) {
-    case 'gate':
-      return item.gateKind === 'node'
-        ? `Decide on ${nodeLabel(item.nodeId)}`
-        : `Approve ${nodeLabel(item.nodeId)}`
-    case 'budget':
-      return item.reason === 'unknown_spend'
-        ? 'Spend is unknown: decide whether to continue'
-        : item.reason === 'deadline'
-          ? 'The deadline passed'
-          : 'The budget is used up'
-    case 'paused':
-      return 'The run is paused'
-    case 'unknown':
-      return 'Some work isn’t confirmed as ended'
-    case 'cancel_fence':
-      return `Stopped ${item.stepId} may still be running`
-    case 'fence':
-      return 'Starting work is blocked until you review a list'
-    case 'retry':
-      return `You stopped waiting for ${nodeLabel(item.nodeId)}: retry or stop`
-    case 'remap':
-      return `${item.agentId} was replaced: decide whether this run uses the new one`
-    case 'refusal_limit':
-      return `Hermes refused ${nodeLabel(item.nodeId)} ${item.refusals} times`
-    case 'coding_agent_changed':
-      return `${item.agentId}’s settings changed: decide whether ${nodeLabel(item.nodeId)} uses the new ones`
-    case 'coding_limit':
-      return `${item.used} of ${item.limit} coding steps are used: raise the limit to go on`
-    case 'quota_low':
-      return heldNeedsText(nodeLabel(item.nodeId), item.agentId)
-    case 'coding_held_back':
-      return `${nodeLabel(item.nodeId)} was held back 20 times: try again or stop`
-    case 'node_inputs_withdrawn':
-      return `${nodeLabel(item.nodeId)} lost something it was going to read: re-run the step before it, then retry`
   }
 }
 

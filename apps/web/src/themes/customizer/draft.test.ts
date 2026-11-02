@@ -9,19 +9,15 @@ import {
   edit,
   emptyManifest,
   freshId,
-  hideMenuRow,
   isDirty,
   manifestProblems,
   markSaved,
   menuRows,
-  moveMenuRow,
   redo,
   referencedAssets,
   removeFace,
-  renameMenuRow,
   setBackgroundDim,
   setBackgroundImage,
-  setChat,
   setColor,
   setCss,
   setDetails,
@@ -42,8 +38,6 @@ describe('draft edits', () => {
     d = setShape(d, 'radius', 12)
     d = setShape(d, 'radius', undefined)
     expect(d.manifest.shape).toBeUndefined()
-    d = setChat(d, 'messages', 'bubbles')
-    expect(d.manifest.layout).toEqual({ chat: { messages: 'bubbles' } })
   })
 
   it('does not change the draft it was given', () => {
@@ -56,7 +50,6 @@ describe('draft edits', () => {
   it('keeps a valid manifest', () => {
     let d = setColor(blank(), 'light', 'ink', '#101010')
     d = setShape(d, 'radius', 'round')
-    d = moveMenuRow(d, 0, 2)
     expect(manifestProblems(d.manifest)).toEqual([])
     expect(manifestProblems({ ...d.manifest, name: '' })).toEqual([
       'Give the theme a name (1–60 characters).',
@@ -74,27 +67,6 @@ describe('menu', () => {
       '/settings',
     ])
     expect(blank().manifest.layout).toBeUndefined()
-  })
-
-  it('moves, renames and hides entries; Settings stays', () => {
-    let d = moveMenuRow(blank(), 1, 0)
-    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/team' })
-    d = renameMenuRow(d, '/team', 'Talk')
-    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/team', label: 'Talk' })
-    d = hideMenuRow(d, '/reports', true)
-    expect(d.manifest.layout?.menu?.some((m) => m.to === '/reports')).toBe(false)
-    expect(menuRows(d.manifest).at(-1)).toEqual({ to: '/reports', hidden: true })
-    expect(hideMenuRow(d, '/settings', true)).toBe(d)
-    d = hideMenuRow(d, '/reports', false)
-    expect(menuRows(d.manifest).some((r) => r.hidden)).toBe(false)
-  })
-
-  it('stores nothing when the menu is Score’s own again', () => {
-    let d = moveMenuRow(blank(), 0, 1)
-    d = moveMenuRow(d, 1, 0)
-    expect(d.manifest.layout).toBeUndefined()
-    d = renameMenuRow(renameMenuRow(blank(), '/chat', 'Home'), '/chat', 'Chat')
-    expect(d.manifest.layout).toBeUndefined()
   })
 })
 

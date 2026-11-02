@@ -12,8 +12,6 @@ import {
 // validates the graph rules: the server does that (`POST /api/workflows/validate`), and the editor shows its answer.
 
 export type Draft = WorkflowDefinition
-export type AgentNode = Extract<WorkflowNode, { kind: 'agent' }>
-export type GateNode = Extract<WorkflowNode, { kind: 'gate' }>
 export type BranchNode = Extract<WorkflowNode, { kind: 'branch' }>
 
 export const KIND_LABEL: Record<WorkflowNodeKind, string> = {
@@ -110,24 +108,6 @@ export function nextRuleId(node: BranchNode): string {
   for (let n = 1; ; n++) {
     const id = `rule${n}`
     if (!taken.has(id) && id !== 'default') return id
-  }
-}
-
-/** A readable id from a title the person typed ("Write the draft" -> `write-the-draft`), made unique. */
-export function idFromLabel(draft: Draft, label: string, own?: string): string {
-  const base =
-    label
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/^[^a-z]+/, '')
-      .slice(0, 28) || 'node'
-  const taken = new Set(draft.nodes.filter((n) => n.id !== own).map((n) => n.id))
-  if (!taken.has(base)) return base
-  for (let n = 2; ; n++) {
-    const id = `${base}-${n}`
-    if (!taken.has(id)) return id
   }
 }
 

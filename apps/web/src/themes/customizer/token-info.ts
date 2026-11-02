@@ -87,10 +87,6 @@ const legacyGroups: TokenGroup[] = [
   },
 ]
 
-export const editableTokens: ThemeColorToken[] = tokenGroups.flatMap((group) =>
-  group.tokens.map((item) => item.token),
-)
-
 export function tokenLabel(token: ThemeColorToken): string {
   for (const group of [...tokenGroups, ...legacyGroups]) {
     const found = group.tokens.find((item) => item.token === token)

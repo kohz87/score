@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.15.1] — 2026-11-02
+
+### Removed
+- **Obsolete code** (about 2,000 lines): a session-reconciliation module that was never wired in, features only their own
+  tests still used (the old Watch side panels, wiki-link conversion, the customizer's menu-row editing, the to-do list
+  component, old search, attempt and liveliness helpers) with their tests and styles, and some sixty functions, constants
+  and types nothing referenced. No behaviour changes.
+
 ## [3.15.0] — 2026-11-02
 
 ### Added

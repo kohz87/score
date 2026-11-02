@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Approval } from '@score/contract'
-import { approvalChip, chipText, clock, gateChip } from './resolved.ts'
+import { approvalChip, gateChip } from './resolved.ts'
 
 const at = '2026-10-11T14:02:00.000Z'
 const base = {
@@ -14,7 +14,6 @@ describe('approvalChip', () => {
   it('says what you chose, with the time', () => {
     const chip = approvalChip(base)!
     expect(chip).toEqual({ tone: 'ok', text: 'Approved by you', at })
-    expect(chipText(chip)).toBe(`Approved by you · ${clock(at)}`)
     expect(approvalChip(make({ decision: { choice: 'deny', by: 'you', at } }))).toMatchObject({
       tone: 'no',
       text: 'Rejected',

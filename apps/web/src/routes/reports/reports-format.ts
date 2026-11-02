@@ -11,7 +11,3 @@ export function formatDuration(sec: number | null): string {
 export function formatPercent(rate: number | null, empty = NO_VALUE): string {
   return rate === null ? empty : `${Math.round(rate * 100)}%`
 }
-
-export function formatUsd(usd: number | null): string {
-  return usd === null ? NO_VALUE : `$${usd.toFixed(2)}`
-}

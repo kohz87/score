@@ -243,8 +243,6 @@ export function useCodingAgentDraft(
   }
 }
 
-export type CodingAgentDraft = ReturnType<typeof useCodingAgentDraft>
-
 export function AddCodingAgentForm({
   onAdded,
 }: {

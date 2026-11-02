@@ -47,12 +47,3 @@ export function useAgentDetail(agentId: string) {
     retry: false,
   })
 }
-
-export const statusLabels = {
-  idle: 'Idle',
-  working: 'Working',
-  waiting: 'Needs you',
-  paused: 'Paused',
-  offline: 'Offline',
-  'up-next': 'Up next',
-} as const

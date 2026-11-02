@@ -73,19 +73,6 @@ export function stepVisual(
   }
 }
 
-/** Steps that are over, one way or another. */
-export const isSettledVisual = (visual: NodeVisual): boolean =>
-  [
-    'succeeded',
-    'failed',
-    'cancelled',
-    'blocked',
-    'rejected',
-    'not_started',
-    'abandoned',
-    'skipped',
-  ].includes(visual)
-
 // ------------------------------------------------------------------------------------------------------ the graph
 
 export interface GraphNode {
@@ -228,10 +215,6 @@ export function eventEffect(event: OrchEvent, known: ReadonlySet<string>): Effec
       return null
   }
 }
-
-/** Events in `next` whose ids were not in `seen`, in order. */
-export const freshEvents = (seen: ReadonlySet<string>, next: readonly OrchEvent[]): OrchEvent[] =>
-  next.filter((event) => !seen.has(event.id))
 
 /**
  * Effects wait their turn: one starts per `gapMs` at the earliest, so a burst of events stays readable. Bounded: when

@@ -1,10 +1,5 @@
 import type { KnowledgeLink, KnowledgeNoteSummary } from '@score/contract'
 
-const WIKILINK = /\[\[([^\]\n|]+?)(?:\|([^\]\n]+?))?\]\]/g
-
-/** The `href` prefix the preview uses for wikilinks; the link component turns it into a router link or a "missing" chip. */
-export const WIKI_HREF = '#wiki:'
-
 /** Obsidian-style resolution for the preview: exact path, then a unique basename, case-insensitive. The server resolves
  *  the note's own links (`links`); this covers links typed since the last save. */
 export function resolveTarget(
@@ -24,22 +19,6 @@ export function resolveTarget(
     (note) => (note.path.split('/').pop() ?? '').replace(/\.md$/i, '').toLowerCase() === name,
   )
   return byName.length === 1 ? byName[0]!.path : null
-}
-
-/** Rewrites `[[Target|alias]]` into Markdown links the preview renders itself. Skips fenced code blocks. */
-export function wikilinksToMarkdown(body: string): string {
-  let fenced = false
-  return body
-    .split('\n')
-    .map((line) => {
-      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
-      if (fenced) return line
-      return line.replace(WIKILINK, (_all, target: string, alias?: string) => {
-        const label = (alias ?? target).replace(/[[\]]/g, '')
-        return `[${label}](${WIKI_HREF}${encodeURIComponent(target.trim())})`
-      })
-    })
-    .join('\n')
 }
 
 /** Snippets from search mark matches with `[[ ]]`. */

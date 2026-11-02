@@ -243,22 +243,6 @@ export const approvalsQuery = defineStreamQuery<Approval[]>({
   },
 })
 
-// Files in play / Learned here are read models the server computes on request, so stream events
-// only trigger a refetch (see RoomPanels); the reducer never changes them.
-export function roomPanelsQuery(roomId: string) {
-  return defineStreamQuery({
-    key: ['chat', 'room-panels', roomId],
-    async fetch(signal) {
-      const { asOfSeq, filesInPlay, learned } = RoomSnapshotSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}`, { signal }),
-      )
-      return { asOfSeq, data: { filesInPlay, learned } }
-    },
-    types: [],
-    reduce: (data) => data,
-  })
-}
-
 // Previous versions of a room (PLAN 5.33): the stream's `room.version.created` upserts one (also when an edit's
 // correction is linked), the hidden messages themselves are read on demand.
 export function versionsQuery(roomId: string) {

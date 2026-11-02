@@ -7,7 +7,6 @@ import { migrate, openDatabase, type ScoreDb } from '../src/db/index.ts'
 import {
   defaultJobId,
   ensureJobSession,
-  roomSession,
   sessionFor,
   sessionOwner,
 } from '../src/domain/job-sessions.ts'
@@ -124,8 +123,16 @@ test('a migrated room keeps its exact session ids, continued outside sessions in
     )
     .run()
   upgrade(migrations)
-  expect(roomSession(db.sqlite, 'r1', 'builder')).toBe('score-r1-builder')
-  expect(roomSession(db.sqlite, 'r2', 'lead')).toBe('tg-123')
+  expect(
+    sessionFor(db.sqlite, {
+      roomId: 'r1',
+      jobId: defaultJobId(db.sqlite, 'r1'),
+      agentId: 'builder',
+    }),
+  ).toBe('score-r1-builder')
+  expect(
+    sessionFor(db.sqlite, { roomId: 'r2', jobId: defaultJobId(db.sqlite, 'r2'), agentId: 'lead' }),
+  ).toBe('tg-123')
   // A turn row without a job falls back to its room's session.
   expect(sessionFor(db.sqlite, { roomId: 'r1', jobId: null, agentId: 'lead' })).toBe(
     'score-r1-lead',

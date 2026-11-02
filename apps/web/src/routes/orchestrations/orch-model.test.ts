@@ -5,7 +5,6 @@ import {
   EffectQueue,
   eventEffect,
   filterLog,
-  freshEvents,
   LEAD_NODE,
   replayAt,
   replayDelayMs,
@@ -116,12 +115,6 @@ describe('events to effects', () => {
     ).toBeNull()
     expect(eventEffect(ev({ kind: 'run_started' }), known)).toBeNull()
     expect(eventEffect(ev({ kind: 'lead_done' }), known)).toBeNull()
-  })
-
-  test('only events not seen before are new', () => {
-    const a = ev({ kind: 'run_started' })
-    const b = ev({ kind: 'lead_wake' })
-    expect(freshEvents(new Set([a.id]), [a, b])).toEqual([b])
   })
 })
 

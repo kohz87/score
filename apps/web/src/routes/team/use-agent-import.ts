@@ -129,5 +129,3 @@ export function useAgentImport(
     blocked,
   }
 }
-
-export type AgentImportDraft = ReturnType<typeof useAgentImport>

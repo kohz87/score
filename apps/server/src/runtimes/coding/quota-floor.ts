@@ -12,9 +12,6 @@ export interface BelowFloor {
   resetsAt: string
 }
 
-export const DEFAULT_QUOTA_FLOOR = 10
-export const MAX_QUOTA_FLOOR = 50
-
 /** Antigravity's `/usage` group names (1.4.0). */
 const GEMINI_GROUP = 'Gemini Models'
 const ARGON_GROUP = 'Gemini 4 Argon'
