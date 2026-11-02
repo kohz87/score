@@ -14,7 +14,6 @@ import {
   CodingRuntimeSchema,
   CodingRuntimesResponseSchema,
   CodingQuotaResponseSchema,
-  CodingVersionConfirmSchema,
   type CodingPermission,
   advisorChoicesFor,
 } from '@score/contract'
@@ -243,21 +242,6 @@ export function registerCodingAgentRoutes(
           : {}),
       })
     })
-    await publish(agentId)
-    return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
-  })
-
-  app.post('/api/coding-agents/:agentId/confirm-version', guard, async (request) => {
-    const { agentId } = Params.parse(request.params)
-    const body = CodingVersionConfirmSchema.parse(request.body)
-    const agent = getCodingAgent(db.sqlite, agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
-    coding.locator.invalidate()
-    const cli = await coding.locator.detect(driverFor(agent.runtime))
-    // Only the version Score sees right now can be confirmed: a stale page can't bless a CLI that has since changed.
-    if (cli.version === null || cli.version !== body.version)
-      throw new HttpError(409, 'conflict', 'The installed version isn’t the one you confirmed.')
-    db.tx((sqlite) => updateCodingAgent(sqlite, agentId, { confirmedVersion: body.version }))
     await publish(agentId)
     return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
   })

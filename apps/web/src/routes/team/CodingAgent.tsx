@@ -274,7 +274,7 @@ export function CodingOverview({
         onChanged={changed}
         facts={<CodingFacts coding={coding} />}
       />
-      <CodingAlerts coding={coding} onChanged={changed} />
+      <CodingAlerts coding={coding} />
       <div className="team-overview-grid">
         <section className="team-card" aria-labelledby="coding-limits" data-protected="block">
           <h2 id="coding-limits">Limits left</h2>
@@ -310,7 +310,7 @@ const cliStates = {
   ready: 'Ready',
   not_installed: 'Not installed',
   not_supported: 'Not supported yet',
-  untested_version: 'Untested version',
+  untested_version: 'Newer than tested',
 } as const
 
 /** The right-hand column of the Personality card: what runs this agent and where. */
@@ -322,7 +322,9 @@ function CodingFacts({ coding }: { coding: CodingAgent }) {
         <dd>
           {runtimeLabel(coding.runtime) ?? coding.runtime} {coding.cli.version ?? ''} ·{' '}
           {cliStates[coding.cli.state]}
-          {coding.cli.state === 'untested_version' && coding.cli.confirmed && ' (you confirmed it)'}
+          {coding.cli.state === 'untested_version' &&
+            coding.cli.problem === null &&
+            ' (newer than tested; Score checked it)'}
           <CodingBackend />
         </dd>
       </div>
@@ -340,19 +342,11 @@ function CodingFacts({ coding }: { coding: CodingAgent }) {
   )
 }
 
-/** Things that stop the agent working: held programs and an untested CLI version. Shown only when they apply. */
-function CodingAlerts({ coding, onChanged }: { coding: CodingAgent; onChanged: () => void }) {
-  const confirm = useMutation({
-    mutationFn: async () =>
-      apiFetch(`coding-agents/${encodeURIComponent(coding.id)}/confirm-version`, {
-        method: 'POST',
-        body: JSON.stringify({ version: coding.cli.version }),
-      }),
-    onSuccess: onChanged,
-  })
+/** Things that stop the agent working: held programs and a CLI version that failed Score's check. Shown only when they apply. */
+function CodingAlerts({ coding }: { coding: CodingAgent }) {
   const held = coding.heldGroups.length > 0
-  const untested = coding.cli.state === 'untested_version' && !coding.cli.confirmed
-  if (!held && !untested) return null
+  const broken = coding.cli.problem !== null
+  if (!held && !broken) return null
   return (
     <section className="team-card" aria-label="Needs attention" data-protected="block">
       {held && (
@@ -364,21 +358,12 @@ function CodingAlerts({ coding, onChanged }: { coding: CodingAgent; onChanged: (
           <ReleaseHeld agentId={coding.id} />
         </div>
       )}
-      {untested && (
+      {broken && (
         <div role="alert">
           <p className="team-muted-strong">
-            Score was tested with {coding.cli.testedVersions.join(', ')}. The installed{' '}
-            {coding.cli.version} may change its output; it runs only after you confirm it.
+            {runtimeLabel(coding.runtime) ?? coding.runtime} {coding.cli.version} can’t run:{' '}
+            {coding.cli.problem} Score was tested with {coding.cli.testedVersions.join(', ')}.
           </p>
-          <button
-            type="button"
-            className="team-pill-button"
-            disabled={confirm.isPending}
-            onClick={() => confirm.mutate()}
-          >
-            Run with {coding.cli.version} anyway
-          </button>
-          {confirm.error && <p role="alert">{confirm.error.message}</p>}
         </div>
       )}
     </section>

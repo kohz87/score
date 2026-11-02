@@ -103,7 +103,7 @@ const codingAgent = {
   style: coder.style,
   quota: 'Uses your Claude plan quota, shared with your other Claude Code work.',
   quotaFloorPercent: 10,
-  cli: { state: 'ready', version: '2.1.302', testedVersions: ['2.1.302'], confirmed: false },
+  cli: { state: 'ready', version: '2.1.302', testedVersions: ['2.1.302'], problem: null },
   heldGroups: [],
   createdAt: '2026-10-16T00:00:00.000Z',
 }

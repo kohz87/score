@@ -260,7 +260,7 @@ test('Add agent lists the CLIs and creates a coding agent that shows up as a tea
   expect(agent).toMatchObject({
     id: 'coder',
     permission: 'workspace-write',
-    cli: { state: 'ready', version: '2.1.295', confirmed: false },
+    cli: { state: 'ready', version: '2.1.295', problem: null },
   })
   const team = (await request('GET', '/api/agents')).json().items as {
     id: string
@@ -788,32 +788,46 @@ test('FW #5: an explicit Claude success followed by a rejected error record is n
   expect(runs()[0]!.status).toBe('failed')
 })
 
-test('an untested CLI version runs only after the person confirms that version', async () => {
+// 3.15.3 (decision 157): no confirmation step; Score's help check is what stops a broken version.
+test('a newer CLI version runs without asking; one whose help changed what Score relies on is refused with why', async () => {
   await coding.close()
   await app.close()
+  const changed = join(home, 'changed-help.txt')
+  writeFileSync(
+    changed,
+    readFileSync(
+      fileURLToPath(new URL('../fixtures/coding/help/claude-code.txt', import.meta.url)),
+      'utf8',
+    ).replace('ignoring all other MCP configurations', 'merged with your other MCP configurations'),
+  )
+  setEnv('SCORE_CODING_FAKE_HELP', changed)
   await boot({ version: '9.9.9' })
   const agent = await addAgent()
-  expect(agent.cli).toMatchObject({ state: 'untested_version', version: '9.9.9', confirmed: false })
+  expect(agent.cli).toMatchObject({ state: 'untested_version', version: '9.9.9' })
+  expect(agent.cli.problem).toContain('no longer describes --strict-mcp-config')
   await makeRoom()
   await say('@coder go')
-  await vi.waitFor(() => expect(replies()[0]?.parts).toBeDefined(), { timeout: 10_000 })
-  await vi.waitFor(
-    () => expect(JSON.stringify(replies()[0]!.parts)).toContain('untested version'),
-    { timeout: 10_000 },
-  )
-  expect(runs()).toHaveLength(0)
-  // The wrong version can't be confirmed.
-  expect(
-    (await request('POST', '/api/coding-agents/coder/confirm-version', { version: '1.0.0' }))
-      .statusCode,
-  ).toBe(409)
-  const confirmed = await request('POST', '/api/coding-agents/coder/confirm-version', {
-    version: '9.9.9',
+  await vi.waitFor(() => expect(JSON.stringify(replies()[0]?.parts)).toContain("can't run"), {
+    timeout: 10_000,
   })
-  expect(confirmed.json().cli.confirmed).toBe(true)
+  expect(runs()).toHaveLength(0)
+  expect(db.sqlite.prepare('SELECT version FROM checked_cli_versions').all()).toEqual([])
+  // The confirmation route is gone.
+  expect(
+    (await request('POST', '/api/coding-agents/coder/confirm-version', { version: '9.9.9' }))
+      .statusCode,
+  ).toBe(404)
+  // A version whose help reads as Score relies on runs straight away, and is remembered.
+  setEnv('SCORE_CODING_FAKE_HELP', undefined)
+  setEnv('SCORE_CODING_FAKE_VERSION', '9.9.10')
   await say('@coder go again')
   await finished()
   expect(runs()[0]!.status).toBe('completed')
+  expect(db.sqlite.prepare('SELECT version FROM checked_cli_versions').all()).toEqual([
+    { version: '9.9.10' },
+  ])
+  const view = (await request('GET', '/api/coding-agents')).json().items[0]
+  expect(view.cli).toMatchObject({ state: 'untested_version', version: '9.9.10', problem: null })
 })
 
 test('the intent is durable before anything spawns', async () => {
@@ -889,7 +903,7 @@ test('removing an agent hides it; a running turn must be stopped first', async (
   expect(report.byAgent.some((row: { agentId: string }) => row.agentId === 'coder')).toBe(false)
 })
 
-test('only the exact tested version runs unasked, and a queued turn is checked again right before it spawns (review: high 4)', async () => {
+test('a queued turn is checked again right before it spawns: a CLI replaced meanwhile by a broken version fails it (review: high 4)', async () => {
   await coding.close()
   await app.close()
   await boot({ version: '2.1.1' })
@@ -908,13 +922,14 @@ test('only the exact tested version runs unasked, and a queued turn is checked a
   await vi.waitFor(() => expect(runs()).toHaveLength(2), { timeout: 10_000 })
   expect(runs()[1]!.status).toBe('queued')
   setEnv('SCORE_CODING_FAKE_VERSION', '2.1.297')
+  setEnv('SCORE_CODING_FAKE_HELP', join(home, 'missing-help.txt'))
   const first = db.sqlite
     .prepare("SELECT message_id FROM message_runs WHERE room_id = ? AND agent_id = 'coder'")
     .get(firstRoom) as { message_id: string }
   await request('POST', `/api/rooms/${firstRoom}/messages/${first.message_id}/stop`)
   await finished(2)
   expect(runs()[1]).toMatchObject({ status: 'failed' })
-  expect(runs()[1]!.error).toMatch(/untested version/)
+  expect(runs()[1]!.error).toMatch(/Claude Code 2.1.297 can't run: Score couldn’t read/)
   // Only the first turn was ever spawned.
   expect(calls().filter((call) => call.prompt.includes('second'))).toHaveLength(0)
 }, 30_000)
@@ -1270,7 +1285,7 @@ test('antigravity: refused actions show as a card; SUCCESS without a response is
   expect(calls()[0]!.args).toEqual(expect.arrayContaining(['--mode', 'plan', '--sandbox']))
 })
 
-test('antigravity: the version is read before every turn; a self-updated CLI pauses the agent until confirmed', async () => {
+test('antigravity: the version is read before every turn; a self-updated CLI keeps working (3.15.3)', async () => {
   setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only')
   await agy()
   await makeRoom()
@@ -1278,18 +1293,9 @@ test('antigravity: the version is read before every turn; a self-updated CLI pau
   await finished()
   setEnv('SCORE_CODING_FAKE_VERSION', '1.9.9')
   await say('@agy1 two')
-  await vi.waitFor(() => expect(JSON.stringify(replies())).toMatch(/untested version/), {
-    timeout: 10_000,
-  })
-  expect(calls().length).toBe(1)
-  const view = (await request('GET', '/api/coding-agents')).json().items[0]
-  expect(view.cli).toMatchObject({ state: 'untested_version', version: '1.9.9', confirmed: false })
-  const confirmed = await request('POST', '/api/coding-agents/agy1/confirm-version', {
-    version: '1.9.9',
-  })
-  expect(confirmed.statusCode, confirmed.body).toBe(200)
-  await say('@agy1 three')
   await vi.waitFor(() => expect(calls().length).toBe(2), { timeout: 10_000 })
+  const view = (await request('GET', '/api/coding-agents')).json().items[0]
+  expect(view.cli).toMatchObject({ state: 'untested_version', version: '1.9.9', problem: null })
 })
 
 test('antigravity: Stop ends the process group and the reply says it was stopped', async () => {
