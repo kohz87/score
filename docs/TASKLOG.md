@@ -1926,3 +1926,24 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Gate: e2e 853 passed, 1 failed (tablet flake, 13/13 on rerun); check failed on missing contract fixtures for the three new
   schemas (added), then green (contract 1568, web 3105, server 4953).
 - **v3.14.5 deployed live** (~03:03 UTC, idle guard passed): backup score-pre-3.14.5-20261029.db, health ok.
+
+## Hermes upgrade to main 557254fa + 3.14.6 (2026-11-02)
+- Owner: "update hermes agent and score accordingly"; approved the plan (backup, `hermes update --channel main --yes`, check,
+  smoke). Stable had nothing newer (the install was already ahead of v0.22.5); main was 2,158 commits ahead. Disk was 92%
+  full: Score's 84 older pre-deploy backups compressed with zstd (lossless, verified; newest 5 kept as .db) → 83%.
+  Backup: gateway stopped 18 s, `~/hermes-backup-pre-upgrade-20261102.tar.zst` (1.4 GB, 0600, verified). Update →
+  v0.22.5+3257 (557254fa): skills synced to astra, gem38, sol61, terra, voter; config unchanged; the updater restarted the
+  gateway; Score logged 0 warnings and every bridge producer reconnected.
+- Score's check: not compatible on the session schema only. Compared with the backup (read-only): one new table
+  `hosted_room_policy_capacity` in the default and profile state.db; kanban unchanged; hooks (14), approval functions,
+  capabilities (21), patterns (105) unchanged. Gateway diff: /p/<profile>/ prefixes, turn executors, approval-settle timeout
+  notice; no change to what Score parses. Live smoke: `default` failed with the provider's 404 (the StepFun free model has
+  ended; not the upgrade, owner told); gem38 (owner's choice) answered PONG with streaming and a tool part, 0 warnings.
+  The test profiles scoretesta/scoretestb no longer exist.
+- 3.14.6: tested-fingerprints entry (e18400b040828c0a), config index regenerated (934 → 943 keys, 9 added, none removed).
+  Sonnet review clean (commit message count corrected). Gate: e2e 846 passed, 3 failed (Results retry, tablet, orchestrations
+  diagram; 31/31 on rerun; the release changes only two data files); check green (contract 1568, web 3105, server 4953).
+- **v3.14.6 deployed live** (~02:47 UTC, idle guard passed): backup score-pre-3.14.6-20261102.db, health ok;
+  compatibility tested, nothing disabled: approvals back on.
+- Mock-up for updating Hermes from Settings (owner asked; agent picker for the test, per the owner):
+  https://claude.ai/artifact/N4x7UVa9EEDwk2SeDsVNyb — waiting for the owner's review.
