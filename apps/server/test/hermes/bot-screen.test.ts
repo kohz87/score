@@ -408,7 +408,8 @@ test('input past the idle window or the hard limit is refused, even before the s
     expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
     bot.setControl('builder', control({ expiresAt: Date.now() - 1 }))
     expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
-    expect(inputTypes(fake)).toEqual([])
+    // Refused before the screen is even opened: not a byte was written.
+    expect(Buffer.concat(fake.received).length).toBe(0)
   } finally {
     bot.close()
   }
