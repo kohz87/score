@@ -128,14 +128,20 @@
 [data-ui='bold'] .check input {
   width: 20px;
   height: 20px;
+  /* The browser's default checkbox margin pushed the box below its label (owner, 3.14.7). */
+  margin: 0;
   accent-color: var(--ink);
   flex: none;
 }
 
+/* A small check keeps its box beside the first line of a long label; the padding centres a one-line label in the 44px
+   row instead of leaving the space under it (owner, 3.14.7). */
 [data-ui='bold'] .check.small {
   align-items: flex-start;
   gap: calc(10px * var(--bold-d, 1));
-  line-height: 1.4;
+  line-height: 20px;
+  padding-block: 12px;
+  min-height: 0;
 }
 
 [data-ui='bold'] .grid3 {
