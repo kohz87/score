@@ -1,7 +1,7 @@
 # Bold redesign: design sources
 
 Mockups for the UI rework proposed in [`docs/proposals/ui-rework-bold.md`](../../proposals/ui-rework-bold.md).
-The live, clickable canvas (owner's account, private): https://claude.ai/artifact/7zF2GJcnzUcArXiWeaRknh
+The live canvas this was copied from was removed on 2026-11-02 after the new shell shipped; the copy here is the source.
 
 **`prototype.html`** is the whole app as one clickable page (open it in a browser, no build): every screen above plus
 the owner decisions of 2026-10-24 (recipe editor, agent page with "Runs on", message actions, room dropdown, job menu,
