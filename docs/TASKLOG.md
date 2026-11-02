@@ -2062,3 +2062,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   in $JOB/tmp/plugin-pre-3.17.0/); `SCORE_BRIDGE_INSTALL_REF` → v3.17.0 commit (old env saved beside them);
   hermes-gateway restarted while idle, Score restarted; `hermes plugins list` shows score-bridge enabled on default and
   gem38. No Bot Desktop on this host yet (Xvnc/Xfce not installed): owner given Hermes' own apt command (54 packages).
+
+## 3.18.0 — Screens in the top bar (2026-11-02)
+- Owner: "can we put screen navigation on the top? so it's easier to access bot screen" → mock-up (canvas boards
+  "Screens in the top bar", docs/design/bold/mockups/15-screens*.dc.html) → "yes, build it". Sonnet coder, web only.
+- `/b/screens`: a card per agent (live desktop frame, `human` hidden, last-frame thumbnail or surface drawing), Open
+  screen, Take over… (`?take=1` opens the screen page's confirm card); phone rows; Screens highlighted on the single
+  screen pages too (lead accepted).
+- Sonnet review: P2 a held desktop could show the overview thumbnail while its status loaded (now no picture until the
+  state is known); P2 `?take=1` on a cached status (harmless: the server re-checks and answers busy). Lead screenshot
+  check: the phone top bar wrapped the avatar (links squeezed into one row) and phone rows repeated "Idle" (fixed).
+  Fix-round review: one optional wording note, left.
+- Gate: check green (contract 1590, web 3153, server 4958); e2e 864 passed, 1 failed (bold-tablet flake: failed once
+  more alone, then 13/13). Phone baselines regenerated twice (top-bar changes), 20 + 34, all checked as top-bar only.
+- **v3.18.0 deployed live** (~11:09 UTC), backup score-pre-3.18.0-20261102.db, health ok, `/b/screens` serves.
