@@ -105,18 +105,24 @@ export function useControlSession(
       end()
       handBackNow(agentId, takeoverId)
     }
+    // The page hiding or closing hands control back; show that here too instead of "in control" with input discarded.
+    const leaveVisibly = () => {
+      if (handed.current) return
+      leave()
+      lost.current()
+    }
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') leave()
+      if (document.visibilityState === 'hidden') leaveVisibly()
     }
 
     const sender = setInterval(() => void flush(), SEND_EVERY_MS)
     const heart = setInterval(() => void beat(), HEARTBEAT_EVERY_MS)
-    window.addEventListener('pagehide', leave)
+    window.addEventListener('pagehide', leaveVisibly)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       clearInterval(sender)
       clearInterval(heart)
-      window.removeEventListener('pagehide', leave)
+      window.removeEventListener('pagehide', leaveVisibly)
       document.removeEventListener('visibilitychange', onVisibility)
       leave()
     }
@@ -130,8 +136,13 @@ export function useControlSession(
     if (!takeoverId || handed.current) return
     handed.current = true
     stopped.current = true
-    batcher.current.clear()
     try {
+      // Whatever is queued (the key releases before this) goes out first.
+      for (let batch = batcher.current.take(); batch.length > 0; batch = batcher.current.take())
+        await apiFetch(path(agentId, 'input'), {
+          method: 'POST',
+          body: JSON.stringify({ takeoverId, events: batch }),
+        }).catch(() => undefined)
       await apiFetch(path(agentId, 'hand-back'), {
         method: 'POST',
         body: JSON.stringify({ takeoverId }),

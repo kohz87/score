@@ -122,8 +122,13 @@ export function ControlBar({
         onChange={() => undefined}
         onInput={(event) => {
           const native = event.nativeEvent as InputEvent
+          // Composition (IME, swipe keyboards) is sent once, when it ends, not as every intermediate guess.
+          if (native.isComposing || native.inputType === 'insertCompositionText') return
           if (native.inputType === 'deleteContentBackward') push(...press(0xff08))
           else if (native.data) push(...textToEvents(native.data))
+        }}
+        onCompositionEnd={(event) => {
+          if (event.data) push(...textToEvents(event.data))
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') push(...press(0xff0d))

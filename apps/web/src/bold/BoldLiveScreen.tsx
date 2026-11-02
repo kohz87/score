@@ -25,6 +25,20 @@ function writeHidden(hidden: boolean) {
   }
 }
 
+/** True at phone width, where Hand back moves under the screen. jsdom has no matchMedia: desktop there. */
+function usePhone(): boolean {
+  const query = '(max-width: 600px)'
+  const [phone, setPhone] = useState(() => window.matchMedia?.(query).matches ?? false)
+  useEffect(() => {
+    const list = window.matchMedia?.(query)
+    if (!list) return
+    const onChange = () => setPhone(list.matches)
+    list.addEventListener('change', onChange)
+    return () => list.removeEventListener('change', onChange)
+  }, [])
+  return phone
+}
+
 function usePageVisible(): boolean {
   const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden')
   useEffect(() => {
@@ -49,6 +63,8 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
   const visible = usePageVisible()
   const queryClient = useQueryClient()
   const boxRef = useRef<HTMLDivElement>(null)
+  const releaseRef = useRef<(() => void) | null>(null)
+  const phone = usePhone()
   const active = !hidden && visible
   const query = useQuery({
     ...botScreenQuery(agentId),
@@ -92,6 +108,7 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
   const handBack = async () => {
     setEnded({ how: 'handed', at: Date.now() })
     hadControl.current = false
+    releaseRef.current?.()
     await session.handBack()
     await refetch()
   }
@@ -125,6 +142,7 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
                 width={width}
                 height={height}
                 push={session.push}
+                releaseRef={releaseRef}
               />
             </div>
           ) : (
@@ -147,6 +165,16 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
               lastInputAt={session.lastInputAt}
               push={session.push}
             />
+          )}
+          {control && phone && (
+            <button
+              type="button"
+              className="bold-to-handback"
+              data-protected="inline-flex"
+              onClick={() => void handBack()}
+            >
+              Hand back to {agentName}
+            </button>
           )}
           {!control && ended?.how === 'handed' && (
             <p className="bold-to-status" role="status" data-protected="block">
@@ -213,7 +241,7 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
             Take over…
           </button>
         )}
-        {control && (
+        {control && !phone && (
           <button
             type="button"
             className="bold-to-handback"

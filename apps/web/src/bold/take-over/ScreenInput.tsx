@@ -1,12 +1,20 @@
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
 import type { BotInputEvent } from '@score/contract'
-import { keyToKeysym } from './keysyms.ts'
+import { keyToKeysym, textToEvents } from './keysyms.ts'
 import { click, rfbButtons, toScreenPoint, wheelNotch } from './pointer.ts'
 
 const MOVE_EVERY_MS = 50
 const HOLD_MS = 500
 const DRAG_PX = 10
 const SCROLL_PX = 40
+const MODIFIERS = new Set([0xffe1, 0xffe3, 0xffe9, 0xffeb, 0xffe5])
 
 /**
  * The picture of the desktop while this page holds control. It captures the keyboard only while focused and turns
@@ -20,6 +28,7 @@ export function ScreenInput({
   height,
   label,
   push,
+  releaseRef,
 }: {
   boxRef: RefObject<HTMLDivElement | null>
   src: string
@@ -28,10 +37,39 @@ export function ScreenInput({
   height: number
   label: string
   push: (...events: BotInputEvent[]) => void
+  /** Filled with a function that lets go of every held key and pointer button (before Hand back). */
+  releaseRef?: { current: (() => void) | null }
 }) {
   const imgRef = useRef<HTMLImageElement>(null)
   const lastMove = useRef(0)
   const held = useRef(0)
+  // The keysym sent on each key's down, by physical key, so its up releases exactly that one (Shift changes `key`).
+  const keysHeld = useRef(new Map<string, number>())
+  const lastPoint = useRef({ x: 0, y: 0 })
+  const pushRef = useRef(push)
+  useEffect(() => {
+    pushRef.current = push
+  }, [push])
+  const releaseAll = useCallback(() => {
+    const events: BotInputEvent[] = [...keysHeld.current.values()].map((keysym) => ({
+      k: 'key',
+      keysym,
+      down: false,
+    }))
+    keysHeld.current.clear()
+    if (held.current !== 0) {
+      events.push({ k: 'pointer', ...lastPoint.current, buttons: 0 })
+      held.current = 0
+    }
+    if (events.length > 0) pushRef.current(...events)
+  }, [])
+  useEffect(() => {
+    if (releaseRef) releaseRef.current = releaseAll
+    return () => {
+      if (releaseRef) releaseRef.current = null
+      releaseAll()
+    }
+  }, [releaseRef, releaseAll])
   const touch = useRef<{
     id: number
     x: number
@@ -78,10 +116,23 @@ export function ScreenInput({
   function key(event: KeyboardEvent, down: boolean) {
     // The hidden phone keyboard input is not the screen; its own handlers deal with it.
     if (event.target !== event.currentTarget) return
-    const keysym = keyToKeysym(event.key)
+    const id = event.code || event.key
+    if (!down) {
+      const keysym = keysHeld.current.get(id)
+      if (keysym === undefined) return
+      event.preventDefault()
+      keysHeld.current.delete(id)
+      push({ k: 'key', keysym, down: false })
+      return
+    }
+    const already = keysHeld.current.get(id)
+    const keysym = already ?? keyToKeysym(event.key)
     if (keysym === null) return
     event.preventDefault()
-    push({ k: 'key', keysym, down })
+    // A held modifier repeating adds nothing; a repeating letter is typing.
+    if (already !== undefined && event.repeat && MODIFIERS.has(keysym)) return
+    keysHeld.current.set(id, keysym)
+    push({ k: 'key', keysym, down: true })
   }
 
   function down(event: PointerEvent<HTMLDivElement>) {
@@ -110,6 +161,7 @@ export function ScreenInput({
       return
     }
     event.currentTarget.setPointerCapture?.(event.pointerId)
+    lastPoint.current = { x, y }
     held.current = rfbButtons(event.buttons)
     push({ k: 'pointer', x, y, buttons: held.current })
   }
@@ -143,6 +195,7 @@ export function ScreenInput({
     if (held.current === 0 && now - lastMove.current < MOVE_EVERY_MS) return
     lastMove.current = now
     const { x, y } = point(event.clientX, event.clientY)
+    lastPoint.current = { x, y }
     push({ k: 'pointer', x, y, buttons: held.current })
   }
 
@@ -159,6 +212,7 @@ export function ScreenInput({
       return
     }
     const { x, y } = point(event.clientX, event.clientY)
+    lastPoint.current = { x, y }
     held.current = rfbButtons(event.buttons)
     push({ k: 'pointer', x, y, buttons: held.current })
   }
@@ -172,6 +226,10 @@ export function ScreenInput({
       aria-label={label}
       onKeyDown={(event) => key(event, true)}
       onKeyUp={(event) => key(event, false)}
+      onBlur={releaseAll}
+      onCompositionEnd={(event) => {
+        if (event.data) push(...textToEvents(event.data))
+      }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}

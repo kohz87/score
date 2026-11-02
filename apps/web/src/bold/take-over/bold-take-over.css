@@ -306,6 +306,7 @@
 }
 
 [data-ui='bold'] .bold-to-status {
+  display: block;
   margin: 0;
   padding: 12px 16px;
   border-radius: 18px;
@@ -343,6 +344,12 @@
 }
 
 @media (max-width: 600px) {
+  [data-ui='bold'] .bold-live-screen-head {
+    flex-wrap: wrap;
+  }
+  [data-ui='bold'] .bold-to-pill {
+    white-space: nowrap;
+  }
   [data-ui='bold'] .bold-to-tool {
     min-height: 48px;
     flex: 1 1 40%;

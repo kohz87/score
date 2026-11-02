@@ -245,3 +245,64 @@ test('someone else: the screen is hidden behind a protected line', async () => {
   expect(heading.parentElement!.getAttribute('data-protected')).toBe('block')
   expect(screen.queryByRole('img')).toBeNull()
 })
+
+const syms = () =>
+  inputEvents().map((e) => {
+    const k = e as { keysym: number; down: boolean }
+    return `${k.keysym.toString(16)}${k.down ? 'v' : '^'}`
+  })
+
+test('a key up releases the keysym its down sent, even when Shift changed `key`', async () => {
+  const box = await takeOver()
+  fireEvent.keyDown(box, { key: 'a', code: 'KeyA' })
+  fireEvent.keyDown(box, { key: 'Shift', code: 'ShiftLeft' })
+  fireEvent.keyUp(box, { key: 'A', code: 'KeyA' })
+  fireEvent.keyUp(box, { key: 'Shift', code: 'ShiftLeft' })
+  await waitFor(() => expect(inputEvents()).toHaveLength(4))
+  expect(syms()).toEqual(['61v', 'ffe1v', '61^', 'ffe1^'])
+})
+
+test('modifier auto-repeat is ignored; a repeating letter is sent', async () => {
+  const box = await takeOver()
+  fireEvent.keyDown(box, { key: 'Shift', code: 'ShiftLeft' })
+  fireEvent.keyDown(box, { key: 'Shift', code: 'ShiftLeft', repeat: true })
+  fireEvent.keyDown(box, { key: 'a', code: 'KeyA' })
+  fireEvent.keyDown(box, { key: 'a', code: 'KeyA', repeat: true })
+  await waitFor(() => expect(inputEvents()).toHaveLength(3))
+  expect(syms()).toEqual(['ffe1v', '61v', '61v'])
+})
+
+test('blur and Hand back release every held key', async () => {
+  const box = await takeOver()
+  fireEvent.keyDown(box, { key: 'Control', code: 'ControlLeft' })
+  fireEvent.blur(box)
+  await waitFor(() => expect(inputEvents()).toHaveLength(2))
+  expect(syms()).toEqual(['ffe3v', 'ffe3^'])
+  fireEvent.keyDown(box, { key: 'Alt', code: 'AltLeft' })
+  fireEvent.click(screen.getByRole('button', { name: 'Hand back to builder' }))
+  await waitFor(() => expect(posts('/hand-back')).toHaveLength(1))
+  expect(syms().slice(2)).toEqual(['ffe9v', 'ffe9^'])
+  const lastInput = calls
+    .map((c, i) => (c.url.endsWith('/input') ? i : -1))
+    .reduce((a, b) => Math.max(a, b))
+  expect(lastInput).toBeLessThan(calls.findIndex((c) => c.url.endsWith('/hand-back')))
+})
+
+test('composition is sent once, at its end', async () => {
+  await takeOver()
+  const field = screen.getByLabelText('Keyboard input for the screen')
+  fireEvent.input(field, { inputType: 'insertCompositionText', data: 'x' })
+  fireEvent.input(field, { inputType: 'insertCompositionText', data: 'xy' })
+  fireEvent.compositionEnd(field, { data: 'xy' })
+  await waitFor(() => expect(inputEvents()).toHaveLength(4))
+  expect(syms()).toEqual(['78v', '78^', '79v', '79^'])
+})
+
+test('hiding the page shows control as lost', async () => {
+  await takeOver()
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+  document.dispatchEvent(new Event('visibilitychange'))
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+  expect(await screen.findByText(/Control went back to builder/)).toBeDefined()
+  expect(screen.queryByRole('application')).toBeNull()
+})
