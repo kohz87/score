@@ -73,6 +73,7 @@ beforeEach(() => {
             : json({ items: overview }),
         )
       const id = /^\/api\/agents\/([^/]+)\/bot-screen$/.exec(url)?.[1]
+      if (id && bots[id] === 'pending') return new Promise<Response>(() => undefined)
       if (id) return Promise.resolve(json(bots[id] ?? { state: 'off' }))
       return Promise.resolve(json({ error: { code: 'not_found', message: 'none' } }, 404))
     }),
@@ -212,4 +213,14 @@ test('on a phone each agent is one row linking to its screen', async () => {
   const link = await screen.findByRole('link', { name: /^builder, Live desktop/ })
   expect(link.getAttribute('href')).toBe('/b/screen/builder')
   expect(screen.queryByRole('link', { name: 'Take over…' })).toBeNull()
+})
+
+// Review (3.18.0): until a desktop's state is known, a person may be using it.
+test('no picture of any kind while the desktop’s state is still unknown', async () => {
+  overview = [item('builder', { thumbnail: '/api/media/shot', live: true, surface: 'browser' })]
+  bots = { builder: 'pending' }
+  mount()
+  const unknown = within(await card('builder'))
+  expect(unknown.getByText('Checking the screen…')).toBeDefined()
+  expect(document.querySelector('img[src="/api/media/shot"]')).toBeNull()
 })

@@ -91,6 +91,8 @@ function Picture({ card }: { card: Card }) {
         Someone has taken over this desktop. Score hides it while they work.
       </div>
     )
+  // Until the desktop's state is known, a person may be using it: no picture of any kind yet.
+  if (!bot) return <div className="bold-sc-none">Checking the screen…</div>
   if (overview?.thumbnail)
     return <img className="bold-sc-img" src={overview.thumbnail} alt="" draggable={false} />
   if (overview?.surface) return <Surface surface={overview.surface} />
@@ -155,7 +157,7 @@ function PhoneRow({ card }: { card: Card }) {
         >
           {badge.text}
         </span>
-        <span className="bold-sc-doing">{card.doing}</span>
+        {card.doing !== badge.text && <span className="bold-sc-doing">{card.doing}</span>}
       </span>
     </Link>
   )

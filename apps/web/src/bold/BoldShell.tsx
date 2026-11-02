@@ -312,7 +312,7 @@ function BoldShellFrame() {
               </div>
             )}
             {phone && (
-              <>
+              <span className="bold-top-links">
                 <button type="button" className="btn sm" onClick={go('/b/recipes')}>
                   Recipes
                 </button>
@@ -322,7 +322,7 @@ function BoldShellFrame() {
                 <button type="button" className="btn sm" onClick={go('/b/screens')}>
                   Screens
                 </button>
-              </>
+              </span>
             )}
             {!phone && (
               <button
