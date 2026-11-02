@@ -99,6 +99,10 @@ export const protectedClasses = [
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
+  // 3.16.0: the Tasks board's count of what needs you, its needs-you cards and the panel's needs-you block
+  'bold-tb-pill',
+  'bold-tb-need',
+  'bold-tb-needs-block',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',

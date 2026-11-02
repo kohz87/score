@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tasks board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+input::placeholder{color:#7C8291}
+</style>
+</helmet>
+<div style="min-height: 1180px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; box-sizing: border-box; padding: 0 24px 40px">
+
+<header style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 16px 0 20px; max-width: 1392px; margin: 0 auto">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: -0.5px">score</span>
+<nav aria-label="Main" style="display: flex; gap: 6px; flex-wrap: wrap">
+<a href="#" style="padding: 9px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Room</a>
+<a href="#" style="padding: 9px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Team</a>
+<a href="#" style="padding: 9px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Recipes</a>
+<a href="#" aria-current="page" style="padding: 9px 16px; border-radius: 999px; background: #ECEEF2; color: #12131A; text-decoration: none; font-weight: 700">Tasks</a>
+</nav>
+<span style="flex: 1"></span>
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #ECEEF2; color: #12131A; font-size: 13px; font-weight: 700" data-protected="block">{{needsCount}} need you</span>
+</header>
+
+<div style="max-width: 1392px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 32px; font-weight: 700">Tasks</h1>
+<p style="margin: 0; color: #9AA0AD; max-width: 640px">Every Hermes task across your jobs. Agents move their own tasks; you act on the ones that need you.</p>
+</div>
+<div role="group" aria-label="Filter by agent" style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{agentChips}}" as="a" hint-placeholder-count="5">
+<button type="button" onClick="{{a.pick}}" aria-pressed="{{a.on}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: #ECEEF2; font-size: 14px; font-weight: 600">
+<sc-if value="{{a.hex}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z" fill="#A893F7"></path></svg></sc-if>
+<sc-if value="{{a.square}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#F5A35B"></rect></svg></sc-if>
+<sc-if value="{{a.circle}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#4FC8D1"></circle></svg></sc-if>
+<sc-if value="{{a.tri}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l10 19H2z" fill="#F28AC0"></path></svg></sc-if>
+{{a.label}}
+</button>
+</sc-for>
+</div>
+</div>
+
+<div role="group" aria-label="Filter by job" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+<span style="color: #9AA0AD; font-size: 13px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; margin-right: 4px">Job</span>
+<sc-for list="{{jobChips}}" as="j" hint-placeholder-count="4">
+<button type="button" onClick="{{j.pick}}" aria-pressed="{{j.on}}" style="min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid {{j.border}}; background: {{j.bg}}; color: #ECEEF2; font-size: 14px; font-weight: 600">{{j.label}}</button>
+</sc-for>
+</div>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start">
+<div style="flex: 999 1 760px; min-width: 0; overflow-x: auto; padding-bottom: 6px">
+<div style="display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 14px; min-width: 1040px">
+<sc-for list="{{columns}}" as="col" hint-placeholder-count="5">
+<section aria-label="{{col.title}}" style="background: #1A1C23; border-radius: 24px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 420px">
+<h2 style="margin: 0 4px 2px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700; letter-spacing: 0.3px">
+<span>{{col.title}}</span>
+<span style="min-width: 26px; text-align: center; padding: 2px 8px; border-radius: 999px; background: #262933; color: #C9CDD6; font-size: 12px; font-variant-numeric: tabular-nums">{{col.count}}</span>
+</h2>
+<sc-for list="{{col.cards}}" as="c" hint-placeholder-count="3">
+<button type="button" onClick="{{c.pick}}" aria-pressed="{{c.selected}}" style="text-align: left; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 20px; border: 2px solid {{c.ring}}; background: {{c.bg}}; color: {{c.fg}}; font-size: 14px">
+<span style="display: flex; justify-content: space-between; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: {{c.muted}}"><span>{{c.key}}</span><span>{{c.job}}</span></span>
+<span style="font-weight: 600; line-height: 1.35">{{c.title}}</span>
+<sc-if value="{{c.badge}}" hint-placeholder-val="{{false}}">
+<span style="align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: {{c.badgeBg}}; color: {{c.badgeFg}}; font-size: 12px; font-weight: 700">{{c.badge}}</span>
+</sc-if>
+<sc-if value="{{c.hasProgress}}" hint-placeholder-val="{{false}}">
+<span style="display: block; height: 6px; border-radius: 999px; background: #2E313B; overflow: hidden"><span style="display: block; height: 6px; width: {{c.progress}}; background: #7DB8FF; border-radius: 999px"></span></span>
+</sc-if>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{c.agentColor}}">
+<sc-if value="{{c.hex}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z" fill="#A893F7"></path></svg></sc-if>
+<sc-if value="{{c.square}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#F5A35B"></rect></svg></sc-if>
+<sc-if value="{{c.circle}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#4FC8D1"></circle></svg></sc-if>
+<sc-if value="{{c.tri}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l10 19H2z" fill="#F28AC0"></path></svg></sc-if>
+<span>{{c.agent}}</span>
+<span style="flex: 1"></span>
+<span style="color: {{c.muted}}; font-weight: 500; font-variant-numeric: tabular-nums">{{c.time}}</span>
+</span>
+</button>
+</sc-for>
+<sc-if value="{{col.empty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 8px 4px; color: #7C8291; font-size: 13px">Nothing here for this filter.</p>
+</sc-if>
+</section>
+</sc-for>
+</div>
+</div>
+
+<aside aria-label="Task details" style="flex: 1 1 340px; max-width: 420px; min-width: 0; background: #1A1C23; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<span style="display: flex; justify-content: space-between; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA0AD"><span>{{sel.key}} · Hermes: {{sel.hermes}}</span><button type="button" onClick="{{close}}" aria-label="Close task details" style="border: 0; background: transparent; color: #C9CDD6; font-size: 18px; line-height: 1; padding: 0 4px; min-width: 32px; min-height: 32px">×</button></span>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700; line-height: 1.25; text-wrap: balance">{{sel.title}}</h2>
+<dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px">
+<dt style="color: #9AA0AD">Job</dt><dd style="margin: 0"><a href="#">{{sel.job}}</a></dd>
+<dt style="color: #9AA0AD">Doing it</dt><dd style="margin: 0; color: {{sel.agentColor}}; font-weight: 600">{{sel.agent}}</dd>
+<dt style="color: #9AA0AD">Reviewer</dt><dd style="margin: 0">{{sel.reviewer}}</dd>
+<dt style="color: #9AA0AD">Column</dt><dd style="margin: 0">{{sel.column}}</dd>
+</dl>
+
+<sc-if value="{{sel.needsYou}}" hint-placeholder-val="{{true}}">
+<div data-protected="block" style="background: #ECEEF2; color: #12131A; border-radius: 22px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #4A4F5C">Needs you</span>
+<p style="margin: 0; font-weight: 600; line-height: 1.4">{{sel.ask}}</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<button type="button" onClick="{{act}}" style="min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #12131A; color: #ECEEF2; font-weight: 700; font-size: 14px">{{sel.actLabel}}</button>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 999px; color: #12131A; font-weight: 600; font-size: 14px; text-decoration: underline">Open in its job thread</a>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{acted}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; padding: 12px 16px; border-radius: 18px; background: #1F3A2E; color: #4FD1A5; font-weight: 600; font-size: 14px">{{actedText}}</p>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Steps</h3>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+<sc-for list="{{sel.steps}}" as="s" hint-placeholder-count="4">
+<li style="display: flex; gap: 10px; align-items: flex-start; color: {{s.color}}"><span aria-hidden="true" style="flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 6px; border: 2px solid {{s.box}}; background: {{s.fill}}"></span><span>{{s.text}}</span><span style="position: absolute; left: -9999px">{{s.sr}}</span></li>
+</sc-for>
+</ul>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Comments</h3>
+<sc-for list="{{sel.comments}}" as="m" hint-placeholder-count="2">
+<div style="background: #22252E; border-radius: 16px; padding: 10px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; color: #9AA0AD"><strong style="color: #ECEEF2">{{m.who}}</strong> · {{m.when}}</span>
+<span style="line-height: 1.4">{{m.text}}</span>
+</div>
+</sc-for>
+<label for="task-comment" style="font-size: 13px; color: #9AA0AD; margin-top: 4px">Add a comment for {{sel.agent}}</label>
+<div style="display: flex; gap: 8px">
+<input id="task-comment" type="text" placeholder="Say what to change or check" style="flex: 1; min-width: 0; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #3A3E4A; background: #12131A; color: #ECEEF2; font: 15px 'Hanken Grotesk', sans-serif">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Comment</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{noSel}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; color: #9AA0AD">Pick a task to see its steps, comments and what it needs from you.</p>
+</sc-if>
+</aside>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+const AGENTS = {
+  lead: { label: 'lead', color: '#BFB0FA', shape: 'hex' },
+  builder: { label: 'builder', color: '#F7B77A', shape: 'square' },
+  reviewer: { label: 'reviewer', color: '#7DD8DF', shape: 'circle' },
+  designer: { label: 'designer', color: '#F5A3CF', shape: 'tri' },
+};
+const TASKS = [
+  { key: 'T-41', title: 'Add pagination to the events endpoint', job: 'Activity feed', agent: 'builder', col: 'planned', time: 'queued', badge: 'Starts after T-38', kind: 'wait' },
+  { key: 'T-44', title: 'Write the release notes', job: 'Docs refresh', agent: 'designer', col: 'planned', time: 'queued' },
+  { key: 'T-45', title: 'Audit the export columns', job: 'Billing export', agent: 'reviewer', col: 'planned', time: 'new', badge: 'Needs sorting', kind: 'triage' },
+  { key: 'T-38', title: 'Swap polling for a socket', job: 'Activity feed', agent: 'builder', col: 'working', time: '14 min', progress: 0.6 },
+  { key: 'T-39', title: 'Empty-state art for the feed', job: 'Activity feed', agent: 'designer', col: 'working', time: '8 min', progress: 0.3 },
+  { key: 'T-46', title: 'Split the billing job into steps', job: 'Billing export', agent: 'lead', col: 'working', time: '3 min', progress: 0.15 },
+  { key: 'T-36', title: 'Read layer for events', job: 'Activity feed', agent: 'builder', col: 'in_review', time: '22 min', reviewer: 'reviewer' },
+  { key: 'T-37', title: 'Feed card spacing', job: 'Activity feed', agent: 'designer', col: 'in_review', time: '31 min', badge: 'Changes requested', kind: 'changes', reviewer: 'reviewer' },
+  { key: 'T-40', title: 'Install ws@8 for the socket', job: 'Activity feed', agent: 'builder', col: 'needs_you', time: '5 min', badge: 'Blocked', kind: 'blocked', ask: 'builder wants to install ws@8 (MIT) in the activity-feed workspace.', actLabel: 'Unblock', actedText: 'Unblocked. builder picks it up on its next turn.' },
+  { key: 'T-43', title: 'Use the staging database for the export test?', job: 'Billing export', agent: 'lead', col: 'needs_you', time: '2 min', badge: 'Asks you', kind: 'needs', ask: 'lead asks to run the export test once against the staging database.', actLabel: 'Approve once', actedText: 'Approved once. lead runs the test and reports back.' },
+  { key: 'T-33', title: 'Events table migration', job: 'Activity feed', agent: 'builder', col: 'done', time: 'yesterday' },
+  { key: 'T-34', title: 'Pick the feed icon set', job: 'Activity feed', agent: 'designer', col: 'done', time: 'yesterday' },
+  { key: 'T-35', title: 'Review the event schema', job: 'Activity feed', agent: 'reviewer', col: 'done', time: '2 h' },
+];
+const COLUMNS = [['planned', 'Planned'], ['working', 'Working'], ['in_review', 'In review'], ['needs_you', 'Needs you'], ['done', 'Done']];
+const BADGE = {
+  wait: ['#2B3242', '#B3D4FF'], triage: ['#3A3322', '#F5C66B'], changes: ['#3A2A22', '#F7B77A'],
+  blocked: ['#12131A', '#ECEEF2'], needs: ['#12131A', '#ECEEF2'],
+};
+const STEPS = {
+  'T-40': [['Wrote the socket client', true], ['Needs ws@8 to run it', false], ['Swap the feed to the socket', false]],
+  'T-43': [['Planned the export test', true], ['Run it once against staging', false], ['Report the numbers back', false]],
+  'T-38': [['Read the polling code', true], ['Socket server in api/events.py', true], ['Client reconnect', false], ['Tests', false]],
+};
+const COMMENTS = {
+  'T-40': [{ who: 'builder', when: '5 min ago', text: 'The socket client needs ws@8. Nothing else is added.' }],
+  'T-43': [{ who: 'lead', when: '2 min ago', text: 'The local copy has 40 rows; staging has the real volume. Read-only user.' }],
+  'T-37': [{ who: 'reviewer', when: '12 min ago', text: 'Cards touch on phones. 12px between them, please.' }],
+};
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sel: 'T-40', agent: 'all', job: 'All jobs', acted: {} }; }
+  renderVals() {
+    const { sel, agent, job, acted } = this.state;
+    const tasks = TASKS.map((t) => (acted[t.key] ? { ...t, col: 'working', badge: null, time: 'just now', progress: 0.05 } : t));
+    const shown = tasks.filter((t) => (agent === 'all' || t.agent === agent) && (job === 'All jobs' || t.job === job));
+    const glyph = (id) => { const s = AGENTS[id].shape; return { hex: s === 'hex', square: s === 'square', circle: s === 'circle', tri: s === 'tri' }; };
+    const columns = COLUMNS.map(([id, title]) => {
+      const cards = shown.filter((t) => t.col === id).map((t) => {
+        const light = id === 'needs_you';
+        const b = BADGE[t.kind] || ['#2B3242', '#B3D4FF'];
+        return {
+          ...glyph(t.agent), key: t.key, title: t.title, job: t.job, time: t.time, agent: t.agent,
+          badge: t.badge || '', badgeBg: b[0], badgeFg: b[1],
+          hasProgress: typeof t.progress === 'number', progress: Math.round((t.progress || 0) * 100) + '%',
+          bg: light ? '#ECEEF2' : '#22252E', fg: light ? '#12131A' : '#ECEEF2', muted: light ? '#4A4F5C' : '#9AA0AD',
+          agentColor: light ? '#12131A' : AGENTS[t.agent].color,
+          selected: sel === t.key, ring: sel === t.key ? '#7DB8FF' : 'transparent',
+          pick: () => this.setState({ sel: t.key }),
+        };
+      });
+      return { title, count: cards.length, cards, empty: cards.length === 0 };
+    });
+    const agentChips = [{ id: 'all', label: 'Everyone' }, ...Object.keys(AGENTS).map((id) => ({ id, label: id }))].map((a) => ({
+      ...(a.id === 'all' ? {} : glyph(a.id)), label: a.label, on: agent === a.id,
+      bg: agent === a.id ? '#2B3242' : 'transparent', border: agent === a.id ? '#7DB8FF' : '#3A3E4A',
+      pick: () => this.setState({ agent: a.id }),
+    }));
+    const jobChips = ['All jobs', 'Activity feed', 'Billing export', 'Docs refresh'].map((label) => ({
+      label, on: job === label, bg: job === label ? '#2B3242' : 'transparent', border: job === label ? '#7DB8FF' : '#3A3E4A',
+      pick: () => this.setState({ job: label }),
+    }));
+    const t = tasks.find((x) => x.key === sel);
+    const colTitle = t ? COLUMNS.find(([id]) => id === t.col)[1] : '';
+    const steps = (t && STEPS[t.key]) || [['Plan the work', true], ['Do it', false], ['Hand it to review', false]];
+    const selView = t ? {
+      key: t.key, title: t.title, job: t.job, agent: t.agent, agentColor: AGENTS[t.agent].color,
+      reviewer: t.reviewer || 'none yet', column: colTitle, hermes: t.col === 'needs_you' ? 'blocked' : t.col === 'in_review' ? 'review' : t.col === 'planned' ? 'todo' : t.col === 'done' ? 'done' : 'running',
+      needsYou: t.col === 'needs_you', ask: t.ask || '', actLabel: t.actLabel || '',
+      steps: steps.map(([text, done]) => ({ text, color: done ? '#9AA0AD' : '#ECEEF2', box: done ? '#4FD1A5' : '#5A5F6C', fill: done ? '#4FD1A5' : 'transparent', sr: done ? '(done)' : '(to do)' })),
+      comments: COMMENTS[t.key] || [],
+    } : {};
+    const actedTask = TASKS.find((x) => x.key === sel);
+    return {
+      columns, agentChips, jobChips, sel: selView, hasSel: !!t, noSel: !t,
+      needsCount: tasks.filter((x) => x.col === 'needs_you').length,
+      acted: !!acted[sel], actedText: actedTask && actedTask.actedText ? actedTask.actedText : '',
+      act: () => this.setState({ acted: { ...acted, [sel]: true } }),
+      close: () => this.setState({ sel: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

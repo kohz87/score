@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tasks on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1640px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 14px 16px 32px; display: flex; flex-direction: column; gap: 18px">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">score</span>
+<button type="button" aria-label="Open the menu" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 700">Tasks</h1>
+<p style="margin: 0; color: #9AA0AD; font-size: 14px">Across all jobs. What needs you comes first.</p>
+</div>
+
+<section aria-labelledby="needs-h" style="display: flex; flex-direction: column; gap: 10px">
+<h2 id="needs-h" style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #C9CDD6">Needs you · {{needsCount}}</h2>
+<sc-for list="{{needs}}" as="n" hint-placeholder-count="2">
+<article data-protected="block" style="background: #ECEEF2; color: #12131A; border-radius: 24px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #4A4F5C"><span>{{n.key}}</span><span>{{n.job}}</span></span>
+<span style="font-weight: 700; line-height: 1.35">{{n.title}}</span>
+<span style="font-size: 14px; line-height: 1.4; color: #2A2D36">{{n.ask}}</span>
+<sc-if value="{{n.open}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<button type="button" onClick="{{n.act}}" style="min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #12131A; color: #ECEEF2; font-weight: 700; font-size: 14px">{{n.actLabel}}</button>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: #12131A; font-weight: 600; font-size: 14px">Comment</a>
+</div>
+</sc-if>
+<sc-if value="{{n.done}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-weight: 600; font-size: 14px; color: #1B6B4F">{{n.doneText}}</p>
+</sc-if>
+</article>
+</sc-for>
+</section>
+
+<div role="tablist" aria-label="Columns" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: #ECEEF2; font-size: 14px; font-weight: 600; white-space: nowrap">{{t.label}} <span style="color: #9AA0AD; font-variant-numeric: tabular-nums">{{t.count}}</span></button>
+</sc-for>
+</div>
+
+<div role="tabpanel" style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
+<a href="#" style="text-decoration: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 20px; background: #1A1C23; color: #ECEEF2">
+<span style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA0AD"><span>{{c.key}}</span><span>{{c.job}}</span></span>
+<span style="font-weight: 600; line-height: 1.35">{{c.title}}</span>
+<sc-if value="{{c.badge}}" hint-placeholder-val="{{false}}">
+<span style="align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: {{c.badgeBg}}; color: {{c.badgeFg}}; font-size: 12px; font-weight: 700">{{c.badge}}</span>
+</sc-if>
+<sc-if value="{{c.hasProgress}}" hint-placeholder-val="{{false}}">
+<span style="display: block; height: 6px; border-radius: 999px; background: #2E313B; overflow: hidden"><span style="display: block; height: 6px; width: {{c.progress}}; background: #7DB8FF; border-radius: 999px"></span></span>
+</sc-if>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{c.color}}">
+<sc-if value="{{c.hex}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z" fill="#A893F7"></path></svg></sc-if>
+<sc-if value="{{c.square}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#F5A35B"></rect></svg></sc-if>
+<sc-if value="{{c.circle}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#4FC8D1"></circle></svg></sc-if>
+<sc-if value="{{c.tri}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l10 19H2z" fill="#F28AC0"></path></svg></sc-if>
+<span>{{c.agent}}</span><span style="flex: 1"></span><span style="color: #9AA0AD; font-weight: 500">{{c.time}}</span>
+</span>
+</a>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1640}}'>
+const AGENTS = {
+  lead: { color: '#BFB0FA', shape: 'hex' }, builder: { color: '#F7B77A', shape: 'square' },
+  reviewer: { color: '#7DD8DF', shape: 'circle' }, designer: { color: '#F5A3CF', shape: 'tri' },
+};
+const TASKS = [
+  { key: 'T-41', title: 'Add pagination to the events endpoint', job: 'Activity feed', agent: 'builder', col: 'planned', time: 'queued', badge: 'Starts after T-38', b: ['#2B3242', '#B3D4FF'] },
+  { key: 'T-44', title: 'Write the release notes', job: 'Docs refresh', agent: 'designer', col: 'planned', time: 'queued' },
+  { key: 'T-45', title: 'Audit the export columns', job: 'Billing export', agent: 'reviewer', col: 'planned', time: 'new', badge: 'Needs sorting', b: ['#3A3322', '#F5C66B'] },
+  { key: 'T-38', title: 'Swap polling for a socket', job: 'Activity feed', agent: 'builder', col: 'working', time: '14 min', progress: 0.6 },
+  { key: 'T-39', title: 'Empty-state art for the feed', job: 'Activity feed', agent: 'designer', col: 'working', time: '8 min', progress: 0.3 },
+  { key: 'T-46', title: 'Split the billing job into steps', job: 'Billing export', agent: 'lead', col: 'working', time: '3 min', progress: 0.15 },
+  { key: 'T-36', title: 'Read layer for events', job: 'Activity feed', agent: 'builder', col: 'in_review', time: '22 min' },
+  { key: 'T-37', title: 'Feed card spacing', job: 'Activity feed', agent: 'designer', col: 'in_review', time: '31 min', badge: 'Changes requested', b: ['#3A2A22', '#F7B77A'] },
+  { key: 'T-33', title: 'Events table migration', job: 'Activity feed', agent: 'builder', col: 'done', time: 'yesterday' },
+  { key: 'T-34', title: 'Pick the feed icon set', job: 'Activity feed', agent: 'designer', col: 'done', time: 'yesterday' },
+  { key: 'T-35', title: 'Review the event schema', job: 'Activity feed', agent: 'reviewer', col: 'done', time: '2 h' },
+];
+const NEEDS = [
+  { key: 'T-40', title: 'Install ws@8 for the socket', job: 'Activity feed', ask: 'builder wants to install ws@8 (MIT) in the activity-feed workspace.', actLabel: 'Unblock', doneText: 'Unblocked. builder picks it up next.' },
+  { key: 'T-43', title: 'Use the staging database for the export test?', job: 'Billing export', ask: 'lead asks to run the export test once against staging.', actLabel: 'Approve once', doneText: 'Approved once. lead reports back.' },
+];
+const TABS = [['working', 'Working'], ['planned', 'Planned'], ['in_review', 'In review'], ['done', 'Done']];
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'working', acted: {} }; }
+  renderVals() {
+    const { tab, acted } = this.state;
+    const shape = (id) => { const s = AGENTS[id].shape; return { hex: s === 'hex', square: s === 'square', circle: s === 'circle', tri: s === 'tri' }; };
+    return {
+      needsCount: NEEDS.filter((n) => !acted[n.key]).length,
+      needs: NEEDS.map((n) => ({ ...n, open: !acted[n.key], done: !!acted[n.key], act: () => this.setState({ acted: { ...acted, [n.key]: true } }) })),
+      tabs: TABS.map(([id, label]) => ({
+        label, count: TASKS.filter((t) => t.col === id).length, on: tab === id,
+        bg: tab === id ? '#2B3242' : 'transparent', border: tab === id ? '#7DB8FF' : '#3A3E4A',
+        pick: () => this.setState({ tab: id }),
+      })),
+      cards: TASKS.filter((t) => t.col === tab).map((t) => ({
+        ...shape(t.agent), key: t.key, title: t.title, job: t.job, agent: t.agent, time: t.time, color: AGENTS[t.agent].color,
+        badge: t.badge || '', badgeBg: t.b ? t.b[0] : '', badgeFg: t.b ? t.b[1] : '',
+        hasProgress: typeof t.progress === 'number', progress: Math.round((t.progress || 0) * 100) + '%',
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>
