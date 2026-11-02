@@ -18,7 +18,10 @@ async function openCard(page: Page, shape: Record<string, unknown> | null) {
   await mockThemes(page, themes, { active: shape ? 'shaped' : 'score', mode: 'dark' })
   await pair(page)
   await page.goto('/b/settings/system')
-  const card = page.locator('[data-ui="bold"] .bold-settings-page .card').first()
+  // Not the Hermes updates card (3.15.0): it can hold a decision (an update's result), which glass leaves solid.
+  const card = page
+    .locator('[data-ui="bold"] .bold-settings-page .card:not(#hermes-updates)')
+    .first()
   await expect(card).toBeVisible({ timeout: 20_000 })
   if (shape) await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   return card
