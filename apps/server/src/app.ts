@@ -581,7 +581,7 @@ export function buildApp({
   registerHermesUpdateRoutes(app, {
     updates:
       config.mode === 'live' && db
-        ? createLiveHermesUpdates({ db, port, hermesHome: config.hermesHome })
+        ? createLiveHermesUpdates({ db, port, config })
         : config.mode === 'fake'
           ? createFakeHermesUpdates()
           : undefined,

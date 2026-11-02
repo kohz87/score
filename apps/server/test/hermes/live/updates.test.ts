@@ -228,3 +228,64 @@ test('two quick starts never both run', async () => {
   await finished(updates)
   expect(calls.filter((c) => c === 'run:main')).toHaveLength(1)
 })
+
+test('an update still running from before a Score restart is shown and blocks a second one', async () => {
+  let recorded: { pid: number; startedAt: string } | null = {
+    pid: 4242,
+    startedAt: '2026-11-02T03:00:00.000Z',
+  }
+  let alive = true
+  const { updates } = harness({
+    marker: {
+      read: () => recorded,
+      write: (value) => void (recorded = value),
+      clear: () => void (recorded = null),
+      alive: () => alive,
+    },
+  })
+  const status = await updates.status()
+  expect(status.job).toMatchObject({
+    state: 'running',
+    steps: [{ id: 'wait' }, { id: 'update', state: 'running' }, {}, {}],
+  })
+  await expect(updates.start({ channel: 'main', testAgentId: null })).rejects.toMatchObject({
+    code: 'update_running',
+  })
+  await expect(updates.check('main')).rejects.toMatchObject({ code: 'update_running' })
+  alive = false
+  expect((await updates.status()).job).toBeNull()
+  expect(recorded).toBeNull()
+})
+
+test('a check that did not run is an error, never "nothing newer"', async () => {
+  const { updates } = harness({
+    spawn: (_command, _channel, options) => {
+      options.onLine('hermes: command not found')
+      return { exited: Promise.resolve(127), kill: () => undefined }
+    },
+  })
+  await expect(updates.check('stable')).rejects.toMatchObject({ code: 'hermes_unavailable' })
+})
+
+test('a check that throws while the gateway restarts is tried again; one that never works is broken', async () => {
+  let n = 0
+  const flaky = harness({
+    check: async () => {
+      n += 1
+      if (n < 3) throw new Error('connect ECONNREFUSED 127.0.0.1:8642')
+      return check()
+    },
+  })
+  await flaky.updates.start({ channel: 'main', testAgentId: null })
+  expect(await finished(flaky.updates)).toMatchObject({ outcome: 'clear' })
+
+  const down = harness({
+    check: async () => {
+      throw new Error('connect ECONNREFUSED')
+    },
+  })
+  await down.updates.start({ channel: 'main', testAgentId: null })
+  const job = await finished(down.updates)
+  expect(job).toMatchObject({ outcome: 'broken' })
+  expect(job.error).toMatch(/couldn't check it/)
+})

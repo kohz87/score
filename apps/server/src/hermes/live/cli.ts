@@ -146,6 +146,8 @@ export function signInShape(argv: string[]): SignInShape | null {
 export interface HermesChild {
   /** Kills the whole process group by the handle's pid; never by name or pattern. */
   kill(): void
+  /** The process id, when known (an update records it, so a Score restart can tell it is still running). */
+  readonly pid?: number
   /** Exit code; -1 when it could not start or died from a signal. */
   readonly exited: Promise<number>
 }
@@ -313,9 +315,10 @@ export const spawnHermesUpdate: HermesUpdateSpawner = (command, channel, options
     if (process.env[name] !== undefined) env[name] = process.env[name]
   }
   const child = spawn('hermes', argv, { detached: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  // On `exit` plus a short drain, not `close`: a process the update starts could inherit the pipes and keep them open.
   const exited = new Promise<number>((resolve) => {
     child.once('error', () => resolve(-1))
-    child.once('close', (code) => resolve(code ?? -1))
+    child.once('exit', (code) => setTimeout(() => resolve(code ?? -1), 500).unref())
   })
   // Lines from both streams, in arrival order per stream; the caller redacts before keeping any.
   for (const stream of [child.stdout, child.stderr]) {
@@ -337,13 +340,20 @@ export const spawnHermesUpdate: HermesUpdateSpawner = (command, channel, options
   })
   return {
     exited,
+    ...(child.pid !== undefined ? { pid: child.pid } : {}),
     kill() {
       if (finished || child.pid === undefined) return
-      try {
-        process.kill(-child.pid, 'SIGTERM')
-      } catch {
-        // Already gone.
+      const signal = (name: NodeJS.Signals) => {
+        try {
+          process.kill(-child.pid!, name)
+        } catch {
+          // Already gone.
+        }
       }
+      signal('SIGTERM')
+      setTimeout(() => {
+        if (!finished) signal('SIGKILL')
+      }, 10_000).unref()
     },
   }
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { ScoreDb } from '../../db/index.ts'
@@ -62,28 +63,68 @@ function backupEstimate(home: string) {
 export function createLiveHermesUpdates(options: {
   db: ScoreDb
   port: HermesPort
-  hermesHome?: string | undefined
+  /** Score's config: its home holds the running-update marker; the Hermes home is resolved here, inside the adapter. */
+  config: { home: string; hermesHome?: string | undefined }
 }): HermesUpdates {
-  const home = resolveHermesHome(options.hermesHome)
+  const hermesHome = options.config.hermesHome
+  const home = resolveHermesHome(hermesHome)
+  const markerPath = path.join(options.config.home, 'hermes-update-running.json')
   return new HermesUpdates({
-    hermesHome: options.hermesHome,
+    hermesHome,
     spawn: spawnHermesUpdate,
     idle: () => scoreIdle(options.db),
     version: () =>
       new Promise((resolve) => {
         let first: string | null = null
         const child = spawnHermesUpdate('version', 'stable', {
-          hermesHome: options.hermesHome,
+          hermesHome,
           onLine: (line) => {
             if (first === null && line.trim()) first = line.trim()
           },
         })
-        void child.exited.then((code) => resolve(code === 0 ? first : null))
+        // Never hangs the status read (review).
+        const timer = setTimeout(() => {
+          child.kill()
+          resolve(null)
+        }, 15_000)
+        timer.unref()
+        void child.exited.then((code) => {
+          clearTimeout(timer)
+          resolve(code === 0 ? first : null)
+        })
       }),
     check: () => options.port.checkHermes(),
     accept: (hash) => options.port.acceptHermes(hash),
     startTestRun: (agentId, input) =>
       options.port.startRun({ agentId, input, turnId: randomUUID() }),
+    stopTestRun: async (agentId, runId) => {
+      await options.port.stopRun({ agentId, runId })
+    },
+    marker: {
+      read: () => {
+        try {
+          const parsed = JSON.parse(readFileSync(markerPath, 'utf8')) as {
+            pid?: unknown
+            startedAt?: unknown
+          }
+          return typeof parsed.pid === 'number' && typeof parsed.startedAt === 'string'
+            ? { pid: parsed.pid, startedAt: parsed.startedAt }
+            : null
+        } catch {
+          return null
+        }
+      },
+      write: (value) => writeFileSync(markerPath, JSON.stringify(value), { mode: 0o600 }),
+      clear: () => rmSync(markerPath, { force: true }),
+      alive: (pid) => {
+        try {
+          process.kill(pid, 0)
+          return true
+        } catch {
+          return false
+        }
+      },
+    },
     readRun: (runId) =>
       options.db.read(
         (sqlite) =>

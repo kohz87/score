@@ -30,8 +30,20 @@ export interface HermesUpdatesDeps {
   readRun: (
     runId: string,
   ) => { status: string; output: string | null; error: string | null } | undefined
+  /** Stops the test run when it never ends (e.g. waiting for an approval). */
+  stopTestRun?: (agentId: string, runId: string) => Promise<void>
   diskFreeBytes: () => Promise<number | null>
   backupNeedsBytes: () => Promise<number | null>
+  /**
+   * Where a running update is recorded, so a Score restart while Hermes is still updating refuses a second update
+   * (review: the update runs detached and outlives Score).
+   */
+  marker?: {
+    read(): { pid: number; startedAt: string } | null
+    write(value: { pid: number; startedAt: string }): void
+    clear(): void
+    alive(pid: number): boolean
+  }
   sleep?: (ms: number) => Promise<void>
   /** Limits, overridable in tests. */
   limits?: Partial<typeof LIMITS>
@@ -109,11 +121,12 @@ export class HermesUpdates {
       this.deps.backupNeedsBytes().catch(() => null),
       this.#version(),
     ])
+    const orphan = this.#orphan()
     return {
       available: true,
       version,
       lastCheck: this.#lastCheck,
-      job: this.#job,
+      job: this.#job ?? (orphan ? this.#orphanJob(orphan) : null),
       diskFreeBytes,
       backupNeedsBytes,
     }
@@ -121,11 +134,18 @@ export class HermesUpdates {
 
   /** Read-only: `hermes update --check` and `--plan` for the channel. One at a time. */
   async check(channel: HermesUpdateChannel): Promise<HermesUpdateCheck> {
-    if (this.#job?.state === 'running')
+    if (this.#job?.state === 'running' || this.#starting || this.#orphan())
       throw new HttpError(409, 'update_running', 'Hermes is being updated right now.')
     if (this.#checking) return this.#checking
     this.#checking = (async () => {
       const checked = await this.#runToEnd('check', channel, 120_000)
+      // A check that didn't run (no `hermes`, a timeout, an error) never reads as "nothing newer" (review).
+      if (checked.code !== 0)
+        throw new HttpError(
+          502,
+          'hermes_unavailable',
+          `Hermes couldn't check for updates (${checked.code === -2 ? 'it took too long' : `exit code ${checked.code}`}).`,
+        )
       const planned = await this.#runToEnd('plan', channel, 120_000)
       const result: HermesUpdateCheck = {
         channel,
@@ -147,8 +167,14 @@ export class HermesUpdates {
     testAgentId: string | null
   }): Promise<HermesUpdateJob> {
     // Claimed before the first await: two quick starts can never both pass the check.
-    if (this.#job?.state === 'running' || this.#starting)
+    if (this.#job?.state === 'running' || this.#starting || this.#orphan())
       throw new HttpError(409, 'update_running', 'Hermes is already being updated.')
+    if (this.#checking)
+      throw new HttpError(
+        409,
+        'check_running',
+        'Score is still checking for updates. Try again in a moment.',
+      )
     this.#starting = true
     try {
       const [free, needs] = await Promise.all([
@@ -168,6 +194,41 @@ export class HermesUpdates {
   }
 
   #starting = false
+
+  /** An update recorded by an earlier Score process whose `hermes update` is still running. */
+  #orphan(): { pid: number; startedAt: string } | null {
+    const marker = this.deps.marker
+    const recorded = marker?.read() ?? null
+    if (!recorded || this.#job?.state === 'running') return null
+    if (marker!.alive(recorded.pid)) return recorded
+    marker!.clear()
+    return null
+  }
+
+  #orphanJob(orphan: { pid: number; startedAt: string }): HermesUpdateJob {
+    return {
+      id: `earlier-${orphan.pid}`,
+      state: 'running',
+      channel: 'stable',
+      testAgentId: null,
+      startedAt: orphan.startedAt,
+      endedAt: null,
+      steps: [
+        { id: 'wait', state: 'done', note: null },
+        { id: 'update', state: 'running', note: 'started before Score restarted' },
+        { id: 'check', state: 'pending', note: null },
+        { id: 'test', state: 'skipped', note: null },
+      ],
+      fromVersion: null,
+      toVersion: null,
+      outcome: null,
+      check: null,
+      test: null,
+      backup: null,
+      error: null,
+      log: [],
+    }
+  }
 
   async #begin(req: {
     channel: HermesUpdateChannel
@@ -247,7 +308,7 @@ export class HermesUpdates {
       if (!kept) return
       job.log = [...job.log, kept].slice(-MAX_LOG)
       const backup = line.match(/(hermes-backup-[^\s'"`]+\.zip)/)
-      if (backup) job.backup = backup[1]!
+      if (backup) job.backup = clean(backup[1]!)
       const done = line.match(/Update complete!.*\((.+?)\s*(?:→|->)\s*(.+?)\)/)
       if (done) {
         job.fromVersion = clean(done[1]!)
@@ -272,11 +333,33 @@ export class HermesUpdates {
 
     // 3. Score's own check; the gateway may still be coming back, so a check that can't read it is tried again.
     this.#step(job, 'check', 'running', null)
-    let check = await this.deps.check()
-    for (let tries = 1; tries < this.#limits.checkTries && unreadable(check); tries += 1) {
+    // A check that throws while the gateway restarts is tried again too (review).
+    const attempt = () =>
+      this.deps.check().then(
+        (value) => ({ value, error: null as string | null }),
+        (error: unknown) => ({
+          value: null,
+          error: error instanceof Error ? redact(error.message) : 'the check failed',
+        }),
+      )
+    let checked = await attempt()
+    for (
+      let tries = 1;
+      tries < this.#limits.checkTries && (checked.value === null || unreadable(checked.value));
+      tries += 1
+    ) {
       await this.#sleep(this.#limits.checkPollMs)
-      check = await this.deps.check()
+      checked = await attempt()
     }
+    if (checked.value === null) {
+      this.#step(job, 'check', 'failed', checked.error)
+      return this.#finish(
+        job,
+        'broken',
+        `Hermes was updated, but Score couldn't check it: ${checked.error}`,
+      )
+    }
+    const check = checked.value
     job.check = check
     const differing = check.parts.filter((part) => part.status !== 'same').length
     this.#step(
@@ -329,8 +412,11 @@ export class HermesUpdates {
           detail: clean(run.error ?? run.status).slice(0, 200) || run.status,
         }
       }
-      if (this.#clock() >= until)
+      if (this.#clock() >= until) {
+        // A run that never ends (waiting for an approval) is stopped, not left behind (review).
+        await this.deps.stopTestRun?.(agentId, runId).catch(() => undefined)
         return { agentId, ok: false, detail: 'no answer within 4 minutes' }
+      }
       await this.#sleep(this.#limits.testPollMs)
     }
   }
@@ -349,18 +435,26 @@ export class HermesUpdates {
         onLine?.(line)
       },
     })
+    if (command === 'run' && child.pid !== undefined)
+      this.deps.marker?.write({ pid: child.pid, startedAt: new Date(this.#clock()).toISOString() })
     let timer: NodeJS.Timeout | undefined
-    const timedOut = new Promise<number>((resolve) => {
+    let timedOutFlag = false
+    const timedOut = new Promise<void>((resolve) => {
       timer = setTimeout(() => {
+        timedOutFlag = true
         child.kill()
-        resolve(-2)
+        resolve()
       }, timeoutMs)
       timer.unref?.()
     })
-    return Promise.race([child.exited, timedOut]).then((code) => {
-      clearTimeout(timer)
-      return { code, lines }
-    })
+    // After a timeout the job still waits for the process to be gone (the kill escalates), so nothing overlaps it.
+    return Promise.race([child.exited, timedOut])
+      .then(() => child.exited)
+      .then((code) => {
+        clearTimeout(timer)
+        if (command === 'run') this.deps.marker?.clear()
+        return { code: timedOutFlag ? -2 : code, lines }
+      })
   }
 
   #step(
