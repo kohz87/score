@@ -2002,3 +2002,18 @@ One entry per completed task: what landed, review results, and any **rejected re
   "(same errors as `/usage`)" in the contract — fixed.
 - Gate: e2e 856 passed, 0 failed; check green (contract 1584, web 3096, server 4938).
 - **v3.15.2 deployed live** (~06:09 UTC, idle guard passed): backup score-pre-3.15.2-20261102.db, health ok.
+
+## 3.15.3 — Coding agents run on a newer CLI unless it's broken (2026-11-02, decision 157)
+- Owner: "set the score for coding agent to run regardless of version unless it's broken". Lead-coded (coding-runtime
+  gate). The per-agent confirmation (`confirm-version`, `cli.confirmed`, `confirmedVersion`) is gone; `cliRefusal` runs
+  the decision-138 help check for an untested version on every launch path (admission, the fresh pre-spawn re-check,
+  worker readiness); a failure refuses with its reason (`cli.problem`, cause `version_unchecked`). Antigravity has no help
+  check and simply runs. Contract updated; `version_untested` readiness no longer produced.
+- Sonnet review: no P1/P2. P3s fixed: a remembered page verdict now yields once a run passed the check; the CLI message
+  no longer calls every untested version "newer"; a contract comment. Left: the dead `version_untested` enum value and its
+  web label (removing it is a contract enum change for no behaviour).
+- Gate: check green (contract 1582, web 3097, server 4938); e2e 855 passed, 1 failed: bold-tablet 820×1180 layout (known
+  flake, untouched area), re-run alone 13/13 passed.
+- **v3.15.3 deployed live** (~07:24 UTC, idle guard passed): backup score-pre-3.15.3-20261102.db, health ok. Live: all
+  five Claude Code agents report 2.1.316 `untested_version` with `problem: null` (the help check passed); temporary
+  session signed out.
