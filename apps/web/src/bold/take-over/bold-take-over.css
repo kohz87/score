@@ -1,0 +1,359 @@
+/* 3.17.0: taking over the agent's desktop. Values from docs/design/bold/mockups/14-take-over*.dc.html. */
+
+[data-ui='bold'] .bold-to-open {
+  margin-left: auto;
+  background: transparent;
+  color: #e8eaf0;
+  border: 1px solid #3a3e4a;
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 18px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-to-open + .bold-live-screen-toggle,
+[data-ui='bold'] .bold-to-handback + .bold-live-screen-toggle {
+  margin-left: 0;
+}
+
+/* The light card that asks: for you, so it is a light object on the dark card. */
+[data-ui='bold'] .bold-to-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+  padding: 24px 26px;
+  border-radius: 24px;
+  background: #eceef2;
+  color: #12131a;
+}
+
+[data-ui='bold'] .bold-to-confirm h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-to-confirm ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.45;
+  font-size: 14px;
+  color: #2a2d36;
+}
+
+[data-ui='bold'] .bold-to-confirm label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-to-confirm input {
+  min-height: 46px;
+  min-width: 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #b8bcc6;
+  background: #ffffff;
+  color: #12131a;
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-to-confirm .bold-to-note,
+[data-ui='bold'] .bold-to-confirm [role='alert'] {
+  margin: 0;
+  font-size: 14px;
+  color: #2a2d36;
+}
+
+[data-ui='bold'] .bold-to-confirm [role='alert'] {
+  color: #a32424;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-to-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+[data-ui='bold'] .bold-to-primary {
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 0;
+  background: #12131a;
+  color: #eceef2;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-to-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-to-link {
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #12131a;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-to-cancel {
+  color: #4a4f5c;
+  text-decoration: none;
+}
+
+/* In control: the red pill, the red frame, the light Hand back button. */
+[data-ui='bold'] .bold-to-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #d93a3a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-to-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation: bold-to-live 1.6s ease-in-out infinite;
+}
+
+@keyframes bold-to-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-to-dot {
+    animation: none;
+  }
+}
+
+[data-ui='bold'] .bold-to-handback {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 0;
+  background: #eceef2;
+  color: #12131a;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-to-frame {
+  border-radius: 20px;
+  padding: 6px;
+  background: #d93a3a;
+}
+
+[data-ui='bold'] .bold-to-screen {
+  border-radius: 15px;
+  overflow: hidden;
+  cursor: text;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+[data-ui='bold'] .bold-to-screen:focus-visible {
+  box-shadow: 0 0 0 3px #7db8ff;
+}
+
+[data-ui='bold'] .bold-to-screen:fullscreen {
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+[data-ui='bold'] .bold-to-screen:fullscreen .bold-live-screen-img {
+  width: auto;
+  max-height: 100vh;
+}
+
+[data-ui='bold'] .bold-to-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #c9cdd6;
+}
+
+[data-ui='bold'] .bold-to-spacer {
+  flex: 1;
+}
+
+[data-ui='bold'] .bold-to-clock {
+  color: #eceef2;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-to-tool {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #3a3e4a;
+  background: transparent;
+  color: #eceef2;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-to-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-to-menu {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-to-menu-list {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 6px;
+  border-radius: 16px;
+  background: #22252e;
+  border: 1px solid #3a3e4a;
+}
+
+[data-ui='bold'] .bold-to-menu-list button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #eceef2;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-to-menu-list button:hover,
+[data-ui='bold'] .bold-to-menu-list button:focus-visible {
+  background: #2e313b;
+}
+
+[data-ui='bold'] .bold-to-type {
+  flex-basis: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-to-type label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+[data-ui='bold'] .bold-to-type input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #3a3e4a;
+  background: #12131a;
+  color: #eceef2;
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-to-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-to-status {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: #1f3a2e;
+  color: #4fd1a5;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-to-status[data-tone='warn'] {
+  background: #3a2e1f;
+  color: #f0b95a;
+}
+
+[data-ui='bold'] .bold-screen-human {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 28px;
+  border-radius: 20px;
+  background: #22252e;
+  color: #eceef2;
+}
+
+[data-ui='bold'] .bold-screen-human h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-human p {
+  margin: 0;
+  color: #c9cdd6;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-to-tool {
+    min-height: 48px;
+    flex: 1 1 40%;
+  }
+  [data-ui='bold'] .bold-to-handback {
+    min-height: 52px;
+    flex-basis: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+  [data-ui='bold'] .bold-to-confirm {
+    padding: 20px;
+  }
+}

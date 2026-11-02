@@ -7,6 +7,7 @@ import type { ScoreDb } from '../db/index.ts'
 import { readAgent } from '../domain/agents.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
+import { FRESH_AUTH_MS } from '../terminal/tickets.ts'
 import { sessionKey } from './session.ts'
 
 const UNLOCK_MS = 5 * 60_000
@@ -52,7 +53,14 @@ export function registerBotTakeoverRoutes(
       const agentId = agentOf(request.params)
       const body = BotTakeoverRequestSchema.parse(request.body ?? {})
       const cookie = request.headers.cookie
-      if (!app.pairing.touchUnlock(cookie, UNLOCK_MS)) {
+      // An unlocked session, a passkey (or password) proved moments ago (consumed, as the terminal's ticket does), or
+      // the password itself.
+      const session = app.pairing.pairedSession(cookie)
+      const fresh =
+        body.password === undefined &&
+        session !== undefined &&
+        app.pairing.takeFresh(session, FRESH_AUTH_MS)
+      if (!fresh && !app.pairing.touchUnlock(cookie, UNLOCK_MS)) {
         if (!options.security) throw new HttpError(501, 'unsupported', 'Not available here.')
         await options.security.verify(body.password, sessionKey(cookie))
       }

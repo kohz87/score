@@ -658,7 +658,8 @@ attempts on) lists the step's attempts of the board lineage Score follows, by`or
   after the grab; a takeover the lease no longer names (handed back elsewhere, the Hermes app took over, an unreadable
   file) ends at once and Score drops its framebuffer.
   - **H** `POST /api/agents/:agentId/bot-screen/take-over` `{ password? }` → `{ takeoverId; since; expiresAt }`: needs the
-    security password, or a session unlocked with it (or a passkey) in the last 5 minutes (`401`/`403` as the security
+    security password, a session unlocked with it in the last 5 minutes, or a passkey sign-in moments ago (the fresh
+    proof the terminal uses, consumed once) (`401`/`403` as the security
     routes). Taken through Hermes' lease by Score's plugin (`desktop_take` below). `409 conflict` when the screen isn't
     running or someone already holds it; `503 unavailable` when the plugin isn't connected; `502 unavailable` when Hermes
     didn't hand it over. Idempotency receipt with a keyed hash (the body may carry the password).
