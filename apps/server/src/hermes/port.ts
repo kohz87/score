@@ -2,6 +2,7 @@ import {
   ApprovalChoiceSchema,
   ApprovalSchema,
   type AgentSummary,
+  type BotInputEvent,
   type BotScreenStatus,
   type RunsOn,
   type RunsOnUpdate,
@@ -194,10 +195,27 @@ export interface HermesPort extends ProfileManagementPort {
    * Names and times only; memory contents are never read.
    */
   journeyFacts(req: { from: number; to: number; agentIds: string[] }): Promise<JourneyFacts>
-  /** 3.3.0: the agent's Hermes Bot Desktop, read-only (decision 135). */
-  botScreenStatus(agentId: string): Promise<BotScreenStatus>
+  /**
+   * 3.3.0: the agent's Hermes Bot Desktop (decision 135). `viewer` is the asking browser session (3.17.0): while it
+   * holds a takeover it alone sees the screen.
+   */
+  botScreenStatus(agentId: string, viewer?: string): Promise<BotScreenStatus>
   /** The current screen as PNG, or the status saying why there is none. */
-  botScreenFrame(agentId: string): Promise<{ seq: number; png: Buffer } | BotScreenStatus>
+  botScreenFrame(
+    agentId: string,
+    viewer?: string,
+  ): Promise<{ seq: number; png: Buffer } | BotScreenStatus>
+  /** 3.17.0: take over the screen through Hermes' lease for this browser session (docs/briefs/3.17.0-take-over.md). */
+  botScreenTake?(agentId: string, owner: string): Promise<BotTakeResult>
+  /** One batch of keyboard/pointer input; `lost` when this session no longer holds the screen. */
+  botScreenInput?(
+    agentId: string,
+    owner: string,
+    takeoverId: string,
+    events: readonly BotInputEvent[],
+  ): Promise<'sent' | 'lost'>
+  botScreenHeartbeat?(agentId: string, owner: string, takeoverId: string): boolean
+  botScreenHandBack?(agentId: string, owner: string, takeoverId: string): Promise<boolean>
   /** Live only: sessions active since `sinceMs` with cumulative cost, per readable profile, for Score's spend snapshots. */
   sessionCosts?(req: {
     sinceMs: number
@@ -458,6 +476,10 @@ export interface HermesPortDeps {
    */
   frozen?: () => string | null
 }
+
+export type BotTakeResult =
+  | { ok: true; takeoverId: string; since: number; lastInput: number; expiresAt: number }
+  | { ok: false; code: 'unavailable' | 'busy' | 'not_running' | 'failed'; message: string }
 
 export type ImageReader = (mediaId: string) => { contentType: string; bytes: Uint8Array } | null
 

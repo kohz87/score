@@ -1,6 +1,11 @@
 import { resolveOnPath } from '../../runtimes/coding/native-exec.ts'
 import { homedir } from 'node:os'
-import { type AgentSummary, type HermesCheck, type ModelRef } from '@score/contract'
+import {
+  type AgentSummary,
+  type BotInputEvent,
+  type HermesCheck,
+  type ModelRef,
+} from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
 import { ProfileFiles } from './profile-files.ts'
 import type { AgentFile, AgentFileName } from '../agent-files.ts'
@@ -24,6 +29,7 @@ import {
   TaskFilterSchema,
   matchesTask,
   type HermesPort,
+  type BotTakeResult,
   type HermesPortDeps,
   type ObservationSink,
   notDispatched,
@@ -79,6 +85,7 @@ import {
 } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
 import { BotScreens } from './bot-screen.ts'
+import { BotTakeovers } from './bot-takeover.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 
@@ -252,22 +259,62 @@ export class LivePort implements HermesPort {
     return this.options.frozen?.() ?? null
   }
   // One shared read-only RFB session per profile, opened while someone looks (decision 135).
-  private readonly botScreens = new BotScreens({
-    profileHome: (agentId) => {
-      try {
-        return this.profiles.profileHome(agentId)
-      } catch {
-        return null
-      }
-    },
-  })
-  botScreenStatus(agentId: string) {
-    return this.botScreens.status(agentId)
+  private readonly botProfileHome = (agentId: string) => {
+    try {
+      return this.profiles.profileHome(agentId)
+    } catch {
+      return null
+    }
   }
-  botScreenFrame(agentId: string) {
-    return this.botScreens.frame(agentId)
+  private readonly botScreens = new BotScreens({
+    profileHome: this.botProfileHome,
+    onLost: (agentId, control) => this.botTakeovers?.lost(agentId, control),
+  })
+  // 3.17.0: taking over a Bot Desktop through Hermes' lease, via Score's plugin in the profile's gateway.
+  private botTakeoversValue: BotTakeovers | undefined
+  private get botTakeovers(): BotTakeovers | undefined {
+    if (!this.botTakeoversValue && this.options.db) {
+      const broker = this.options.rewindBroker
+      this.botTakeoversValue = new BotTakeovers({
+        screens: this.botScreens,
+        ask: broker ? (profile, req, timeoutMs) => broker.ask(profile, req, timeoutMs) : undefined,
+        db: this.options.db,
+        profileHome: this.botProfileHome,
+      })
+    }
+    return this.botTakeoversValue
+  }
+  botScreenStatus(agentId: string, viewer?: string) {
+    return this.botScreens.status(agentId, viewer)
+  }
+  botScreenFrame(agentId: string, viewer?: string) {
+    return this.botScreens.frame(agentId, viewer)
+  }
+  async botScreenTake(agentId: string, owner: string): Promise<BotTakeResult> {
+    const takeovers = this.botTakeovers
+    if (!takeovers)
+      return { ok: false, code: 'unavailable', message: 'Taking over isn’t available here.' }
+    const result = await takeovers.take(agentId, owner)
+    if (!result.ok) return result
+    const { takeoverId, since, lastInput, expiresAt } = result.control
+    return { ok: true, takeoverId, since, lastInput, expiresAt }
+  }
+  botScreenInput(
+    agentId: string,
+    owner: string,
+    takeoverId: string,
+    events: readonly BotInputEvent[],
+  ) {
+    return this.botScreens.input(agentId, owner, takeoverId, events)
+  }
+  botScreenHeartbeat(agentId: string, owner: string, takeoverId: string) {
+    return this.botTakeovers?.heartbeat(agentId, owner, takeoverId) ?? false
+  }
+  async botScreenHandBack(agentId: string, owner: string, takeoverId: string) {
+    return (await this.botTakeovers?.handBack(agentId, owner, takeoverId)) ?? false
   }
   async stop(): Promise<void> {
+    this.botTakeoversValue?.close()
     this.botScreens.close()
     this.settings.close()
     clearInterval(this.timer)

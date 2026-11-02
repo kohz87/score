@@ -49,3 +49,94 @@ export function fakeBotScreenFrame(
   }
   return { seq, png }
 }
+
+// 3.17.0: the demo's takeover. Fake mode has no Hermes lease: one session at a time holds builder's screen, others see
+// `human`, and input is counted, not drawn. Idle and the hard limit end it as in live mode.
+const IDLE_MS = 5 * 60_000
+const LIMIT_MS = 30 * 60_000
+interface FakeControl {
+  takeoverId: string
+  owner: string
+  since: number
+  lastInput: number
+  expiresAt: number
+}
+export class FakeBotTakeovers {
+  private readonly controls = new Map<string, FakeControl>()
+  /** Input events received per agent (tests read it). */
+  readonly inputs = new Map<string, number>()
+
+  status(agentId: string, viewer: string | undefined, now: number): BotScreenStatus {
+    const base = fakeBotScreenStatus(agentId, now)
+    const control = this.current(agentId, now)
+    if (!control) return base
+    if (control.owner !== viewer) return { state: 'human' }
+    return {
+      ...base,
+      control: {
+        takeoverId: control.takeoverId,
+        since: new Date(control.since).toISOString(),
+        idleExpiresAt: new Date(control.lastInput + IDLE_MS).toISOString(),
+        expiresAt: new Date(control.expiresAt).toISOString(),
+      },
+    }
+  }
+  take(agentId: string, owner: string, now: number, id: string) {
+    if (fakeBotScreenStatus(agentId, now).state !== 'running')
+      return {
+        ok: false as const,
+        code: 'not_running' as const,
+        message: 'The screen isn’t running right now.',
+      }
+    if (this.current(agentId, now))
+      return {
+        ok: false as const,
+        code: 'busy' as const,
+        message: 'Someone already has control of this screen.',
+      }
+    const control = { takeoverId: id, owner, since: now, lastInput: now, expiresAt: now + LIMIT_MS }
+    this.controls.set(agentId, control)
+    return {
+      ok: true as const,
+      takeoverId: id,
+      since: now,
+      lastInput: now,
+      expiresAt: control.expiresAt,
+    }
+  }
+  input(
+    agentId: string,
+    owner: string,
+    takeoverId: string,
+    count: number,
+    now: number,
+  ): 'sent' | 'lost' {
+    const control = this.held(agentId, owner, takeoverId, now)
+    if (!control) return 'lost'
+    control.lastInput = now
+    this.inputs.set(agentId, (this.inputs.get(agentId) ?? 0) + count)
+    return 'sent'
+  }
+  heartbeat(agentId: string, owner: string, takeoverId: string, now: number): boolean {
+    return this.held(agentId, owner, takeoverId, now) !== undefined
+  }
+  handBack(agentId: string, owner: string, takeoverId: string, now: number): boolean {
+    if (!this.held(agentId, owner, takeoverId, now)) return false
+    this.controls.delete(agentId)
+    return true
+  }
+  private held(agentId: string, owner: string, takeoverId: string, now: number) {
+    const control = this.current(agentId, now)
+    return control && control.owner === owner && control.takeoverId === takeoverId
+      ? control
+      : undefined
+  }
+  private current(agentId: string, now: number) {
+    const control = this.controls.get(agentId)
+    if (control && (now - control.lastInput > IDLE_MS || now >= control.expiresAt)) {
+      this.controls.delete(agentId)
+      return undefined
+    }
+    return control
+  }
+}
