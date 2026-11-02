@@ -14,6 +14,16 @@ export type CommandRequest =
   | { kind: 'rewind'; sessionId: string; turns: number; since?: number }
   | { kind: 'compact'; sessionId: string; keepRecent?: number }
   | { kind: 'context_breakdown'; sessionId: string }
+  | { kind: 'desktop_take'; viewerId: string }
+  | { kind: 'desktop_hand_back'; viewerId: string; epoch: number }
+  | { kind: 'desktop_touch'; viewerId: string }
+
+/** 3.17.0: a profile's Bot Desktop lease as the plugin read it after a desktop command. */
+export interface DesktopLease {
+  holder: 'agent' | 'human'
+  viewerId: string | null
+  epoch: number
+}
 
 export type RewindOutcome =
   | {
@@ -24,6 +34,7 @@ export type RewindOutcome =
       after?: SessionSize
       context?: SessionContextReading
       summary?: string
+      lease?: DesktopLease
     }
   | { status: 'nothing' }
   | { status: 'failed'; error?: string }
@@ -134,6 +145,7 @@ export class RewindBroker {
             ...(result.after ? { after: result.after } : {}),
             ...(result.context ? { context: result.context } : {}),
             ...(result.summary ? { summary: result.summary } : {}),
+            ...(result.lease ? { lease: result.lease } : {}),
           }
         : result.outcome === 'failed'
           ? { status: 'failed', ...(result.error ? { error: result.error } : {}) }

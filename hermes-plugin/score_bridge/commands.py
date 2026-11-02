@@ -19,10 +19,13 @@ def validate_command(item):
     if type(command_id) is not str or not 0 < len(command_id) <= 128:
         raise ProtocolError("invalid command")
     kind = item.get("kind")
-    if kind not in ("rewind", "compact", "context_breakdown") or type(session_id) is not str or not 0 < len(session_id) <= 256:
-        raise ProtocolError("invalid command")
     expires = item.get("expiresAt")
     if type(expires) not in (int, float) or not 0 < expires < 1e12:
+        raise ProtocolError("invalid command")
+    if kind in _DESKTOP:
+        validate_desktop(item)
+        return
+    if kind not in ("rewind", "compact", "context_breakdown") or type(session_id) is not str or not 0 < len(session_id) <= 256:
         raise ProtocolError("invalid command")
     if kind == "context_breakdown":
         return
@@ -87,9 +90,44 @@ def run_context(item, profile: str | None = None) -> dict:
     return {"outcome": "done", "context": result}
 
 
+_DESKTOP = ("desktop_take", "desktop_hand_back", "desktop_touch")
+
+
+def validate_desktop(item):
+    """3.17.0: Bot Desktop takeover. Score's viewer ids are its own (``score:`` + random), never another viewer's."""
+    viewer = item.get("viewerId")
+    if type(viewer) is not str or not viewer.startswith("score:") or not 8 < len(viewer) <= 128:
+        raise ProtocolError("invalid command")
+    if item["kind"] == "desktop_hand_back":
+        epoch = item.get("epoch")
+        if type(epoch) is not int or not 0 <= epoch < 2**53:
+            raise ProtocolError("invalid command")
+    reason = item.get("reason")
+    if reason is not None and (type(reason) is not str or len(reason) > 500):
+        raise ProtocolError("invalid command")
+
+
+def run_desktop(item, profile: str | None = None) -> dict:
+    """The lease after the change, never Hermes text; a fixed error code when Hermes has no lease API."""
+    try:
+        if item["kind"] == "desktop_take":
+            lease = hermes_private.desktop_take(profile, item["viewerId"], item.get("reason") or "")
+        elif item["kind"] == "desktop_hand_back":
+            lease = hermes_private.desktop_hand_back(profile, item["viewerId"], item["epoch"])
+        else:
+            lease = hermes_private.desktop_touch(profile, item["viewerId"])
+    except hermes_private.DesktopUnavailable:
+        return {"outcome": "failed", "error": "desktop_unavailable"}
+    except Exception:
+        return {"outcome": "failed", "error": "desktop_failed"}
+    return {"outcome": "done", "lease": lease}
+
+
 def run_command(item, profile: str | None = None) -> dict:
     if time.time() >= item["expiresAt"]:
         return {"outcome": "expired"}
+    if item["kind"] in _DESKTOP:
+        return run_desktop(item, profile)
     if item["kind"] == "context_breakdown":
         return run_context(item, profile)
     return run_compact(item, profile) if item["kind"] == "compact" else run_rewind(item, profile)

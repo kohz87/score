@@ -602,3 +602,68 @@ def context_breakdown(session_id: str, profile: str | None = None) -> dict | Non
             except Exception:
                 pass
         _release(db)
+
+
+# ---------------------------------------------------------------------------------------------- Bot Desktop (3.17.0)
+# Taking over a profile's Bot Desktop goes through Hermes' own lease functions (tools/bot_desktop/lease.py), in the
+# profile's own home, never by writing its files: docs/briefs/3.17.0-take-over.md.
+
+class DesktopUnavailable(Exception):
+    """Hermes has no Bot Desktop lease API here (older Hermes, or not Linux)."""
+
+
+def _desktop_apis():
+    lease = _lookup_attr("tools.bot_desktop.lease")
+    runtime = _lookup_attr("tools.bot_desktop.runtime")
+    override = _lookup("hermes_constants.set_hermes_home_override")
+    reset = _lookup("hermes_constants.reset_hermes_home_override")
+    get_dir = _lookup("hermes_cli.profiles.get_profile_dir")
+    if not all((lease, runtime, override, reset, get_dir)) or not callable(getattr(lease, "acquire", None)):
+        raise DesktopUnavailable()
+    return lease, runtime, override, reset, get_dir
+
+
+def _lease_view(lease) -> dict:
+    return {"holder": lease.holder, "viewerId": lease.viewer_id, "epoch": int(lease.epoch)}
+
+
+def _in_profile(profile: str | None, act):
+    """Runs ``act(lease_module, runtime_module, home)`` with Hermes' home bound to the profile, as Hermes' own
+    profile-scoped handlers do: ``touch_activity`` has no profile argument and reads the bound home."""
+    lease, runtime, override, reset, get_dir = _desktop_apis()
+    home = Path(get_dir(profile or current_profile()))
+    token = override(home)
+    try:
+        return act(lease, runtime, str(home))
+    finally:
+        reset(token)
+
+
+def desktop_take(profile: str | None, viewer_id: str, reason: str = "") -> dict:
+    def act(lease, runtime, home):
+        # Stamped before the lease is written, as Hermes' display.lease.acquire does: an idle check reading the new
+        # lease against an old stamp would take it for an abandoned one and stop the screen under the person.
+        current = lease.get(profile_key=home)
+        # Hermes' acquire evicts whoever holds the screen (last writer wins). Score never takes it from a person: their
+        # lease comes back unchanged and Score reports the screen as busy.
+        if current.holder == lease.HUMAN and current.viewer_id != viewer_id:
+            return _lease_view(current)
+        runtime.touch_activity()
+        return _lease_view(lease.acquire(viewer_id, profile_key=home, reason=reason or current.reason or ""))
+    return _in_profile(profile, act)
+
+
+def desktop_hand_back(profile: str | None, viewer_id: str, epoch: int) -> dict:
+    # Only this viewer's own generation: a takeover since (the Hermes app, another viewer) keeps the lease.
+    return _in_profile(profile, lambda lease, runtime, home: _lease_view(
+        lease.release(viewer_id, profile_key=home, epoch=epoch)))
+
+
+def desktop_touch(profile: str | None, viewer_id: str) -> dict:
+    """Marks the screen in use while this viewer holds it (Hermes' own viewers stamp from their RFB updates)."""
+    def act(lease, runtime, home):
+        current = lease.get(profile_key=home)
+        if current.holder == lease.HUMAN and current.viewer_id == viewer_id:
+            runtime.touch_activity()
+        return _lease_view(current)
+    return _in_profile(profile, act)

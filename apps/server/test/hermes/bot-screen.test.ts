@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { inflateSync } from 'node:zlib'
 import { afterEach, beforeEach, expect, test } from 'vitest'
-import { BotScreens, encodePng, leaseHolder } from '../../src/hermes/live/bot-screen.ts'
+import {
+  BotScreens,
+  encodePng,
+  keyEvent,
+  leaseHolder,
+  pointerEvent,
+} from '../../src/hermes/live/bot-screen.ts'
 
 // A stand-in for Hermes' Xvnc on a real Unix socket: RFB 3.8, security None, Raw rectangles. It records every byte
 // Score writes so the test can prove the client only ever sends the three read-only message types.
@@ -94,7 +100,11 @@ async function fakeXvnc(
                 ? 4 + 4 * (pending.readUInt16BE(2) || 0)
                 : type === 3
                   ? 10
-                  : 1
+                  : type === 4
+                    ? 8
+                    : type === 5
+                      ? 6
+                      : 1
           if (pending.length < length) break
           pending = pending.subarray(length)
           if (type === 3) {
@@ -125,7 +135,17 @@ function clientMessageTypes(received: Buffer[]): number[] {
   while (bytes.length) {
     const type = bytes[0]!
     const length =
-      type === 0 ? 20 : type === 2 ? 4 + 4 * bytes.readUInt16BE(2) : type === 3 ? 10 : -1
+      type === 0
+        ? 20
+        : type === 2
+          ? 4 + 4 * bytes.readUInt16BE(2)
+          : type === 3
+            ? 10
+            : type === 4
+              ? 8
+              : type === 5
+                ? 6
+                : -1
     if (length < 0) throw new Error(`client wrote message type ${type}`)
     types.push(type)
     bytes = bytes.subarray(length)
@@ -291,6 +311,105 @@ test('a symlinked bot-desktop folder is refused, never followed', async () => {
   const bot = screens()
   try {
     expect((await bot.status('builder')).state).toBe('unavailable')
+  } finally {
+    bot.close()
+  }
+})
+
+// ---- 3.17.0: taking over (docs/briefs/3.17.0-take-over.md) ----
+const lease = (value: object) =>
+  writeFileSync(join(home, 'bot-desktop', 'lease.json'), JSON.stringify(value))
+const VIEWER = 'score:abcdefghijklmnop'
+const control = (over: object = {}) => ({
+  takeoverId: 't1',
+  viewerId: VIEWER,
+  epoch: 3,
+  owner: 'me',
+  since: Date.now(),
+  lastInput: Date.now(),
+  expiresAt: Date.now() + 60_000,
+  ...over,
+})
+const inputTypes = (fake: FakeXvnc) => clientMessageTypes(fake.received).filter((t) => t >= 4)
+
+test('input goes out only while Hermes’ lease names the takeover, and only its owner sees the screen', async () => {
+  const fake = await fakeXvnc(100, 50)
+  const lost: string[] = []
+  const bot = new BotScreens({
+    profileHome: (id) => (id === 'builder' ? home : null),
+    onLost: (_agent, held) => lost.push(held.takeoverId),
+  })
+  try {
+    expect((await bot.status('builder', 'me')).state).toBe('running')
+    const key = [{ k: 'key', keysym: 0x61, down: true } as const]
+    // No takeover: nothing is sent.
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    lease({ holder: 'human', viewer_id: VIEWER, epoch: 3 })
+    bot.setControl('builder', control())
+    expect(await bot.status('builder', 'someone-else')).toEqual({ state: 'human' })
+    expect(await bot.status('builder', 'me')).toMatchObject({
+      state: 'running',
+      control: { takeoverId: 't1' },
+    })
+    expect(await bot.input('builder', 'someone-else', 't1', key)).toBe('lost')
+    expect(
+      await bot.input('builder', 'me', 't1', [
+        ...key,
+        { k: 'key', keysym: 0x61, down: false },
+        { k: 'pointer', x: 500, y: 20, buttons: 1 },
+      ]),
+    ).toBe('sent')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(inputTypes(fake)).toEqual([4, 4, 5])
+    const bytes = Buffer.concat(fake.received)
+    const pointer = bytes.subarray(bytes.length - 6)
+    // Clamped into the screen (x 500 → 99).
+    expect([...pointer]).toEqual([5, 1, 0, 99, 0, 20])
+    // The Hermes app takes over: the takeover is lost, nothing more is sent, nothing is served.
+    lease({ holder: 'human', viewer_id: 'hermes-app', epoch: 4 })
+    expect(await bot.frame('builder', 'me')).toEqual({ state: 'human' })
+    expect(lost).toEqual(['t1'])
+    expect(bot.control('builder')).toBeUndefined()
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(inputTypes(fake)).toEqual([4, 4, 5])
+  } finally {
+    bot.close()
+  }
+})
+
+test('an unreadable lease is never Score’s: the takeover ends', async () => {
+  await fakeXvnc()
+  const bot = screens()
+  try {
+    lease({ holder: 'human', viewer_id: VIEWER, epoch: 3 })
+    bot.setControl('builder', control())
+    expect((await bot.status('builder', 'me')).state).toBe('running')
+    writeFileSync(join(home, 'bot-desktop', 'lease.json'), '{torn')
+    expect(await bot.status('builder', 'me')).toEqual({ state: 'human' })
+    expect(bot.control('builder')).toBeUndefined()
+  } finally {
+    bot.close()
+  }
+})
+
+test('the encoders write exactly RFB KeyEvent and PointerEvent', () => {
+  expect([...keyEvent(true, 0xff0d)]).toEqual([4, 1, 0, 0, 0, 0, 0xff, 0x0d])
+  expect([...pointerEvent(4, 258, 3)]).toEqual([5, 4, 1, 2, 0, 3])
+})
+
+test('input past the idle window or the hard limit is refused, even before the sweep ends the takeover', async () => {
+  const fake = await fakeXvnc()
+  const bot = screens()
+  try {
+    lease({ holder: 'human', viewer_id: VIEWER, epoch: 3 })
+    const key = [{ k: 'key', keysym: 0x61, down: true } as const]
+    bot.setControl('builder', control({ lastInput: Date.now() - 6 * 60_000 }))
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    bot.setControl('builder', control({ expiresAt: Date.now() - 1 }))
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    // Refused before the screen is even opened: not a byte was written.
+    expect(Buffer.concat(fake.received).length).toBe(0)
   } finally {
     bot.close()
   }
