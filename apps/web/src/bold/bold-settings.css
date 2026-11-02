@@ -401,20 +401,23 @@
   color: var(--hi-ink);
 }
 
-/* Advanced: a searchable list of fields and the same staged preview/apply flow as the classic page. */
+/* Advanced: a searchable list of fields and the same staged preview/apply flow as the classic page. The search sits
+   under the intro, full width (beside it, it floated at an odd height on a wide screen; owner, 3.14.7). */
 .bold-settings-page .advanced-head {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: calc(14px * var(--bold-d, 1));
-  align-items: flex-end;
+  align-items: stretch;
 }
 
 .bold-settings-page .advanced-intro {
-  flex: 1 1 280px;
+  flex: none;
 }
 
 .bold-settings-page .advanced-search {
-  flex: 1 1 260px;
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--field);
   border: 0;
   border-radius: 999px;
