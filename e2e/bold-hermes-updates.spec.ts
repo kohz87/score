@@ -24,7 +24,7 @@ for (const viewport of [
     await page.goto('/b/settings/system')
     const card = page.getByRole('region', { name: 'Hermes updates' })
     await expect(card.getByText('Update channel')).toBeVisible({ timeout: 30_000 })
-    await card.getByRole('button', { name: /Check (for updates|again)/ }).click()
+    await card.getByRole('button', { name: /Check (for Hermes updates|again)/ }).click()
     await card.getByRole('button', { name: 'Update Hermes…' }).click()
     const dialog = page.getByRole('form', { name: 'Update Hermes' })
     await expect(dialog).toHaveAttribute('data-protected', 'block')
