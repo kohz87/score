@@ -38,6 +38,7 @@ const tasks = [
   task('t-review', 'T-39', { column: 'in_review', assignee: 'lead', reviewer: 'reviewer' }),
   task('t-block', 'T-40', {
     column: 'needs_you',
+    hermesStatus: 'blocked',
     badge: { kind: 'blocked', label: 'Needs a token' },
   }),
   task('t-done', 'T-30', { column: 'done' }),

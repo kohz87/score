@@ -194,7 +194,11 @@ test('five columns with counts, cards with key, room, badge, progress and agent'
       badge: { kind: 'starts_after', label: 'Starts after T-1' },
     }),
     task('t3', { column: 'in_review' }),
-    task('t4', { column: 'needs_you', badge: { kind: 'blocked', label: 'Needs a token' } }),
+    task('t4', {
+      column: 'needs_you',
+      hermesStatus: 'blocked',
+      badge: { kind: 'blocked', label: 'Needs a token' },
+    }),
     task('t5', { column: 'done', roomId: null }),
   ]
   details.t1 = detailOf(tasks[0]!)
@@ -281,7 +285,13 @@ test('the panel shows the task, its steps and comments, and Comment posts', asyn
 })
 
 test('a blocked task shows Unblock in a light protected block', async () => {
-  tasks = [task('t4', { column: 'needs_you', badge: { kind: 'blocked', label: 'Needs a token' } })]
+  tasks = [
+    task('t4', {
+      column: 'needs_you',
+      hermesStatus: 'blocked',
+      badge: { kind: 'blocked', label: 'Needs a token' },
+    }),
+  ]
   details.t4 = detailOf(tasks[0]!)
   mount()
   fireEvent.click(await screen.findByRole('button', { name: 'T4 Task t4' }))
@@ -313,7 +323,11 @@ test('on a phone Needs you comes first with its actions, then the column tabs, a
   tasks = [
     task('t1'),
     task('t3', { column: 'planned' }),
-    task('t4', { column: 'needs_you', badge: { kind: 'blocked', label: 'Needs a token' } }),
+    task('t4', {
+      column: 'needs_you',
+      hermesStatus: 'blocked',
+      badge: { kind: 'blocked', label: 'Needs a token' },
+    }),
   ]
   details.t1 = detailOf(tasks[0]!)
   mount()
@@ -346,8 +360,16 @@ test('empty states: no tasks at all, and a filter with nothing', async () => {
 // Review (3.16.0): the panel's state belongs to one task, and a phone card only unblocks a blocked task.
 test('switching tasks starts a fresh panel: one task’s Unblock or draft never carries to the next', async () => {
   tasks = [
-    task('t4', { column: 'needs_you', badge: { kind: 'blocked', label: 'Needs a token' } }),
-    task('t5', { column: 'needs_you', badge: { kind: 'blocked', label: 'Needs a key' } }),
+    task('t4', {
+      column: 'needs_you',
+      hermesStatus: 'blocked',
+      badge: { kind: 'blocked', label: 'Needs a token' },
+    }),
+    task('t5', {
+      column: 'needs_you',
+      hermesStatus: 'blocked',
+      badge: { kind: 'blocked', label: 'Needs a key' },
+    }),
   ]
   details.t4 = detailOf(tasks[0]!)
   details.t5 = detailOf(tasks[1]!)
@@ -367,7 +389,8 @@ test('switching tasks starts a fresh panel: one task’s Unblock or draft never 
 
 test('on a phone a task waiting on an approval offers Review and decide, never Unblock', async () => {
   phone = true
-  tasks = [task('t6', { column: 'needs_you', badge: { kind: 'needs_you', label: 'Approval' } })]
+  // As the server sends it: an approval moves the task to Needs you and leaves Hermes' status and badge alone.
+  tasks = [task('t6', { column: 'needs_you', hermesStatus: 'running', badge: null })]
   details.t6 = detailOf(tasks[0]!, { pendingApproval: approval() })
   mount()
   const needs = await screen.findByRole('region', { name: 'Needs you' })

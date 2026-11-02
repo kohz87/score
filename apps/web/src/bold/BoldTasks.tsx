@@ -478,9 +478,9 @@ function PhoneNeedsCard({
   onOpen: () => void
 }) {
   const unblock = useTaskPost(task.id, 'unblock')
-  // Only a blocked task is unblocked here; one waiting on an approval (badge `needs_you`) is decided in its details, where
-  // the approval is (the summary doesn't carry it).
-  const blocked = blockedTask(task) && task.badge?.kind !== 'needs_you'
+  // Unblock only what Hermes itself has blocked (it refuses the rest); anything else in Needs you, such as a task
+  // waiting on an approval, is decided in its details, where the approval is (the summary doesn't carry it).
+  const blocked = task.hermesStatus === 'blocked'
   const reason = taskBlockedReason(task)
   return (
     <article className="bold-tb-need bold-tb-need--phone" data-protected="flex">
