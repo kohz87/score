@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.6] — 2026-11-02
+
+### Changed
+- **Hermes v0.22.5+3257 (main 557254fa) is a tested build.** Score's check found only a new session-database table it
+  doesn't read; hooks, approval functions, the kanban schema, capabilities and command patterns are unchanged, and a live
+  test message ran end to end. Approvals stay on after this Hermes update. The Advanced settings search knows the 9 new
+  Hermes settings.
+
 ## [3.14.5] — 2026-10-29
 
 ### Added

@@ -155,7 +155,7 @@
     },
     {
       "key": "agent.local_stream_stale_timeout",
-      "description": "Stale-stream ceiling (seconds) for local providers (Ollama, oMLX, llama-cpp). Applied when the base stale timeout is at its 180s default and a local endpoint is detected, so a wedged local server eventually trips the detector instead of hanging forever. Env HERMES_LOCAL_STREAM_STALE_TIMEOUT overrides.",
+      "description": "Stale-stream ceiling (s) for local providers (Ollama, oMLX, llama-cpp) when the base stale timeout is at its 180s default, so a wedged local server eventually trips the detector instead of hanging forever. Env HERMES_LOCAL_STREAM_STALE_TIMEOUT overrides.",
       "default": 900
     },
     {
@@ -229,6 +229,11 @@
       "default": 2.0
     },
     {
+      "key": "agent.stream_max_lifetime",
+      "description": "opt-in whole-stream cap in s, 0 = off (agent/stream_max_lifetime.py)",
+      "default": 0
+    },
+    {
       "key": "agent.task_completion_guidance",
       "description": "\"Finish the job\" prompt block for all models: don't stop at a stub, never fabricate output when the real path is blocked. ~80 cached tokens. False disables.",
       "default": true
@@ -283,13 +288,18 @@
       "default": true
     },
     {
+      "key": "approvals.discord_prompt_timeout",
+      "description": "Discord buttons stay clickable (min 30 s, cap MAX_SAFE_TIMEOUT_S)",
+      "default": 300
+    },
+    {
       "key": "approvals.mcp_reload_confirm",
       "description": "/reload-mcp confirms before rebuilding the MCP tool set (it invalidates the prompt cache, so the next message re-sends full input). \"Always Approve\" → false.",
       "default": true
     },
     {
       "key": "approvals.mode",
-      "description": "single_query_mode — what to do when a single-query (-q) session hits a dangerous command. -q runs export HERMES_INTERACTIVE=1 (for interactive sudo prompts) but have NO user waiting to answer approval prompts — an unanswered prompt just waits the full timeout then fails closed, so the agent is forced to work around the block (often via execute_code). This setting makes that intent explicit: deny    — block the command and let the agent find another way (default, safe; mirrors cron_mode deny) approve — auto-approve all dangerous commands in single-query mode These surfaces bind a session platform like chat gateways do, but have no send_exec_approval and no /approve channel — a pending approval there just blocks for the full timeout with nobody to answer (#37284, #87509): deny    — block the command instantly and let the agent find another way (default, safe; mirrors cron_mode deny) approve — auto-approve all dangerous commands on unattended platforms Shared by the CLI prompt and gateway/messaging waits. Messaging approvals arrive as a push notification the user may not see immediately — 60s proved too tight on Telegram/Discord (the prompt expired before the user reached their phone), so the default is 300.",
+      "description": "single_query_mode — what to do when a single-query (-q) session hits a dangerous command. -q runs export HERMES_INTERACTIVE=1 (for interactive sudo prompts) but have NO user waiting to answer approval prompts — an unanswered prompt just waits the full timeout then fails closed, so the agent is forced to work around the block (often via execute_code). This setting makes that intent explicit: deny    — block the command and let the agent find another way (default, safe; mirrors cron_mode deny) approve — auto-approve all dangerous commands in single-query mode These surfaces bind a session platform like chat gateways do, but have no send_exec_approval and no /approve channel — a pending approval there just blocks for the full timeout with nobody to answer (#37284, #87509): deny    — block the command instantly and let the agent find another way (default, safe; mirrors cron_mode deny) approve — auto-approve all dangerous commands on unattended platforms",
       "default": "smart"
     },
     {
@@ -660,7 +670,7 @@
     },
     {
       "key": "auxiliary.stream_only_base_urls",
-      "description": "Endpoints that reject NON-streaming chat (HTTP 400): aux calls are sent with stream=True and aggregated. Case-insensitive URL substrings; copilot.tencent.com is always stream-only.",
+      "description": "Endpoints that reject NON-streaming chat (HTTP 400): aux calls are sent with stream=True and aggregated. Case-insensitive URL substrings; some vendor endpoints are always stream-only.",
       "default": []
     },
     {
@@ -876,12 +886,12 @@
     },
     {
       "key": "browser.allow_private_urls",
-      "description": "allow private/internal IPs (localhost, 192.168.x.x, ...)",
+      "description": "legacy security.allow_private_urls; local/sidecar Chromium ignore it",
       "default": false
     },
     {
       "key": "browser.auto_local_for_private_urls",
-      "description": "With a cloud provider, auto-spawn local Chromium for LAN/localhost URLs instead",
+      "description": "Cloud provider: LAN/localhost URLs open in a local Chromium (ignores allow_private_urls; False refuses)",
       "default": true
     },
     {
@@ -1022,7 +1032,7 @@
     },
     {
       "key": "compression.codex_gpt55_autoraise",
-      "description": "(Historical key name.) When True, gpt-5.4/5.5/5.6 and gpt-6 Astra (any slug containing \"astra\" without \"900k\") on the ChatGPT Codex OAuth route raise their compaction trigger to 85%: Codex hard-caps them at a 272K window, so the global 50% would compact at ~136K. False = global `threshold`. Only that route; the same models via OpenAI direct, OpenRouter or Copilot keep the global value.",
+      "description": "(Historical key name.) When True, gpt-5.4/5.5/5.6 and gpt-6 Astra (any slug containing \"astra\" without \"900k\") on the ChatGPT Codex OAuth route raise their compaction trigger to 85%: Codex hard-caps them at a 272K window, so the global 50% would compact at ~136K. False = global `threshold`. Only that route; the same models via OpenAI direct, OpenRouter or another relay keep the global value.",
       "default": true
     },
     {
@@ -1081,7 +1091,7 @@
     },
     {
       "key": "compression.idle_compact_after_seconds",
-      "description": "Opt-in idle compaction (0 = off): a session resuming after this many idle seconds compacts up front, before the first reply. Time-based complement to `threshold`; skipped when already at/below threshold × target_ratio; honors the same cooldown/ anti-thrash/lock guards. Example: 1800 = 30 min.",
+      "description": "Opt-in idle compaction (0 = off): a session resuming after this many idle seconds compacts up front, before the first reply. Time-based complement to `threshold`; skipped when already at/below threshold × target_ratio; honors the same cooldown/anti-thrash/lock guards. Example: 1800 = 30 min.",
       "default": 0
     },
     {
@@ -1118,6 +1128,11 @@
       "key": "compression.model_thresholds",
       "description": "Per-model threshold overrides: keys substring-match the model name (longest wins), values replace the global `threshold`, e.g. {\"glm-5.2\": 0.40}. Prefix a key with \"<provider>:\" to scope it to one route ({\"openai-codex:astra\": 0.85} leaves Astra on OpenRouter/Nous at the global value). The <512K floor (0.75) still applies raise-only on top.",
       "default": {}
+    },
+    {
+      "key": "compression.prepare_ahead",
+      "description": "Opt-in: write the next summary in the background near the trigger; compaction uses (or waits for) it if it still covers the same messages.",
+      "default": false
     },
     {
       "key": "compression.proactive_prune_min_reclaim_tokens",
@@ -1433,12 +1448,12 @@
     },
     {
       "key": "dashboard.drain_auth.min_secret_chars",
-      "description": "Drain-control token auth (dashboard_auth/drain plugin). The secret is NOT here: env HERMES_DASHBOARD_DRAIN_SECRET; no-op unless >=256-bit, weak secrets rejected (fail-closed). scope = capability label; min_secret_chars in url-safe-b64 chars.",
+      "description": "Drain-control token auth (dashboard_auth/drain plugin): the secret is NOT here (env HERMES_DASHBOARD_DRAIN_SECRET); no-op unless >=256-bit, weak secrets rejected (fail-closed).",
       "default": 43
     },
     {
       "key": "dashboard.drain_auth.scope",
-      "description": "Drain-control token auth (dashboard_auth/drain plugin). The secret is NOT here: env HERMES_DASHBOARD_DRAIN_SECRET; no-op unless >=256-bit, weak secrets rejected (fail-closed). scope = capability label; min_secret_chars in url-safe-b64 chars.",
+      "description": "Drain-control token auth (dashboard_auth/drain plugin): the secret is NOT here (env HERMES_DASHBOARD_DRAIN_SECRET); no-op unless >=256-bit, weak secrets rejected (fail-closed).",
       "default": "drain"
     },
     {
@@ -1454,6 +1469,11 @@
       "key": "dashboard.public_url",
       "description": "Public URL (env HERMES_DASHBOARD_PUBLIC_URL): full authority (scheme + host + optional prefix, e.g. https://example.com/hermes) for the OAuth redirect_uri; its hostname is trusted by Host/Origin guards and engages the auth gate when non-loopback. For proxies that don't forward X-Forwarded-Host/-Proto/-Prefix; X-Forwarded-Prefix is then IGNORED on the OAuth path. Empty or malformed (no http(s):// + host, or quote/angle/whitespace chars) = reconstruct from headers.",
       "default": ""
+    },
+    {
+      "key": "dashboard.session_token_auth.enabled",
+      "description": "session_token plugin: a provisioned HERMES_DASHBOARD_SESSION_TOKEN (literal or file:<path>) authorizes the gated dashboard; enabled: false opts out",
+      "default": true
     },
     {
       "key": "dashboard.show_token_analytics",
@@ -1549,6 +1569,11 @@
       "key": "delegation.fallback_providers",
       "description": "Fallback chain for delegated children (same entry format as the top-level list). For an unpinned child, null = inherit the parent chain; [] = disable fallback. A child pinned by provider, endpoint, or model gets no fallback unless this setting declares one explicitly.",
       "default": null
+    },
+    {
+      "key": "delegation.gateway_mode",
+      "description": "gateway: inline (join in the turn) | background | auto = inline where interim msgs are off",
+      "default": "auto"
     },
     {
       "key": "delegation.independent_completions",
@@ -2434,6 +2459,14 @@
       "default": false
     },
     {
+      "key": "hosted_rooms.discussion.max_messages",
+      "default": 10
+    },
+    {
+      "key": "hosted_rooms.discussion.max_rounds",
+      "default": 3
+    },
+    {
       "key": "human_delay.max_ms",
       "default": 2500
     },
@@ -3153,7 +3186,7 @@
     },
     {
       "key": "security.allow_private_urls",
-      "description": "allow requests to private/internal IPs (OpenWrt, VPNs)",
+      "description": "private IPs for web/vision/media + cloud/CDP browsers; not local/sidecar Chromium",
       "default": false
     },
     {
@@ -3247,6 +3280,11 @@
       "default": 30
     },
     {
+      "key": "sessions.orphan_end_grace_s",
+      "description": "Seconds before a local session with no viewer is ended (resumable) once its turn settles; 0 = never; after a restart also >= 6h idle. Unset: dashboard.ws_orphan_reap_grace_s: 0 / startup_orphan_sweep: false opt out.",
+      "default": 300.0
+    },
+    {
       "key": "sessions.retention_days",
       "description": "Inactive days of ended-session history to keep (= `hermes sessions prune`).",
       "default": 90
@@ -3263,7 +3301,7 @@
     },
     {
       "key": "sessions.vacuum_after_prune",
-      "description": "VACUUM after a prune that deleted rows (SQLite never reclaims disk on DELETE). VACUUM blocks writes (~seconds per 100MB), so it runs only at startup, only when ≥1 session was deleted AND freelist/page_count > 25%. SQLite does not reclaim disk space on DELETE — freed pages are just reused on subsequent INSERTs — so without VACUUM the file stays bloated even after pruning. See #54189.",
+      "description": "VACUUM after a prune that deleted rows (SQLite never reclaims disk on DELETE, #54189). It blocks writes (~seconds per 100MB): only at startup, only when ≥1 session went AND freelist/page_count > 25%.",
       "default": true
     },
     {
@@ -4286,7 +4324,7 @@
     },
     {
       "key": "wake_word.start_new_session",
-      "description": "fresh session on wake vs. continue the current one",
+      "description": "fresh session on wake vs. continue the current one (detached-spawn: ok — a config key)",
       "default": true
     },
     {
@@ -4369,7 +4407,7 @@
     },
     {
       "key": "worktrees.archive_dirty",
-      "description": "false = never remove a dirty/unpushed tree (the pre-archive behaviour, exactly).",
+      "description": "false = never remove a dirty/unpushed tree (the pre-archive behaviour)",
       "default": true
     },
     {
@@ -4381,6 +4419,11 @@
       "key": "worktrees.archive_retention_days",
       "description": "The sweep deletes archive refs older than this many days. 0 keeps them forever.",
       "default": 30
+    },
+    {
+      "key": "worktrees.install_state_retention_days",
+      "description": "installs/<key> of a missing checkout, unused this long, goes; 0 = never",
+      "default": 14
     },
     {
       "key": "worktrees.max_total_gb",
