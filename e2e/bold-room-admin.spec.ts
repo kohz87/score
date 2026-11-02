@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { makeRoom, openBoldRoomById, say, streamOf } from './bold-chat-helpers.ts'
-import { pair } from './pair.ts'
+import { pair, E2E_SECURITY_PASSWORD } from './pair.ts'
 
 // 3.0.0: the classic chat-rooms (delete, compact, /compress), chat-summary, memory-notes and conversations (export, share)
 // specs on the new shell, against the real fake server. The compaction ring now lives in the one-to-one chat and the
@@ -182,7 +182,7 @@ test('a share link opens a static page without the app, and revoking it makes it
   page,
   browser,
 }) => {
-  const password = 'e2e share password'
+  const password = E2E_SECURITY_PASSWORD
   // The security password guards link creation; set it if this server has none yet.
   await page.request.put('/api/session/security/password', { headers: web, data: { password } })
   const room = await makeRoom(page, 'share')

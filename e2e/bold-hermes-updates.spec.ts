@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { pair } from './pair.ts'
+import { pair, E2E_SECURITY_PASSWORD } from './pair.ts'
 
 // 3.15.0 (owner): Settings › System › Hermes updates, against the fake adapter's simulated update (it ends in "differs").
 const web = { 'x-score-client': 'web' }
-const password = 'e2e hermes update password'
+const password = E2E_SECURITY_PASSWORD
 
 // One simulated update job lives on the server, so the two sizes run one after the other.
 test.describe.configure({ mode: 'serial' })
