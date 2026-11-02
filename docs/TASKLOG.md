@@ -1991,3 +1991,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   owner as a follow-up.
 - Gate: e2e 854 passed, 2 failed (tablet, terminal; 32/32 on rerun); check green (contract 1584, web 3096, server 4941).
 - **v3.15.1 deployed live** (~04:55 UTC, idle guard passed): backup score-pre-3.15.1-20261102.db, health ok.
+
+## 3.15.2 — Second cleanup pass (2026-11-02)
+- Owner: "do 7". Lead removed `GET /api/coding-agents/runtimes/:runtime/usage` (its quota-parsing and caching test now goes
+  through `…/runtimes/antigravity/quota`, which reads the same cached `/usage`) and `GET /api/themes/:id/style.css` with the
+  server's `rewriteAssetUrls` (the page rewrites `asset:` references itself, `sanitise.ts`/`engine.ts`); contract updated.
+- A Sonnet coder retired `AddCodingAgentForm`: it stopped before deleting because the bold add dialog lacked the live
+  quota line the old form had; lead decided to keep the behaviour, so the bold dialog now shows `RuntimeQuotaLine`, and
+  the two old tests moved to `BoldAddAgent.test.tsx` with equivalent assertions. Sonnet review: no P1/P2; P3 a stale
+  "(same errors as `/usage`)" in the contract — fixed.
+- Gate: e2e 856 passed, 0 failed; check green (contract 1584, web 3096, server 4938).
+- **v3.15.2 deployed live** (~06:09 UTC, idle guard passed): backup score-pre-3.15.2-20261102.db, health ok.
