@@ -108,8 +108,11 @@ export const CodingAgentSchema = z.object({
     state: CliStateSchema,
     version: z.string().nullable(),
     testedVersions: z.array(z.string()),
-    /** The person confirmed the installed (untested) version for this agent. */
-    confirmed: z.boolean(),
+    /**
+     * 3.15.3 (decision 157): why the installed version can't run, or null. A version newer than the tested ones runs
+     * unless Score's help check finds it changed something Score relies on; this is that finding.
+     */
+    problem: z.string().nullable(),
   }),
   /** Process groups Score could not prove ended: the agent takes no new turn while any is held. */
   heldGroups: z.array(
@@ -204,8 +207,6 @@ export const CodingAgentPatchSchema = z
     path: ['instructionsEtag'],
   })
 export type CodingAgentPatch = z.infer<typeof CodingAgentPatchSchema>
-
-export const CodingVersionConfirmSchema = z.object({ version: z.string().min(1).max(100) }).strict()
 
 /**
  * Antigravity's own quota (`agy -p /usage`, PLAN 7.6): per model group the 5-hour and weekly share still available.

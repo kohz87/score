@@ -277,6 +277,10 @@ export class CodingRuntime {
   async view(agent: StoredCodingAgent): Promise<CodingAgent> {
     const driver = driverFor(agent.runtime)
     const cli = await this.deps.locator.detect(driver)
+    const problem =
+      cli.state === 'untested_version' && cli.version !== null
+        ? await this.versionProblemShown(driver, cli.version)
+        : null
     return {
       id: agent.id,
       name: agent.name,
@@ -296,7 +300,7 @@ export class CodingRuntime {
         state: cli.state,
         version: cli.version,
         testedVersions: [...driver.testedVersions],
-        confirmed: cli.version !== null && agent.confirmedVersion === cli.version,
+        problem,
       },
       heldGroups: this.heldGroups(agent.id),
       createdAt: agent.createdAt,
@@ -442,8 +446,6 @@ export class CodingRuntime {
     const cli = await this.deps.locator.detect(driver, { fresh: true })
     if (cli.state === 'not_installed' || cli.state === 'not_supported')
       throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI isn’t available.')
-    if (cli.state === 'untested_version')
-      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version.')
     const { file, args } = this.deps.locator.command(driver)
     const cwd = join(this.deps.home, 'coding')
     mkdirSync(cwd, { recursive: true, mode: 0o700 })
@@ -541,14 +543,37 @@ export class CodingRuntime {
         notice: `${driver.label} is not verified for ${agent.permission} access yet. Open this agent in Team and pick a verified level.`,
         cause: 'reach_unverifiable',
       }
-    if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
-      return {
-        code: 'untested_cli_version',
-        message: cli.message ?? 'Untested CLI version.',
-        notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
-        cause: 'untested_version',
-      }
+    // 3.15.3 (decision 157): a version newer than the tested ones runs without asking unless it is broken: the help check
+    // (decision 138) is what decides, the same one orchestration steps use. A runtime without one simply runs.
+    if (cli.state === 'untested_version' && cli.version !== null) {
+      const problem = await this.checkVersion(driver, cli.version)
+      if (problem)
+        return {
+          code: 'untested_cli_version',
+          message: problem,
+          notice: `${driver.label} ${cli.version} can't run: ${problem}`,
+          cause: 'version_unchecked',
+        }
+    }
     return null
+  }
+
+  private readonly shownProblems = new Map<string, { at: number; problem: string | null }>()
+
+  /**
+   * The help check's verdict for the agent page. Lists ask often, so a failed check is remembered for a minute instead of
+   * reading the help again every time; a run always checks afresh (`cliRefusal`).
+   */
+  private async versionProblemShown(
+    driver: ReturnType<typeof driverFor>,
+    version: string,
+  ): Promise<string | null> {
+    const key = `${driver.runtime}@${version}`
+    const seen = this.shownProblems.get(key)
+    if (seen && Date.now() - seen.at < 60_000) return seen.problem
+    const problem = await this.checkVersion(driver, version)
+    this.shownProblems.set(key, { at: Date.now(), problem })
+    return problem
   }
 
   // ---------------------------------------------------------------------------------------- worker policy (7.7b §3)
@@ -695,11 +720,9 @@ export class CodingRuntime {
       const readiness: WorkerReadiness =
         refusal.cause === 'cli_missing'
           ? 'not_installed'
-          : refusal.cause === 'untested_version'
-            ? 'version_untested'
-            : refusal.cause === 'reach_unverifiable'
-              ? 'level_unverified'
-              : 'reach_unverifiable'
+          : refusal.cause === 'reach_unverifiable'
+            ? 'level_unverified'
+            : 'reach_unverifiable'
       return none(readiness, refusal.notice)
     }
     const checked = await checkRoot(agent.workspace, this.deps.policy)

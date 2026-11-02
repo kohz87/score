@@ -87,7 +87,7 @@ const coder: CodingAgent = {
   style: { color: '#6B4EFF', shape: 'hexagon' },
   quota: 'Uses your ChatGPT plan quota.',
   quotaFloorPercent: 10,
-  cli: { state: 'ready', version: '0.160.1', testedVersions: ['0.160.1'], confirmed: false },
+  cli: { state: 'ready', version: '0.160.1', testedVersions: ['0.160.1'], problem: null },
   heldGroups: [],
   createdAt: '2026-10-16T00:00:00.000Z',
 }
