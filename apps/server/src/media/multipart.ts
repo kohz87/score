@@ -61,19 +61,6 @@ export function parseSingleFile(
   return files[0]!
 }
 
-/** Every file part of the body (any field name), at most `maxParts` parts, at least one file. */
-export function parseFiles(
-  body: Buffer,
-  contentType: string | undefined,
-  maxParts: number,
-): FilePart[] {
-  const files = parseParts(body, contentType, maxParts, (disposition) =>
-    /filename=/i.test(disposition),
-  )
-  if (files.length === 0) throw bad()
-  return files
-}
-
 // Only ever echoed back to the client: strip directories, control characters and absurd lengths.
 function safeName(raw: string): string {
   const base = raw.split(/[\\/]/).pop() ?? ''

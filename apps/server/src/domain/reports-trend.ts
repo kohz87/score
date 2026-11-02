@@ -3,7 +3,6 @@ import type { Reports } from '@score/contract'
 import { addDays, reportWindow, startOfDay, type ReportRun } from './reports.ts'
 import { profileSpendInWindow, type SessionCost } from './spend.ts'
 
-export const TREND_DAYS = 30
 export type Trend = Reports['trend']
 
 const dayOf = (ms: number, tz: string) =>

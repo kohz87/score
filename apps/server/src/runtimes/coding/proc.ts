@@ -45,13 +45,6 @@ export function procAvailable(): boolean {
   return processStart(process.pid) !== null
 }
 
-/** Whether the exact process (pid and start time) is alive. A zombie counts as gone. */
-export function isSameProcess(pid: number, startTime: string | null): boolean {
-  const fields = statFields(pid)
-  if (!fields || fields[0] === 'Z') return false
-  return startTime === null ? true : fields[19] === startTime
-}
-
 /** The boot this process table belongs to: start times and pids mean nothing across boots. null where unreadable. */
 export function bootId(): string | null {
   try {

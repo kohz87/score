@@ -108,5 +108,3 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
     setReuseConfirmed,
   }
 }
-
-export type AgentCreateDraft = ReturnType<typeof useAgentCreateDraft>

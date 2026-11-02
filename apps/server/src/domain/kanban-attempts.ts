@@ -294,12 +294,6 @@ export function attemptsByIds(sqlite: DatabaseSync, ids: readonly string[]): Kan
   return out
 }
 
-/** The id of the live (active) history of the Kanban source, or null before one exists. Never inert-qualifies. */
-export function activeHistoryId(sqlite: DatabaseSync): string | null {
-  const row = sqlite.prepare("SELECT id FROM kanban_histories WHERE state = 'active' LIMIT 1").get()
-  return row === undefined ? null : z.object({ id: z.string() }).parse(row).id
-}
-
 /**
  * A task reference qualified by the board lineage the attempt came from. Only `current` references describe the board
  * Score follows now; a task deleted upstream, or from a closed or unverified history, is historical.
@@ -335,46 +329,10 @@ export function attemptDetail(attempt: KanbanAttempt): AttemptDetail {
   return { ...attemptSummary(attempt), taskSnapshot: attempt.taskSnapshot }
 }
 
-/** Sort key for every list of attempts: `(startedAt, upstream attempt id)`, never the opaque id. */
-export function byAttemptOrder(
-  a: { startedAt: string; attemptId: number },
-  b: { startedAt: string; attemptId: number },
-): number {
-  return Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.attemptId - b.attemptId
-}
-
-export function attemptByKey(
-  sqlite: DatabaseSync,
-  historyId: string,
-  attemptId: number,
-): AttemptRow | undefined {
-  const row = sqlite
-    .prepare('SELECT * FROM kanban_attempts WHERE history_id = ? AND attempt_id = ?')
-    .get(historyId, attemptId)
-  return row === undefined ? undefined : AttemptRowSchema.parse(row)
-}
-
 /** One `attempt.updated` per changed attempt, built from the rows as committed in the same transaction. */
 export function attemptUpdates(sqlite: DatabaseSync, ids: readonly string[]): DomainEventDraft[] {
   return attemptsByIds(sqlite, [...new Set(ids)]).map((attempt) => ({
     type: 'attempt.updated' as const,
     data: attemptSummary(attempt),
   }))
-}
-
-/**
- * The attempts of one task in the lineage Score follows now, oldest first by `(startedAt, upstream attempt id)`.
- * Attempts from an earlier copy of the board never join a task of the current one; a copy made by a restore is the
- * current lineage's own row, so it is included.
- */
-export function currentAttemptsOfTask(
-  sqlite: DatabaseSync,
-  taskId: string,
-  nowMs: number,
-): KanbanAttempt[] {
-  return listAttempts(sqlite, {
-    since: new Date(0).toISOString(),
-    until: new Date(nowMs).toISOString(),
-    taskId,
-  }).filter((attempt) => attemptSummary(attempt).task.current)
 }

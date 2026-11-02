@@ -1,7 +1,5 @@
 import { createContext, useContext, useSyncExternalStore } from 'react'
 
-/** Breakpoints shared by the whole app (phone < 600, tablet < 1024, desktop >= 1024). */
-export const NARROW_QUERY = '(width < 1024px)'
 export const PHONE_QUERY = '(width < 600px)'
 
 /** The window whose size the queries measure: the Customizer's preview frame has its own (PLAN 9.4). */

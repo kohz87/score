@@ -1,6 +1,8 @@
 import { THEME_COLOR_TOKENS } from '@score/contract'
 import { describe, expect, it } from 'vitest'
-import { editableTokens, tokenGroups, tokenLabel } from './token-info.ts'
+import { tokenGroups, tokenLabel } from './token-info.ts'
+
+const editableTokens = tokenGroups.flatMap((group) => group.tokens.map((item) => item.token))
 
 describe('the Colours groups of the new shell (decision 131 E)', () => {
   it('are the new shell’s areas, with no Flow or Tasks colours', () => {

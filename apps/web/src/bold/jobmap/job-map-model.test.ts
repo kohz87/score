@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { agents, events, fullRun, plainRun } from './job-map-fixtures.ts'
-import { buildJobMap, formatTokens, logFor } from './job-map-model.ts'
+import { buildJobMap, logFor } from './job-map-model.ts'
 
 test('a plain job draws only you, the lead and its workers', () => {
   const model = buildJobMap(plainRun, [], agents)
@@ -43,8 +43,6 @@ test('the advisor counts its own checkpoint consults; a worker counts the asks o
   expect(model.advisor?.marks.map((mark) => mark.used)).toEqual([true, false, false])
   expect(model.workers[0]?.asked).toEqual({ count: 2 })
   expect(model.workers[1]?.asked).toBeNull()
-  expect(formatTokens(18000)).toBe('18k')
-  expect(formatTokens(900)).toBe('900')
 })
 
 test('the votes layer shows the last three votes', () => {

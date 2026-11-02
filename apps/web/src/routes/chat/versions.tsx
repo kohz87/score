@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { MessageItem } from './MessageItem.tsx'
-import { startEdit } from './message-edit.ts'
 
 /**
  * Message versions like ChatGPT / Open WebUI (PLAN 5.35). All edits of one message form a chain; the current message
@@ -335,63 +334,6 @@ export function DeletedBlock({
         agents={agents}
         onlyJobId={onlyJobId}
       />
-    </div>
-  )
-}
-
-/** An edit whose rewind is done but whose correction was never sent: the original is hidden with no replacement yet. */
-export function OpenEditNotice({
-  version,
-  versions,
-  agents,
-}: {
-  version: RoomVersion
-  versions: RoomVersion[]
-  agents: AgentSummary[]
-}) {
-  const [viewing, setViewing] = useState(false)
-  const [continuing, setContinuing] = useState(false)
-  async function continueEditing() {
-    setContinuing(true)
-    try {
-      const detail = RoomVersionDetailSchema.parse(
-        await apiFetch(
-          `rooms/${encodeURIComponent(version.roomId)}/versions/${encodeURIComponent(version.anchorId)}`,
-        ),
-      )
-      const anchor = detail.items.find((message) => message.id === version.anchorId)
-      // The rewind already happened: sending posts the correction without asking for it again.
-      if (anchor) startEdit(anchor, { rewound: true })
-    } finally {
-      setContinuing(false)
-    }
-  }
-  return (
-    <div className="chat-version" data-testid="open-edit">
-      <div className="chat-version-bar">
-        <span>Edit not sent yet: the original is hidden</span>
-        <button
-          type="button"
-          className="chat-version-toggle"
-          aria-expanded={viewing}
-          onClick={() => setViewing((value) => !value)}
-        >
-          {viewing ? 'Hide' : 'View'}
-        </button>
-        <button
-          type="button"
-          className="chat-version-toggle"
-          disabled={continuing}
-          onClick={() => void continueEditing()}
-        >
-          Continue editing
-        </button>
-      </div>
-      {viewing && (
-        <div className="chat-previous" role="region" aria-label="Original message">
-          <VersionItems version={version} versions={versions} agents={agents} />
-        </div>
-      )}
     </div>
   )
 }

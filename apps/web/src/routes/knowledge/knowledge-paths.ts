@@ -1,4 +1,4 @@
-import type { KnowledgeDocumentSummary, KnowledgeNoteSummary, KnowledgeTree } from '@score/contract'
+import type { KnowledgeDocumentSummary, KnowledgeNoteSummary } from '@score/contract'
 
 export const notePath = (path: string) =>
   path
@@ -39,49 +39,6 @@ export type TreeNode =
   | { kind: 'folder'; path: string; name: string; children: TreeNode[] }
   | { kind: 'note'; path: string; name: string; note: KnowledgeNoteSummary }
   | { kind: 'document'; path: string; name: string; document: KnowledgeDocumentSummary }
-
-export function buildTree(tree: KnowledgeTree): TreeNode[] {
-  const root: TreeNode[] = []
-  const folders = new Map<string, Extract<TreeNode, { kind: 'folder' }>>()
-  function folder(path: string): TreeNode[] {
-    if (path === '') return root
-    let node = folders.get(path)
-    if (!node) {
-      node = { kind: 'folder', path, name: path.split('/').pop()!, children: [] }
-      folders.set(path, node)
-      folder(folderOf(path)).push(node)
-    }
-    return node.children
-  }
-  for (const path of tree.folders) folder(path)
-  for (const note of tree.notes)
-    folder(folderOf(note.path)).push({
-      kind: 'note',
-      path: note.path,
-      name: baseName(note.path),
-      note,
-    })
-  for (const document of tree.documents)
-    folder(folderOf(document.path)).push({
-      kind: 'document',
-      path: document.path,
-      name: document.path.split('/').pop()!,
-      document,
-    })
-  const sort = (nodes: TreeNode[]) => {
-    nodes.sort(
-      (a, b) =>
-        (a.kind === b.kind || (a.kind !== 'folder' && b.kind !== 'folder')
-          ? 0
-          : a.kind === 'folder'
-            ? -1
-            : 1) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-    )
-    for (const node of nodes) if (node.kind === 'folder') sort(node.children)
-  }
-  sort(root)
-  return root
-}
 
 export function timeAgo(iso: string, now = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000))

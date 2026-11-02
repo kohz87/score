@@ -54,11 +54,6 @@ function useActivityMap(): ActivityMap {
   )
 }
 
-/** Starts listening for the whole session. */
-export function useActivityFeed() {
-  useActivityMap()
-}
-
 export function useAgentActivity(agentId: string | null | undefined): AgentActivity {
   const map = useActivityMap()
   return (agentId ? map.get(agentId) : undefined) ?? EMPTY_ACTIVITY

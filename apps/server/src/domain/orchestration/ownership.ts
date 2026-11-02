@@ -50,13 +50,3 @@ export function assertNotOwned(owner: Owner | undefined, action: string): void {
 export function assertRoomFree(sqlite: DatabaseSync, roomId: string, action: string): void {
   assertNotOwned(ownerOfRoom(sqlite, roomId), action)
 }
-export function assertBriefFree(sqlite: DatabaseSync, briefId: string, action: string): void {
-  assertNotOwned(ownerOfBrief(sqlite, briefId), action)
-}
-
-/** The brief a Hermes run belongs to, via its reply row (null for runs outside any brief). */
-export function briefOfRun(sqlite: DatabaseSync, runId: string): string | null {
-  const row = sqlite.prepare('SELECT chain_id FROM message_runs WHERE run_id = ?').get(runId) as
-    { chain_id: string } | undefined
-  return row?.chain_id ?? null
-}

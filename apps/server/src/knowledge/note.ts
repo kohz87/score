@@ -37,12 +37,6 @@ export function parseNotePath(input: string): string {
   return segments.join('/')
 }
 
-/** What may be written: notes and anything under `attachments/` (attachments have no route yet). */
-export function isWritablePath(vaultPath: string): boolean {
-  const segments = parseVaultPath(vaultPath)
-  return /\.md$/i.test(segments.at(-1)!) || segments[0] === 'attachments'
-}
-
 export function hashContent(raw: Buffer | string): string {
   return createHash('sha256').update(raw).digest('hex')
 }

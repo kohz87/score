@@ -59,9 +59,6 @@ export const packs = [
   },
 ] as const satisfies readonly Pack[]
 
-export type PackId = (typeof packs)[number]['id']
-export const defaultPackId: PackId = 'score'
-
 export function findPack(id: string | null | undefined): Pack {
   return packs.find((pack) => pack.id === id) ?? packs[0]
 }

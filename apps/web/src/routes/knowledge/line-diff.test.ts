@@ -1,14 +1,13 @@
 import { expect, test } from 'vitest'
 import { lineDiff } from './line-diff.ts'
 import {
-  buildTree,
   linkTargetFor,
   normalizeNewPath,
   notePath,
   pathForLinkTarget,
   timeAgo,
 } from './knowledge-paths.ts'
-import { resolveTarget, splitSnippet, wikilinksToMarkdown } from './wikilinks.ts'
+import { resolveTarget, splitSnippet } from './wikilinks.ts'
 
 test('lineDiff marks added and removed lines and keeps the unchanged ones', () => {
   expect(lineDiff('a\nb\nc', 'a\nc\nd')).toEqual([
@@ -35,27 +34,6 @@ test('paths: normalise, encode, and link targets', () => {
   ]
   expect(linkTargetFor(notes[0]!, notes)).toBe('a/Plan')
   expect(linkTargetFor(notes[2]!, notes)).toBe('Idea')
-})
-
-test('buildTree nests folders (empty ones too), folders first, then notes by name', () => {
-  const tree = buildTree({
-    folders: ['empty', 'a'],
-    documents: [],
-    notes: [
-      { path: 'z.md', title: 'z', mtime: '', lastAuthor: null },
-      { path: 'a/b/n.md', title: 'n', mtime: '', lastAuthor: null },
-    ],
-  })
-  expect(tree.map((node) => node.path)).toEqual(['a', 'empty', 'z.md'])
-  const a = tree[0]!
-  expect(a.kind === 'folder' && a.children[0]!.path).toBe('a/b')
-})
-
-test('wikilinks become preview links, except inside code fences', () => {
-  const out = wikilinksToMarkdown('See [[Plan|the plan]] and [[Idea#Top]].\n```\n[[Code]]\n```')
-  expect(out).toContain('[the plan](#wiki:Plan)')
-  expect(out).toContain('[Idea#Top](#wiki:Idea%23Top)')
-  expect(out).toContain('[[Code]]')
 })
 
 test('resolveTarget prefers the server, then exact path, then a unique name', () => {

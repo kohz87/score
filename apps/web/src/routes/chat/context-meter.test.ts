@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { meterFraction, meterText, parseLocalCommand, usageSummary } from './context-meter.ts'
+import { meterText, parseLocalCommand, usageSummary } from './context-meter.ts'
 
 const full = {
   model: 'm',
@@ -10,10 +10,8 @@ const full = {
 
 test('the meter shows tokens, window and cost, and hides when usage is unknown', () => {
   expect(meterText(full)).toBe('100k of 200k tokens · $0.5000')
-  expect(meterFraction(full)).toBe(0.5)
   expect(meterText({ ...full, tokens: null })).toBeNull()
   expect(meterText({ ...full, contextLength: null, costUsd: null })).toBe('100k tokens')
-  expect(meterFraction({ ...full, contextLength: null })).toBeNull()
 })
 
 test('/usage summarises tokens, cost and model', () => {

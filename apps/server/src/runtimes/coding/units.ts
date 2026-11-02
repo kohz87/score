@@ -449,13 +449,6 @@ export async function managerIncarnation(
   return start === null ? null : { pid, start }
 }
 
-export function sameIncarnation(
-  a: ManagerIncarnation | null,
-  b: ManagerIncarnation | null,
-): boolean {
-  return a !== null && b !== null && a.pid === b.pid && a.start === b.start
-}
-
 // ---- capability check ----------------------------------------------------------------------------------------------
 
 export interface CapabilityCheck {

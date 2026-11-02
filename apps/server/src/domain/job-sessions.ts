@@ -131,11 +131,6 @@ export function usesRoomSession(sqlite: DatabaseSync, jobId: string | null | und
   return jobRow(sqlite, jobId)?.session_scheme !== 'job'
 }
 
-/** The session of a room's default job: for room-scoped callers (one job per room until 11.1b). */
-export function roomSession(sqlite: DatabaseSync, roomId: string, agentId: string): string {
-  return sessionFor(sqlite, { roomId, jobId: defaultJobId(sqlite, roomId), agentId })
-}
-
 /** Records a 'job'-scheme session the first time a turn is reserved, so `sessionOwner` can find it. */
 export function ensureJobSession(
   sqlite: DatabaseSync,
