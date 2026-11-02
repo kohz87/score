@@ -78,13 +78,16 @@ import { registerAboutRoutes } from './http/about.ts'
 import type { UpdateFetcher } from './domain/about.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
+import { registerHermesUpdateRoutes } from './http/hermes-update.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
 import type { ScoreDb } from './db/index.ts'
 import type { Ingest } from './hub/ingest.ts'
 import { pidfdSupport } from './runtimes/coding/pidfd-signal.ts'
 import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
 import {
+  createFakeHermesUpdates,
   createHermesPort,
+  createLiveHermesUpdates,
   registerBridgeRoutes,
   resolveHermesHome,
   registerBridgeCredentialGuard,
@@ -574,6 +577,18 @@ export function buildApp({
       ...(clock ? { clock } : {}),
     })
   registerSystemRoutes(app, getSystemStatus)
+  // 3.15.0 (owner): update Hermes from Settings › System (a simulated flow in fake mode).
+  registerHermesUpdateRoutes(app, {
+    updates:
+      config.mode === 'live' && db
+        ? createLiveHermesUpdates({ db, port, hermesHome: config.hermesHome })
+        : config.mode === 'fake'
+          ? createFakeHermesUpdates()
+          : undefined,
+    security: securityPassword,
+    db,
+    ...(clock ? { clock } : {}),
+  })
   registerLogRoutes(app, config.logFile)
   registerAboutRoutes(app, {
     config,
