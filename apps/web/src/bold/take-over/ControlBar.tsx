@@ -143,6 +143,10 @@ export function ControlBar({
         onCompositionEnd={(event) => {
           if (event.data) push(...textToEvents(event.data))
           composed.current = event.data || null
+          // Safari's trailing input event comes in the same task; anything later is new typing, never swallowed.
+          setTimeout(() => {
+            composed.current = null
+          }, 0)
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') push(...press(0xff0d))
