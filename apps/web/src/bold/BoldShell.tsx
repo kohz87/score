@@ -337,7 +337,7 @@ function BoldShellFrame() {
                 onClick={openCommand}
               >
                 <SearchIcon />
-                Search
+                <span className="searchbtn-label">Search</span>
                 <span className="kbd">⌘K</span>
               </button>
             )}
