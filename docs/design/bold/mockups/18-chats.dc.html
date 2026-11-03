@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chats</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+button{font-family:inherit;cursor:pointer}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+input::placeholder{color:#7C8291}
+@keyframes flow{0%{top:-4px;opacity:0}15%{opacity:1}85%{opacity:1}100%{top:calc(100% - 4px);opacity:0}}
+.flow{animation:flow 1.6s linear infinite}
+@media (prefers-reduced-motion: reduce){.flow{animation:none;top:45%}}
+</style>
+</helmet>
+<div style="min-height: 980px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 24px; border-bottom: 1px solid #23262F">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700">score</span>
+<nav aria-label="Main" style="display: flex; gap: 6px; flex-wrap: wrap">
+<a href="#" aria-current="page" style="padding: 8px 16px; border-radius: 999px; background: #ECEEF2; color: #12131A; text-decoration: none; font-weight: 700">Chats</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Team</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Knowledge</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Tasks</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Screens</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Recipes</a>
+</nav>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+
+<sc-if value="{{listShut}}" hint-placeholder-val="{{false}}">
+<aside aria-label="Chats, folded" style="flex: none; width: 72px; border-right: 1px solid #23262F; padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<button type="button" onClick="{{toggleList}}" aria-label="Show the chat list" style="width: 40px; height: 40px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2">›</button>
+<sc-for list="{{groups}}" as="c" hint-placeholder-count="3">
+<button type="button" onClick="{{c.pick}}" aria-label="{{c.name}}" style="width: 48px; height: 48px; border-radius: 14px; border: 2px solid {{c.ring}}; background: {{c.tile}}; color: #12131A; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700">{{c.initial}}</button>
+</sc-for>
+<sc-for list="{{directs}}" as="d" hint-placeholder-count="4">
+<span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 50%; background: #22252E; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24"><path d="{{d.path}}" fill="{{d.color}}"></path></svg></span>
+</sc-for>
+</aside>
+</sc-if>
+<sc-if value="{{listOpen}}" hint-placeholder-val="{{true}}">
+<aside aria-label="Chats" style="flex: 1 1 300px; max-width: 340px; border-right: 1px solid #23262F; padding: 14px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box">
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{toggleList}}" aria-label="Fold the chat list" style="flex: none; width: 42px; height: 42px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2">‹</button>
+<label for="chat-search" style="position: absolute; left: -9999px">Search chats</label>
+<input id="chat-search" type="search" placeholder="Search chats" style="flex: 1; min-width: 0; min-height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid #2E313B; background: #1A1C23; color: #ECEEF2; font: 15px 'Hanken Grotesk', sans-serif">
+<button type="button" aria-label="New chat" style="width: 42px; height: 42px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-size: 22px; line-height: 1">+</button>
+</div>
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD; margin: 6px 6px 0">Groups</span>
+<sc-for list="{{groups}}" as="c" hint-placeholder-count="3">
+<button type="button" onClick="{{c.pick}}" style="display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px; border-radius: 18px; border: 0; background: {{c.bg}}; color: #ECEEF2">
+<span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 14px; background: {{c.tile}}; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; color: #12131A">{{c.initial}}</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; justify-content: space-between; gap: 6px"><span style="font-weight: 700">{{c.name}}</span><span style="font-size: 12px; color: #9AA0AD">{{c.at}}</span></span>
+<span style="font-size: 13px; color: #9AA0AD; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.preview}}</span>
+</span>
+<sc-if value="{{c.needs}}" hint-placeholder-val="{{false}}"><span data-protected="inline-flex" style="flex: none; padding: 2px 8px; border-radius: 999px; background: #ECEEF2; color: #12131A; font-size: 11px; font-weight: 700">needs you</span></sc-if>
+</button>
+</sc-for>
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD; margin: 8px 6px 0">Direct</span>
+<sc-for list="{{directs}}" as="d" hint-placeholder-count="4">
+<button type="button" style="display: flex; gap: 12px; align-items: center; text-align: left; padding: 8px 10px; border-radius: 18px; border: 0; background: transparent; color: #ECEEF2">
+<span aria-hidden="true" style="flex: none; width: 36px; height: 36px; border-radius: 50%; background: #22252E; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24"><path d="{{d.path}}" fill="{{d.color}}"></path></svg></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 600">{{d.name}}</span><span style="font-size: 13px; color: #9AA0AD; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{d.preview}}</span></span>
+</button>
+</sc-for>
+</aside>
+</sc-if>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 24px; border-bottom: 1px solid #23262F; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Activity feed crew</h1>
+<span style="font-size: 13px; color: #9AA0AD">Owner <strong style="color: #BFB0FA">lead</strong> · 4 members · workspace <code style="font-family: 'JetBrains Mono', monospace; color: #C9CDD6">activity-feed</code></span>
+</div>
+<button type="button" onClick="{{toggleInfo}}" aria-pressed="{{info}}" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Chat info</button>
+</div>
+
+<div style="flex: 1; display: flex; min-height: 0">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div style="flex: 1; padding: 22px 0; display: flex; flex-direction: column; gap: 16px; max-width: 860px; width: 100%; margin: 0 auto; box-sizing: border-box; padding-inline: 24px">
+
+<div style="display: flex; align-items: center; gap: 12px; color: #9AA0AD; font-size: 13px"><span style="flex: 1; height: 1px; background: #2E313B"></span><span>Topic · <strong style="color: #ECEEF2">Feed pagination</strong> · done yesterday</span><span style="flex: 1; height: 1px; background: #2E313B"></span></div>
+
+<div style="display: flex; align-items: center; gap: 12px; color: #9AA0AD; font-size: 13px"><span style="flex: 1; height: 1px; background: #2E313B"></span><span>New topic · <strong style="color: #ECEEF2">Swap polling for a socket</strong> · <span style="color: #7DB8FF">working</span></span><span style="flex: 1; height: 1px; background: #2E313B"></span></div>
+
+<div style="align-self: flex-end; max-width: 70%; background: #ECEEF2; color: #12131A; border-radius: 22px 22px 6px 22px; padding: 12px 16px; line-height: 1.45">/new Swap polling for a socket<br>@builder take the server side, @designer the empty states. lead, keep it moving.</div>
+
+<div style="display: flex; gap: 10px; max-width: 78%">
+<svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true" style="flex: none"><path d="M12 2l9 5v10l-9 5-9-5V7z" fill="#A893F7"></path></svg>
+<div style="background: #1A1C23; border-radius: 6px 22px 22px 22px; padding: 12px 16px; line-height: 1.45"><strong style="color: #BFB0FA">lead</strong> · owner<br>On it. builder has the socket server, designer the empty states. I'll run the review recipe when both are in.</div>
+</div>
+
+<div style="display: flex; gap: 10px; max-width: 78%">
+<svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true" style="flex: none"><rect x="3" y="3" width="18" height="18" rx="3" fill="#F5A35B"></rect></svg>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="background: #1A1C23; border-radius: 6px 22px 22px 22px; padding: 12px 16px; line-height: 1.45"><strong style="color: #F7B77A">builder</strong><br>Socket server is in api/events.py, 3 tests pass. It needs ws@8 to run.</div>
+<div role="group" aria-label="Reply versions" style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9AA0AD">
+<button type="button" aria-label="Previous version" style="width: 30px; height: 30px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2">‹</button>
+<span style="font-variant-numeric: tabular-nums">2 / 2</span>
+<button type="button" aria-label="Next version" disabled style="width: 30px; height: 30px; border-radius: 999px; border: 1px solid #2E313B; background: transparent; color: #5A5F6C">›</button>
+<span>· swipe or use the arrows for builder’s other reply</span>
+<button type="button" style="margin-left: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-size: 13px">Retry</button>
+</div>
+</div>
+</div>
+
+<div data-protected="block" style="max-width: 78%; margin-left: 40px; background: #ECEEF2; color: #12131A; border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #4A4F5C">builder asks you</span>
+<code style="font-family: 'JetBrains Mono', monospace; font-weight: 500">npm install ws@8</code>
+<div style="display: flex; gap: 8px"><button type="button" style="min-height: 40px; padding: 0 18px; border-radius: 999px; border: 0; background: #12131A; color: #ECEEF2; font-weight: 700">Allow</button><button type="button" style="min-height: 40px; padding: 0 18px; border-radius: 999px; border: 1px solid #B8BCC6; background: transparent; color: #12131A; font-weight: 600">Don’t allow</button></div>
+</div>
+
+<div style="margin-left: 40px; max-width: 78%; background: #1A1C23; border: 1px solid #2E313B; border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; justify-content: space-between; gap: 8px"><strong>Run · Review and ship</strong><span style="font-size: 13px; color: #7DB8FF">step 2 of 4</span></span>
+<span style="display: block; height: 6px; border-radius: 999px; background: #2E313B"><span style="display: block; width: 45%; height: 6px; border-radius: 999px; background: #7DB8FF"></span></span>
+<span style="font-size: 13px; color: #9AA0AD">✓ builder: tests · <span style="color: #ECEEF2">reviewer: reading the change</span> · designer: screenshots · lead: release notes</span>
+<button type="button" onClick="{{showGraph}}" style="align-self: flex-start; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 13px">Show graph</button>
+</div>
+
+</div>
+
+<div style="padding: 0 24px 16px; max-width: 860px; width: 100%; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{palette}}" hint-placeholder-val="{{true}}">
+<div role="listbox" aria-label="Commands" style="background: #1A1C23; border: 1px solid #2E313B; border-radius: 20px; padding: 8px; display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{commands}}" as="k" hint-placeholder-count="6">
+<div role="option" aria-selected="{{k.first}}" style="display: flex; gap: 14px; align-items: baseline; padding: 9px 12px; border-radius: 12px; background: {{k.bg}}"><code style="flex: none; width: 150px; font-family: 'JetBrains Mono', monospace; color: #ECEEF2">{{k.cmd}}</code><span style="font-size: 14px; color: #9AA0AD">{{k.what}}</span></div>
+</sc-for>
+</div>
+</sc-if>
+<div style="display: flex; gap: 10px; align-items: center; background: #1A1C23; border: 1px solid #2E313B; border-radius: 26px; padding: 8px 8px 8px 18px">
+<label for="composer" style="position: absolute; left: -9999px">Message Activity feed crew</label>
+<input id="composer" value="{{draft}}" onInput="{{typing}}" placeholder="Message the chat · @ someone · / for commands" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #ECEEF2; font: 15px 'Hanken Grotesk', sans-serif; min-height: 40px">
+<button type="button" aria-label="Send" style="width: 44px; height: 44px; border-radius: 50%; border: 0; background: #ECEEF2; color: #12131A; font-weight: 700">↑</button>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0 8px; font-size: 13px; color: #9AA0AD">
+<span>To <strong style="color: #BFB0FA">lead</strong> (owner)</span>
+<span style="display: inline-flex; align-items: center; gap: 8px">Context <span aria-hidden="true" style="display: inline-block; width: 90px; height: 6px; border-radius: 999px; background: #2E313B"><span style="display: block; width: 41%; height: 6px; border-radius: 999px; background: #7DB8FF"></span></span><span style="font-variant-numeric: tabular-nums; color: #C9CDD6">82k / 200k · 41%</span></span>
+<span>Model <code style="font-family: 'JetBrains Mono', monospace; color: #C9CDD6">[lead’s model]</code></span>
+<span>Today <span style="color: #C9CDD6">$0.42</span></span>
+<span style="flex: 1"></span>
+<span><code style="font-family: 'JetBrains Mono', monospace">/compress</code> when it fills up</span>
+</div>
+</div>
+</div>
+
+<sc-if value="{{info}}" hint-placeholder-val="{{false}}">
+<aside aria-label="Chat info" style="flex: none; width: {{panelWidth}}; border-left: 1px solid #23262F; padding: 18px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+<div role="tablist" aria-label="Panel" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #1A1C23; align-self: flex-start">
+<button type="button" role="tab" aria-selected="{{onInfo}}" onClick="{{showInfo}}" style="min-height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: {{infoBg}}; color: {{infoFg}}; font-weight: 700; font-size: 13px">Info</button>
+<button type="button" role="tab" aria-selected="{{onGraph}}" onClick="{{showGraph}}" style="min-height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: {{graphBg}}; color: {{graphFg}}; font-weight: 700; font-size: 13px">Graph</button>
+</div>
+<sc-if value="{{onGraph}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; justify-content: space-between; font-size: 13px; color: #9AA0AD"><span>Run · Review and ship</span><span style="color: #7DB8FF">Check phase</span></span>
+<div aria-label="Run graph" style="display: flex; flex-direction: column; align-items: stretch; background: #15161D; border-radius: 18px; padding: 14px">
+<sc-for list="{{layers}}" as="l" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; align-items: center">
+<sc-if value="{{l.line}}" hint-placeholder-val="{{false}}">
+<span aria-hidden="true" style="position: relative; width: 2px; height: 26px; background: {{l.lineColor}}"><sc-if value="{{l.flowing}}" hint-placeholder-val="{{false}}"><span class="flow" style="position: absolute; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: #7DB8FF"></span></sc-if></span>
+</sc-if>
+<button type="button" onClick="{{l.pick}}" aria-pressed="{{l.selected}}" data-protected="{{l.protect}}" style="width: 100%; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 16px; border: 2px solid {{l.border}}; background: {{l.bg}}; color: {{l.fg}}">
+<span style="display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: {{l.kickerColor}}"><span>{{l.phase}}</span><span>{{l.state}}</span></span>
+<span style="font-size: 14px; font-weight: 600">{{l.title}}</span>
+<span style="font-size: 12px; color: {{l.subColor}}">{{l.sub}}</span>
+</button>
+</div>
+</sc-for>
+</div>
+<section aria-label="Session log" style="display: flex; flex-direction: column; gap: 6px">
+<h3 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Session log · {{logTitle}}</h3>
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<sc-for list="{{log}}" as="e" hint-placeholder-count="4">
+<li style="display: flex; gap: 10px"><span style="flex: none; width: 40px; font-family: 'JetBrains Mono', monospace; color: #9AA0AD">{{e.at}}</span><span><strong style="color: {{e.color}}">{{e.who}}</strong> {{e.text}}</span></li>
+</sc-for>
+</ol>
+</section>
+</div>
+</sc-if>
+<sc-if value="{{onInfo}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Members</h2>
+<sc-for list="{{members}}" as="m" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="{{m.path}}" fill="{{m.color}}"></path></svg><span style="flex: 1">{{m.name}}</span><span style="font-size: 12px; color: #9AA0AD">{{m.role}}</span></div>
+</sc-for>
+<button type="button" style="align-self: flex-start; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 13px">Add member</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Workspace</h2>
+<code style="font-family: 'JetBrains Mono', monospace; font-size: 13px">activity-feed · ~/code/activity-feed</code>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">Topics</h2>
+<span style="font-size: 14px"><span style="color: #7DB8FF">●</span> Swap polling for a socket</span>
+<span style="font-size: 14px; color: #9AA0AD">✓ Feed pagination</span>
+<span style="font-size: 14px; color: #9AA0AD">✓ Event schema</span>
+</div>
+</div>
+</sc-if>
+</aside>
+</sc-if>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":980}}'>
+const SHAPE = { hex: 'M12 2l9 5v10l-9 5-9-5V7z', square: 'M3 3h18v18H3z', circle: 'M12 2a10 10 0 1 0 0.01 0z', tri: 'M12 2l10 19H2z' };
+const COMMANDS = [
+  ['/new <title>', 'Start a new topic in this chat (fresh agent sessions)'],
+  ['/run <recipe>', 'Run a recipe here; its progress shows as a card'],
+  ['/assign @agent <task>', 'Give someone a task on the Tasks board'],
+  ['/lead @agent', 'Make someone the owner of this chat'],
+  ['/add @agent · /remove @agent', 'Change who is in this chat'],
+  ['/workspace <name>', 'Set the folder this chat works in'],
+  ['/done · /rename', 'Close or rename the current topic'],
+];
+const LAYERS = [
+  { id: 'you', phase: 'You', state: 'asked', title: 'Review the socket change and ship it', sub: 'one prompt, 10:02', done: true },
+  { id: 'lead', phase: 'Plan · lead', state: 'done', title: 'Split into tests, screenshots, review, notes', sub: 'asked its advisor 1×', done: true },
+  { id: 'work', phase: 'Build · 2 workers', state: '1 of 2', title: 'builder ✓ tests · designer screenshots…', sub: 'designer working 6 min', flowing: true },
+  { id: 'check', phase: 'Check · reviewer', state: 'working', title: 'Reading api/events.py', sub: 'runs the code, not an opinion', flowing: true },
+  { id: 'ship', phase: 'Ship', state: 'needs you', title: 'Ship it?', sub: 'waits for your OK', needs: true },
+];
+const LOG = {
+  you: [['10:02', 'you', '#ECEEF2', 'asked: review the socket change and ship it']],
+  lead: [['10:02', 'lead', '#BFB0FA', 'planned 4 steps'], ['10:03', 'lead', '#BFB0FA', 'asked its advisor whether to test first']],
+  work: [['10:04', 'builder', '#F7B77A', 'ran the tests: 3 pass'], ['10:05', 'designer', '#F5A3CF', 'opened the feed for screenshots']],
+  check: [['10:09', 'reviewer', '#7DD8DF', 'started reading api/events.py'], ['10:11', 'reviewer', '#7DD8DF', 'ran pnpm test api/events']],
+  ship: [['—', 'Score', '#9AA0AD', 'waits for your OK before the release notes go out']],
+};
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: 'feed', info: true, draft: '/', shut: false, layer: null }; }
+  graph() {
+    const pick = this.state.layer;
+    const layers = LAYERS.map((l, i) => {
+      const selected = pick === l.id;
+      return {
+        ...l, line: i > 0, flowing: !!l.flowing, selected,
+        lineColor: l.done || LAYERS[i - 1]?.done ? '#4FD1A5' : '#3A3E4A',
+        bg: l.needs ? '#ECEEF2' : '#22252E', fg: l.needs ? '#12131A' : '#ECEEF2',
+        border: selected ? '#7DB8FF' : l.needs ? '#ECEEF2' : l.done ? '#2F6B55' : '#3A3E4A',
+        kickerColor: l.needs ? '#4A4F5C' : l.done ? '#4FD1A5' : '#9AA0AD', subColor: l.needs ? '#4A4F5C' : '#9AA0AD',
+        protect: l.needs ? 'flex' : undefined,
+        pick: () => this.setState({ layer: selected ? null : l.id }),
+      };
+    });
+    const ids = pick ? [pick] : LAYERS.map((l) => l.id);
+    const log = ids.flatMap((id) => LOG[id]).map(([at, who, color, text]) => ({ at, who, color, text }));
+    return { layers, log, logTitle: pick ? LAYERS.find((l) => l.id === pick).phase : 'all phases' };
+  }
+  renderVals() {
+    const { sel, info, draft, shut } = this.state;
+    const groups = [
+      { id: 'feed', name: 'Activity feed crew', initial: 'A', tile: '#A893F7', at: 'now', preview: 'builder: Socket server is in…', needs: true },
+      { id: 'team', name: 'Team', initial: 'T', tile: '#4FC8D1', at: '09:40', preview: 'lead: Morning plan is pinned', needs: false },
+      { id: 'billing', name: 'Billing export', initial: 'B', tile: '#F5A35B', at: 'Mon', preview: 'Run · Monthly export finished', needs: false },
+    ].map((g) => ({ ...g, bg: sel === g.id ? '#22252E' : 'transparent', ring: sel === g.id ? '#ECEEF2' : 'transparent', pick: () => this.setState({ sel: g.id }) }));
+    const directs = [
+      { name: 'lead', path: SHAPE.hex, color: '#A893F7', preview: 'Here when you need me' },
+      { name: 'builder', path: SHAPE.square, color: '#F5A35B', preview: 'Pushed the branch' },
+      { name: 'reviewer', path: SHAPE.circle, color: '#4FC8D1', preview: 'Two comments on events.py' },
+      { name: 'designer', path: SHAPE.tri, color: '#F28AC0', preview: 'Empty states attached' },
+    ];
+    const members = [
+      { name: 'lead', role: 'owner', path: SHAPE.hex, color: '#A893F7' },
+      { name: 'builder', role: 'server', path: SHAPE.square, color: '#F5A35B' },
+      { name: 'designer', role: 'design', path: SHAPE.tri, color: '#F28AC0' },
+      { name: 'reviewer', role: 'review', path: SHAPE.circle, color: '#4FC8D1' },
+    ];
+    const q = draft.startsWith('/') ? draft.slice(1).toLowerCase() : null;
+    const commands = COMMANDS.filter(([c]) => q !== null && c.slice(1).toLowerCase().startsWith(q.split(' ')[0])).map(([cmd, what], i) => ({ cmd, what, first: i === 0, bg: i === 0 ? '#22252E' : 'transparent' }));
+    return {
+      groups, directs, members, info, draft, commands,
+      palette: q !== null && commands.length > 0 && !draft.includes(' '),
+      toggleInfo: () => this.setState({ info: !info }),
+      onInfo: this.state.tab !== 'graph', onGraph: this.state.tab === 'graph',
+      panelWidth: this.state.tab === 'graph' ? '420px' : '300px',
+      ...this.graph(),
+      infoBg: this.state.tab !== 'graph' ? '#ECEEF2' : 'transparent', infoFg: this.state.tab !== 'graph' ? '#12131A' : '#C9CDD6',
+      graphBg: this.state.tab === 'graph' ? '#ECEEF2' : 'transparent', graphFg: this.state.tab === 'graph' ? '#12131A' : '#C9CDD6',
+      showInfo: () => this.setState({ tab: 'info', info: true }),
+      showGraph: () => this.setState({ tab: 'graph', info: true }),
+      listOpen: !shut, listShut: shut,
+      toggleList: () => this.setState({ shut: !shut }),
+      typing: (e) => this.setState({ draft: e.target.value }),
+    };
+  }
+}
+</script>
+</body>
+</html>
