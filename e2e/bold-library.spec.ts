@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 async function openLibrary(page: Page, size: (typeof sizes)[number]) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
   if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
   await page.locator('button.side-toggle').click()
@@ -119,7 +119,7 @@ for (const size of sizes) {
       const word = `zebrafinch${name.replace(/\W/g, '')}`
       const path = await createNote(page, name, `# ${name}\n\n${word} sings.\n`)
       await unfold(page)
-      await page.getByPlaceholder('Search').fill(word)
+      await page.getByPlaceholder('Search', { exact: true }).fill(word)
       const results = page.getByRole('region', { name: 'Search results' })
       await results.getByRole('button', { name: new RegExp(name) }).click()
       await expect(editor(page, path)).toBeVisible()
@@ -242,7 +242,7 @@ for (const size of sizes) {
         table.getByRole('button', { name: notesName.replace(/\.md$/i, ''), exact: true }),
       ).toBeVisible()
 
-      await page.getByPlaceholder('Search').fill(word)
+      await page.getByPlaceholder('Search', { exact: true }).fill(word)
       const results = page.getByRole('region', { name: 'Search results' })
       await results
         .getByRole('button', { name: new RegExp(pdfName.replaceAll('.', '\\.')) })

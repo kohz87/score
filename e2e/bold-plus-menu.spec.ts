@@ -76,7 +76,7 @@ for (const { name, viewport } of sizes) {
     })
 
     test('team room', async ({ page }) => {
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       const composer = page.locator('.chat-composer-box--room').first()
       await expect(composer).toBeVisible({ timeout: 20_000 })
       await checkMenu(page, composer)

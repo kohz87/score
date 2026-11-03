@@ -79,7 +79,7 @@ for (const { name, viewport } of sizes) {
     test('opens from the dock, lands in the latest chat and always shows the privacy label', async ({
       page,
     }) => {
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       if (phone) {
         // A phone has no dock (board 19); the side panel's menu lists every agent under "One to one".
         await page.getByRole('button', { name: 'Open side panel' }).click()
@@ -135,7 +135,7 @@ for (const { name, viewport } of sizes) {
     })
 
     test('opens from Search (a chat result)', async ({ page }) => {
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await page.getByRole('button', { name: 'Search', exact: true }).click()
       const search = page.getByRole('combobox', { name: 'Search or run a command' })
       await search.fill('Docker sandbox')
@@ -184,7 +184,7 @@ for (const { name, viewport } of sizes) {
     test('"Take it aside" opens an empty one-to-one and makes the chat only when the first message is sent', async ({
       page,
     }) => {
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       // A phone opens on the job list; the capsule with Take it aside is in the job's own chat.
       if (phone) await openBoldJob(page, /^Activity feed\./)
       const aside = page.getByRole('button', { name: 'Take it aside with builder' }).first()
@@ -354,7 +354,7 @@ for (const { name, viewport } of sizes) {
         // With nothing open, Escape on the sheet closes it the way Back does: `?with=` goes.
         await page.keyboard.press('Escape')
         await expect(page).not.toHaveURL(/with=/)
-        await expect(page.getByRole('button', { name: 'Open side panel' })).toBeVisible()
+        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
       }
     })
 
@@ -398,7 +398,7 @@ for (const { name, viewport } of sizes) {
       if (phone) {
         await side(page).getByRole('button', { name: 'Back' }).click()
         await expect(page).not.toHaveURL(/with=/)
-        await expect(page.getByRole('button', { name: 'Open side panel' })).toBeVisible()
+        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
       }
     })
   })

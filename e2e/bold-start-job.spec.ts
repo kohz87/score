@@ -18,7 +18,7 @@ function tag(prefix: string) {
 async function openStart(page: Page, from: 'link' | 'room') {
   if (from === 'link') await page.goto('/b?start=job')
   else {
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await page.getByRole('button', { name: 'Start a job' }).click()
   }
   const dialog = page.getByRole('dialog', { name: 'Start a job' })

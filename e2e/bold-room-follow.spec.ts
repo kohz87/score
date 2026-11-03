@@ -12,7 +12,7 @@ const distance = (page: Page) =>
 
 async function openSettled(page: Page) {
   await pair(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   const stream = page.locator('#bold-room-stream')
   await expect(stream.getByRole('article').first()).toBeAttached({ timeout: 30_000 })
   await expect

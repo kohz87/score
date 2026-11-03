@@ -12,7 +12,7 @@ function tag(prefix: string) {
 }
 
 async function openBold(page: Page) {
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
 }
 

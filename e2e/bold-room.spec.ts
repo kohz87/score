@@ -58,7 +58,7 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   const notes = await read()
   expect(notes?.unread ?? 0).toBeGreaterThan(0)
 
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   const notesTab = page.getByRole('tab', { name: new RegExp(title) })
   const badge = notesTab.locator('.bold-unread')
   await expect(badge).toHaveText(String(notes!.unread), { timeout: 30_000 })

@@ -66,7 +66,7 @@ for (const size of sizes) {
 async function openLibrary(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
   if (width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
   await page.locator('button.side-toggle').click()

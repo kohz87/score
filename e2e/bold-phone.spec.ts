@@ -122,7 +122,7 @@ for (const size of sizes) {
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-chat-${size.width}.png`) })
 
       await page.getByRole('button', { name: 'Back to jobs' }).click()
-      await expect(page).toHaveURL('/b')
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
     })
@@ -136,7 +136,7 @@ for (const size of sizes) {
       await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
 
       await page.goBack()
-      await expect(page).toHaveURL('/b')
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Back to jobs' })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
@@ -264,9 +264,9 @@ for (const size of sizes) {
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-settings-${size.width}.png`) })
 
       await tabs(page).getByRole('button', { name: 'Room' }).click()
-      await expect(page).toHaveURL('/b')
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expectTabBar(page, 'Room')
-      await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
     })
 
     test('the Room tab keeps the Needs-you count while Team is open', async ({ page }) => {
@@ -311,7 +311,7 @@ for (const size of sizes) {
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-older-${size.width}.png`) })
 
       await page.getByRole('button', { name: 'Back to the team room' }).click()
-      await expect(page).toHaveURL('/b')
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
       await page.getByRole('button', { name: 'Team room', exact: true }).click()
@@ -359,9 +359,9 @@ for (const size of sizes) {
 
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     // A phone one-to-one is a sheet over the room: Back closes it where it came from.
-    await expect(page).toHaveURL('/b')
+    await expect(page).toHaveURL(/\/b(\?open=1)?$/)
     await expect(panel).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Open side panel' })).toBeFocused()
+    await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
     await expectTabBar(page, 'Room')
   })
 }
@@ -382,6 +382,6 @@ test('Search opens a one-to-one full screen and Back returns to the job list', a
     'Only you and reviewer see this',
   )
   await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await expect(page).toHaveURL('/b')
+  await expect(page).toHaveURL(/\/b(\?open=1)?$/)
   await expect(panel).toBeHidden()
 })

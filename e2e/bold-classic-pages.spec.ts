@@ -213,7 +213,7 @@ for (const size of sizes) {
     })
 
     test(`the Runs view lists every run and opens one at ${size.name}`, async ({ page }) => {
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       if (size.name === 'phone') await page.getByRole('button', { name: 'Open side panel' }).click()
       const panel = page.getByRole('complementary', { name: 'Side panel' })
       await panel.locator('.side-toggle').click()
@@ -222,7 +222,7 @@ for (const size of sizes) {
       await expect(list.getByRole('listitem').first()).toBeVisible()
       await panel.getByRole('button', { name: 'Needs you', exact: true }).click()
       await list.getByRole('button').first().click()
-      await expect(page).toHaveURL(/\/b\?run=/)
+      await expect(page).toHaveURL(/\/b\?(open=1&)?run=/)
       await expect(panel.getByRole('list', { name: 'Steps' })).toBeVisible()
       await panel.getByRole('button', { name: 'All runs' }).click()
       await expect(list).toBeVisible()

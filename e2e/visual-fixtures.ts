@@ -265,6 +265,16 @@ export const visualFixtures: Record<string, unknown> = {
   // The tab keyboard test lands on the History tab, which reads this.
   '/api/agents/builder/history': { items: [], nextCursor: null },
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
+  // 3.21.0: the chat list reads every room's jobs for its second line and its order; these rooms have none here.
+  ...Object.fromEntries(
+    (() => {
+      const read = recorded['/api/rooms'] as { rooms: { id: string }[]; directs: { id: string }[] }
+      return [...read.rooms, ...read.directs].map((room) => [
+        `/api/rooms/${room.id}/jobs?closed=include`,
+        { asOfSeq: 1, items: [] },
+      ])
+    })(),
+  ),
   '/api/shares': { items: [] },
   '/api/orchestrations': { asOfSeq: 0, items: [] },
   '/api/workflow-runs': { asOfSeq: 0, items: [] },

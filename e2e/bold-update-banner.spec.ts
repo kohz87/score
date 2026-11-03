@@ -6,7 +6,7 @@ test.use({ reducedMotion: 'reduce' })
 
 async function withBanner(page: Page) {
   await pair(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('.bold-room-composer')).toBeVisible({ timeout: 30_000 })
   await page.evaluate(() => {
     const banner = document.createElement('div')

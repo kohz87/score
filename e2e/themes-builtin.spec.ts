@@ -182,7 +182,7 @@ for (const id of packagedThemeIds) {
     }) => {
       await useTheme(page, id)
       await pair(page)
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       const html = page.locator('html')
       await expect(html).toHaveAttribute('data-look', 'custom')
       const settings = page.getByRole('button', { name: 'Settings', exact: true })
@@ -203,7 +203,7 @@ for (const id of packagedThemeIds) {
       await expect(html).not.toHaveAttribute('data-look', 'custom')
       await expect(html).toHaveAttribute('data-pack', 'score')
 
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await expect(html).toHaveAttribute('data-look', 'custom')
       await page.keyboard.press('Control+Shift+Digit0')
       await expect(html).not.toHaveAttribute('data-look', 'custom')

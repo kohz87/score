@@ -197,7 +197,7 @@ for (const viewport of sizes) {
       await dialog.getByLabel(/Type #activity-feed to confirm/).fill('#activity-feed')
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
-      await expect(page).toHaveURL(/\/b$/)
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.locator('.roomtitle')).toHaveText('Team room')
       expect(
         state.requests.some(
@@ -226,7 +226,7 @@ for (const viewport of sizes) {
         .fill('#telegram-plan #imported')
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
-      await expect(page).toHaveURL(/\/b$/)
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.locator('.roomtitle')).toHaveText('Team room')
       expect(
         state.requests.some(

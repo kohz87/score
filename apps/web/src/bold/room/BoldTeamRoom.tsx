@@ -683,8 +683,11 @@ export function BoldTeamRoom({
   onOpenElsewhere,
   onOpenThread = () => undefined,
   externalDeletedNotice = false,
+  header,
 }: {
   agents: AgentSummary[]
+  /** 3.21.0: the chat header row (owner, members, workspace, Chat info), drawn under the room title on desktop. */
+  header?: (room: Room) => ReactNode
   /** The bold shell's phone breakpoint: board 18's job list and board 03's full-screen chat. */
   phone?: boolean
   phoneAction?: ReactNode
@@ -833,6 +836,7 @@ export function BoldTeamRoom({
         }}
         onDelete={setDeleting}
       />
+      {!phoneRoom && current && header?.(current)}
       {status === 'pending' ? (
         <RoomWaiting />
       ) : status === 'error' || !room ? (

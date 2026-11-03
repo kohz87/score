@@ -426,7 +426,7 @@ test('the side-panel dropdown is a disclosure that closes and restores focus', (
 
 test('a phone keeps the wordmark and avatar, shows the tab bar and opens the side panel as a sheet', async () => {
   phone = true
-  open('/b')
+  open('/b?open=1')
   const nav = screen.getByRole('navigation', { name: 'Main' })
   for (const label of ['Room', 'Team', 'Search', 'Settings'])
     expect(within(nav).getByRole('button', { name: label })).toBeDefined()
@@ -497,7 +497,7 @@ test('the phone Room badge waits for the team room and counts the job in the URL
 
 test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {
   phone = true
-  open('/b')
+  open('/b?open=1')
   fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
   fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
@@ -512,7 +512,7 @@ test('Escape in a Library dialog closes the dialog, not the phone sheet', async 
 test('the Library keeps an upload and its state while the phone sheet closes and the mode changes', async () => {
   phone = true
   vi.stubGlobal('XMLHttpRequest', PendingUpload)
-  open('/b')
+  open('/b?open=1')
   fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
   fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))

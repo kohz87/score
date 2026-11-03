@@ -21,7 +21,7 @@ test('?ui=bold opens the frame at 1440×900 and 390×844', async ({ page }) => {
   await expect(page.getByRole('banner')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Score, go to the team room' })).toBeVisible()
   const topNav = page.getByRole('navigation', { name: 'Main' })
-  await expect(topNav.getByRole('button', { name: 'Room' })).toBeVisible()
+  await expect(topNav.getByRole('button', { name: 'Chats' })).toBeVisible()
   await expect(topNav.getByRole('button', { name: 'Team' })).toBeVisible()
   const dock = page.getByRole('group', { name: /Your team/ })
   await expect(dock.getByRole('button', { name: /One to one with lead/ })).toBeVisible()

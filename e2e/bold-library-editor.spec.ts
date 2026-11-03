@@ -24,7 +24,9 @@ test.beforeEach(async ({ page }) => {
 
 async function openLibrary(page: Page, size: (typeof sizes)[number] = sizes[0]) {
   await page.setViewportSize({ width: size.width, height: size.height })
-  await page.goto('/b')
+  // The Library needs the width: a folded chat list (3.21.0) gives it back.
+  await page.addInitScript(() => localStorage.setItem('score.chats.folded', '1'))
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
   if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
   await page.locator('button.side-toggle').click()
@@ -92,7 +94,7 @@ test('Ctrl+K searches the vault and opens a note hit in the Library', async ({ p
   const name = unique()
   const word = `zebrafinch${name.replace(/\W/g, '')}`
   const path = await createNote(page, name, `# ${name}\n\n${word} sings.\n`)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.getByRole('button', { name: 'Search' })).toBeVisible()
   await page.keyboard.press('Control+k')
   const box = page.getByRole('combobox', { name: 'Search or run a command' })
@@ -549,7 +551,7 @@ test('a PDF downloads as an attachment, never rendered from Score’s origin, an
   await expect(page.getByText(new RegExp(`Added ${folder}/budget\\.pdf`))).toBeVisible({
     timeout: 30_000,
   })
-  await page.getByPlaceholder('Search').fill(word)
+  await page.getByPlaceholder('Search', { exact: true }).fill(word)
   const hit = page.getByRole('region', { name: 'Search results' }).getByRole('button').first()
   await expect(hit).toContainText('PDF', { timeout: 15_000 })
 

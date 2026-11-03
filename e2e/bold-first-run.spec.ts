@@ -73,7 +73,7 @@ test.beforeAll(() => {
 async function firstRunFlow(page: Page, origin: string, pairingToken: string) {
   await pair(page, origin, pairingToken)
 
-  await page.goto(`${origin}/b`)
+  await page.goto(`${origin}/b?open=1`)
   await expect(
     page.getByRole('heading', { name: 'Run a team of agents from one room.' }),
   ).toBeVisible()
@@ -140,6 +140,8 @@ async function firstRunFlow(page: Page, origin: string, pairingToken: string) {
   await expect(
     page.getByRole('heading', { name: 'Run a team of agents from one room.' }),
   ).toHaveCount(0)
+  // On a phone `/b` is the chat list (3.21.0); the team room is one tap further.
+  await page.goto(`${origin}/b?open=1`)
   await expect(page.getByRole('region', { name: 'Team room' })).toBeVisible()
 
   await page.goto(`${origin}/b?first=run`)
@@ -173,7 +175,7 @@ for (const [index, size] of [
     await page.setViewportSize({ width: size.width, height: size.height })
     await withFreshServer(page, webPort + 50 + index, async (origin, pairingToken) => {
       await pair(page, origin, pairingToken)
-      await page.goto(`${origin}/b`)
+      await page.goto(`${origin}/b?open=1`)
       await expect(page.getByRole('region', { name: 'Team room' })).toBeVisible()
       await expect(
         page.getByRole('heading', { name: 'Run a team of agents from one room.' }),

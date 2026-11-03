@@ -559,7 +559,7 @@ export async function openBoldRoomWith(
   await pair(page)
   const state = await mockBoldRoom(page, options)
   await before?.(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return state
 }

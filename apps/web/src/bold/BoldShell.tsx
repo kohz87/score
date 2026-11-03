@@ -285,7 +285,7 @@ function BoldShellFrame() {
             </button>
             {!phone && (
               <nav className="nav" aria-label="Main">
-                {navButton('room', 'Room', '/b')}
+                {navButton('room', 'Chats', '/b')}
                 {navButton('team', 'Team', '/b/team')}
                 {navButton('recipes', 'Recipes', '/b/recipes')}
                 {navButton('tasks', 'Tasks', '/b/tasks')}

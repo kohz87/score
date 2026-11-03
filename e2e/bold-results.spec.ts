@@ -26,7 +26,7 @@ async function activityFeedJob(page: Page) {
   return job!
 }
 
-async function openResults(page: Page, size: Size, path = '/b') {
+async function openResults(page: Page, size: Size, path = '/b?open=1') {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(path)
