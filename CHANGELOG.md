@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.19.0] — 2026-11-03
+
+### Added
+- **Knowledge** has its own page in the top bar: folders, your notes and documents with search, and the open note with
+  Share to a chat and Edit. The side panel's Library stays for quick reference and links to the page.
+- **Settings › Workspaces**: named folders your agents work in. Tick which agents may use each one; an agent can be in
+  several. A room can be set to a workspace (room menu): coding agents ticked for it work there, others in their own
+  folder. A Hermes agent can take one of its workspaces as its folder.
+
+### Changed
+- **Team is now Agents** (`/b/agents`; old `/b/team` links still work). Top bar: Room, Agents, Knowledge, Tasks,
+  Screens, Recipes. On a phone, Knowledge joins the bottom bar.
+- Agent pages show their folder read-only; workspaces are set in Settings.
+
 ## [3.18.0] — 2026-11-02
 
 ### Added

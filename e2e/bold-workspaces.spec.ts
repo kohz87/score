@@ -55,7 +55,7 @@ for (const viewport of [
     )
 
     // The agent page shows the folder but no longer changes it.
-    await open(page, '/b/team/lead')
+    await open(page, '/b/agents/lead')
     await page
       .getByRole('button', {
         name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
