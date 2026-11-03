@@ -95,7 +95,7 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
                 kind,
                 title: run.status === 'failed' ? 'Routine failed' : 'Routine finished',
                 body: `${name}’s routine ${run.status === 'failed' ? 'did not finish' : 'is done'}.`,
-                url: '/b/team',
+                url: '/b/agents',
                 tag: `run:${run.id}`,
               }
             : {

@@ -16,7 +16,7 @@ async function shot(target: Locator, name: string): Promise<void> {
 }
 
 async function openAdd(page: Page): Promise<Locator> {
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByRole('radio', { name: /A coding tool/ }).click()
   return dialog
@@ -92,7 +92,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Usage
       await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
       // Quota meters (PLAN 8.1): the turn's own rate-limit record, as "% left" with when Score saw it.
-      await page.goto(`/b/team/${encodeURIComponent(id)}`)
+      await page.goto(`/b/agents/${encodeURIComponent(id)}`)
       const meters = page.locator('.bold-coding').getByRole('group', {
         name: 'Claude Code limits',
       })
@@ -215,7 +215,7 @@ test('Codex: the meters come from the log of the run Score started, and say noth
         acknowledgeReads: true,
       })
       expect(created).toMatchObject({ id })
-      await page.goto(`/b/team/${encodeURIComponent(id)}`)
+      await page.goto(`/b/agents/${encodeURIComponent(id)}`)
       const card = page.locator('.bold-coding')
       await expect(card).toContainText('Codex reports its limits after its first reply')
       const room = await openRoom(page, 'codex')
@@ -223,7 +223,7 @@ test('Codex: the meters come from the log of the run Score started, and say noth
       await expect(
         from(room, id).filter({ hasText: 'Updated notes.txt and added new.txt.' }),
       ).toBeVisible({ timeout: 30_000 })
-      await page.goto(`/b/team/${encodeURIComponent(id)}`)
+      await page.goto(`/b/agents/${encodeURIComponent(id)}`)
       const meters = card.getByRole('group', { name: 'Codex limits' })
       await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
         'aria-valuenow',

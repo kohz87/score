@@ -360,7 +360,7 @@ test('/b draws the frame and the dock', async () => {
   expect(screen.getByRole('main')).toBeDefined()
   expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Team' })).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Agents' })).toBeDefined()
   const roomTitle = screen.getByRole('button', { name: 'Team room' })
   expect(roomTitle.getAttribute('aria-haspopup')).toBe('listbox')
   expect(roomTitle.getAttribute('aria-expanded')).toBe('false')
@@ -428,7 +428,7 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and opens the sid
   phone = true
   open('/b')
   const nav = screen.getByRole('navigation', { name: 'Main' })
-  for (const label of ['Room', 'Team', 'Search', 'Settings'])
+  for (const label of ['Room', 'Agents', 'Knowledge', 'Search', 'Settings'])
     expect(within(nav).getByRole('button', { name: label })).toBeDefined()
   expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
   expect(screen.queryByRole('group', { name: /Your team/ })).toBeNull()
@@ -564,10 +564,10 @@ test('a Library note request is consumed and can be repeated after another mode'
   expect(screen.getByLabelText('Contents of Decisions/Source.md')).toBeDefined()
 })
 
-test('Team and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {
+test('Agents, Knowledge and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {
   open('/b')
-  fireEvent.click(screen.getByRole('button', { name: 'Team' }))
-  expect(await screen.findByRole('heading', { name: 'Your team' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Agents' }))
+  expect(await screen.findByRole('heading', { name: 'Agents' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Pause everyone' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
@@ -616,11 +616,11 @@ test('the index opens the new shell', async () => {
 
 test('the Terminal button shows only when the server offers a terminal, and Back returns', async () => {
   terminalFixture = { terminal: true, terminalUnavailable: null }
-  const router = open('/b/team')
+  const router = open('/b/agents')
   fireEvent.click(await screen.findByRole('button', { name: 'Terminal' }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
   fireEvent.click(await screen.findByRole('button', { name: '← Back' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/agents'))
 })
 
 test('no Terminal button when the terminal is off or unavailable', async () => {
@@ -638,16 +638,16 @@ test('no Terminal button when the terminal is off or unavailable', async () => {
 
 test('Ctrl+` opens the terminal and returns, but not while typing', async () => {
   terminalFixture = { terminal: true, terminalUnavailable: null }
-  const router = open('/b/team')
+  const router = open('/b/agents')
   await screen.findByRole('button', { name: 'Terminal' })
   const field = document.body.appendChild(document.createElement('input'))
   fireEvent.keyDown(field, { key: '`', ctrlKey: true })
-  expect(router.state.location.pathname).toBe('/b/team')
+  expect(router.state.location.pathname).toBe('/b/agents')
   field.remove()
   fireEvent.keyDown(document.body, { key: '`', ctrlKey: true })
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
   fireEvent.keyDown(document.body, { key: '`', metaKey: true })
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/agents'))
 })
 
 test('the shell mounts the notification bridge and the update banner', async () => {

@@ -44,7 +44,7 @@ async function openRunLink(page: Page) {
 }
 
 test('a run opens from the agent page inside the new shell, and Back returns to it', async () => {
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   await page.getByRole('button', { name: /^More/ }).click()
   // The runs load after the agent page under a busy server.
   const open = await openRunLink(page)
@@ -53,11 +53,11 @@ test('a run opens from the agent page inside the new shell, and Back returns to 
   await expect(page.locator('.bold-classic-page .attempt-card')).toBeVisible()
   await expect(page.getByRole('heading', { level: 1, name: /^Task run by/ })).toBeVisible()
   await page.getByRole('button', { name: '← Back' }).click()
-  await expect(page).toHaveURL(/\/b\/team\/designer/)
+  await expect(page).toHaveURL(/\/b\/agents\/designer/)
 })
 
 test('the old /attempts address redirects into the frame and keeps the query', async () => {
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   await page.getByRole('button', { name: /^More/ }).click()
   const href = await (await openRunLink(page)).getAttribute('href')
   const id = href!.split('/').pop()!

@@ -157,7 +157,7 @@ test('glass reaches an agent card: its glyph is identity, not a decision', async
     { active: 'shaped', mode: 'dark' },
   )
   await pair(page)
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   const card = page.locator('[data-ui="bold"] .bold-agentcard').first()
   await expect(card).toBeVisible({ timeout: 20_000 })
   await expect(card.locator('.agent-glyph').first()).toBeVisible()

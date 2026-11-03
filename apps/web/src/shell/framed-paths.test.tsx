@@ -26,8 +26,8 @@ describe('toBoldPath', () => {
     expect(toBoldPath('/runs/%E0%A4%A')).toBe('/runs/%E0%A4%A')
   })
   it('sends team pages and chat rooms to their new homes', () => {
-    expect(toBoldPath('/team/lead')).toBe('/b/team/lead')
-    expect(toBoldPath('/team/lead/workspace?path=a')).toBe('/b/team/lead')
+    expect(toBoldPath('/team/lead')).toBe('/b/agents/lead')
+    expect(toBoldPath('/team/lead/workspace?path=a')).toBe('/b/agents/lead')
     expect(toBoldPath('/chat')).toBe('/b')
     // Without the room list a room opens by id; the room page falls back to the team room for an unknown one.
     expect(toBoldPath('/chat/room-1')).toBe('/b?room=room-1')
@@ -60,11 +60,12 @@ describe('classicRedirectFor', () => {
     ['/chat', '', '', '/b'],
     ['/chat', '?job=j1', '#m', '/b?job=j1#m'],
     ['/chat/room-1', '?job=j1', '#m', '/b?room=room-1&job=j1#m'],
-    ['/team', '?add=agent', '', '/b/team?add=agent'],
-    ['/team/lead', '?x=1', '#agent-routines', '/b/team/lead?x=1#agent-routines'],
-    ['/team/lead/workspace', '?path=a', '', '/b/team/lead?path=a'],
-    ['/knowledge', '', '', '/b?library=1'],
-    ['/knowledge/projects/plan.md', '?x=1', '#h', '/b?note=projects%2Fplan.md&x=1#h'],
+    ['/team', '?add=agent', '', '/b/agents?add=agent'],
+    ['/team/lead', '?x=1', '#agent-routines', '/b/agents/lead?x=1#agent-routines'],
+    ['/team/lead/workspace', '?path=a', '', '/b/agents/lead?path=a'],
+    ['/knowledge', '', '', '/b/knowledge'],
+    ['/knowledge/projects/plan.md', '?x=1', '#h', '/b/knowledge?note=projects%2Fplan.md&x=1#h'],
+    ['/knowledge', '?note=a.md', '', '/b/knowledge?note=a.md'],
     ['/reports', '?range=30d', '', '/b/settings/usage?range=30d'],
     ['/settings', '', '', '/b/settings'],
     ['/settings/rules', '?x=1', '#a', '/b/settings/rules?x=1#a'],
@@ -74,7 +75,7 @@ describe('classicRedirectFor', () => {
     expect(classicRedirectFor(path, search, hash)).toBe(target)
   })
   it('leaves new-shell and unknown addresses alone', () => {
-    expect(classicRedirectFor('/b/team', '')).toBeNull()
+    expect(classicRedirectFor('/b/agents', '')).toBeNull()
     expect(classicRedirectFor('/pair', '')).toBeNull()
     expect(classicRedirectFor('/runs/b1', '?x=y', '#z')).toBeNull()
     expect(classicRedirectFor('/chatter', '')).toBeNull()

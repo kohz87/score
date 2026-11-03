@@ -18,7 +18,7 @@ export function useOperationDone(done: boolean, removed: boolean) {
     if (!done) return
     void client.invalidateQueries({ queryKey: ['team'] })
     void client.invalidateQueries({ queryKey: ['chat', 'agents'] })
-    if (removed) void navigate('/b/team')
+    if (removed) void navigate('/b/agents')
   }, [done, removed, client, navigate])
 }
 

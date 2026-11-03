@@ -66,7 +66,7 @@ test('pick a model from the connected providers in Add an agent and on the agent
 }, testInfo) => {
   const helper = helperName(testInfo)
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByLabel('Name').fill(helper)
   await dialog.getByLabel('What does it do?').fill('Checks the model picker')
@@ -112,5 +112,5 @@ test('pick a model from the connected providers in Add an agent and on the agent
   const removal = page.getByRole('group', { name: `Remove ${helper}` })
   await removal.getByLabel(`Type ${helper} to confirm`).fill(helper)
   await removal.getByRole('button', { name: 'Remove', exact: true }).click()
-  await expect(page).toHaveURL(/\/b\/team$/, { timeout: 30_000 })
+  await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 30_000 })
 })

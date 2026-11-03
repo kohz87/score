@@ -43,9 +43,9 @@ export function boldOneToOneLink(agentId: string, search = ''): string {
   return `/b?${params.toString()}`
 }
 
-/** 11.12b search: a repeating job lives in the agent's Team page, under More › Routines. */
+/** 11.12b search: a repeating job lives in the agent's Agents page, under More › Routines. */
 export function boldAgentRoutinesLink(agentId: string): string {
-  return `/b/team/${encodeURIComponent(agentId)}#agent-routines`
+  return `/b/agents/${encodeURIComponent(agentId)}#agent-routines`
 }
 
 /** 11.10e Library: open a note. */
@@ -80,7 +80,7 @@ export function boldCommandLink(name: string): string {
 
 /** 11.8c Add an agent: open the team page's add flow. */
 export function boldAddAgentLink(): string {
-  return '/b/team?add=agent'
+  return '/b/agents?add=agent'
 }
 
 export function boldSettingsSectionLink(sectionId: string): string {
@@ -119,7 +119,7 @@ export function boldAgentScreenLink(agentId: string): string {
 /** 11.8b: the agent's Workspace tab (inside More), optionally on one file. */
 export function boldAgentWorkspaceLink(agentId: string, path?: string): string {
   const query = path ? `?path=${encodeURIComponent(path)}` : ''
-  return `/b/team/${encodeURIComponent(agentId)}${query}#agent-workspace`
+  return `/b/agents/${encodeURIComponent(agentId)}${query}#agent-workspace`
 }
 
 /** Normalises the paths workspace links and Workbench files use before comparing them. */

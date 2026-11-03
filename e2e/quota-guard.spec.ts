@@ -177,7 +177,7 @@ async function codingAgentPage(page: Page) {
     },
   )
 
-  await page.goto(`/b/team/${encodeURIComponent(id)}`)
+  await page.goto(`/b/agents/${encodeURIComponent(id)}`)
   const card = page.locator('.bold-coding')
   const meters = card.getByRole('group', { name: 'Claude Code limits' })
   await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
@@ -206,5 +206,5 @@ async function codingAgentPage(page: Page) {
     .getByRole('group', { name: `Remove ${id}` })
     .getByRole('button', { name: 'Remove', exact: true })
     .click()
-  await expect(page).toHaveURL(/\/b\/team$/)
+  await expect(page).toHaveURL(/\/b\/agents$/)
 }

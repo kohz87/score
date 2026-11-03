@@ -7,13 +7,13 @@ holdLockPerTest('roster')
 
 test('team list opens an agent profile with its cards and a style popover', async ({ page }) => {
   await pair(page)
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
   await expect(page.locator('.bold-agentcard')).toHaveCount(4)
   await expect(page.getByRole('link', { name: 'builder', exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: 'builder', exact: true }).first().click()
-  await expect(page).toHaveURL('/b/team/builder')
+  await expect(page).toHaveURL('/b/agents/builder')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
   // The personality file and the skills sit on the page (Skills under More).
   await expect(page.getByText('How builder works')).toBeVisible()

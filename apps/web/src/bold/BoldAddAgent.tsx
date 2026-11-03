@@ -256,7 +256,7 @@ function AddedView({
       <div className="bold-add-added-actions">
         <Link
           className="btn primary"
-          to={`/b/team/${encodeURIComponent(added.id)}`}
+          to={`/b/agents/${encodeURIComponent(added.id)}`}
           onClick={close}
           autoFocus
         >
@@ -313,7 +313,7 @@ function JoinedRuns({ id, runs, close }: { id: string; runs: RunsOutcome; close:
 
 function WhereItWorksLink({ id, close }: { id: string; close: () => void }) {
   return (
-    <Link className="link" to={`/b/team/${encodeURIComponent(id)}#agent-where`} onClick={close}>
+    <Link className="link" to={`/b/agents/${encodeURIComponent(id)}#agent-where`} onClick={close}>
       Where it works
     </Link>
   )

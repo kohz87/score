@@ -7,12 +7,12 @@ export type PreviewPage = { id: string; label: string; path: string; view: LookV
 
 export const previewPages: PreviewPage[] = [
   { id: 'b-room', label: 'Team room', path: '/b', view: 'admin' },
-  { id: 'b-team', label: 'Team', path: '/b/team', view: 'admin' },
+  { id: 'b-team', label: 'Agents', path: '/b/agents', view: 'admin' },
   // The agent pages' ids are filled in from the team (below).
   {
     id: 'b-agent',
     label: 'Agent page',
-    path: `/b/team/${previewAgentFallback}`,
+    path: `/b/agents/${previewAgentFallback}`,
     view: 'admin',
   },
   {
@@ -27,7 +27,7 @@ export const previewPages: PreviewPage[] = [
 /** The agent pages of the first agent of the team; the fallback id only holds until the team is read. */
 export const previewAgentId = (page: PreviewPage, firstAgentId: string | null): PreviewPage => {
   if (!firstAgentId) return page
-  if (page.id === 'b-agent') return { ...page, path: `/b/team/${firstAgentId}` }
+  if (page.id === 'b-agent') return { ...page, path: `/b/agents/${firstAgentId}` }
   if (page.id === 'b-screen') return { ...page, path: `/b/screen/${firstAgentId}` }
   return page
 }

@@ -242,8 +242,8 @@ async function open(page: Page, path: string, width: number) {
 }
 
 const kinds = [
-  { name: 'hermes', path: '/b/team/builder', ready: 'Runs on' },
-  { name: 'coding', path: '/b/team/coder', ready: 'Access' },
+  { name: 'hermes', path: '/b/agents/builder', ready: 'Runs on' },
+  { name: 'coding', path: '/b/agents/coder', ready: 'Access' },
 ]
 for (const kind of kinds) {
   for (const [label, width] of [
@@ -266,7 +266,7 @@ for (const kind of kinds) {
 test('Message opens the one-to-one and Pause pauses', async ({ page }) => {
   const posts: { path: string; body: unknown }[] = []
   await answer(page, posts)
-  await open(page, '/b/team/builder', 1440)
+  await open(page, '/b/agents/builder', 1440)
   await expect(page.getByRole('link', { name: 'Message', exact: true })).toHaveAttribute(
     'href',
     '/b?with=builder',
@@ -278,7 +278,7 @@ test('Message opens the one-to-one and Pause pauses', async ({ page }) => {
 test('a coding agent’s Model and Access cards edit in place', async ({ page }) => {
   const posts: { path: string; body: unknown }[] = []
   await answer(page, posts)
-  await open(page, '/b/team/coder', 1440)
+  await open(page, '/b/agents/coder', 1440)
   await expect(page.getByRole('link', { name: 'Message', exact: true })).toBeVisible()
   const model = page.locator('section', { has: page.getByRole('heading', { name: 'Model' }) })
   await model.getByRole('button', { name: 'Change model' }).click()

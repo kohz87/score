@@ -12,7 +12,7 @@ test('import an exported agent: inspect, refuse an existing id, then run the dur
   test.setTimeout(90_000)
   const id = 'imported-scout'
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByRole('radio', { name: /Bring in a Hermes profile/ }).click()
 

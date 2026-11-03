@@ -16,10 +16,10 @@ const sizes = [
 
 const tabs = (page: Page) => page.getByRole('navigation', { name: 'Main' })
 
-async function expectTabBar(page: Page, current: 'Room' | 'Team' | 'Settings') {
+async function expectTabBar(page: Page, current: 'Room' | 'Agents' | 'Settings') {
   const bar = tabs(page)
   await expect(bar).toBeVisible()
-  for (const label of ['Room', 'Team', 'Search', 'Settings'])
+  for (const label of ['Room', 'Agents', 'Knowledge', 'Search', 'Settings'])
     await expect(bar.getByRole('button', { name: label })).toBeVisible()
   await expect(bar.getByRole('button', { name: current })).toHaveAttribute('aria-current', 'page')
 }
@@ -234,16 +234,16 @@ for (const size of sizes) {
       await expect(opener).toBeFocused()
     })
 
-    test('Room, Team and Settings each keep the tab bar and content above it', async ({
+    test('Room, Agents and Settings each keep the tab bar and content above it', async ({
       page,
     }, testInfo) => {
       await openBoldRoom(page)
       await expectTabBar(page, 'Room')
 
-      await tabs(page).getByRole('button', { name: 'Team' }).click()
-      await expect(page).toHaveURL('/b/team')
-      await expect(page.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible()
-      await expectTabBar(page, 'Team')
+      await tabs(page).getByRole('button', { name: 'Agents' }).click()
+      await expect(page).toHaveURL('/b/agents')
+      await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible()
+      await expectTabBar(page, 'Agents')
       await expectAtLeast44(page.getByRole('button', { name: 'Add' }))
       const builder = page
         .locator('.bold-agentcard')
@@ -269,7 +269,7 @@ for (const size of sizes) {
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
     })
 
-    test('the Room tab keeps the Needs-you count while Team is open', async ({ page }) => {
+    test('the Room tab keeps the Needs-you count while Agents is open', async ({ page }) => {
       await openBoldRoom(page)
       const nav = tabs(page)
       const room = nav.getByRole('button', { name: /^Room, \d+ need you$/ })
@@ -281,9 +281,9 @@ for (const size of sizes) {
         'rgba(0, 0, 0, 0)',
       )
 
-      await nav.getByRole('button', { name: 'Team' }).click()
-      await expect(page).toHaveURL('/b/team')
-      await expectTabBar(page, 'Team')
+      await nav.getByRole('button', { name: 'Agents' }).click()
+      await expect(page).toHaveURL('/b/agents')
+      await expectTabBar(page, 'Agents')
       await expect(room).toHaveAccessibleName('Room, 2 need you')
       await expect(badge).toHaveText('2')
     })
@@ -333,12 +333,12 @@ for (const size of sizes) {
 }
 
 for (const size of sizes) {
-  test(`Team’s Message opens the one-to-one full screen at ${size.name}`, async ({
+  test(`Agents’ Message opens the one-to-one full screen at ${size.name}`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: size.width, height: size.height })
     await pair(page)
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     const builder = page
       .locator('.bold-agentcard')
       .filter({ has: page.getByRole('link', { name: 'builder', exact: true }) })

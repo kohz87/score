@@ -22,7 +22,7 @@ async function wear(page: Page, css = '.main { box-shadow: 0 1px 2px rgb(0 0 0 /
 
 /** Add an agent › A coding tool, with a name; the first tool on the list is chosen, which needs no acknowledgement. */
 async function openAddCodingAgent(page: Page, id: string) {
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByRole('radio', { name: /A coding tool/ }).check()
   await dialog.getByLabel('Name', { exact: true }).fill(id)

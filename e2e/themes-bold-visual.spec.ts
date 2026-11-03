@@ -119,7 +119,7 @@ for (const id of boldThemeIds) {
           route.fulfill({ json: { items: [] } }),
         )
         await withLock('roster', async () => {
-          await page.goto('/b/team')
+          await page.goto('/b/agents')
           await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
           await settle(page)
           await expect(page).toHaveScreenshot(`bold-${id}-team-${variant}.png`, {

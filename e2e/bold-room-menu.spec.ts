@@ -457,7 +457,7 @@ for (const viewport of sizes) {
       const dialog = page.getByRole('dialog')
       await dialog.getByLabel(/Type Activity feed to confirm/).fill('Activity feed')
       await dialog.getByRole('button', { name: 'Delete job' }).click()
-      await page.getByRole('button', { name: 'Team', exact: true }).click()
+      await page.getByRole('button', { name: 'Agents', exact: true }).click()
       const undo = page.getByRole('status').filter({ hasText: 'Job deleted' })
       await expect(undo).toBeVisible()
       await undo.getByRole('button', { name: 'Undo' }).click()

@@ -7,7 +7,7 @@ test('agent import shows a real upload percentage while the archive is sent, the
   page,
 }) => {
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   // A few MB of data that does not compress, sent over a slow link, so the browser reports real progress.
   const archive = sampleProfile('scout', [
     { name: 'scout/memories/big.bin', body: randomBytes(3 * 1024 * 1024) },
