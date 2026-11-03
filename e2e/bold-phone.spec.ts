@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openBoldJob, openBoldRoom } from './bold-room-fixtures.ts'
+import { openBoldJob, openBoldRoom, openRoomPicker } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
@@ -58,54 +58,44 @@ for (const size of sizes) {
       await page.setViewportSize({ width: size.width, height: size.height })
     })
 
-    test('opens on the job list, opens a job full screen, writes to it and goes back', async ({
+    test('opens on the chat, picks a topic in Info › Topics, writes to it and goes back', async ({
       page,
     }, testInfo) => {
       const state = await openBoldRoom(page)
       await expectTabBar(page, 'Chats')
-      // 3.21.0: a chat opens in its conversation; the job list is one step away (`?jobs=1`, from the Info sheet).
-      await page.goto('/b?jobs=1')
-
-      const jobs = page.getByRole('region', { name: 'All topics' })
-      await expect(jobs.getByRole('heading', { name: 'All topics' })).toBeVisible()
-      const teamRow = jobs.getByRole('button', { name: /^General conversation\./ })
-      await expect(teamRow).toBeVisible()
-      const done = jobs.getByRole('button', { name: /^Queue research\./ })
-      await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
+      // 3.24.0: the All topics screen is gone. A chat opens in its conversation, with the needs-you card inside it, and the
+      // topics are Info › Topics (an old `?jobs=1` link opens the sheet there).
       const pinned = page.getByRole('article', { name: /Needs you: May I install a package/ })
       await expect(pinned).toHaveAttribute('data-protected', 'flex')
-      // The pinned decision comes before the job list in document order.
-      expect(
-        await pinned.evaluate(
-          (el, jobsEl) =>
-            Boolean(el.compareDocumentPosition(jobsEl) & Node.DOCUMENT_POSITION_FOLLOWING),
-          await jobs.elementHandle(),
-        ),
-      ).toBe(true)
+      await expect(page.locator('.bold-pins')).toHaveCount(0)
+      await expect(
+        page.locator('#bold-room-stream').getByRole('article', { name: /Needs you/ }),
+      ).toHaveCount(2)
+      await pinned.scrollIntoViewIfNeeded()
       await expect(pinned.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
       await expect(pinned.getByRole('button', { name: 'Don’t allow' })).toBeVisible()
-      // The first card is the decision: at 360×740 its actions must fit without scrolling inside the strip.
-      const pinBox = await pinned.boundingBox()
-      const stripBox = await page.locator('.bold-pins').boundingBox()
-      expect(pinBox!.y + pinBox!.height).toBeLessThanOrEqual(stripBox!.y + stripBox!.height + 1)
-      // 3.22.0: the strip no longer folds to one card; when the cards do not all fit it scrolls and says how many are
-      // below ("N more below"), so nothing is cut off silently.
-      const scrolls = await page
-        .locator('.bold-pins')
-        .evaluate((strip) => strip.scrollHeight > strip.clientHeight)
-      if (scrolls) await expect(page.locator('.bold-pins-more')).toBeVisible()
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
-      await expectAtLeast44(jobs.getByRole('button', { name: /^Activity feed\./ }))
-      // The job list (`?jobs=1`) keeps the room title row, with its own side-panel button.
-      await expectAtLeast44(page.getByRole('button', { name: 'Open side panel' }))
-      await page.screenshot({ path: testInfo.outputPath(`bold-phone-jobs-${size.width}.png`) })
+      await expectAtLeast44(page.getByRole('button', { name: 'Chat info' }))
+      await page.screenshot({
+        path: testInfo.outputPath(`bold-phone-chat-first-${size.width}.png`),
+      })
 
+      await page.goto('/b?jobs=1')
+      const topics = page.getByRole('complementary', { name: 'Side panel' })
+      await expect(topics.getByRole('heading', { name: 'Topics' })).toBeVisible()
+      const done = topics.getByRole('link', { name: /Queue research/ })
+      await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
+      await expectAtLeast44(topics.getByRole('link', { name: /Activity feed/ }))
+      await expect(page.getByRole('region', { name: 'All topics' })).toHaveCount(0)
+      await page.screenshot({ path: testInfo.outputPath(`bold-phone-jobs-${size.width}.png`) })
+      await page.keyboard.press('Escape')
+
+      await openBoldJob(page, /^Activity feed$/)
       await openBoldJob(page, /^Activity feed\./)
       await expect(page).toHaveURL(/job=job-activity/)
       await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       await expect(page.locator('.bold-chat-phone-id')).toContainText('Activity feed')
       await expect(page.locator('.bold-chat-phone-id')).toContainText('working')
-      await expect(page.getByRole('region', { name: 'All topics' })).toHaveCount(0)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       // 3.22.0: the Thread panel is gone (the chat is the thread) and "Show deleted messages" moved into the room menu;
       // a topic divider has its own Job menu.
@@ -129,37 +119,26 @@ for (const size of sizes) {
       ).toMatchObject({ jobId: 'job-activity', text: 'Check the activity feed on a phone.' })
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-chat-${size.width}.png`) })
 
-      await page.goBack()
-      await expect(page).toHaveURL(/jobs=1/)
-      await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
-      await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
+      await page.getByRole('button', { name: 'Back to chats' }).click()
+      await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
     })
 
-    test('browser Back closes the job chat and returns to the list, not out of /b', async ({
-      page,
-    }) => {
+    test('browser Back leaves the topic and stays in the chat, not out of /b', async ({ page }) => {
       await openBoldRoom(page)
-      await page.goto('/b?jobs=1')
-      await openBoldJob(page, /^Activity feed\./)
+      await openBoldJob(page, /^Activity feed$/)
       await expect(page).toHaveURL(/job=job-activity/)
-      await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
 
       await page.goBack()
-      await expect(page).toHaveURL(/jobs=1/)
-      await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Back to chats' })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
+      expect(new URL(page.url()).searchParams.get('job')).toBeNull()
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
+      await expect(page.getByRole('region', { name: 'All topics' })).toHaveCount(0)
     })
 
-    test('the Team room row opens the default job, the home of a list message', async ({
+    test('the general conversation is the chat itself, the home of a message sent from the composer', async ({
       page,
     }) => {
       const state = await openBoldRoom(page)
-      await page.goto('/b?jobs=1')
-      const teamRow = page.getByRole('button', { name: /^General conversation\..*/ })
-      await expect(teamRow).toBeVisible()
-      await expect(teamRow).toContainText('lead is working')
-
+      // 3.24.0: the general conversation is not a row of a list any more; its link is `?job=job-default`.
       const composer = page.getByRole('combobox', { name: /^Message Team room/ })
       await composer.fill('A note to the team.')
       await page.getByRole('button', { name: 'Send', exact: true }).click()
@@ -172,7 +151,7 @@ for (const size of sizes) {
       // the context bar says so.
       expect(sent?.['jobId']).toBe('job-activity')
 
-      await teamRow.click()
+      await page.goto('/b?job=job-default')
       await expect(page).toHaveURL(/job=job-default/)
       await expect(page.locator('[data-phone-chat-title]')).toHaveText('Team room')
       await expect(page.getByText('Event cursors are (created_at, id).')).toBeVisible()
@@ -305,11 +284,10 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openMenuRoom(page)
-      // 3.21.0: older and imported rooms are not in the chat list; a phone reaches them from the picker on the job list.
-      await page.goto('/b?jobs=1')
-      const picker = page.getByRole('button', { name: 'Team room', exact: true })
-      await picker.click()
-      await page.getByRole('option', { name: /#activity-feed/ }).click()
+      // 3.24.0: older and imported rooms are not in the chat list; a phone reaches them from the room menu's
+      // "Older, imported and elsewhere chats…" (the title switcher is gone).
+      const picker = await openRoomPicker(page)
+      await picker.getByRole('option', { name: /#activity-feed/ }).click()
 
       await expect(page).toHaveURL(/room=room-old/)
       await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
@@ -329,9 +307,9 @@ for (const size of sizes) {
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
 
-      await page.goto('/b?jobs=1')
-      await page.getByRole('button', { name: 'Team room', exact: true }).click()
-      await page.getByRole('option', { name: /#telegram-plan #imported/ }).click()
+      await page.goto('/b?open=1')
+      const second = await openRoomPicker(page)
+      await second.getByRole('option', { name: /#telegram-plan #imported/ }).click()
       await expect(page).toHaveURL(/room=room-imported/)
       await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       await expect(page.locator('[data-phone-chat-title]')).toHaveText('#telegram-plan #imported')

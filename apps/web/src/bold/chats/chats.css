@@ -984,3 +984,10 @@
   right: 0;
   width: min(420px, calc(100vw - 28px));
 }
+
+/* 3.24.0: on a phone Info › Topics is the only way to pick a topic (the All topics screen is gone): a 44px tap target. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-chat-topics a {
+    min-height: 44px;
+  }
+}

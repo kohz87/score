@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openBoldJob, openBoldRoom, showAllJobsOnPhone } from './bold-room-fixtures.ts'
+import {
+  openBoldJob,
+  openBoldRoom,
+  openTopicsOnPhone,
+  showAllJobsOnPhone,
+} from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.4a: the bold team room. The robot room moves over time, so these specs pin the contract-shaped reads to a
@@ -123,26 +128,33 @@ for (const viewport of sizes) {
       await openBoldRoom(page)
 
       if (viewport.width <= 860) {
-        await showAllJobsOnPhone(page)
-        await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
-        const activity = page.getByRole('button', { name: /^Activity feed\..*2 unread/ })
-        const notes = page.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
-        const queue = page.getByRole('button', { name: /^Queue research\./ })
+        // 3.24.0: the All topics screen is gone; Info › Topics (the sheet, or an old `?jobs=1` link) lists the topics.
+        await openTopicsOnPhone(page)
+        await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
+        const row = (title: string) =>
+          page
+            .locator('.bold-chat-topics a')
+            .filter({ has: page.locator('.bold-chat-topic-title', { hasText: title }) })
+        const activity = row('Activity feed')
+        const notes = row('Release notes 2.4')
+        const queue = row('Queue research')
         await expect(activity).toBeVisible()
         await expect(notes).toBeVisible()
         await expect(queue).toBeVisible()
+        await expect(activity.locator('.bold-unread')).toHaveText('2')
+        await expect(notes.locator('.bold-unread')).toHaveText('3')
         await expect(queue.locator('.bold-unread')).toHaveCount(0)
 
-        await activity.dispatchEvent('click') // see openBoldJob: the Needs you box covers the rows
+        await activity.click()
         expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
         await expectDestination(page, 'Activity feed')
         await expect(
           page.getByText('Read layer is ready. The feed renders newest first.'),
         ).toBeVisible()
-        // 3.21.0: the browser's Back returns to the topic list; the bar's Back leads to the chat list.
+        // The pick closes the sheet and the browser's Back leaves the topic again.
+        await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
         await page.goBack()
-        await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
-        await expect(page.getByRole('button', { name: /^Activity feed\..*/ })).toBeVisible()
+        expect(new URL(page.url()).searchParams.get('job')).toBeNull()
         return
       }
 
@@ -287,10 +299,8 @@ for (const viewport of sizes) {
 
     test(`the hover row copies, saves, and pins or unpins at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
-      if (viewport.width <= 860) {
-        await openJob(page, /^General conversation\./)
-        await expect(message(page, 'message-pinned')).toBeVisible()
-      }
+      // 3.24.0: no job screen on a phone; the one conversation already holds every topic's messages.
+      if (viewport.width <= 860) await expect(message(page, 'message-pinned')).toBeVisible()
       const pinned = message(page, 'message-pinned')
       await pinned.hover()
       await expect(
@@ -446,7 +456,7 @@ for (const viewport of sizes) {
       // 3.22.0: the "Open result" card of a finished job (the job folds) is gone with the tabs; a result link is a plain
       // address (Search and notifications open it the same way), followed here.
       if (viewport.width <= 860) {
-        await page.getByRole('button', { name: /^Queue research\. Done/ }).dispatchEvent('click')
+        await openBoldJob(page, /^Queue research$/)
         await expect(page).toHaveURL(/[?&]job=job-queue/)
         await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       }
@@ -498,10 +508,10 @@ for (const viewport of sizes) {
       await expect(
         page.getByRole('heading', { name: 'Your team is ready. What first?' }),
       ).toBeVisible()
-      const strip = page.getByRole('region', { name: 'Needs you' })
-      await expect(strip).toBeVisible()
-      const card = strip.getByRole('article', { name: /May I install a package/ })
+      // 3.24.0: no strip. With no conversation yet (board 09) there is no stream to sit in, so the card shows in place.
+      const card = page.getByRole('article', { name: /May I install a package/ })
       await expect(card).toBeVisible()
+      await expect(page.locator('.bold-pins')).toHaveCount(0)
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
     })

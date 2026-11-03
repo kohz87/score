@@ -371,8 +371,8 @@ export async function openMenuRoom(
   await pair(page)
   const base = await mockBoldRoom(page)
   const menu = await mockRoomMenus(page, options)
-  // 3.21.0: a phone chat opens in its conversation; the room switcher and the job list live at `?jobs=1`.
-  await page.goto((page.viewportSize()?.width ?? 1440) <= 860 ? '/b?jobs=1' : '/b?open=1')
+  // 3.24.0: a phone chat opens in its conversation; the old job list screen (`?jobs=1`) is gone.
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return { ...base, ...menu }
 }
