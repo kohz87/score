@@ -110,12 +110,12 @@ export function ContextBar({
         />
       )}
       {model && (
-        <span>
+        <span className="bold-context-model">
           Model <code>{model}</code>
         </span>
       )}
       <span className="bold-context-spacer" />
-      <span>
+      <span className="bold-context-hint">
         <code>/compress</code> when it fills up
       </span>
     </div>

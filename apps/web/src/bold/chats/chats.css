@@ -797,3 +797,43 @@
   right: auto;
   left: 0;
 }
+
+/* 3.22.1: a long topic or run title wraps in Info's This topic instead of running past the panel. */
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head {
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head > b,
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 3.22.1: the phone mock-up has no context bar; on a phone it is one line — who and where (shortened) and the meter.
+   The model and the /compress hint stay in the meter's details. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-context-bar {
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding-top: 6px;
+  }
+
+  [data-ui='bold'] .bold-context-to {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  [data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger,
+  [data-ui='bold'] .bold-context-bar .chat-ctx {
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-context-model,
+  [data-ui='bold'] .bold-context-hint,
+  [data-ui='bold'] .bold-context-spacer {
+    display: none;
+  }
+}
