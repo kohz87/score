@@ -126,7 +126,7 @@ test.describe('the seeded fake team', () => {
 
   test('agent page', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
-    await openBold(page, '/b/team/builder')
+    await openBold(page, '/b/agents/builder')
     await expect(page.getByRole('heading', { name: /builder/ }).first()).toBeVisible()
     await shot(page, 'agent')
   })

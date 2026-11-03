@@ -55,7 +55,7 @@ test('a long agent description stays on one line in the @mention menu', async ({
     await checkMention(page, id, suffix)
   } finally {
     // Other specs count the team's agents: never leave this one behind.
-    await page.goto(`/b/team/${encodeURIComponent(id)}`)
+    await page.goto(`/b/agents/${encodeURIComponent(id)}`)
     await page.getByRole('button', { name: 'Remove agent…' }).click()
     await page
       .getByRole('group', { name: `Remove ${id}` })

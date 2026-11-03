@@ -390,7 +390,7 @@ test.describe('X1: MCP read and write access is one decision', () => {
       sent.push(route.request().url())
       await route.abort()
     })
-    await page.goto('/b/team/lead')
+    await page.goto('/b/agents/lead')
     await page
       .getByRole('button', {
         name: 'More: memory, skills, tools, workspace, repeating jobs, delete',

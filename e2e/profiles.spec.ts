@@ -11,7 +11,7 @@ test('add an agent, observe setup and readiness, then export and delete with its
   test.setTimeout(90_000)
   const id = 'profile-test-helper'
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByLabel('Name').fill(id)
   await dialog.getByLabel('What does it do?').fill('Helps the team test profile management')

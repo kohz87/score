@@ -66,7 +66,7 @@ test('pick a model from the connected providers in Add an agent and on the agent
 }, testInfo) => {
   const helper = helperName(testInfo)
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await dialog.getByLabel('Name').fill(helper)
   await dialog.getByLabel('What does it do?').fill('Checks the model picker')

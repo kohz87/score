@@ -58,7 +58,7 @@ async function openCodingForm() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/b/team?add=agent']}>
+      <MemoryRouter initialEntries={['/b/agents?add=agent']}>
         <BoldAddAgent agents={[]} phone={false} />
       </MemoryRouter>
     </QueryClientProvider>,

@@ -232,7 +232,7 @@ test.describe('every decision surface is protected, not only the approval card',
         '[role=dialog] input[type=password], [role=dialog] input[type=radio] { opacity: 0; }' +
         '[role=dialog] label { visibility: hidden; color: transparent; }',
     )
-    await page.goto('/b/team?add=agent')
+    await page.goto('/b/agents?add=agent')
     const dialog = page.getByRole('dialog', { name: 'Add an agent' })
     await dialog.getByRole('radio', { name: /A coding tool/ }).check()
     await dialog.getByRole('radio', { name: 'Codex' }).check()

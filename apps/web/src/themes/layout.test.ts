@@ -25,13 +25,13 @@ describe('layout model', () => {
     expect(resolveMenu([{ to: '/chat', label: 'Talk' }, { to: '/team' }, { to: '/chat' }])).toEqual(
       [
         { path: '/chat', title: 'Talk' },
-        { path: '/team', title: 'Team' },
+        { path: '/team', title: 'Agents' },
         { path: '/settings', title: 'Settings', name: 'Settings' },
       ],
     )
     expect(resolveMenu([{ to: '/settings', label: 'Setup' }, { to: '/team' }])).toEqual([
       { path: '/settings', title: 'Setup', name: 'Settings (Setup)' },
-      { path: '/team', title: 'Team' },
+      { path: '/team', title: 'Agents' },
     ])
     expect(resolveMenu([])).toEqual([{ path: '/settings', title: 'Settings', name: 'Settings' }])
   })
@@ -44,7 +44,7 @@ describe('layout model', () => {
       ]),
     ).toEqual([
       { path: '/settings', title: 'Settings', name: 'Settings' },
-      { path: '/team', title: 'Team' },
+      { path: '/team', title: 'Agents' },
     ])
   })
 

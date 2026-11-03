@@ -6,6 +6,7 @@ import type {
   KnowledgeNoteSummary,
 } from '@score/contract'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { useMediaQuery } from '../data/use-media.ts'
 import { DocumentWorkspace } from '../routes/knowledge/DocumentWorkspace.tsx'
 import { ExportDialog } from '../routes/knowledge/ExportDialog.tsx'
@@ -40,6 +41,7 @@ import {
 import { splitSnippet } from '../routes/knowledge/wikilinks.ts'
 import { summaryText, useUploadFlow } from '../routes/knowledge/UploadFlow.tsx'
 import { BookIcon, PlusIcon, SearchIcon, UploadIcon } from './BoldIcons.tsx'
+import { FolderRail, PAGE_DOCUMENTS, PageList } from './KnowledgePageParts.tsx'
 import './bold-library.css'
 
 type Dialog =
@@ -53,6 +55,7 @@ type Dialog =
 
 type ExportRequest = { request: KnowledgeExportRequest; heading: string }
 const PHONE = '(max-width: 860px)'
+const PAGE_PHONE = '(max-width: 600px)'
 
 function Byline({
   author,
@@ -85,6 +88,46 @@ function SelectedByline({ path, agents }: { path: string; agents: AgentSummary[]
   const note = useNote(isNotePath(path) ? path : null)
   if (!note.data) return null
   return <Byline author={note.data.lastAuthor} mtime={note.data.mtime} agents={agents} detail />
+}
+
+function SearchResults({
+  search,
+  debounced,
+  onOpen,
+}: {
+  search: ReturnType<typeof useSearch>
+  debounced: string
+  onOpen: (path: string) => void
+}) {
+  return (
+    <section className="bold-library-results" aria-label="Search results">
+      {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
+      {search.isError && <p role="alert">Couldn’t search the Library. Try again.</p>}
+      {search.data && search.data.length === 0 && (
+        <p className="muted small">Nothing matches “{debounced}”.</p>
+      )}
+      <ul>
+        {(search.data ?? []).map((hit) => (
+          <li key={hit.path}>
+            <button type="button" onClick={() => onOpen(hit.path)}>
+              <strong>
+                {hit.title || baseName(hit.path)}
+                {hit.kind === 'document' && hit.type && (
+                  <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
+                )}
+              </strong>
+              <span className="kn-path">{hit.path}</span>
+              <span className="bold-library-snippet">
+                {splitSnippet(hit.snippet).map((part, index) =>
+                  part.match ? <mark key={index}>{part.text}</mark> : part.text,
+                )}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
 }
 
 const COLLAPSED_KEY = 'score.library.collapsed'
@@ -123,13 +166,25 @@ export function BoldLibrary({
   agents,
   hidden = false,
   openPath = null,
+  page = false,
+  onOpened,
+  onShare,
 }: {
   agents: AgentSummary[]
   hidden?: boolean
+  /** 3.19.0: the Knowledge page (folders, list and note in three columns) instead of the side panel. */
+  page?: boolean
+  /** The page keeps `?note=` in step with the open note (null: none open). */
+  onOpened?: (path: string | null) => void
+  /** The page's Share to a chat; missing while no chat can take it (the button stays disabled). */
+  onShare?: (path: string) => void
   /** A note named by `?note=` (Search); a new path wins even after someone picked another note by hand. */
   openPath?: string | null
 }) {
   const phone = useMediaQuery(PHONE)
+  const pagePhone = useMediaQuery(PAGE_PHONE)
+  // The page's folder rail: '' is every note and file, PAGE_DOCUMENTS the uploaded files, else a folder.
+  const [pageFilter, setPageFilter] = useState('')
   // On a phone the notes list folds while a note is open (3.8.1); this unfolds it.
   const [listOpen, setListOpen] = useState(false)
   const [picks, setPicks] = useState(0)
@@ -216,10 +271,14 @@ export function BoldLibrary({
   // refetching after a create or move; without one, fall back to the first note (or the empty state).
   const active = useMemo(() => {
     if (selected !== undefined) return selected
+    // A phone page starts on the list; the first note opens only on wider screens.
+    if (page && pagePhone) return null
     return section === 'notes' ? (tree.data?.notes[0]?.path ?? null) : null
-  }, [section, selected, tree.data])
+  }, [page, pagePhone, section, selected, tree.data])
   // Folded only once the person chose a note (not the first one shown by default), and not while browsing files.
-  const chosen = phone && section === 'notes' && selected != null
+  const chosen = !page && phone && section === 'notes' && selected != null
+  // The phone page shows the list or, once a note is chosen, the note full width with Back.
+  const reading = page && pagePhone && section === 'notes' && selected != null
   const folded = chosen && !listOpen
 
   if (openPath && openPath !== openedPath) {
@@ -263,6 +322,7 @@ export function BoldLibrary({
     setSection('notes')
     setQuery('')
     focusNote.current = phone
+    onOpened?.(next)
   }
 
   useEffect(() => {
@@ -342,7 +402,7 @@ export function BoldLibrary({
   return (
     <div
       ref={rootRef}
-      className={`sidebody bold-library${dragging ? ' is-dragging' : ''}`}
+      className={`sidebody bold-library${page ? ' is-page' : ''}${reading ? ' is-reading' : ''}${dragging ? ' is-dragging' : ''}`}
       data-testid="bold-library"
       data-width={width}
       hidden={hidden}
@@ -377,10 +437,24 @@ export function BoldLibrary({
           )}
         </p>
       )}
+      {page && !reading && (
+        <FolderRail
+          tree={tree.data}
+          agents={agents}
+          filter={pageFilter}
+          onFilter={(next) => {
+            setPageFilter(next)
+            setPickedFolder(next === PAGE_DOCUMENTS ? '' : next)
+            setSection('notes')
+          }}
+          onNewNote={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
+        />
+      )}
       <nav
         className="bold-library-nav"
         aria-label="Library notes"
         data-folded={folded ? '' : undefined}
+        hidden={reading}
       >
         {chosen && (
           // 3.8.1 (owner, phone): with a note open the list folds to this bar, so the note is what the screen shows.
@@ -418,33 +492,15 @@ export function BoldLibrary({
             </label>
 
             {searching ? (
-              <section className="bold-library-results" aria-label="Search results">
-                {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
-                {search.isError && <p role="alert">Couldn’t search the Library. Try again.</p>}
-                {search.data && search.data.length === 0 && (
-                  <p className="muted small">Nothing matches “{debounced}”.</p>
-                )}
-                <ul>
-                  {(search.data ?? []).map((hit) => (
-                    <li key={hit.path}>
-                      <button type="button" onClick={() => open(hit.path)}>
-                        <strong>
-                          {hit.title || baseName(hit.path)}
-                          {hit.kind === 'document' && hit.type && (
-                            <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
-                          )}
-                        </strong>
-                        <span className="kn-path">{hit.path}</span>
-                        <span className="bold-library-snippet">
-                          {splitSnippet(hit.snippet).map((part, index) =>
-                            part.match ? <mark key={index}>{part.text}</mark> : part.text,
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <SearchResults search={search} debounced={debounced} onOpen={open} />
+            ) : page ? (
+              <PageList
+                tree={tree}
+                agents={agents}
+                filter={pageFilter}
+                active={section === 'notes' ? active : null}
+                onOpen={open}
+              />
             ) : (
               <div className="bold-library-groups">
                 {tree.isPending && <p role="status">Loading notes…</p>}
@@ -548,13 +604,23 @@ export function BoldLibrary({
             )}
 
             <div className="bold-library-tools">
-              <button
-                type="button"
-                className="bold-library-new"
-                onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
-              >
-                <PlusIcon size={14} /> New note
-              </button>
+              {!page && (
+                <Link
+                  className="bold-library-open"
+                  to={active ? `/b/knowledge?note=${encodeURIComponent(active)}` : '/b/knowledge'}
+                >
+                  Open Knowledge
+                </Link>
+              )}
+              {!page && (
+                <button
+                  type="button"
+                  className="bold-library-new"
+                  onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
+                >
+                  <PlusIcon size={14} /> New note
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
@@ -623,7 +689,24 @@ export function BoldLibrary({
         )}
       </nav>
 
-      <section className="kn-main bold-library-main" aria-label="Library note" ref={mainRef}>
+      <section
+        className="kn-main bold-library-main"
+        aria-label="Library note"
+        ref={mainRef}
+        hidden={page && pagePhone && !reading}
+      >
+        {reading && (
+          <button
+            type="button"
+            className="bold-knowledge-back"
+            onClick={() => {
+              setSelected(undefined)
+              onOpened?.(null)
+            }}
+          >
+            ← Back to the notes
+          </button>
+        )}
         {notice && (
           <p className="kn-banner" role="status">
             {notice}{' '}
@@ -669,6 +752,31 @@ export function BoldLibrary({
           />
         ) : active ? (
           <>
+            {page && (
+              <div className="bold-knowledge-actions">
+                <button
+                  type="button"
+                  className="bold-knowledge-share"
+                  disabled={!onShare}
+                  onClick={() => onShare?.(active)}
+                >
+                  Share to a chat
+                </button>
+                {isNotePath(active) && (
+                  <button
+                    type="button"
+                    className="bold-knowledge-edit"
+                    onClick={() =>
+                      mainRef.current
+                        ?.querySelector<HTMLElement>('[contenteditable="true"], textarea')
+                        ?.focus()
+                    }
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            )}
             <SelectedByline path={active} agents={agents} />
             {isNotePath(active) ? (
               <NoteWorkspace

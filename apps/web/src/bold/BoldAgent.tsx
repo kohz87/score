@@ -118,7 +118,7 @@ function OverviewFacts({ agent, agents }: { agent: AgentDetail; agents: AgentSum
         <dt>Reports to</dt>
         <dd>
           {manager ? (
-            <Link to={`/b/team/${encodeURIComponent(manager.id)}`}>{manager.name}</Link>
+            <Link to={`/b/agents/${encodeURIComponent(manager.id)}`}>{manager.name}</Link>
           ) : (
             (agent.reportsTo ?? 'No one')
           )}
@@ -165,7 +165,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
       lifeState === 'removed' &&
       (before === 'deleting' || before === 'needs_attention' || removing)
     )
-      void navigate('/b/team')
+      void navigate('/b/agents')
   }, [lifeState, navigate, removing])
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
@@ -232,8 +232,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
   return (
     <section className="page bold-agent" aria-labelledby="agent-title">
       <div className="pagehead" id="agent-overview">
-        <Link className="link" to="/b/team">
-          Team
+        <Link className="link" to="/b/agents">
+          Agents
         </Link>
         <span className="muted" aria-hidden>
           /
@@ -348,7 +348,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
 
       {coding ? (
         <div className="bold-coding">
-          <CodingOverview agent={agent} teamPath="/b/team" />
+          <CodingOverview agent={agent} teamPath="/b/agents" />
         </div>
       ) : (
         <HermesUpFront agent={agent} file={file} onFile={setFile} openSection={reveal} />

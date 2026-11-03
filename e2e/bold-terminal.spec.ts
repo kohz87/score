@@ -20,7 +20,7 @@ for (const viewport of [
     await pair(page)
     await page.setViewportSize(viewport)
     await offerTerminal(page, true, null)
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     const icon = page.getByRole('banner').getByRole('button', { name: 'Terminal' })
     await expect(icon).toBeVisible()
     const box = await icon.boundingBox()

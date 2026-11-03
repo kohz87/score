@@ -290,8 +290,8 @@ export function BoldFirstRun() {
                   })}
                 </ul>
               )}
-              <Link className="link bold-first-run-team-link" to="/b/team">
-                Add or remove agents on the Team page
+              <Link className="link bold-first-run-team-link" to="/b/agents">
+                Add or remove agents on the Agents page
               </Link>
             </li>
 

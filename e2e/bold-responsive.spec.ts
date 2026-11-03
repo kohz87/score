@@ -8,8 +8,8 @@ test.use({ reducedMotion: 'reduce' })
 
 const routes = [
   { name: 'room', path: '/b', ready: '[data-ui="bold"] .top .word' },
-  { name: 'team', path: '/b/team', ready: '.bold-agentcard' },
-  { name: 'agent', path: '/b/team/builder', ready: '.bold-agent' },
+  { name: 'team', path: '/b/agents', ready: '.bold-agentcard' },
+  { name: 'agent', path: '/b/agents/builder', ready: '.bold-agent' },
   { name: 'library', path: '/b?library=1', ready: '[data-ui="bold"] .top .word' },
   { name: 'runs', path: '/b/recipes', ready: '[data-ui="bold"] .top .word' },
   { name: 'settings', path: '/b/settings', ready: '.bold-settings-page' },

@@ -12,7 +12,7 @@ test.describe.configure({ mode: 'serial' })
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
 async function openWorkspace(page: Page, agent: string) {
-  await page.goto(`/b/team/${agent}`)
+  await page.goto(`/b/agents/${agent}`)
   await page.getByRole('button', { name: /^More:/ }).click()
   await page.getByRole('button', { name: 'Browse all files' }).click()
   const panel = page.locator('#agent-files')
@@ -133,7 +133,7 @@ test('create a file and a folder, then delete both (a folder with files needs it
 test('a remote terminal backend makes the workspace unavailable, with the reason', async ({
   page,
 }) => {
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   await page.getByRole('button', { name: /^More:/ }).click()
   await expect(page.locator('#agent-workspace').getByRole('status')).toContainText(
     'remote terminal (docker)',
@@ -243,7 +243,7 @@ test('the file list can be resized by keyboard and by dragging, and the width is
 })
 
 test("the agent page shows the agent's To do card", async ({ page }) => {
-  await page.goto('/b/team/reviewer')
+  await page.goto('/b/agents/reviewer')
   await page.getByRole('button', { name: /^More:/ }).click()
   const card = page.locator('#agent-todo')
   await expect(card).toBeVisible({ timeout: 15_000 })

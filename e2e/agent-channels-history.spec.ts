@@ -5,7 +5,7 @@ test('Channels shows the connect form and Recent runs lists runs with a Watch re
   page,
 }) => {
   await pair(page)
-  await page.goto('/b/team/builder#agent-channels')
+  await page.goto('/b/agents/builder#agent-channels')
   const channels = page.locator('#agent-channels')
   await expect(channels.getByRole('heading', { name: 'Channels', level: 3 })).toBeVisible()
   await expect(channels.getByText('Connected', { exact: true }).first()).toBeVisible()

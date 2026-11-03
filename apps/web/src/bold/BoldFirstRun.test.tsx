@@ -234,9 +234,9 @@ test('first run lists the team without pretending members are editable, and neve
   expect(within(members).queryByRole('checkbox')).toBeNull()
   expect(
     screen
-      .getByRole('link', { name: 'Add or remove agents on the Team page' })
+      .getByRole('link', { name: 'Add or remove agents on the Agents page' })
       .getAttribute('href'),
-  ).toBe('/b/team')
+  ).toBe('/b/agents')
 
   const lead = screen.getByRole('combobox', { name: /Who leads/ }) as HTMLSelectElement
   expect(lead.value).toBe('')

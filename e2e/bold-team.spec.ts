@@ -19,10 +19,10 @@ for (const viewport of sizes) {
     await page.setViewportSize(viewport)
     await pair(page)
 
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     await expect(
       page.getByRole('heading', {
-        name: viewport.width > 860 ? 'Your team' : 'Team',
+        name: 'Agents',
         level: 1,
       }),
     ).toBeVisible()
@@ -56,10 +56,10 @@ for (const viewport of sizes) {
       name: viewport.width > 860 ? 'Open' : 'builder',
       exact: true,
     })
-    await expect(open).toHaveAttribute('href', '/b/team/builder')
+    await expect(open).toHaveAttribute('href', '/b/agents/builder')
 
     await open.click()
-    await expect(page).toHaveURL('/b/team/builder')
+    await expect(page).toHaveURL('/b/agents/builder')
     await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
     await expect(page.getByText('How builder works')).toBeVisible()
     const where = page.getByRole('region', { name: 'Where it works' })
@@ -180,7 +180,7 @@ test('a coding agent keeps permission, quota floor, password and the protected C
     }, id)
     created = true
 
-    await page.goto(`/b/team/${id}`)
+    await page.goto(`/b/agents/${id}`)
     await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Access', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Limits left' })).toBeVisible()
@@ -224,7 +224,7 @@ test('Where it works: Docker is partly separated and lists what stays on this ma
   page,
 }) => {
   await pair(page)
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   const where = page.getByRole('region', { name: 'Where it works' })
   // The fake designer runs in Docker.
   await expect(where.getByText('Partly separated')).toBeVisible()
