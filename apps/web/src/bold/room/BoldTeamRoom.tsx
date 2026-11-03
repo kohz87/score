@@ -30,6 +30,7 @@ import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { RoomCapsules } from './RoomCapsules.tsx'
 import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
+import { currentTopic } from '../chats/chat-model.ts'
 import { RoomRequests } from './RoomRequests.tsx'
 import { ReportBackLine } from './ReportBack.tsx'
 import {
@@ -175,10 +176,7 @@ function LoadedTeamRoom({
           ? requestedJob
           : 'all'
   // The current topic: the one picked, else the newest open one, else the chat's general conversation.
-  const openTopic = [...allJobs]
-    .filter((job) => !job.isDefault && job.state !== 'done' && job.state !== 'closed')
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
-  const currentJob = picked ?? openTopic ?? allJobs.find((job) => job.isDefault)
+  const currentJob = picked ?? currentTopic(allJobs, null)
   const seek = params.get('message')
   const command = params.get('command')
   const stream = useStream()

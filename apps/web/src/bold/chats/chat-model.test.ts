@@ -152,3 +152,18 @@ test('a run opens at the chat and topic whose job links to it, else nowhere (the
   expect(chatForRun(lists, jobs, 'run-direct')).toBe('/b?with=lead&chat=job-d')
   expect(chatForRun(lists, jobs, 'run-unknown')).toBeNull()
 })
+
+test('the current topic is the picked one, else the newest open one, else the general conversation', async () => {
+  const { currentTopic } = await import('./chat-model.ts')
+  const make = (id: string, isDefault: boolean, state: string, createdAt: string): Job =>
+    ({ id, isDefault, state, createdAt }) as unknown as Job
+  const jobs = [
+    make('general', true, 'working', '2026-01-01'),
+    make('old', false, 'working', '2026-01-02'),
+    make('new', false, 'working', '2026-01-03'),
+    make('done', false, 'done', '2026-01-04'),
+  ]
+  expect(currentTopic(jobs, null)?.id).toBe('new')
+  expect(currentTopic(jobs, 'done')?.id).toBe('done')
+  expect(currentTopic(jobs.slice(0, 1), null)?.id).toBe('general')
+})

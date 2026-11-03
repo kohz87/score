@@ -205,3 +205,15 @@ const OPEN_PARAMS = [
 export function chatIsOpen(params: URLSearchParams): boolean {
   return OPEN_PARAMS.some((name) => params.has(name))
 }
+
+/** The current topic (the one the composer posts to): the one picked, else the newest open one, else the general conversation. */
+export function currentTopic<T extends Job>(
+  jobs: readonly T[],
+  pickedId: string | null,
+): T | undefined {
+  const picked = pickedId ? jobs.find((job) => job.id === pickedId) : undefined
+  const open = [...jobs]
+    .filter((job) => !job.isDefault && job.state !== 'done' && job.state !== 'closed')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  return picked ?? open ?? jobs.find((job) => job.isDefault)
+}
