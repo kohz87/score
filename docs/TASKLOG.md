@@ -2153,3 +2153,13 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Accepted P3s: a legacy room-scheme topic's meter 404s quietly; a tall approval card can be partly clipped in the
   capped strip (it scrolls, with the cue); /compress to several recipients has no meter to open; the Elsewhere view
   has no mode tab on desktop; the phone All topics screen is tight at 360×740 with two cards (stage 4).
+- Gates 2–4 (after the triage): 38 → 22 → 10 e2e failures. Lead fixes found by them: a chat lost its end when its own
+  box got shorter after settling (the context bar's meter and the needs-you cards arrive later) → the follow logic
+  watches the box's size (vitest); the Knowledge page scrolled sideways by a wide note (A's sticky fix had set
+  `overflow: visible`) → `overflow-x: clip`; the phone topic list keeps its composer (my hiding broke 3.21.0's tested
+  layout; reverted, stage 4); theme Room baselines shoot the conversation at its end (a chat opens at its first unread,
+  ±37px with the cue's late layout — accepted P3); the contrast-guard cases moved to the card title (protected.css pins
+  the buttons; a new test checks the buttons). Final gate: check green (contract 1607, web 3227, server 4969); e2e 854
+  passed, 10 failed under parallel load, every one passing on its own (phone 360 list, + menu phone, room unread,
+  workspace screenshot, orchestration dots, a theme switch) and the tablet/Knowledge one fixed (104 passed together).
+
