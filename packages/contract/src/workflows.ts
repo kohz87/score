@@ -19,6 +19,7 @@ import {
   ORCH_LIMITS,
 } from './orchestration.ts'
 import { QuotaFloorSchema } from './coding.ts'
+import { RunTopicRequestSchema } from './run-topic.ts'
 import { AgentIdSchema } from './types.ts'
 
 // Contract §15 "Workflows" (PLAN 7.1a; design docs/briefs/7.1-workflow-builder.md v8 .. v8.3). A workflow run IS an
@@ -947,6 +948,8 @@ export const WorkflowRunCreateSchema = z
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
     /** 8.6: the quota floor for every coding agent of this run; omitted = each agent's own floor. */
     quotaFloorPercent: QuotaFloorSchema.optional(),
+    /** 3.23.0: the chat topic this run becomes, created with the run in one transaction. */
+    topic: RunTopicRequestSchema.optional(),
   })
   .strict()
   .refine(
@@ -958,6 +961,8 @@ export type WorkflowRunCreate = z.infer<typeof WorkflowRunCreateSchema>
 export const WorkflowRunCreatedSchema = z.object({
   run: WorkflowRunSummarySchema,
   preflight: WorkflowPreflightSchema,
+  /** 3.23.0: the topic's job id when the request named a `topic`. */
+  topicId: z.string().optional(),
 })
 export type WorkflowRunCreated = z.infer<typeof WorkflowRunCreatedSchema>
 

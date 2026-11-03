@@ -380,7 +380,7 @@ test('every form that posts a consent is a data-decision and wears its protected
 
 test('the top bar’s Needs-you count and the chat list’s needs-you marks wear Score’s own colours (3.21.0)', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
-  for (const cls of ['bold-nav-count', 'bold-chat-needs', 'bold-pins-more'])
+  for (const cls of ['bold-nav-count', 'bold-chat-needs', 'bold-pins-more', 'bold-run-needs'])
     expect(css, cls).toMatch(
       new RegExp(
         `html\\[data-look='custom'\\] \\.${cls}\\[data-protected\\] \\{[^}]*background-color: #ececf1 !important;[^}]*color: #12131a !important;`,

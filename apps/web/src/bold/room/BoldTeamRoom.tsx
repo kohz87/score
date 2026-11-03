@@ -130,6 +130,7 @@ function LoadedTeamRoom({
   phoneJob,
   phoneJobMissing,
   onOpenThread,
+  onShowGraph,
   externalDeletedNotice,
 }: {
   room: Room
@@ -141,6 +142,7 @@ function LoadedTeamRoom({
   phoneJob?: Job
   phoneJobMissing: boolean
   onOpenThread: (jobId: string) => void
+  onShowGraph: (jobId: string) => void
   /** The shell already owns the deletion notice when the room is mounted inside it. */
   externalDeletedNotice: boolean
 }) {
@@ -516,6 +518,7 @@ function LoadedTeamRoom({
               />
             )}
             onSeeked={clearSeek}
+            onShowGraph={onShowGraph}
           />
         </div>
       )}
@@ -601,6 +604,7 @@ export function BoldTeamRoom({
   phoneAction,
   onOpenElsewhere,
   onOpenThread = () => undefined,
+  onShowGraph = () => undefined,
   externalDeletedNotice = false,
   chatMeta,
   chatAction,
@@ -623,6 +627,8 @@ export function BoldTeamRoom({
   phoneAction?: ReactNode
   onOpenElsewhere?: (session: OutsideSession) => void
   onOpenThread?: (jobId: string) => void
+  /** 3.23.0: the run card's Show graph; the side panel opens its Graph tab for that topic. */
+  onShowGraph?: (jobId: string) => void
   /** The shell already owns the deletion notice when the room is mounted inside it. */
   externalDeletedNotice?: boolean
 }) {
@@ -800,6 +806,7 @@ export function BoldTeamRoom({
           phoneJob={phoneJob}
           phoneJobMissing={phoneJobMissing}
           onOpenThread={onOpenThread}
+          onShowGraph={onShowGraph}
           externalDeletedNotice={externalDeletedNotice}
         />
       )}

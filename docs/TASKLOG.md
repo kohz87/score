@@ -2175,3 +2175,24 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.22.1 deployed live** (~17:12 UTC), backup score-pre-3.22.1-20261104.db, health ok, fence off; pushed. Live
   screenshot: the phone bar is one line and the long run title wraps. Noted for stage 3: topics started by a run show
   only their divider in the team room (their messages live in the run's room); the /run card will fill that space.
+
+## 3.23.0 — Chats, stage 3: runs in the chat (2026-11-04)
+- Owner (asleep): "proceed with stage 3, go with all your recommendation", then "continue until stage 4 is completed"
+  (DECISIONS 160). Brief docs/briefs/3.23.0-run-in-chat.md.
+- Lead (server, contract): `topic` on `POST /api/orchestrations` and `/api/workflow-runs` makes the run's topic in the
+  run's own transaction (`topicId` in the answer; a missing or non-exchange chat leaves neither); checked that run
+  creation writes nothing to the journal (journal appends happen at dispatch), so a rollback can't leave a fence.
+  Tests: run-topic.test.ts (both kinds, rollback).
+- Sonnet coder (web): one-call start in BoldStartJob (the "run made, job not" partial path removed), Start a run in this
+  chat (direct chats refused), `/run` and `/run <recipe>`, a live run card after the topic's divider, the side panel's
+  Graph tab (job map with dots/phases and the session log; a recipe run's live graph; 420px), `?run=` → chat + topic +
+  Graph. Review P2s fixed in one round: archived/unknown chat fell back to the team room; a missing topicId showed a
+  success card; every run card fetched live detail (now the 3 newest unfinished); the 420px panel squeezed tablets
+  (340px with the chat list folded below 1280px); Graph reopened by itself; phone `?work=graph` didn't open the sheet;
+  the card text follows the mock-up (step N of M, who did what ✓). Re-review clean. Lead: an empty-chat line hid behind a
+  run card.
+- Gate: e2e 859 passed, 5 failed: a real one — the run card's "step N of M" and the Graph tab's status used the job map's
+  blue outside the map (2.0:1 on light) → a name colour with AA (lead); the other four passed on their own (load flakes).
+  Contract test listed the new schema. Accepted P3s: a run topic in an archived chat isn't refused by the server (same
+  as `POST …/jobs`); a finished run's card shows its status, not the who-did-what line; a phone rotation with
+  `?work=graph` still in the address reopens the sheet.

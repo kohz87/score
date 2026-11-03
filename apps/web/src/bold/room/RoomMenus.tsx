@@ -1572,7 +1572,7 @@ export function RoomTitle({
               type="button"
               className="chip room-start"
               aria-label="Start a job"
-              onClick={() => startJob?.openStartJob()}
+              onClick={() => startJob?.openStartJob({ roomId: current.id })}
             >
               <PlusIcon />
               Job
@@ -1620,7 +1620,7 @@ export function RoomTitle({
           type="button"
           className="chip room-start"
           aria-label="Start a job"
-          onClick={() => startJob?.openStartJob()}
+          onClick={() => startJob?.openStartJob({ roomId: current.id })}
         >
           <PlusIcon />
           Job

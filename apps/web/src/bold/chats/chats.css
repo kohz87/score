@@ -566,6 +566,20 @@
     width: 300px;
   }
 
+  /* The Graph tab is a little wider than Info (the mock-up's 420px from 1280px, 340px below) so the run's nodes read; it is the flat Info panel. */
+  [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
+    flex: 0 0 340px;
+    width: 340px;
+  }
+
+  /* Up to 1279px the chat list folds to its rail while Graph is open (BoldRoom); from 1280px there is room for 420. */
+  @media (min-width: 1280px) {
+    [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
+      flex: 0 0 420px;
+      width: 420px;
+    }
+  }
+
   /* Results and the Workbench widen the panel only while chosen. */
   [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .bold-sidecol {
     flex: 0 0 480px;
@@ -843,4 +857,91 @@
     bottom: calc(100% + 10px);
     left: auto;
   }
+}
+
+/* 3.23.0: the side panel's Graph tab (mock-up 18): "Run · title" and its state, the run's graph, the Session log. The
+   graph fits the panel: nodes shrink to its width and anything wider scrolls inside its own box, never the page. */
+[data-ui='bold'] .bold-topic-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+[data-ui='bold'] .bold-topic-graph-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-graph-state {
+  flex: none;
+  /* AA in both looks (the job map's swarm blue exists only inside the map). */
+  color: var(--agent-violet-name);
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap {
+  --jm-swarm: #7db8ff;
+  align-items: stretch;
+  background: var(--deep);
+  border-radius: 18px;
+  padding: 14px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-node,
+[data-ui='bold'] .bold-topic-graph .jobmap-node[data-tone] {
+  width: 100%;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-topic-graph-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-topic-graph-log h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-graph .bold-run-classic {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows). */
+[data-ui='bold'] .bold-topic-graph .jobmap-log {
+  margin-top: 4px;
+  padding: 12px 14px;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-log li {
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 0 10px;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-log time {
+  grid-row: 1 / span 2;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-log li > b,
+[data-ui='bold'] .bold-topic-graph .jobmap-log li > span {
+  grid-column: 2;
 }

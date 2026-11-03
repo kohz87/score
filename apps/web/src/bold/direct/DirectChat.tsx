@@ -37,8 +37,8 @@ import { createDirectChat, directChatsQuery } from './direct-queries.ts'
 import { ReferenceChip, ShareMenu, Starters } from './direct-parts.tsx'
 import './bold-direct.css'
 
-/** Only these topic commands make sense in a one-to-one: no owner, members or room workspace to change. */
-const DIRECT_COMMANDS = new Set(['new', 'rename', 'done', 'reopen'])
+/** Only these topic commands make sense in a one-to-one: no owner, members or room workspace to change (/run is listed to say runs start in a group chat). */
+const DIRECT_COMMANDS = new Set(['new', 'rename', 'done', 'reopen', 'run'])
 
 function Welcome({
   agent,

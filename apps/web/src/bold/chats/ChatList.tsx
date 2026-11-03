@@ -84,6 +84,7 @@ export function ChatList({
   phone,
   folded,
   onFold,
+  foldLocked = false,
 }: {
   lists: ChatLists
   ready: boolean
@@ -92,6 +93,8 @@ export function ChatList({
   phone: boolean
   folded: boolean
   onFold: (folded: boolean) => void
+  /** The list is folded to make room (the Graph tab on a narrow screen): there is no unfold button then. */
+  foldLocked?: boolean
 }) {
   const [search, setSearch] = useState('')
   const [making, setMaking] = useState(false)
@@ -103,14 +106,16 @@ export function ChatList({
   if (folded && !phone)
     return (
       <aside className="bold-chat-list rail" aria-label="Chats, folded">
-        <button
-          type="button"
-          className="bold-chat-round"
-          aria-label="Show the chat list"
-          onClick={() => onFold(false)}
-        >
-          ›
-        </button>
+        {!foldLocked && (
+          <button
+            type="button"
+            className="bold-chat-round"
+            aria-label="Show the chat list"
+            onClick={() => onFold(false)}
+          >
+            ›
+          </button>
+        )}
         {[...lists.groups, ...lists.directs].map((entry) => (
           <Link
             key={`${entry.kind}:${entry.id}`}
