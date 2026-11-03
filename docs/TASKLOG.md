@@ -2172,3 +2172,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   open at 390px (inside the screen, model and Compact visible). 7 phone theme baselines regenerated and viewed;
   bold-room, bold-thread, bold-phone, bold-room-admin and themes-bold-visual pass.
 
+- **v3.22.1 deployed live** (~17:12 UTC), backup score-pre-3.22.1-20261104.db, health ok, fence off; pushed. Live
+  screenshot: the phone bar is one line and the long run title wraps. Noted for stage 3: topics started by a run show
+  only their divider in the team room (their messages live in the run's room); the /run card will fill that space.
