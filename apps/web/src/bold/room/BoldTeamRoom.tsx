@@ -449,25 +449,31 @@ function LoadedTeamRoom({
           That job isn’t here any more.
         </p>
       )}
-      {phone && phoneJob && !phoneJob.isDefault && (
+      {phone && phoneJob && (
         <div className="bold-phone-chat-tools" aria-label="Job tools">
-          <button
-            type="button"
-            className="bold-job-thread"
-            aria-label={`Open thread for ${phoneJob.title}`}
-            onClick={() => onOpenThread(phoneJob.id)}
-          >
-            Thread
-          </button>
-          <JobMenu
-            room={room}
-            job={phoneJob}
-            onShare={setSharingJob}
-            onRename={setRenamingJob}
-            onCloseJob={(job) => void changeJobState(job, 'close')}
-            onReopen={(job) => void changeJobState(job, 'reopen')}
-            onDelete={setDeletingJob}
-          />
+          {/* A chat's main conversation (the default job) keeps the deleted-messages toggle; Thread and the job menu are
+              for named jobs. */}
+          {!phoneJob.isDefault && (
+            <>
+              <button
+                type="button"
+                className="bold-job-thread"
+                aria-label={`Open thread for ${phoneJob.title}`}
+                onClick={() => onOpenThread(phoneJob.id)}
+              >
+                Thread
+              </button>
+              <JobMenu
+                room={room}
+                job={phoneJob}
+                onShare={setSharingJob}
+                onRename={setRenamingJob}
+                onCloseJob={(job) => void changeJobState(job, 'close')}
+                onReopen={(job) => void changeJobState(job, 'reopen')}
+                onDelete={setDeletingJob}
+              />
+            </>
+          )}
           <button
             type="button"
             className="bold-filter bold-deleted-toggle"

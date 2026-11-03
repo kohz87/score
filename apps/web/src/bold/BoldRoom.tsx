@@ -97,6 +97,16 @@ export function BoldRoom() {
       setPanelShut(false)
     }
   }
+  // 3.21.0 review: the panel opens on Info by default, so a Workbench or Results link (`?work=…`) asks for Work itself.
+  const workRequest = params.get('work')
+  const [seenWorkRequest, setSeenWorkRequest] = useState<string | null>(null)
+  if (workRequest !== seenWorkRequest) {
+    setSeenWorkRequest(workRequest)
+    if (workRequest) {
+      setMode('work')
+      setPanelShut(false)
+    }
+  }
   // `?run=<brief id>` (a job's link, Search, a notification) opens the Runs view on that run, and stays while it is open.
   const runId = params.get('run')
   // Keyed on the navigation, not only the id: opening the same run again after the sheet was closed opens it again.
