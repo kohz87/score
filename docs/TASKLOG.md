@@ -2162,4 +2162,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   the buttons; a new test checks the buttons). Final gate: check green (contract 1607, web 3227, server 4969); e2e 854
   passed, 10 failed under parallel load, every one passing on its own (phone 360 list, + menu phone, room unread,
   workspace screenshot, orchestration dots, a theme switch) and the tablet/Knowledge one fixed (104 passed together).
+- **v3.22.0 deployed live** (~17:05 UTC), backup score-pre-3.22.0-20261103.db, health ok, fence off; pushed.
+
+## 3.22.1 — phone context bar (2026-11-04)
+- Lead's live screenshot after 3.22.0 (owner's data, 1280/1440/1920 and 390 with the terminal button): layout matches
+  the mock-up; two deviations fixed: the phone context bar took three lines (the phone mock-up has none) → one line
+  (who/where shortened, the meter; model and Compact in its details); a long run title ran past Info's This topic.
+- Sonnet review P1 (the meter's details would open off-screen at the line's right end) fixed and checked with the panel
+  open at 390px (inside the screen, model and Compact visible). 7 phone theme baselines regenerated and viewed;
+  bold-room, bold-thread, bold-phone, bold-room-admin and themes-bold-visual pass.
 

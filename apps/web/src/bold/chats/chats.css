@@ -836,4 +836,11 @@
   [data-ui='bold'] .bold-context-spacer {
     display: none;
   }
+  /* The meter sits at the line's right end here: its details open up and to the left, inside the screen. */
+  [data-ui='bold'] .bold-context-bar .chat-ctx-panel {
+    top: auto;
+    right: 0;
+    bottom: calc(100% + 10px);
+    left: auto;
+  }
 }
