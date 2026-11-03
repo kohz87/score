@@ -2225,3 +2225,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   before B's fixtures merged (regenerated, stable 63/63, viewed) and 3 load flakes passing alone (55 passed).
 - Accepted P3s: custom looks lose the stream's 22px top fade; the needs-you mark of the old phone presence strip has no
   replacement beyond the chat list badge and the top-bar count; questions anchor to their topic.
+- **v3.24.0 deployed live** (~19:38 UTC), backup score-pre-3.24.0-20261104.db, health ok, fence off; pushed. Live
+  screenshot (owner's data, 1440 and 390): nothing above the conversation but the header, run cards in the stream, Info ›
+  This topic with the orchestration card; the chat list's "needs you" on the team room comes from a topic waiting on the
+  person (an agent's reply asked in prose; no card by design since stage 1).
