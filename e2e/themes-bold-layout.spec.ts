@@ -50,6 +50,8 @@ test.describe('background', () => {
     await wear(page, t.glassCover)
     const ask = page.locator('[data-ui="bold"] .bold-request').first()
     await expect(ask).toBeVisible()
+    // 3.24.0: the card is inside the conversation, so it may start scrolled out of the visible part of the stream.
+    await ask.scrollIntoViewIfNeeded()
     const paint = await ask.evaluate((el) => {
       const style = getComputedStyle(el)
       const box = el.getBoundingClientRect()

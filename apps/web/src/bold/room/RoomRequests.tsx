@@ -11,6 +11,7 @@ import type {
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { createPortal } from 'react-dom'
+import { FOLLOW_SLACK } from './follow-end.ts'
 import { CHIP_MIN_HEIGHT, chipClearance, jumpTarget, type Jump } from './needs-jump.ts'
 import { NeedsSlot, NeedsSlotsProvider, slotIds, useNeedsSlotsOuter } from './needs-slots.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -701,11 +702,19 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
       clearance.current = needed
       measure()
     }
+    // The padding grows scrollHeight with no change inside the stream, so the follow-the-end logic never sees it:
+    // a reader at the end is kept there here; one who scrolled up is left where they are.
+    const atEnd = () =>
+      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < FOLLOW_SLACK
+    const wasAtEnd = atEnd()
     scroller.style.paddingBottom = `${needed + 4}px`
     scroller.style.scrollPaddingBottom = `${needed}px`
+    if (wasAtEnd) scroller.scrollTop = scroller.scrollHeight
     return () => {
+      const stay = atEnd()
       scroller.style.paddingBottom = ''
       scroller.style.scrollPaddingBottom = ''
+      if (stay) scroller.scrollTop = scroller.scrollHeight
     }
   }, [pending, showing, jump?.count, measure])
   if (!jump || !slot) return null

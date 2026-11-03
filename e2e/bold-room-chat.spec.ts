@@ -384,19 +384,15 @@ test('a run that asks for approval shows a Needs you card in the room and allowi
   const prompt = `Please ask for approval before installing ${Date.now()}`
   await composerOf(page).fill(prompt)
   await composerOf(page).press('Enter')
-  // Other specs' approvals share the server and the Needs you region, so the card is the one that names this room.
+  // 3.24.0: the card is in the conversation after the message that asked (no pinned Needs you region any more). Other
+  // specs' approvals share the server, so the card is the one that names this room.
   const card = page
-    .getByRole('region', { name: 'Needs you' })
+    .locator('#bold-room-stream')
     .getByRole('article', { name: /^Needs you: Install the websocket library/ })
     .filter({ hasText: room.label })
-  // Other specs' approvals share the server: the region shows the newest and folds the rest behind "N more needs you".
-  await expect(async () => {
-    const more = page.getByRole('button', { name: /more needs? you/ })
-    if (!(await card.isVisible()) && (await more.isVisible())) await more.click()
-    await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible({
-      timeout: 1_000,
-    })
-  }).toPass({ timeout: 20_000 })
+  await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
   await expect(card.locator('code')).toHaveText('pnpm add ws@8.18.0')
   const pending = await page.evaluate(async () => {
     const response = await fetch('/api/approvals')

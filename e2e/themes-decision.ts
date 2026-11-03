@@ -56,6 +56,9 @@ export async function allowIt(card: Locator) {
 
 /** The topmost element at the middle of `target` is `target` or inside it: nothing covers it. */
 export async function isOnTop(target: Locator): Promise<boolean> {
+  // 3.24.0: decision cards sit inside the scrolling conversation: bring the target into view so the point it is
+  // sampled at isn't clipped away or under the room header.
+  await target.scrollIntoViewIfNeeded()
   return target.evaluate((element) => {
     const box = element.getBoundingClientRect()
     if (box.width === 0 || box.height === 0) return false

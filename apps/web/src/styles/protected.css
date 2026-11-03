@@ -231,6 +231,12 @@
     position: relative !important;
     z-index: 100 !important;
   }
+  /* 3.24.0: Needs-you cards sit inside the conversation. The scroll area's fade mask makes it a stacking context, which
+     would cap the cards' lift above at the stream's own level and let anything a theme raises (the top bar dragged
+     over the page) cover them. Under a custom look the stream has no mask, so the lift reaches the page again. */
+  html[data-look='custom'] [data-ui='bold'] .stream {
+    mask-image: none !important;
+  }
   /* A decision's own fields and labels (fourth gate, finding 1) read in Score's fonts too: a font the theme ships could
      draw blank or different glyphs. Size and weight stay the theme's; a rule aimed at a field with the theme's own font
      is refused by the guard. */

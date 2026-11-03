@@ -322,3 +322,25 @@ test('the card’s wrapper is protected so no look can hide it', async () => {
   const host = card.closest<HTMLElement>('.bold-needs-host')!
   expect(host.getAttribute('data-protected')).toBe('block')
 })
+
+// The padding that keeps the chip clear grows scrollHeight with no change inside the stream (follow-end never sees it):
+// a reader at the end stays at the end, one who scrolled up is not moved.
+test.each([
+  ['stays at the end', 1000, true],
+  ['is left where they are when scrolled up', 100, false],
+])('a reader who %s when the room for the chip is made', async (_name, startTop, follows) => {
+  stub({ approvals: [approval] })
+  renderChat()
+  const stream = document.getElementById('bold-room-stream')!
+  let top = startTop
+  Object.defineProperty(stream, 'scrollTop', {
+    configurable: true,
+    get: () => top,
+    set: (v) => (top = v),
+  })
+  Object.defineProperty(stream, 'scrollHeight', { configurable: true, get: () => 1400 })
+  Object.defineProperty(stream, 'clientHeight', { configurable: true, get: () => 400 })
+  await screen.findByRole('article', { name: /Needs you: May I install a package/ })
+  await waitFor(() => expect(stream.style.paddingBottom).toBe('56px'))
+  expect(top).toBe(follows ? 1400 : startTop)
+})
