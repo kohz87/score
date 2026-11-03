@@ -644,6 +644,7 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
   const [jump, setJump] = useState<Jump | null>(null)
   const chipRef = useRef<HTMLButtonElement | null>(null)
   const clearance = useRef(chipClearance(CHIP_MIN_HEIGHT))
+  const chipHeight = useRef(0)
   const measure = useCallback(() => {
     const scroller = document.getElementById('bold-room-stream')
     if (!scroller) return setJump(null)
@@ -690,7 +691,11 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
   useLayoutEffect(() => {
     const scroller = document.getElementById('bold-room-stream')
     if (!scroller || !pending) return
-    const height = chipRef.current?.getBoundingClientRect().height ?? 0
+    // The last measured height is kept while the chip is hidden, so a taller (wrapped) chip doesn't shrink the room
+    // when it hides and grow it when it shows.
+    const measured = chipRef.current?.getBoundingClientRect().height ?? 0
+    if (measured > 0) chipHeight.current = measured
+    const height = chipHeight.current
     const needed = chipClearance(height)
     if (needed !== clearance.current) {
       clearance.current = needed
