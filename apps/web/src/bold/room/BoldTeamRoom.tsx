@@ -187,7 +187,8 @@ function LoadedTeamRoom({
   // The message page the composer writes into: the selected job, or the room's default job from All. Its query key
   // does not depend on the room's job list, so a new job never refetches it or drops an optimistic message.
   // A `?job=` that points at a topic whose list hasn't loaded yet must not fall back to the general conversation.
-  const holdForTopic = requestedJob !== 'all' && jobsStatus !== 'success'
+  // Held only while the topics load; a failed read shows its own error and leaves the composer usable.
+  const holdForTopic = requestedJob !== 'all' && jobsStatus === 'pending'
   const composerJobId = currentJob && !currentJob.isDefault ? currentJob.id : null
   const baseMessagesDefinition = useMemo(
     () => roomChatMessagesQuery(room.id, null, defaultJobId),

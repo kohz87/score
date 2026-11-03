@@ -2060,3 +2060,10 @@
     flex-wrap: nowrap;
   }
 }
+
+/* 3.22.0 review: while the "N more below" cue shows, the box keeps room for it at its end, so the cue never sits over a
+   card's buttons once scrolled. */
+[data-ui='bold'] .bold-pins:has(.bold-pins-more) {
+  padding-bottom: 44px;
+  scroll-padding-bottom: 44px;
+}
