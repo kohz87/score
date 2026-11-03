@@ -8,7 +8,7 @@ holdLockPerTest('roster')
 test('team list opens an agent profile with its cards and a style popover', async ({ page }) => {
   await pair(page)
   await page.goto('/b/agents')
-  await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible()
   await expect(page.locator('.bold-agentcard')).toHaveCount(4)
   await expect(page.getByRole('link', { name: 'builder', exact: true })).toBeVisible()
 
