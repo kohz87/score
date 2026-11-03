@@ -241,6 +241,22 @@ test('Share to a chat leaves a note reference in the team room draft', async () 
   expect(localStorage.getItem('score.chat.draft.team-1')).toContain('[[Decisions/Event cursors]]')
 })
 
+test('Share to a chat keeps a draft already in the team room and adds the sentence on a new line', async () => {
+  localStorage.setItem('score.chat.draft.team-1', 'half a thought')
+  mount()
+  await screen.findByLabelText('Contents of Decisions/Event cursors.md')
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Share to a chat' }).hasAttribute('disabled')).toBe(
+      false,
+    ),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Share to a chat' }))
+  await screen.findByText('The team room')
+  expect(localStorage.getItem('score.chat.draft.team-1')).toBe(
+    'half a thought\nPlease read the Knowledge note [[Decisions/Event cursors]]. ',
+  )
+})
+
 test('on a phone the folders are a chip row, a note opens full width and Back returns to the list', async () => {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('max-width'),
@@ -256,7 +272,11 @@ test('on a phone the folders are a chip row, a note opens full width and Back re
   fireEvent.click(await screen.findByRole('button', { name: /Source/ }))
   expect(await screen.findByLabelText('Contents of Decisions/Source.md')).toBeDefined()
   expect(screen.queryByRole('complementary', { name: 'Folders' })).toBeNull()
+  expect(screen.getByRole('heading', { level: 1, name: 'Knowledge' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: /Back to the notes/ }))
   expect(await screen.findByRole('complementary', { name: 'Folders' })).toBeDefined()
   expect(screen.queryByLabelText('Contents of Decisions/Source.md')).toBeNull()
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute('data-path')).toBe('Decisions/Source.md'),
+  )
 })

@@ -208,7 +208,7 @@ test("a workspace:// link in chat opens the file in the agent's Files panel", as
   await box.fill('open [the readme](workspace://reviewer/README.md) please')
   await box.press('Enter')
   await streamOf(page).getByRole('link', { name: 'the readme' }).click()
-  await expect(page).toHaveURL(/\/b\/team\/reviewer\?path=README\.md/)
+  await expect(page).toHaveURL(/\/b\/agents\/reviewer\?path=README\.md/)
   await expect(page.getByLabel('Contents of README.md')).toBeVisible({ timeout: 15_000 })
   // A blocked path shows the normal error.
   await page.goto('/team/reviewer/workspace?path=.env')

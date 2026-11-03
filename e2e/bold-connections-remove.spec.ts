@@ -197,7 +197,7 @@ for (const viewport of sizes) {
       await panel.getByLabel(`Type ${id} to confirm`).fill(id)
       await expect(remove).toBeEnabled()
       await remove.click()
-      await expect(page).toHaveURL(/\/b\/team$/, { timeout: 30_000 })
+      await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 30_000 })
       await expect(page.getByRole('link', { name: id, exact: true })).toHaveCount(0)
     } finally {
       await page.evaluate(async (agentId) => {
@@ -249,6 +249,6 @@ for (const viewport of sizes) {
     await expect(panel).toHaveAttribute('data-protected', 'block')
     await expect(panel).toContainText(`Removes ${id} from the team. Past work stays in rooms.`)
     await panel.getByRole('button', { name: 'Remove', exact: true }).click()
-    await expect(page).toHaveURL(/\/b\/team$/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 15_000 })
   })
 }

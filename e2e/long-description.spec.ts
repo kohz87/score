@@ -61,7 +61,7 @@ test('a long agent description stays on one line in the @mention menu', async ({
       .getByRole('group', { name: `Remove ${id}` })
       .getByRole('button', { name: 'Remove', exact: true })
       .click()
-    await expect(page).toHaveURL(/\/b\/team$/)
+    await expect(page).toHaveURL(/\/b\/agents$/)
   }
 })
 

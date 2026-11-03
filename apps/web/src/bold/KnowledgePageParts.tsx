@@ -141,6 +141,7 @@ export function PageList({
         return (
           <button
             key={entry.path}
+            data-path={entry.path}
             type="button"
             className={`bold-knowledge-row${active === entry.path ? ' is-on' : ''}`}
             aria-current={active === entry.path ? 'page' : undefined}

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
-import { saveDraft } from '../routes/chat/composer-model.ts'
+import { loadDraft, saveDraft } from '../routes/chat/composer-model.ts'
 import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
 import { isNotePath } from '../routes/knowledge/knowledge-files.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
@@ -32,11 +32,14 @@ export function BoldKnowledgePage() {
   // The team room's composer opens with the note named in its draft; the person reads it and sends.
   const share = teamRoom
     ? (path: string) => {
+        const sentence = isNotePath(path)
+          ? `Please read the Knowledge note [[${path.replace(/\.md$/iu, '')}]].`
+          : `Please read the Knowledge file ${path}.`
+        // A draft already in the composer stays; the sentence goes on a new line after it.
+        const draft = loadDraft(teamRoom.id)
         saveDraft(
           teamRoom.id,
-          isNotePath(path)
-            ? `Please read the Knowledge note [[${path.replace(/\.md$/iu, '')}]]. `
-            : `Please read the Knowledge file ${path}. `,
+          draft.trim() === '' ? `${sentence} ` : `${draft.trimEnd()}\n${sentence} `,
         )
         void navigate('/b')
       }

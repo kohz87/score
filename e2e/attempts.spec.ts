@@ -53,7 +53,7 @@ test('a run opens from the agent page inside the new shell, and Back returns to 
   await expect(page.locator('.bold-classic-page .attempt-card')).toBeVisible()
   await expect(page.getByRole('heading', { level: 1, name: /^Task run by/ })).toBeVisible()
   await page.getByRole('button', { name: '← Back' }).click()
-  await expect(page).toHaveURL(/\/b\/team\/designer/)
+  await expect(page).toHaveURL(/\/b\/agents\/designer/)
 })
 
 test('the old /attempts address redirects into the frame and keeps the query', async () => {

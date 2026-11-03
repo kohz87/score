@@ -187,6 +187,8 @@ export function BoldLibrary({
   const [pageFilter, setPageFilter] = useState('')
   // On a phone the notes list folds while a note is open (3.8.1); this unfolds it.
   const [listOpen, setListOpen] = useState(false)
+  // The phone page's Back returns focus to the note just left in the list (or the list).
+  const [returnedFrom, setReturnedFrom] = useState<string | null | undefined>(undefined)
   const [picks, setPicks] = useState(0)
   // The panel's width picks the layout (rail ≥ 1180, two-column panels ≥ 860): measured, since a CSS container would
   // also contain the editor's fixed dialogs and upload toast.
@@ -338,13 +340,30 @@ export function BoldLibrary({
       }
       if (!heading) return
       focusNote.current = false
-      main?.scrollIntoView({ block: 'start' })
+      main?.scrollIntoView?.({ block: 'start' })
       heading.tabIndex = -1
       heading.focus({ preventScroll: true })
     }
     frame = requestAnimationFrame(moveToHeading)
     return () => cancelAnimationFrame(frame)
   }, [active, phone, section, picks])
+
+  useEffect(() => {
+    if (returnedFrom === undefined || reading) return
+    const frame = requestAnimationFrame(() => {
+      const nav = rootRef.current?.querySelector<HTMLElement>('.bold-library-nav')
+      const row = [...(nav?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find(
+        (item) => item.dataset.path === returnedFrom,
+      )
+      const target = row ?? nav?.querySelector<HTMLElement>('.bold-knowledge-list')
+      if (target) {
+        target.tabIndex = row ? 0 : -1
+        target.focus()
+      }
+      setReturnedFrom(undefined)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [returnedFrom, reading, tree.data])
 
   function openDialog(next: Dialog) {
     setDialogError(null)
@@ -695,11 +714,13 @@ export function BoldLibrary({
         ref={mainRef}
         hidden={page && pagePhone && !reading}
       >
+        {reading && <h1 className="kn-sr">Knowledge</h1>}
         {reading && (
           <button
             type="button"
             className="bold-knowledge-back"
             onClick={() => {
+              setReturnedFrom(active ?? null)
               setSelected(undefined)
               onOpened?.(null)
             }}

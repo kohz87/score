@@ -47,7 +47,7 @@ test('add an agent, observe setup and readiness, then export and delete with its
     await expect(confirm).toBeEnabled()
     await confirm.click()
     // The page leaves for the team once the removal has completed.
-    await expect(page).toHaveURL(/\/b\/team$/, { timeout: 30_000 })
+    await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 30_000 })
     await expect(page.getByRole('link', { name: id, exact: true })).toHaveCount(0)
   } finally {
     // A failed run must not leave the agent on the shared server (global teardown checks).

@@ -34,8 +34,13 @@ for (const size of sizes) {
       await expect(folders).toBeVisible()
     }
 
-    await page.getByPlaceholder('Search').fill('a')
-    await expect(page.getByRole('region', { name: 'Search results' })).toBeVisible()
+    // Opening a note rewrites ?note=, which clears the search box once; retype until the results show.
+    await expect(async () => {
+      await page.getByPlaceholder('Search').fill('a')
+      await expect(page.getByRole('region', { name: 'Search results' })).toBeVisible({
+        timeout: 1500,
+      })
+    }).toPass({ timeout: 10_000 })
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

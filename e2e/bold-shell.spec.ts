@@ -56,7 +56,7 @@ test('the root and the old ?ui=classic address open the new shell, with no way b
 test('a workspace link opens the agent page with More and the file panel', async ({ page }) => {
   await pair(page)
   await page.goto('/team/builder/workspace?path=notes.md')
-  await expect(page).toHaveURL(/\/b\/team\/builder\?path=notes\.md/)
+  await expect(page).toHaveURL(/\/b\/agents\/builder\?path=notes\.md/)
   await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
 })
 
