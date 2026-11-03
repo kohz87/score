@@ -13,22 +13,21 @@ const sizes = [
 ] as const
 
 async function openRoomPicker(page: Page) {
-  // 3.22.0: the chat header is the plain name; other rooms are one item in the room menu.
-  // A phone's header keeps the room name as the switcher button.
-  if ((page.viewportSize()?.width ?? 1440) <= 860) await page.locator('button.roomtitle').click()
-  else {
-    await page.getByRole('button', { name: 'Room menu' }).click()
-    await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
-  }
+  // 3.24.0: a phone's title switcher is gone too; other rooms are one item in the room menu, as on a desktop.
+  await page.getByRole('button', { name: 'Room menu' }).click()
+  await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
-/** 3.21.0: a phone chat shows its conversation; its job list is behind the Info sheet's "All jobs" link (in-app, so toasts stay). */
+/** 3.24.0: a phone's topics are Info › Topics (the All topics screen is gone); Escape closes the sheet again. */
 async function openPhoneJobList(page: Page) {
   await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.getByRole('link', { name: 'All topics' }).click()
-  await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
 }
+const topicRow = (page: Page, title: string) =>
+  page
+    .locator('.bold-chat-topics a')
+    .filter({ has: page.locator('.bold-chat-topic-title', { hasText: new RegExp(`^${title}$`) }) })
 
 // The app's phone composer hides the "to" chip (bold-room.css); the label stays in the DOM.
 async function expectOlderRoomLabel(page: Page) {
@@ -143,10 +142,7 @@ for (const viewport of sizes) {
 
     test(`the room dropdown works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
-      const trigger =
-        viewport.width <= 860
-          ? page.locator('button.roomtitle')
-          : page.getByRole('button', { name: 'Room menu' })
+      const trigger = page.getByRole('button', { name: 'Room menu' })
       await openRoomPicker(page)
       const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
       const team = picker.getByRole('option', { name: /Team room/ })
@@ -222,10 +218,10 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-      // 3.21.0: after a delete a phone is back on the chat list, a desktop on the team room.
+      // 3.24.0: a phone opened the chat as `/b?open=1`, so after a delete it stays in the team room's conversation
+      // (before, the test entered through the retired list screen and fell back to the chat list).
       if (viewport.width > 860) await expect(page.locator('.roomtitle')).toHaveText('Team room')
-      else
-        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
+      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('Team room')
       expect(
         state.requests.some(
           (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-old',
@@ -254,10 +250,10 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-      // 3.21.0: after a delete a phone is back on the chat list, a desktop on the team room.
+      // 3.24.0: a phone opened the chat as `/b?open=1`, so after a delete it stays in the team room's conversation
+      // (before, the test entered through the retired list screen and fell back to the chat list).
       if (viewport.width > 860) await expect(page.locator('.roomtitle')).toHaveText('Team room')
-      else
-        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
+      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('Team room')
       expect(
         state.requests.some(
           (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-imported',
@@ -350,9 +346,8 @@ for (const viewport of sizes) {
       if (viewport.width <= 860) {
         // A phone's chat bar names the chat, not the job; the renamed job shows on the topic list.
         await openPhoneJobList(page)
-        await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toBeVisible()
-        // The Needs you box covers the rows on a phone (reported); a tap cannot reach them.
-        await page.getByRole('button', { name: /^Activity feed v2\./ }).dispatchEvent('click')
+        await expect(topicRow(page, 'Activity feed v2')).toBeVisible()
+        await page.keyboard.press('Escape')
       }
       expect(
         state.requests.find(
@@ -370,9 +365,9 @@ for (const viewport of sizes) {
         await expect(topicHead(page, 'Activity feed v2')).toContainText('closed')
       } else {
         await openPhoneJobList(page)
-        await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toHaveCount(0)
-        await page.getByRole('button', { name: 'Closed topics (2)' }).click()
-        await page.getByRole('button', { name: /^Activity feed v2\./ }).dispatchEvent('click')
+        // The closed topic stays listed in Info › Topics (two closed topics sit in a plain list, no fold).
+        await expect(topicRow(page, 'Activity feed v2')).toBeVisible()
+        await page.keyboard.press('Escape')
       }
       await jobMenu(page, 'Activity feed v2').click()
       await page.getByRole('menuitem', { name: 'Reopen' }).click()
@@ -425,14 +420,19 @@ for (const viewport of sizes) {
       if (viewport.width > 860) await expect(topicHead(page, 'Activity feed')).toHaveCount(0)
       else {
         await openPhoneJobList(page)
-        await expect(page.getByRole('button', { name: /^Activity feed\./ })).toHaveCount(0)
+        await expect(topicRow(page, 'Activity feed')).toHaveCount(0)
+        await page.keyboard.press('Escape')
       }
       await undo.getByRole('button', { name: 'Undo' }).click()
       await expect(
         page.getByRole('status').filter({ hasText: 'Restored “Activity feed”' }),
       ).toBeVisible()
       if (viewport.width > 860) await expect(topicHead(page, 'Activity feed')).toBeVisible()
-      else await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeVisible()
+      else {
+        await openPhoneJobList(page)
+        await expect(topicRow(page, 'Activity feed')).toBeVisible()
+        await page.keyboard.press('Escape')
+      }
       expect(
         state.requests.some(
           (request) =>
@@ -449,8 +449,8 @@ for (const viewport of sizes) {
         // 3.22.0: a closed topic is a divider in the conversation, marked closed.
         await expect(topicHead(page, 'Old import')).toContainText('closed')
       } else {
-        await page.getByRole('button', { name: 'Closed topics (1)' }).click()
-        await expect(page.getByRole('button', { name: /^Old import\./ })).toBeVisible()
+        await openPhoneJobList(page)
+        await expect(topicRow(page, 'Old import')).toBeVisible()
       }
     })
 

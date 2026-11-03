@@ -580,48 +580,45 @@ export async function openBoldRoomWith(
   return state
 }
 
-/** Board 18 on a phone opens a job from the list; the desktop opens its tab. Both land on that job's chat. */
+/** Opens the chat's Info on its Topics: a desktop's side panel already shows it, a phone's sheet opens from `?jobs=1`. */
+export async function openTopicsOnPhone(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) > 860) return
+  // 3.24.0: the All topics screen is gone; an old `?jobs=1` link opens the chat with Info on Topics.
+  const url = new URL(page.url())
+  url.searchParams.set('jobs', '1')
+  await page.goto(url.toString())
+  await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
+}
+
+/** Makes a topic current: the phone picks it in Info › Topics (the sheet closes), the desktop in its side panel. */
 export async function openBoldJob(page: Page, title: RegExp) {
-  if ((page.viewportSize()?.width ?? 1440) <= 860) {
-    // 3.21.0: a phone chat opens in its conversation; the job list is `?jobs=1`.
-    // Decide by the address, not by what is on screen: while a chat's jobs load, the list region shows for a moment.
-    if (new URL(page.url()).searchParams.get('jobs') !== '1') {
-      const url = new URL(page.url())
-      url.searchParams.set('jobs', '1')
-      await page.goto(url.toString())
-    }
-    // KNOWN 3.22.0 BUG (reported): with two needs-you cards the Needs you box leaves the topic list a few pixels, and the
-    // box intercepts pointer events over its rows, so a real tap cannot reach them; dispatch the click instead.
-    await page.getByRole('button', { name: title }).dispatchEvent('click')
-    await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
-    return
-  }
-  // 3.22.0: no job tabs; Info › Topics makes the topic current (the conversation scrolls to its divider).
+  const phone = (page.viewportSize()?.width ?? 1440) <= 860
+  if (phone) await openTopicsOnPhone(page)
+  // The retired job list named its rows "Title. State…"; a topic row's title element holds only the title.
+  const rowTitle = new RegExp(title.source.replace(/\\\.(\.\*)?$/, '$'), title.flags)
   await page
-    .getByRole('complementary', { name: 'Side panel' })
-    .getByRole('link', { name: title })
+    .locator('.bold-chat-topics a')
+    .filter({ has: page.locator('.bold-chat-topic-title').filter({ hasText: rowTitle }) })
+    .first()
     .click()
+  // 3.22.0: no job tabs on a desktop; the pick makes the topic current (the conversation scrolls to its divider).
+  if (phone) await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
 }
 
 /**
- * 3.21.0: a phone chat opens in its conversation (the default job). Cards of the room's other jobs are in the job list
- * (`?jobs=1`, which shows every job); desktop shows them already.
+ * 3.24.0: needs-you cards sit in the conversation, so every topic's cards are in the one conversation on a phone as on a
+ * desktop; nothing to open any more. Kept so specs read the same; it only checks the conversation is there.
  */
 export async function showAllJobsOnPhone(page: Page) {
-  if ((page.viewportSize()?.width ?? 1440) > 860) return
-  await page.goto('/b?jobs=1')
-  await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
+  await expect(page.locator('.bold-stream').first()).toBeAttached()
 }
 
 /**
- * Opens the list of older, imported and elsewhere chats. 3.22.0: on a desktop the chat header is the plain name and the
- * room menu holds it; a phone's header keeps the room name as the switcher button.
+ * Opens the list of older, imported and elsewhere chats: the room menu's "Older, imported and elsewhere chats…" on a
+ * desktop and on a phone (3.24.0: the phone title switcher is gone).
  */
 export async function openRoomPicker(page: Page) {
-  if ((page.viewportSize()?.width ?? 1440) <= 860) await page.locator('button.roomtitle').click()
-  else {
-    await page.getByRole('button', { name: 'Room menu' }).click()
-    await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
-  }
+  await page.getByRole('button', { name: 'Room menu' }).click()
+  await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
