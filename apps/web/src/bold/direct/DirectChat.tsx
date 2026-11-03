@@ -455,6 +455,7 @@ function LoadedDirect({
           topicCommands={topicCommands}
           footer={({ to, subject }) => (
             <ContextBar
+              roomId={room.id}
               to={to}
               subjectId={subject ?? agent.id}
               agents={[agent]}

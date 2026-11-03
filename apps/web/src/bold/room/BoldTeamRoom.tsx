@@ -543,6 +543,7 @@ function LoadedTeamRoom({
           topicCommands={olderRoom ? undefined : topicCommands}
           footer={({ to, subject }) => (
             <ContextBar
+              roomId={room.id}
               to={to}
               subjectId={subject}
               agents={agents}
