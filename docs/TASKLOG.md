@@ -2094,3 +2094,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   agent files without the folder form, dense phone Settings) + the tablet flake; fixed, affected specs 42 + 102 + 13
   passed.
 - **v3.19.0 deployed live** (~07:45 UTC), backup score-pre-3.19.0-20261103.db, health ok.
+
+## 3.19.1 — The top bar and the Knowledge page fit the window (2026-11-03)
+- Owner: "the knowledge and agent doesn't adjust dynamically to windows size". Lead screenshots at 1280/1024/820/700:
+  the top bar wrapped the avatar below ~1200px (six destinations + rings + search), and Knowledge kept three columns to
+  601px. Lead fix: search becomes its icon ≤1180px, rings hide ≤1100px; Knowledge two columns 861–1180px (folders as
+  chips above the list), one column ≤860px (the shell's tab-bar width; was 600).
+- Sonnet review P2: hiding the rings hid the needs-you cue between 861 and 1100px → the Room button carries the count
+  there (`bold-nav-count`, protected, test).
+- Gate: check green (contract 1607, web 3170, server 4967); e2e 860 passed, 5 failed under parallel load (workbench,
+  workspace screenshot, phone manifest, a visual) — all passed on re-run with the review fix (106 passed).
+- **v3.19.1 deployed live** (~08:2x UTC), backup score-pre-3.19.1-20261103.db, health ok.
