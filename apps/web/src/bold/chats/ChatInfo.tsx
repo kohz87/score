@@ -130,7 +130,7 @@ export function ChatInfo({
                 className="btn sm"
                 onClick={() => {
                   onNavigate?.()
-                  startJob?.openStartJob()
+                  startJob?.openStartJob({ roomId: room.id })
                 }}
               >
                 Start a job

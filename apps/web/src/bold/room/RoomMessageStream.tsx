@@ -1,6 +1,6 @@
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import type { AgentSummary, Job, Message } from '@score/contract'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStreamQuery } from '../../data/query-client.ts'
 import './bold-thread.css'
 import { approvalsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
@@ -18,6 +18,11 @@ import {
 } from './topic-divider.tsx'
 import { groupKey, groupReplies, pickReplyVersion } from './reply-versions.ts'
 import { roomChatMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
+import { isRunOver } from '../../routes/orchestrations/orch-model.ts'
+import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
+import { RunCard } from './RunCard.tsx'
+import { recipeRun } from './thread-model.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
@@ -89,6 +94,7 @@ export function RoomMessageStream({
   topicMenu,
   systemLines = [],
   messageExtras,
+  onShowGraph,
 }: {
   roomId: string
   jobs: Job[]
@@ -102,6 +108,8 @@ export function RoomMessageStream({
   topicMenu?: (job: Job) => ReactNode
   /** Small local lines for what a command changed ("You made builder the owner"). */
   systemLines?: SystemLine[]
+  /** 3.23.0: a topic that holds a run shows its card after the divider; Show graph opens the side panel's Graph tab. */
+  onShowGraph?: (jobId: string) => void
   /**
    * Extra buttons and rows on a message (a one-to-one adds Share to the team room). `lastReply` marks the newest
    * finished reply of an agent in the conversation.
@@ -112,6 +120,27 @@ export function RoomMessageStream({
   ) => { actions?: ReactNode; below?: ReactNode } | undefined
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
+  // Only the 3 newest cards of runs still going read their live detail; the rest (and every finished run) use summaries.
+  const orchestrations = useStreamQuery(orchestrationsQuery).data
+  const workflowRuns = useStreamQuery(workflowRunsQuery).data
+  const liveCards = useMemo(() => {
+    const going = jobs.filter((job) => {
+      const match = recipeRun(job.recipe ?? null, orchestrations ?? [], workflowRuns ?? [])
+      return match !== null && !isRunOver(match.summary.status)
+    })
+    going.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return new Set(going.slice(0, 3).map((job) => job.id))
+  }, [jobs, orchestrations, workflowRuns])
+  const runCard = (job: Job) =>
+    job.recipe && onShowGraph ? (
+      <RunCard
+        job={job}
+        recipe={job.recipe}
+        agents={agents}
+        live={liveCards.has(job.id)}
+        onShowGraph={onShowGraph}
+      />
+    ) : null
   const [older, setOlder] = useState<string[]>([])
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
   const seeked = useRef<string | null>(null)
@@ -338,7 +367,12 @@ export function RoomMessageStream({
       const marks: { at: string; node: ReactNode }[] = [
         ...quiet.map((job) => ({
           at: job.createdAt,
-          node: <TopicDivider key={`topic-${job.id}`} job={job} menu={topicMenu?.(job)} />,
+          node: (
+            <Fragment key={`topic-${job.id}`}>
+              <TopicDivider job={job} menu={topicMenu?.(job)} />
+              {runCard(job)}
+            </Fragment>
+          ),
         })),
         ...systemLines.map((line) => ({
           at: line.at,
@@ -361,12 +395,14 @@ export function RoomMessageStream({
         if (divider) {
           flush(false)
           built.nodes.push(
-            <TopicDivider
-              key={`divider-${message.id}`}
-              job={divider.job}
-              again={divider.again}
-              menu={divider.job ? topicMenu?.(divider.job) : undefined}
-            />,
+            <Fragment key={`divider-${message.id}`}>
+              <TopicDivider
+                job={divider.job}
+                again={divider.again}
+                menu={divider.job ? topicMenu?.(divider.job) : undefined}
+              />
+              {divider.job && !divider.again && runCard(divider.job)}
+            </Fragment>,
           )
         }
         run.push(message)
@@ -436,9 +472,13 @@ export function RoomMessageStream({
           Load earlier
         </button>
       )}
-      {status === 'success' && items.length === 0 && !showDeleted && (
-        <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
-      )}
+      {status === 'success' &&
+        items.length === 0 &&
+        !showDeleted &&
+        // A topic with a run card is not empty (3.23.0): its card shows even before its first message.
+        !(onShowGraph && jobs.some((job) => job.recipe)) && (
+          <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
+        )}
       {nodes}
       {Object.entries(typing).map(([agentId, text]) => {
         const agent = agents.find((item) => item.id === agentId)

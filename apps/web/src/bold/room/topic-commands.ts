@@ -6,6 +6,7 @@ import { newId } from '../../data/ids.ts'
 import type { SlashCommand } from '../../routes/chat/composer-model.ts'
 import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
 import { changeCachedJob } from './room-queries.ts'
+import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { setRoomWorkspace, useSharedWorkspaces } from '../workspaces-queries.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
@@ -21,6 +22,11 @@ export const TOPIC_COMMANDS: SlashCommand[] = [
   { name: 'lead', usage: '/lead @agent', description: 'Make someone the owner of this chat' },
   { name: 'add', usage: '/add @agent', description: 'Add someone to this chat' },
   { name: 'remove', usage: '/remove @agent', description: 'Take someone out of this chat' },
+  {
+    name: 'run',
+    usage: '/run [recipe]',
+    description: 'Start a run in this chat (lead decides, or a saved recipe by name)',
+  },
   {
     name: 'workspace',
     usage: '/workspace <name>',
@@ -65,6 +71,8 @@ export type TopicCommandContext = {
   pick: (jobId: string | null) => void
   /** A small line in the stream for what changed. */
   say: (text: string) => void
+  /** Opens Start a job for this chat (`/run`). Missing where the dialog isn't mounted. */
+  startRun?: (options: StartJobOptions) => void
 }
 
 /** Runs one command and says what it did in the stream; throws an Error with plain words when it can't. */
@@ -147,6 +155,12 @@ export async function runTopicCommand(
         }),
       )
       say(line)
+    } else if (name === 'run') {
+      // A direct chat holds no run: runs belong to a group chat (a team or a chat of several agents).
+      if (room.kind === 'direct') throw new Error('Runs start in a group chat.')
+      if (!ctx.startRun) throw new Error('Start a job isn’t available here.')
+      const recipeName = args.trim()
+      ctx.startRun({ roomId: room.id, ...(recipeName ? { recipeName } : {}) })
     } else if (name === 'workspace') {
       const word = args.trim()
       if (!word) throw new Error('Name the workspace: /workspace <name>, or /workspace none')
@@ -171,12 +185,20 @@ export async function runTopicCommand(
 }
 
 /** The hook the room uses: the palette items and a runner bound to the open chat. */
-export function useTopicCommands(ctx: Omit<TopicCommandContext, 'workspaces' | 'queryClient'>) {
+export function useTopicCommands(
+  ctx: Omit<TopicCommandContext, 'workspaces' | 'queryClient' | 'startRun'>,
+) {
   const workspaces = useSharedWorkspaces().data ?? []
   const queryClient = useQueryClient()
+  const startJob = useStartJob()
   return {
     items: TOPIC_COMMANDS,
     run: (name: string, args: string) =>
-      runTopicCommand(name, args, { ...ctx, workspaces, queryClient }),
+      runTopicCommand(name, args, {
+        ...ctx,
+        workspaces,
+        queryClient,
+        startRun: startJob?.openStartJob,
+      }),
   }
 }

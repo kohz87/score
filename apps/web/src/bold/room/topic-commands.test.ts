@@ -66,6 +66,7 @@ test('the palette lists every chat command with a usage line and a description',
     'lead',
     'add',
     'remove',
+    'run',
     'workspace',
   ])
   for (const item of TOPIC_COMMANDS) {
@@ -252,4 +253,20 @@ test('a failing route comes back as the server’s words, and nothing is announc
   await expect(run('done', '')).rejects.toThrow('That topic is busy.')
   expect(said).toEqual([])
   expect(picked).toEqual([])
+})
+
+test('/run opens Start a job for this chat, with the recipe name when one is typed', async () => {
+  const opened: unknown[] = []
+  await run('run', '', { startRun: (options) => opened.push(options) })
+  await run('run', '  Release notes ', { startRun: (options) => opened.push(options) })
+  expect(opened).toEqual([{ roomId: chat.id }, { roomId: chat.id, recipeName: 'Release notes' }])
+  expect(calls).toEqual([])
+})
+
+test('/run in a direct chat says runs start in a group chat', async () => {
+  const opened: unknown[] = []
+  await expect(
+    run('run', '', { room: { ...chat, kind: 'direct' }, startRun: (o) => opened.push(o) }),
+  ).rejects.toThrow('Runs start in a group chat.')
+  expect(opened).toEqual([])
 })

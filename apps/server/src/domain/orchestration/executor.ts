@@ -1,5 +1,6 @@
 import {
   type AgentSummary,
+  type RunTopicRequest,
   WORKFLOW_LIMITS,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_CAPACITY,
@@ -53,6 +54,7 @@ import { redact, redactBounded } from '../../redact.ts'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
+import { createJob } from '../exchanges/store.ts'
 import { teamPausedAt } from '../team-pause.ts'
 import {
   budgetView,
@@ -1000,8 +1002,11 @@ export class Orchestrator {
       }
     }
     const id = `orc-${randomUUID().slice(0, 8)}`
+    let topicId: string | undefined
     await this.mutate((ctx) => {
       this.insert(ctx, id, body, preflight, reports)
+      // 3.23.0: the chat topic is made in this transaction, so a failure leaves neither the run nor the topic.
+      if (body.topic) topicId = this.insertTopic(ctx, body.topic, 'orchestration', id)
       if (helpers) {
         const config: HelpersConfig = {
           agentIds: helpers.agentIds,
@@ -1064,7 +1069,24 @@ export class Orchestrator {
       }
     })
     this.kick()
-    return { orchestration: this.summary(id), preflight }
+    return {
+      orchestration: this.summary(id),
+      preflight,
+      ...(topicId !== undefined ? { topicId } : {}),
+    }
+  }
+
+  /** 3.23.0: a run's topic in the chat it was started from, linked to the run (the chat's run card reads the link). */
+  private insertTopic(
+    ctx: Ctx,
+    topic: RunTopicRequest,
+    kind: 'orchestration' | 'workflow',
+    ref: string,
+  ): string {
+    const { roomId, title, ...limits } = topic
+    const made = createJob(ctx.sqlite, roomId, title, ctx.now, { ...limits, recipe: { kind, ref } })
+    ctx.events.push(...made.drafts)
+    return made.job.id
   }
 
   private insert(
@@ -1652,6 +1674,7 @@ export class Orchestrator {
           }
         : undefined
     const id = `orc-${randomUUID().slice(0, 8)}`
+    let topicId: string | undefined
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
       if (isFenced(sqlite))
@@ -1684,9 +1707,15 @@ export class Orchestrator {
           )
       }
       insertWorkflowRun(ctx, id, body, found, preflight, coding)
+      // 3.23.0: the chat topic is made in this transaction, so a failure leaves neither the run nor the topic.
+      if (body.topic) topicId = this.insertTopic(ctx, body.topic, 'workflow', id)
     })
     this.kick()
-    return { run: this.workflowSummary(id), preflight }
+    return {
+      run: this.workflowSummary(id),
+      preflight,
+      ...(topicId !== undefined ? { topicId } : {}),
+    }
   }
 
   private async decideWf(id: string, fn: (ctx: Ctx) => void): Promise<WorkflowRunSummary> {

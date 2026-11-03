@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { QuotaFloorSchema } from './coding.ts'
+import { RunTopicRequestSchema } from './run-topic.ts'
 import { AgentIdSchema } from './types.ts'
 
 // Contract §14 "Orchestrator" (PLAN 7.5a; design docs/briefs/7.5-orchestrator.md v3 + v3.1). A lead agent decides steps
@@ -339,6 +340,8 @@ export const OrchestrationCreateSchema = z
     advisorMode: z.enum(['on_call', 'checkpoints']).optional(),
     /** 3.15: the helpers and their limits. */
     helpers: OrchestrationHelpersSchema.optional(),
+    /** 3.23.0: the chat topic this run becomes, created with the run in one transaction. */
+    topic: RunTopicRequestSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -844,6 +847,8 @@ export type FenceLift = z.infer<typeof FenceLiftSchema>
 export const OrchestrationCreatedSchema = z.object({
   orchestration: OrchestrationSummarySchema,
   preflight: PreflightSchema,
+  /** 3.23.0: the topic's job id when the request named a `topic`. */
+  topicId: z.string().optional(),
 })
 export type OrchestrationCreated = z.infer<typeof OrchestrationCreatedSchema>
 
