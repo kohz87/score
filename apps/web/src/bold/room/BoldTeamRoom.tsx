@@ -519,15 +519,7 @@ function LoadedTeamRoom({
           />
         </div>
       )}
-      {/* The phone's topic list is a list screen: the composer stays mounted (its draft) but hidden, and the list gets
-          the height (3.22.0 gate). */}
-      <div
-        className={`bold-room-composer${
-          phone && room.role === 'team' && (phoneJobMissing || (!empty && !phoneJob))
-            ? ' is-list-screen'
-            : ''
-        }`}
-      >
+      <div className="bold-room-composer">
         <Composer
           key={`${composerKey}-${command ?? ''}`}
           roomId={room.id}
