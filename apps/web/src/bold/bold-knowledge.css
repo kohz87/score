@@ -211,8 +211,49 @@
   margin-bottom: calc(8px * var(--bold-d, 1));
 }
 
-/* Phone: folders become a chip row above the list; a chosen note fills the screen with Back. */
-@media (max-width: 600px) {
+/* 3.19.1: a mid-width window keeps two columns: the folders sit above the note list, the note takes the rest. */
+@media (min-width: 861px) and (max-width: 1180px) {
+  [data-ui='bold'] .sidebody.bold-library.is-page {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  [data-ui='bold'] .is-page > .bold-knowledge-rail {
+    grid-column: 1;
+    grid-row: 1;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-knowledge-folders {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 10px;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-nav {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-main {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Phone and narrow windows (the shell's tab-bar width): folders become a chip row above the list; a chosen note fills
+   the screen with Back. */
+@media (max-width: 860px) {
   [data-ui='bold'] .sidebody.bold-library.is-page {
     flex-direction: column;
     min-height: 0;

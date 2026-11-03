@@ -699,6 +699,24 @@ body.fit [data-ui='bold'] .stream {
   }
 }
 
+/* 3.19.1: six destinations, the team rings, search and the avatar keep to one row on a laptop-width window. */
+@media (max-width: 1180px) {
+  [data-ui='bold'] .top .searchbtn-label,
+  [data-ui='bold'] .top .searchbtn .kbd {
+    display: none;
+  }
+
+  [data-ui='bold'] .nav button {
+    padding: 0 calc(10px * var(--bold-d, 1));
+  }
+}
+
+@media (max-width: 1100px) {
+  [data-ui='bold'] .top .dock {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
   [data-ui='bold'] .top .nav,
   [data-ui='bold'] .top .dock,
