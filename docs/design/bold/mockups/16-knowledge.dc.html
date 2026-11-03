@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knowledge</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}
+button{font-family:inherit;cursor:pointer}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+input::placeholder{color:#7C8291}
+</style>
+</helmet>
+<div style="min-height: 860px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; display: flex; flex-direction: column">
+<header style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 24px; border-bottom: 1px solid #23262F">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700">score</span>
+<nav aria-label="Main" style="display: flex; gap: 6px; flex-wrap: wrap">
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Chats</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Team</a>
+<a href="#" aria-current="page" style="padding: 8px 16px; border-radius: 999px; background: #ECEEF2; color: #12131A; text-decoration: none; font-weight: 700">Knowledge</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Tasks</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Screens</a>
+<a href="#" style="padding: 8px 16px; border-radius: 999px; color: #C9CDD6; text-decoration: none; font-weight: 600">Recipes</a>
+</nav>
+</header>
+<div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+<aside aria-label="Folders" style="flex: 1 1 240px; max-width: 280px; border-right: 1px solid #23262F; padding: 16px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px"><h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700">Knowledge</h1><button type="button" aria-label="New note" style="width: 40px; height: 40px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-size: 20px">+</button></div>
+<a href="#" style="padding: 9px 12px; border-radius: 12px; background: #22252E; color: #ECEEF2; text-decoration: none; font-weight: 600">All notes <span style="float: right; color: #9AA0AD; font-weight: 500">42</span></a>
+<a href="#" style="padding: 9px 12px; border-radius: 12px; color: #C9CDD6; text-decoration: none">Activity feed <span style="float: right; color: #9AA0AD">12</span></a>
+<a href="#" style="padding: 9px 12px; border-radius: 12px; color: #C9CDD6; text-decoration: none">Billing <span style="float: right; color: #9AA0AD">7</span></a>
+<a href="#" style="padding: 9px 12px; border-radius: 12px; color: #C9CDD6; text-decoration: none">Team handbook <span style="float: right; color: #9AA0AD">9</span></a>
+<a href="#" style="padding: 9px 12px; border-radius: 12px; color: #C9CDD6; text-decoration: none">Documents <span style="float: right; color: #9AA0AD">14</span></a>
+<span style="margin-top: 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #9AA0AD; padding: 0 12px">Who can read it</span>
+<span style="padding: 4px 12px; font-size: 13px; color: #C9CDD6">lead, builder, reviewer · designer: Team handbook only</span>
+</aside>
+<section aria-label="Notes" style="flex: 1 1 320px; max-width: 420px; border-right: 1px solid #23262F; padding: 16px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box">
+<label for="ks" style="position: absolute; left: -9999px">Search knowledge</label>
+<input id="ks" type="search" placeholder="Search notes and documents" style="min-height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid #2E313B; background: #1A1C23; color: #ECEEF2; font: 15px 'Hanken Grotesk', sans-serif">
+<a href="#" style="padding: 12px 14px; border-radius: 16px; background: #22252E; color: #ECEEF2; text-decoration: none; display: flex; flex-direction: column; gap: 3px"><strong>Event schema decisions</strong><span style="font-size: 13px; color: #9AA0AD">Activity feed · edited by reviewer · 2 h</span></a>
+<a href="#" style="padding: 12px 14px; border-radius: 16px; color: #ECEEF2; text-decoration: none; display: flex; flex-direction: column; gap: 3px"><strong>Socket vs polling</strong><span style="font-size: 13px; color: #9AA0AD">Activity feed · builder · yesterday</span></a>
+<a href="#" style="padding: 12px 14px; border-radius: 16px; color: #ECEEF2; text-decoration: none; display: flex; flex-direction: column; gap: 3px"><strong>Release checklist</strong><span style="font-size: 13px; color: #9AA0AD">Team handbook · you · Mon</span></a>
+<a href="#" style="padding: 12px 14px; border-radius: 16px; color: #ECEEF2; text-decoration: none; display: flex; flex-direction: column; gap: 3px"><strong>billing-export-spec.pdf</strong><span style="font-size: 13px; color: #9AA0AD">Documents · 12 pages</span></a>
+</section>
+<article aria-label="Event schema decisions" style="flex: 999 1 420px; min-width: 0; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 700">Event schema decisions</h2>
+<div style="display: flex; gap: 8px"><button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600">Share to a chat</button><button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-weight: 700">Edit</button></div>
+</div>
+<span style="font-size: 13px; color: #9AA0AD">Activity feed · last edited by reviewer 2 h ago · used in 3 chats</span>
+<p style="margin: 0; line-height: 1.6; max-width: 68ch">Events are stored newest first. Two events in the same millisecond keep their insertion order; the id breaks ties. Pages are 50 events; the cursor is the last id seen.</p>
+<p style="margin: 0; line-height: 1.6; max-width: 68ch">Linked: <a href="#">Socket vs polling</a> · <a href="#">Release checklist</a></p>
+</article>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
