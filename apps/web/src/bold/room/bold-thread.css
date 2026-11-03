@@ -480,7 +480,8 @@
 [data-ui='bold'] .bold-run-card-state {
   flex: none;
   font-size: 13px;
-  color: var(--jm-swarm, #7db8ff);
+  /* A name colour that keeps AA in both looks (the job map's swarm blue is set only inside the map: 2.0:1 on light). */
+  color: var(--agent-violet-name);
 }
 
 [data-ui='bold'] .bold-run-card-bar {

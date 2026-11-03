@@ -880,7 +880,8 @@
 
 [data-ui='bold'] .bold-topic-graph-state {
   flex: none;
-  color: var(--jm-swarm, #7db8ff);
+  /* AA in both looks (the job map's swarm blue exists only inside the map). */
+  color: var(--agent-violet-name);
 }
 
 [data-ui='bold'] .bold-topic-graph .jobmap {
