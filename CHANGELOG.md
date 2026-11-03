@@ -16,6 +16,16 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   header, Share to the team room on any reply.
 - **The side panel is chat info**: Info and Results. Library is the Knowledge page; runs show in their chat (or Recipes).
 - The layout follows the mock-up: edge-to-edge columns, a centred conversation, a compact row of agent rings.
+- **Info › This topic**: the current topic's status (rounds, turns), its run or recipe card with Open the run,
+  report-back, its Hermes tasks and Stop.
+- **The context bar's meter** is the session your message lands in, and opens the context details with Compact;
+  `/compress` opens it.
+
+### Fixed
+- A chat stays at its newest message when the composer or the needs-you cards change size.
+- Theme safety: the needs-you buttons and the composer's Stop stay readable under every built-in theme.
+- Knowledge: the note toolbar sticks while you scroll, the phone Files view is reachable, a wide note no longer pushes
+  the page sideways. Deleted-message markers show once; focus returns after the older-rooms list.
 
 ## [3.21.0] — 2026-11-03
 
