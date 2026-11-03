@@ -18,7 +18,8 @@ function tag(prefix: string) {
 async function openStart(page: Page, from: 'link' | 'room') {
   if (from === 'link') await page.goto('/b?start=job')
   else {
-    await page.goto('/b?open=1')
+    // 3.21.0: on a phone the chat bar has no Job button; the job list (`?jobs=1`) does.
+    await page.goto((page.viewportSize()?.width ?? 1440) <= 860 ? '/b?jobs=1' : '/b?open=1')
     await page.getByRole('button', { name: 'Start a job' }).click()
   }
   const dialog = page.getByRole('dialog', { name: 'Start a job' })

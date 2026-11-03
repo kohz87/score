@@ -98,6 +98,12 @@
     color: #fff !important;
     box-shadow: 0 0 0 2px var(--bg) !important;
   }
+  /* The top bar's Needs-you count (shown where the dock rings hide): a light object of Score's own, so a picture behind
+     the bar can't leave it unreadable. */
+  html[data-look='custom'] .bold-nav-count[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
   /* 3.21.0 chat list: the "needs you" pill is a light object of Score's own, and a folded tile that needs you gets the
      same two-tone outline as the dock ring, so no theme can blend either into the list. */
   html[data-look='custom'] .bold-chat-needs[data-protected] {

@@ -47,8 +47,9 @@
 
 [data-ui='bold'] .bold-chat-list.rail .bold-chat-round,
 [data-ui='bold'] .bold-chat-round.small {
-  width: 40px;
-  height: 40px;
+  /* 44px: the phone's Back and Info are finger targets (the 44px floor the phone specs hold every control to). */
+  width: 44px;
+  height: 44px;
   font-size: 18px;
 }
 

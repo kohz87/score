@@ -17,6 +17,13 @@ async function openRoomPicker(page: Page) {
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
+/** 3.21.0: a phone chat shows its conversation; its job list is behind the Info sheet's "All jobs" link (in-app, so toasts stay). */
+async function openPhoneJobList(page: Page) {
+  await page.getByRole('button', { name: 'Chat info' }).click()
+  await page.getByRole('link', { name: 'All jobs' }).click()
+  await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+}
+
 // The app's phone composer hides the "to" chip (bold-room.css); the label stays in the DOM.
 async function expectOlderRoomLabel(page: Page) {
   const label = page.getByText('Older room · @name')
@@ -198,7 +205,10 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-      await expect(page.locator('.roomtitle')).toHaveText('Team room')
+      // 3.21.0: after a delete a phone is back on the chat list, a desktop on the team room.
+      if (viewport.width > 860) await expect(page.locator('.roomtitle')).toHaveText('Team room')
+      else
+        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
       expect(
         state.requests.some(
           (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-old',
@@ -227,7 +237,10 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-      await expect(page.locator('.roomtitle')).toHaveText('Team room')
+      // 3.21.0: after a delete a phone is back on the chat list, a desktop on the team room.
+      if (viewport.width > 860) await expect(page.locator('.roomtitle')).toHaveText('Team room')
+      else
+        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
       expect(
         state.requests.some(
           (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-imported',
@@ -318,7 +331,12 @@ for (const viewport of sizes) {
       await expect(page.getByRole('status').filter({ hasText: 'Renamed' })).toBeVisible()
       if (viewport.width > 860)
         await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
-      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('Activity feed v2')
+      else {
+        // 3.21.0: a phone's chat bar names the chat, not the job; the renamed job shows on the job list.
+        await openPhoneJobList(page)
+        await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toBeVisible()
+        await page.getByRole('button', { name: /^Activity feed v2\./ }).click()
+      }
       expect(
         state.requests.find(
           (request) => request.method === 'PATCH' && request.path === '/api/jobs/job-activity',
@@ -336,6 +354,7 @@ for (const viewport of sizes) {
         await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
         await page.getByRole('tab', { name: /Activity feed v2/ }).click()
       } else {
+        await openPhoneJobList(page)
         await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toHaveCount(0)
         await page.getByRole('button', { name: 'Closed jobs (2)' }).click()
         await page.getByRole('button', { name: /^Activity feed v2\./ }).click()
@@ -390,7 +409,10 @@ for (const viewport of sizes) {
       await expect(undo).toBeVisible()
       if (viewport.width > 860)
         await expect(page.getByRole('tab', { name: /Activity feed/ })).toHaveCount(0)
-      else await expect(page.getByRole('button', { name: /^Activity feed\./ })).toHaveCount(0)
+      else {
+        await openPhoneJobList(page)
+        await expect(page.getByRole('button', { name: /^Activity feed\./ })).toHaveCount(0)
+      }
       await undo.getByRole('button', { name: 'Undo' }).click()
       await expect(
         page.getByRole('status').filter({ hasText: 'Restored “Activity feed”' }),

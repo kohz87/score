@@ -40,6 +40,8 @@ for (const viewport of sizes) {
           ? { status: 200, body: { items, unavailable: [] } }
           : undefined,
     })
+    // 3.21.0: a phone has the room switcher on the job list.
+    if (viewport.width < 861) await page.goto('/b?jobs=1')
     await page.locator('.roomtitle').click()
     const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
     const rows = picker.getByRole('option', { name: /lead · API/ })

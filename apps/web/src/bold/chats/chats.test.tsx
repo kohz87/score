@@ -44,7 +44,10 @@ const teamRoom = room('team-room', 'Team room', {
   everyone: true,
   members: ['lead', 'builder', 'reviewer'],
 })
-const feedRoom = room('feed', 'Feed crew', { workspaceId: 'ws1', unread: 2 })
+const feedBase = room('feed', 'Feed crew', { workspaceId: 'ws1', unread: 2 })
+let feedArchived = false
+// A getter-like view so one test can archive the room.
+const feedRoomNow = () => ({ ...feedBase, archived: feedArchived })
 const directBuilder = room('d-builder', 'builder', {
   kind: 'direct',
   role: 'direct',
@@ -85,6 +88,7 @@ const disposers: (() => void)[] = []
 
 beforeEach(() => {
   phone = false
+  feedArchived = false
   window.localStorage.clear()
   vi.stubGlobal(
     'matchMedia',
@@ -105,7 +109,12 @@ beforeEach(() => {
         return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
       if (path === '/api/rooms')
         return Promise.resolve(
-          Response.json({ asOfSeq: 1, rooms: [feedRoom], directs: [directBuilder], projects: [] }),
+          Response.json({
+            asOfSeq: 1,
+            rooms: [feedRoomNow()],
+            directs: [directBuilder],
+            projects: [],
+          }),
         )
       if (path === '/api/team-rooms')
         return Promise.resolve(Response.json({ asOfSeq: 1, items: [teamRoom] }))
@@ -134,7 +143,7 @@ beforeEach(() => {
         )
       const feed = /^\/api\/rooms\/([^/]+)$/.exec(path)
       if (feed && feed[1] === 'feed')
-        return Promise.resolve(Response.json({ asOfSeq: 1, room: feedRoom }))
+        return Promise.resolve(Response.json({ asOfSeq: 1, room: feedRoomNow() }))
       if (path.endsWith('/messages'))
         return Promise.resolve(
           Response.json({ asOfSeq: 1, items: [], nextCursor: null, jobId: null }),
@@ -321,4 +330,23 @@ test('on a phone every group chat has the back bar, and the chat opens on its co
   fireEvent.click(back)
   await waitFor(() => expect(router.state.location.search).toBe(''))
   expect(await list()).toBeDefined()
+})
+
+test('on a phone an archived chat says so in its bar, with Unarchive right there', async () => {
+  phone = true
+  feedArchived = true
+  open('/b?room=feed')
+  await screen.findByRole('button', { name: 'Back to chats' })
+  expect(await screen.findByText('Archived')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Unarchive' })).toBeDefined()
+})
+
+test('on a phone, picking a room from the job list opens that room’s conversation, not its job list', async () => {
+  phone = true
+  const router = open('/b?jobs=1')
+  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  fireEvent.click(await screen.findByRole('option', { name: /Feed crew/ }))
+  await waitFor(() => expect(router.state.location.search).toBe('?room=feed'))
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
+  expect(screen.queryByRole('region', { name: 'Jobs' })).toBeNull()
 })

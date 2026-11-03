@@ -1488,6 +1488,7 @@ export function RoomTitle({
         onBack={() => onBackToChats?.()}
         onInfo={() => onChatInfo?.()}
         menu={<RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
+        badge={<ArchivedBadge room={current} />}
       />
     )
   }

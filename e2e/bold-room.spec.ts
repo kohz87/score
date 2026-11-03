@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openBoldJob, openBoldRoom } from './bold-room-fixtures.ts'
+import { openBoldJob, openBoldRoom, showAllJobsOnPhone } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.4a: the bold team room. The robot room moves over time, so these specs pin the contract-shaped reads to a
@@ -122,6 +122,7 @@ for (const viewport of sizes) {
       await openBoldRoom(page)
 
       if (viewport.width <= 860) {
+        await showAllJobsOnPhone(page)
         await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
         const activity = page.getByRole('button', { name: /^Activity feed\..*2 unread/ })
         const notes = page.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
@@ -140,7 +141,8 @@ for (const viewport of sizes) {
         await expect(
           page.getByText('Draft is ready. The migration steps are still open.'),
         ).toHaveCount(0)
-        await page.getByRole('button', { name: 'Back to chats' }).click()
+        // 3.21.0: the browser's Back returns to the job list; the bar's Back leads to the chat list.
+        await page.goBack()
         await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
         await expect(page.getByRole('button', { name: /^Activity feed\..*/ })).toBeVisible()
         return
@@ -201,6 +203,7 @@ for (const viewport of sizes) {
             : undefined,
       })
 
+      await showAllJobsOnPhone(page)
       const approval = page.getByRole('article', { name: /May I install a package/ })
       const review = page.getByRole('article', {
         name: /The review ended without a verdict/,
@@ -468,6 +471,7 @@ for (const viewport of sizes) {
 
     test(`result links open the job and seek to its message at ${at}`, async ({ page }) => {
       await openBoldRoom(page)
+      await showAllJobsOnPhone(page)
       const href = '/b?job=job-queue&message=message-queue'
       const result = page.getByRole('link', { name: 'Open result: Queue research' })
       if (viewport.width <= 860) {

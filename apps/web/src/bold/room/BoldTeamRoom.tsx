@@ -820,6 +820,8 @@ export function BoldTeamRoom({
     if (isEveryoneRoom(target)) next.delete('room')
     else next.set('room', target.id)
     next.delete('job')
+    // Picking a chat from the job list's switcher opens that chat's conversation, not its job list.
+    next.delete('jobs')
     next.delete('message')
     next.delete('command')
     setParams(next)

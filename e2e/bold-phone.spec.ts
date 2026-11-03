@@ -95,7 +95,8 @@ for (const size of sizes) {
       ).toBe(true)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       await expectAtLeast44(jobs.getByRole('button', { name: /^Activity feed\./ }))
-      await expectAtLeast44(page.getByRole('button', { name: 'Chat info' }))
+      // The job list (`?jobs=1`) keeps the room title row, with its own side-panel button.
+      await expectAtLeast44(page.getByRole('button', { name: 'Open side panel' }))
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-jobs-${size.width}.png`) })
 
       await openBoldJob(page, /^Activity feed\./)
@@ -302,6 +303,8 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openMenuRoom(page)
+      // 3.21.0: older and imported rooms are not in the chat list; a phone reaches them from the picker on the job list.
+      await page.goto('/b?jobs=1')
       const picker = page.getByRole('button', { name: 'Team room', exact: true })
       await picker.click()
       await page.getByRole('option', { name: /#activity-feed/ }).click()
@@ -322,8 +325,9 @@ for (const size of sizes) {
 
       await page.getByRole('button', { name: 'Back to chats' }).click()
       await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-      await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
 
+      await page.goto('/b?jobs=1')
       await page.getByRole('button', { name: 'Team room', exact: true }).click()
       await page.getByRole('option', { name: /#telegram-plan #imported/ }).click()
       await expect(page).toHaveURL(/room=room-imported/)

@@ -83,7 +83,7 @@ for (const { name, viewport } of sizes) {
       if (phone) {
         // A phone has no dock (board 19); the side panel's menu lists every agent under "One to one".
         await page.getByRole('button', { name: 'Chat info' }).click()
-        await side(page).getByRole('button', { name: /^Work/ }).click()
+        await side(page).getByRole('button', { name: /^Info/ }).click()
         await side(page)
           .getByRole('button', { name: /^builder/ })
           .click()

@@ -63,8 +63,12 @@ const recipesReady: Ready = async (page) => {
   ).toBeVisible({ timeout: 20_000 })
 }
 
+// 3.21.0: a portrait tablet opens a chat in its conversation; the job list (the old room screen) is `?jobs=1`.
+const roomPath = (width: number) => (width <= 860 ? '/b?jobs=1' : '/b?open=1')
+
 const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'room', path: '/b?open=1', ready: roomReady },
+  { name: 'chat', path: '/b?open=1', ready: visible('.bold-room-composer') },
   { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-head') },
   { name: 'team', path: '/b/agents', ready: visible('.bold-agentcard') },
   { name: 'agent', path: '/b/agents/builder', ready: visible('.bold-agent') },
@@ -78,7 +82,8 @@ const pages: { name: string; path: string; ready: Ready }[] = [
 /** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
  * close it, so the room underneath is what gets measured. */
 async function closeSheet(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Chat info' })
+  // 3.21.0: the job list's own button is "Open side panel"; a chat's is "Chat info".
+  const toggle = page.getByRole('button', { name: /^(Chat info|Open side panel)$/ })
   if ((await toggle.getAttribute('aria-expanded')) === 'true') await page.keyboard.press('Escape')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 }
@@ -107,7 +112,7 @@ for (const size of sizes) {
       await expect(
         page.locator('.bold-dm-scroll').getByRole('button', { name: 'Copy' }).first(),
       ).toBeVisible()
-      await open(page, '/b?open=1', roomReady)
+      await open(page, roomPath(size.width), roomReady)
       // Landscape shows the room's messages: their actions must be there (no hover) to be measured.
       if (size.width >= 861)
         await expect(
@@ -134,7 +139,7 @@ for (const size of sizes) {
     test('layout uses the width', async ({ page }) => {
       await pair(page)
       const portrait = size.width < 861
-      await open(page, '/b?open=1', roomReady)
+      await open(page, roomPath(size.width), roomReady)
       if (portrait) {
         // The title's text, the first job card and the composer share a left edge; the header tools and the content
         // share a right edge.
@@ -144,13 +149,11 @@ for (const size of sizes) {
         await expect(page.locator('.bold-room-composer .chat-composer-box--room')).toBeVisible()
         const edges = await page.evaluate(() => {
           const rect = (sel: string) => document.querySelector(sel)!.getBoundingClientRect()
-          const text = document.querySelector('.roomhead .roomtitle')!
-          const range = document.createRange()
-          range.selectNodeContents(text)
+          // 3.21.0: the job list's head starts with the round Back button, so its left edge is the head's.
           const first = rect('.bold-phone-job')
           const composer = rect('.bold-room-composer .chat-composer-box--room')
           return {
-            titleLeft: range.getBoundingClientRect().left,
+            titleLeft: rect('.bold-phone-list-title').left,
             cardLeft: first.left,
             composerLeft: composer.left,
             cardRight: first.right,
@@ -211,7 +214,7 @@ for (const size of sizes) {
     test('no page scrolls sideways; screenshots', async ({ page }, testInfo) => {
       await pair(page)
       for (const where of pages) {
-        await open(page, where.path, where.ready)
+        await open(page, where.name === 'room' ? roomPath(size.width) : where.path, where.ready)
         const extra = await page.evaluate(
           () => document.documentElement.scrollWidth - window.innerWidth,
         )
@@ -252,7 +255,7 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
     }))
     await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
   })
-  await open(page, '/b?open=1', roomReady)
+  await open(page, roomPath(768), roomReady)
   await closeSheet(page)
   await expect(page.locator('.bold-phone-job').first()).toBeVisible()
   // The four demo agents plus twelve (more when other specs added agents to the shared server).

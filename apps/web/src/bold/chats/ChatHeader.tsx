@@ -60,6 +60,7 @@ export function ChatPhoneBar({
   onBack,
   onInfo,
   menu,
+  badge,
 }: {
   room: Room
   agents: AgentSummary[]
@@ -70,6 +71,8 @@ export function ChatPhoneBar({
   onBack: () => void
   onInfo: () => void
   menu?: ReactNode
+  /** The archived badge with its Unarchive: the state and the way back stay on the phone too. */
+  badge?: ReactNode
 }) {
   return (
     <div className="bold-chat-phone-bar">
@@ -90,6 +93,7 @@ export function ChatPhoneBar({
             ? `${job.title} · ${jobStateLabel(job).toLowerCase()}`
             : `Owner ${ownerLabel(room, agents)} · ${membersLabel(room)}`}
         </span>
+        {badge}
       </div>
       {menu}
       <button

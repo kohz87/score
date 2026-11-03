@@ -57,8 +57,8 @@ test('Chat info opens the Info tab with members and topics, and closing it gives
   await expect(header).toContainText('Owner lead')
   await expect(header).toContainText('2 members')
 
-  const info = header.getByRole('button', { name: 'Chat info' })
-  await info.click()
+  // 3.21.0: the side panel opens on Info by default, so Chat info starts pressed.
+  const info = page.getByRole('button', { name: 'Chat info' })
   await expect(info).toHaveAttribute('aria-pressed', 'true')
   const panel = page.getByLabel(`${room.name}, chat info`)
   await expect(panel.getByRole('heading', { name: 'Members' })).toBeVisible()

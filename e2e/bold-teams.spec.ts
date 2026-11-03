@@ -21,7 +21,7 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   const name = tag('Review crew')
   const renamed = tag('Crew two')
   const jobTitle = tag('Team job')
-  await page.goto('/b?open=1')
+  await page.goto('/b')
   const first = (await (await page.request.get('/api/team-room')).json()) as {
     room: { id: string; everyone?: boolean }
   }
