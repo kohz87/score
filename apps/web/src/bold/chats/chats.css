@@ -414,11 +414,6 @@
     border-left: 1px solid var(--line);
   }
 
-  /* A one-to-one is the chat itself: it takes the centre and the panel's width, the group's column steps aside. */
-  [data-ui='bold'] .roomgrid.bold-direct-chat > .roomcol {
-    display: none;
-  }
-
   /* The composer: a 26px box with a hairline and a 44px send circle. */
   [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room {
     border: 1px solid var(--line);

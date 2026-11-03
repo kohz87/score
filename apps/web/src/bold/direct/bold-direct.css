@@ -1,29 +1,5 @@
-/* The one-to-one side panel, from docs/design/bold/prototype.html (vDM, histPop, the side head) and boards 01/19.
-   The panel takes the agent's colour; the person's words are light, the agent's are plain text. */
-[data-ui='bold'] .side.bold-dm-side {
-  box-shadow:
-    0 0 0 2px var(--dm-color),
-    0 0 60px var(--dm-glow);
-}
-
-[data-ui='bold'] .sidehead.bold-dm-head {
-  flex-wrap: nowrap;
-  gap: calc(12px * var(--bold-d, 1));
-  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-identity {
-  gap: calc(10px * var(--bold-d, 1));
-  min-width: 0;
-  padding: 0 calc(14px * var(--bold-d, 1)) 0 calc(10px * var(--bold-d, 1));
-  font-size: 15px;
-}
-
-[data-ui='bold'] .bold-dm-identity .side-glyph .agent-glyph {
-  width: 22px;
-  height: 22px;
-}
-
+/* A one-to-one in the chat view (3.22.0). The header, stream and composer share the group chat's CSS; this file holds
+   what only a one-to-one has: its privacy label, welcome, share menu, Add someone and the Info panel's chat search. */
 [data-ui='bold'] .bold-dm-privacy {
   margin-left: auto;
   display: inline-flex;
@@ -31,173 +7,6 @@
   gap: calc(6px * var(--bold-d, 1));
   font-size: 13px;
   white-space: nowrap;
-}
-
-[data-ui='bold'] .bold-dm-history-button {
-  gap: calc(8px * var(--bold-d, 1));
-  min-height: 44px;
-  padding: 0 calc(14px * var(--bold-d, 1)) 0 calc(12px * var(--bold-d, 1));
-  font-size: 14px;
-}
-
-[data-ui='bold'] .bold-dm-history-icon {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  background: var(--deep);
-}
-
-[data-ui='bold'] .bold-dm-history {
-  left: 16px;
-  top: 64px;
-  width: min(380px, calc(100% - 32px));
-  max-height: min(540px, calc(100vh - 120px));
-  overflow-y: auto;
-}
-
-[data-ui='bold'] .bold-dm-history-search {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--bold-d, 1));
-  min-height: 42px;
-  padding: 0 calc(12px * var(--bold-d, 1));
-  border-radius: calc(14px * var(--bold-r, 1));
-  background: var(--deep);
-  color: var(--muted);
-}
-
-[data-ui='bold'] .bold-dm-history-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--ink);
-  font-size: 14px;
-}
-
-[data-ui='bold'] .bold-dm-new {
-  font-weight: 700;
-}
-
-[data-ui='bold'] .bold-dm-new-plus {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  font-size: 18px;
-}
-
-[data-ui='bold'] .bold-dm-history-row {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-history-title {
-  display: flex;
-  align-items: baseline;
-  gap: calc(8px * var(--bold-d, 1));
-  width: 100%;
-}
-
-[data-ui='bold'] .bold-dm-history-title > .small {
-  margin-left: auto;
-}
-
-[data-ui='bold'] .bold-dm-history-empty {
-  margin: 0;
-  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-history-foot {
-  margin-top: calc(4px * var(--bold-d, 1));
-  border-top: 1px solid var(--line);
-  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1));
-  font-size: 12px;
-}
-
-[data-ui='bold'] .bold-dm-history-foot a {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* The panel body is the chat: its own scroll area and its composer stay above the room tab bar. */
-[data-ui='bold'] .sidebody.bold-dm-sidebody {
-  padding: 0;
-  overflow: hidden;
-}
-
-[data-ui='bold'] .bold-dm {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-[data-ui='bold'] .bold-dm-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: calc(18px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-thread {
-  display: flex;
-  flex-direction: column;
-  gap: calc(16px * var(--bold-d, 1));
-  width: 100%;
-  max-width: 620px;
-  margin: 0 auto;
-}
-
-[data-ui='bold'] .bold-dm-date {
-  align-self: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-[data-ui='bold'] .bold-dm-message {
-  max-width: 100%;
-}
-
-[data-ui='bold'] .bold-dm-message .chat-message-meta {
-  display: none;
-}
-
-[data-ui='bold'] .bold-dm-message .chat-message > .agent-glyph {
-  --glyph-tile-size: 26px;
-  --glyph-radius: 9px;
-}
-
-[data-ui='bold'] .bold-dm-message .chat-message-body {
-  flex: 0 1 90%;
-  max-width: 90%;
-}
-
-[data-ui='bold'] .bold-dm-message .chat-message:not(.chat-message--you) .chat-text {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 1.05em;
-  line-height: 1.6;
-}
-
-[data-ui='bold'] .bold-dm-message .chat-message--you .chat-text {
-  padding: calc(9px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
-  border-radius: 20px 20px 6px 20px;
-  background: var(--hi-bg);
-  color: var(--hi-ink);
-}
-
-[data-ui='bold'] .bold-dm-msg-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--bold-d, 1));
-  padding-left: calc(36px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .btn.bold-dm-primary {
@@ -208,7 +17,6 @@
   font-size: 13px;
 }
 
-[data-ui='bold'] .bold-dm-msg-actions .btn.ghost,
 [data-ui='bold'] .bold-dm-starters .btn.ghost {
   min-height: 40px;
   padding: 0 calc(14px * var(--bold-d, 1));
@@ -224,16 +32,6 @@
   font-size: 13px;
 }
 
-[data-ui='bold'] .bold-dm-typing {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--bold-d, 1));
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-[data-ui='bold'] .bold-dm-empty,
 [data-ui='bold'] .bold-dm-welcome {
   flex: 1;
   display: flex;
@@ -245,13 +43,11 @@
   text-align: center;
 }
 
-[data-ui='bold'] .bold-dm-empty .agent-glyph,
 [data-ui='bold'] .bold-dm-welcome .agent-glyph {
   width: 88px;
   height: 88px;
 }
 
-[data-ui='bold'] .bold-dm-empty h2,
 [data-ui='bold'] .bold-dm-welcome h2 {
   font-family: var(--font-d);
   font-size: 30px;
@@ -259,7 +55,6 @@
   letter-spacing: -0.03em;
 }
 
-[data-ui='bold'] .bold-dm-empty p,
 [data-ui='bold'] .bold-dm-welcome p {
   max-width: 420px;
   margin: 0;
@@ -272,63 +67,6 @@
   justify-content: center;
   gap: calc(8px * var(--bold-d, 1));
   margin-top: calc(6px * var(--bold-d, 1));
-}
-
-/* Composer: the classic logic in board 01's one-line shell, ringed with the agent's colour. */
-[data-ui='bold'] .bold-dm-composer {
-  position: relative;
-  flex: none;
-  padding: calc(8px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-composer > .chat-composer {
-  width: 100%;
-  max-width: 620px;
-  margin: 0 auto;
-  padding: 0;
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'plus text send'
-    'attach attach attach';
-  gap: calc(6px * var(--bold-d, 1));
-  padding: calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1))
-    calc(8px * var(--bold-d, 1));
-  border-radius: calc(26px * var(--bold-r, 1));
-  background: var(--field);
-  box-shadow: 0 0 0 1.5px var(--dm-color);
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room:focus-within {
-  box-shadow:
-    0 0 0 1.5px var(--dm-color),
-    0 0 0 3px color-mix(in srgb, var(--dm-color) 28%, transparent);
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-room-to {
-  display: none;
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room > textarea {
-  padding: calc(10px * var(--bold-d, 1)) 0;
-  font-size: 15px;
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room .chat-send {
-  width: 44px;
-  height: 44px;
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room .chat-attach {
-  width: 44px;
-  height: 44px;
-}
-
-[data-ui='bold'] .bold-dm-composer .chat-composer-notice {
-  max-width: 620px;
-  margin: 0 auto 8px;
 }
 
 [data-ui='bold'] .bold-dm-ref {
@@ -354,47 +92,6 @@
   border-radius: 999px;
   background: var(--field);
   color: var(--ink);
-}
-
-[data-ui='bold'] .bold-dm-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--bold-d, 1));
-  max-width: 620px;
-  margin: 4px auto 0;
-}
-
-[data-ui='bold'] .bold-dm-link {
-  border: 0;
-  background: none;
-  padding: calc(4px * var(--bold-d, 1)) 2px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-[data-ui='bold'] .bold-dm-link:hover {
-  color: var(--ink);
-}
-
-[data-ui='bold'] .bold-dm-context {
-  position: relative;
-  display: inline-flex;
-}
-
-[data-ui='bold'] .bold-dm .chat-ctx-panel {
-  border-color: var(--line);
-  background: var(--panel);
-  color: var(--ink);
-}
-
-[data-ui='bold'] .bold-dm .chat-ctx-track {
-  stroke: var(--line);
-}
-
-[data-ui='bold'] .bold-dm .chat-ctx-summary,
-[data-ui='bold'] .bold-dm .chat-ctx-meta {
-  color: var(--ink2);
 }
 
 [data-ui='bold'] .bold-dm-error {
@@ -454,16 +151,6 @@
   gap: 2px;
 }
 
-[data-ui='bold'] .bold-dm-add-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-dm-add-list .btn {
-  background: var(--field);
-}
-
 /* Ref chips in bold messages and the shared copy in the team room (board 01). */
 [data-ui='bold'] .bold-ref-chip {
   display: inline-flex;
@@ -499,106 +186,17 @@
   font-size: 11px;
 }
 
-[data-ui='bold'] .bold-dm-phone-id,
-[data-ui='bold'] .bold-dm-back,
-[data-ui='bold'] .bold-dm-watermark {
-  display: none;
-}
-
 @media (max-width: 860px) {
-  [data-ui='bold'] .bold-sidecol.bold-dm-open {
-    padding: 0;
-  }
-
-  [data-ui='bold'] .side.bold-dm-side {
-    border-radius: 0;
-    box-shadow: inset 0 0 0 2px var(--dm-color);
-  }
-
-  [data-ui='bold'] .sidehead.bold-dm-head {
-    gap: calc(8px * var(--bold-d, 1));
-    padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1))
-      calc(10px * var(--bold-d, 1)) calc(6px * var(--bold-d, 1));
-    border-bottom: 0;
-  }
-
-  [data-ui='bold'] .bold-dm-back {
-    display: grid;
-  }
-
-  [data-ui='bold'] .bold-dm-identity {
-    display: none;
-  }
-
-  [data-ui='bold'] .bold-dm-phone-id {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: calc(8px * var(--bold-d, 1));
-  }
-
-  [data-ui='bold'] .bold-dm-phone-id .agent-glyph {
-    width: 26px;
-    height: 26px;
-    flex: none;
-  }
-
-  [data-ui='bold'] .bold-dm-phone-id > span {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    line-height: 1.25;
-  }
-
-  [data-ui='bold'] .bold-dm-phone-id b {
-    font-family: var(--font-d);
-    font-size: 18px;
-  }
-
-  [data-ui='bold'] .bold-dm-phone-id .bold-dm-privacy {
+  [data-ui='bold'] .bold-chat-phone-id .bold-dm-privacy {
     margin: 0;
     font-size: 12px;
   }
 
-  [data-ui='bold'] .bold-dm-history-button:not(.bold-dm-history-icon) span {
-    display: none;
-  }
-
-  [data-ui='bold'] .bold-dm-history {
-    left: 12px;
-    top: 58px;
-    width: calc(100% - 24px);
-    max-height: calc(100vh - 80px);
-  }
-
-  [data-ui='bold'] .bold-dm-scroll {
-    padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1))
-      calc(8px * var(--bold-d, 1));
-  }
-
-  [data-ui='bold'] .bold-dm-composer {
-    padding: 8px 12px calc(18px + env(safe-area-inset-bottom, 0px));
-  }
-
-  [data-ui='bold'] .bold-dm-watermark {
-    position: absolute;
-    top: 40px;
-    right: -150px;
-    display: block;
-    width: 380px;
-    height: 380px;
-    opacity: 0.06;
-    pointer-events: none;
-  }
-
-  [data-ui='bold'] .bold-dm-empty .agent-glyph,
   [data-ui='bold'] .bold-dm-welcome .agent-glyph {
     width: 74px;
     height: 74px;
   }
 
-  [data-ui='bold'] .bold-dm-empty h2,
   [data-ui='bold'] .bold-dm-welcome h2 {
     font-size: 26px;
   }
@@ -608,33 +206,14 @@
     right: 12px;
   }
 
-  [data-ui='bold'] .bold-dm-ref button,
-  [data-ui='bold'] .bold-dm-link {
+  [data-ui='bold'] .bold-dm-ref button {
     min-width: 44px;
     min-height: 44px;
   }
 
-  [data-ui='bold'] .bold-dm-composer .chat-composer-box--room > textarea,
-  [data-ui='bold'] .bold-dm-msg-actions .btn,
   [data-ui='bold'] .bold-dm-starters .btn {
     min-height: 44px;
   }
-
-  [data-ui='bold'] .bold-dm-history-search,
-  [data-ui='bold'] .bold-dm-history-foot a {
-    min-height: 44px;
-  }
-
-  [data-ui='bold'] .bold-dm-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 calc(10px * var(--bold-d, 1));
-  }
-}
-
-[data-ui='bold'] .bold-dm-load {
-  align-self: center;
 }
 
 [data-ui='bold'] .bold-dm-add-confirm {
@@ -647,17 +226,76 @@
   overflow-wrap: anywhere;
 }
 
-/* 3.7.0: on a portrait tablet the sheet fills the screen, so the chat column and composer use its full width and share
-   the header's left and right edges instead of sitting in a 620px column. */
 @media (min-width: 601px) and (max-width: 860px) {
-  [data-ui='bold'] .bold-dm-thread,
-  [data-ui='bold'] .bold-dm-composer > .chat-composer,
-  [data-ui='bold'] .bold-dm-composer .chat-composer-notice,
   [data-ui='bold'] .bold-dm-ref {
     max-width: none;
   }
+}
 
-  [data-ui='bold'] .bold-dm-scroll {
-    padding-inline: calc(12px * var(--bold-d, 1));
-  }
+[data-ui='bold'] .bold-dm-add-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-dm-add-list .btn {
+  background: var(--field);
+}
+
+/* 3.22.0: a one-to-one is the chat view. Its line under the name, the Info panel and the Add someone dialog there. */
+[data-ui='bold'] .bold-dm-title {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-dm-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-dm-line .bold-dm-privacy {
+  margin-left: 0;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-dm-bar .bold-dm-screen {
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-dm-composer {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-dm-composer .bold-dm-ref {
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-dm-info .bold-dm-search {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-dm-info .bold-chat-topics li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-dm-info .bold-chat-topics a[aria-current='true'] .bold-chat-topic-title {
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-dm-chat-summary {
+  padding-left: 16px;
+}
+
+[data-ui='bold'] .bold-dm-add-slot .bold-dm-add {
+  position: static;
+  max-height: none;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-dm-info a.btn {
+  text-decoration: none;
 }
