@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.23.0] — 2026-11-04
+
+### Added
+- **Chats, stage 3: runs in the chat.** `/run` (lead decides) or `/run <recipe>` starts a run in the chat you're in; the
+  run and its topic are created in one step, so a run can no longer exist without its topic.
+- A **live run card** after the topic's divider: the run, step N of M, who did or does what, and **Show graph**.
+- The side panel's **Graph** tab: the job map with its moving dots and phases and the session log (a recipe run shows
+  its live graph). Links to a run open its chat and topic on Graph.
+
 ## [3.22.1] — 2026-11-04
 
 ### Fixed
