@@ -44,12 +44,12 @@ function classicLoader({ request }: { request: Request }) {
   return redirect(target ?? '/b')
 }
 
-/** A run's old addresses (`/runs/:id`, `/b/runs/:id`, `/now/flow/:id`) open it in the Runs side panel (2.5.0). */
+/** A run's old addresses (`/runs/:id`, `/b/runs/:id`, `/now/flow/:id`) open it on the Recipes page (3.22.0; the side panel is chat info only). */
 function runRedirect({ request, params }: { request: Request; params: { briefId?: string } }) {
   const url = new URL(request.url)
   const search = new URLSearchParams(url.search)
   search.set('run', params.briefId ?? '')
-  return redirect(`/b?${search.toString()}${hashOf(url)}`)
+  return redirect(`/b/recipes?${search.toString()}${hashOf(url)}`)
 }
 
 /** Every address the classic shell served, each of which now leads into the new shell (see classicRedirectFor). */

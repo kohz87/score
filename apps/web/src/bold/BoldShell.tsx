@@ -61,6 +61,23 @@ function viewOf(path: string): View {
   return 'room'
 }
 
+const DOCK_MAX = 7
+
+/** The rings the dock draws: at most DOCK_MAX, those who need you first, and how many are left out. */
+export function dockOverflow<T>(team: T[], needs: (item: T) => boolean) {
+  if (team.length <= DOCK_MAX) return { shown: team, hidden: 0 }
+  const room = DOCK_MAX - 1
+  const urgent = team.filter(needs)
+  const picked = new Set(urgent.slice(0, room))
+  for (const item of team) {
+    if (picked.size >= room) break
+    picked.add(item)
+  }
+  // Keep the team's own order among the rings that stay.
+  const shown = team.filter((item) => picked.has(item))
+  return { shown, hidden: team.length - shown.length }
+}
+
 function DockRing({
   agent,
   needsYou,
@@ -191,6 +208,11 @@ function BoldShellFrame() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
   const searchTrigger = useRef<HTMLButtonElement>(null)
+  // Many agents would crowd the top bar: the first few rings (anyone who needs you first), then a "+N" ring.
+  const dockRings = dockOverflow(
+    agents.filter(onTeam),
+    (agent) => agent.status === 'waiting' || waitingOn.has(agent.id),
+  )
   const dockHasProgress = agents.some(() => dockProgress() !== null)
 
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
@@ -306,7 +328,7 @@ function BoldShellFrame() {
                 role="group"
                 aria-label="Your team. Click someone to talk one to one."
               >
-                {agents.filter(onTeam).map((agent) => (
+                {dockRings.shown.map((agent) => (
                   <DockRing
                     key={agent.id}
                     agent={agent}
@@ -314,6 +336,17 @@ function BoldShellFrame() {
                     onOpen={() => void navigate(boldOneToOneLink(agent.id, location.search))}
                   />
                 ))}
+                {dockRings.hidden > 0 && (
+                  <button
+                    type="button"
+                    className="ring ring-more"
+                    aria-label={`${dockRings.hidden} more on the team. Open Agents.`}
+                    title={`${dockRings.hidden} more`}
+                    onClick={go('/b/agents')}
+                  >
+                    <span className="dock-ring-inner">+{dockRings.hidden}</span>
+                  </button>
+                )}
                 {dockHasProgress && (
                   <span className="small muted dock-note">Rings show progress</span>
                 )}

@@ -215,6 +215,51 @@ test('a message with jobId stores its reply and message.created event in that jo
   )
 })
 
+test('all=1 lists every non-deleted job in one ordered, paged read', async () => {
+  const room = await createRoom()
+  const job = defaultJobId(db.sqlite, room.id)!
+  const second = addJob(room.id)
+  const gone = addJob(room.id, 'job_gone', 'Gone')
+  say(room.id, job, 'm1', 'one', 1)
+  say(room.id, second, 'm2', 'two', 2)
+  say(room.id, gone, 'm3', 'three', 3)
+  say(room.id, job, 'm4', 'four', 4)
+  say(room.id, second, 'm5', 'five', 5)
+  db.sqlite.prepare("UPDATE jobs SET deleted_at = ? WHERE id = 'job_gone'").run(at(6))
+  const first = await get(`/api/rooms/${room.id}/messages?all=1&limit=3`)
+  expect(first.statusCode).toBe(200)
+  const page = first.json() as { items: Message[]; nextCursor: string | null }
+  expect(page.items.map((item) => item.id)).toEqual(['m5', 'm4', 'm2'])
+  expect(page.items.map((item) => item.jobId)).toEqual([second, job, second])
+  const next = await get(
+    `/api/rooms/${room.id}/messages?all=1&limit=3&before=${encodeURIComponent(page.nextCursor!)}`,
+  )
+  expect((next.json() as { items: Message[] }).items.map((item) => item.id)).toEqual(['m1'])
+  expect((await get(`/api/rooms/${room.id}/messages?all=1&jobId=${second}`)).statusCode).toBe(400)
+  // Without all, the default job only, as before.
+  const plain = await get(`/api/rooms/${room.id}/messages`)
+  expect((plain.json() as { items: Message[] }).items.map((item) => item.id)).toEqual(['m4', 'm1'])
+})
+
+test('all=1 leaves a job unread when its older unread messages fall off the first page', async () => {
+  const room = await createRoom()
+  const job = defaultJobId(db.sqlite, room.id)!
+  const second = addJob(room.id)
+  const agent: Message['author'] = { kind: 'agent', agentId: 'lead' }
+  say(room.id, second, 'q1', 'quiet one', 1, agent)
+  say(room.id, second, 'q2', 'quiet two', 2, agent)
+  for (let n = 3; n <= 8; n += 1) say(room.id, job, `b${n}`, `busy ${n}`, n, agent)
+  const first = await get(`/api/rooms/${room.id}/messages?all=1&limit=6`)
+  expect((first.json() as { items: Message[] }).items).toHaveLength(6)
+  const reads = () =>
+    db.sqlite.prepare('SELECT job_id FROM job_reads').all() as { job_id: string }[]
+  expect(reads().map((row) => row.job_id)).toContain(job)
+  expect(reads().map((row) => row.job_id)).not.toContain(second)
+  // A page that reaches the beginning reads it.
+  await get(`/api/rooms/${room.id}/messages?all=1&limit=50`)
+  expect(reads().map((row) => row.job_id)).toContain(second)
+})
+
 test('a jobId from another room is 404', async () => {
   const room = await createRoom()
   const other = await createRoom('other')

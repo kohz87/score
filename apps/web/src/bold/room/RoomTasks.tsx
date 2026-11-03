@@ -11,8 +11,6 @@ import {
   roomTasksQuery,
   taskAction,
   taskBlockedReason,
-  taskStateLabel,
-  useTaskDetail,
   useTaskRefresh,
 } from './task-queries.ts'
 
@@ -152,69 +150,5 @@ export function RoomTaskRequests({
         <BlockedTaskCard key={task.id} task={task} agents={agents} />
       ))}
     </>
-  )
-}
-
-function TaskSteps({ taskId }: { taskId: string }) {
-  const detail = useTaskDetail(taskId)
-  if (detail.isPending) return <span className="small muted">Reading steps…</span>
-  if (detail.isError) return <span className="small muted">Couldn’t read its steps.</span>
-  if (detail.data.steps.length === 0) return <span className="small muted">No steps yet.</span>
-  return (
-    <ul className="bold-task-steps" aria-label={`Steps for ${detail.data.title}`}>
-      {detail.data.steps.map((step) => (
-        <li key={step.id} data-done={step.done ? 'true' : 'false'}>
-          <span aria-hidden="true">{step.done ? '✓' : '○'}</span>
-          {step.text}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function ThreadTask({ task, agents }: { task: TaskSummary; agents: AgentSummary[] }) {
-  const [commenting, setCommenting] = useState(false)
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <article className="bold-thread-task" data-task-id={task.id}>
-      <div className="bold-thread-task-head">
-        <TaskAgent task={task} agents={agents} />
-        <span className="bold-thread-task-state">{taskStateLabel(task)}</span>
-        <span className="bold-thread-task-key">{task.key}</span>
-      </div>
-      <b>{task.title}</b>
-      <button
-        type="button"
-        className="link"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((open) => !open)}
-      >
-        {expanded ? 'Hide steps' : 'Show steps'}
-      </button>
-      {expanded && <TaskSteps taskId={task.id} />}
-      {commenting ? (
-        <TaskActionForm task={task} action="comment" onCancel={() => setCommenting(false)} />
-      ) : (
-        <button type="button" className="link" onClick={() => setCommenting(true)}>
-          Comment
-        </button>
-      )}
-    </article>
-  )
-}
-
-/** The room's Hermes tasks in the thread. Tasks are not tied to a job yet (TaskSummary has no jobId). */
-export function ThreadTasks({ roomId, agents }: { roomId: string; agents: AgentSummary[] }) {
-  const definition = useMemo(() => roomTasksQuery(roomId, false), [roomId])
-  const tasks = useStreamQuery(definition).data?.tasks ?? []
-  if (tasks.length === 0) return null
-  return (
-    <section className="bold-thread-tasks" aria-labelledby="bold-thread-tasks-title">
-      <h3 id="bold-thread-tasks-title">Room tasks</h3>
-      <p className="small muted">Tasks are not tied to a job yet; these are for the whole room.</p>
-      {tasks.map((task) => (
-        <ThreadTask key={task.id} task={task} agents={agents} />
-      ))}
-    </section>
   )
 }

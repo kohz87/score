@@ -126,15 +126,31 @@
   border-radius: calc(22px * var(--bold-r, 1));
 }
 
-[data-ui='bold'] .bold-pins:empty {
-  display: none;
+/* The cue at the bottom edge of the scrolling pinned box: it sticks while the cards scroll under its fade. */
+[data-ui='bold'] .bold-pins-fade {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 18px;
+  margin-top: -18px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bg) 70%);
 }
 
-/* The prototype keeps one pin in view and puts the rest behind its count. Cards carry their sorted rank;
-   before the registry has measured them they all show, so nothing can hide behind a missing attribute. */
-[data-ui='bold']
-  .bold-pins[data-expanded='false']
-  > .bold-request[data-pin-rank]:not([data-pin-rank='0']) {
+[data-ui='bold'] .bold-pins-more {
+  pointer-events: auto;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #ececf1;
+  color: #12131a;
+  font-size: 12px;
+  font-weight: 700;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-pins:empty {
   display: none;
 }
 
@@ -145,26 +161,6 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-[data-ui='bold'] .bold-pins-more {
-  align-self: flex-start;
-  border: 0;
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 calc(14px * var(--bold-d, 1));
-  font: inherit;
-  font-size: 0.87em;
-  font-weight: 700;
-  background: var(--panel);
-  color: var(--ink2);
-  display: inline-flex;
-  align-items: center;
-  gap: calc(7px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-pins-more[aria-expanded='true'] svg {
-  transform: rotate(180deg);
 }
 
 [data-ui='bold'] .bold-request {
@@ -1022,6 +1018,9 @@
 }
 
 [data-ui='bold'] .bold-typing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: var(--muted);
   font-size: 13px;
@@ -1740,7 +1739,6 @@
   [data-ui='bold'] .bold-approval-menu button,
   [data-ui='bold'] .bold-act,
   [data-ui='bold'] .bold-history,
-  [data-ui='bold'] .bold-pins-more,
   [data-ui='bold'] .bold-request-form input,
   [data-ui='bold'] .bold-request-form select,
   [data-ui='bold'] .chat-composer-box--room .chat-attach-list button,
@@ -2061,4 +2059,11 @@
     flex: none;
     flex-wrap: nowrap;
   }
+}
+
+/* 3.22.0 review: while the "N more below" cue shows, the box keeps room for it at its end, so the cue never sits over a
+   card's buttons once scrolled. */
+[data-ui='bold'] .bold-pins:has(.bold-pins-more) {
+  padding-bottom: 44px;
+  scroll-padding-bottom: 44px;
 }

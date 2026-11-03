@@ -176,6 +176,7 @@ export function BoldMessage({
   canRetry = false,
   replyGroup,
   onEdit,
+  extraActions,
   children,
 }: {
   message: Message
@@ -196,7 +197,9 @@ export function BoldMessage({
   replyGroup?: ReplyGroupParts | undefined
   /** Runs after Edit hands the message to the composer (the phone sheet closes so the composer can be used). */
   onEdit?: () => void
-  /** Extra rows that belong to the message (the one-to-one's share row). */
+  /** Extra buttons at the end of the action row (a one-to-one's Share to the team room). */
+  extraActions?: ReactNode
+  /** Extra rows that belong to the message (the one-to-one's share menu). */
   children?: ReactNode
 }) {
   const [copied, setCopied] = useState(false)
@@ -391,6 +394,7 @@ export function BoldMessage({
               Delete
             </button>
           )}
+          {extraActions}
         </div>
       )}
       {saving &&

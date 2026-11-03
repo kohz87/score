@@ -148,6 +148,8 @@
   gap: calc(14px * var(--bold-d, 1));
   padding: 14px max(20px, env(safe-area-inset-right, 0px)) 14px
     max(20px, env(safe-area-inset-left, 0px));
+  /* Board 18: a full-width hairline under the top bar. */
+  border-bottom: 1px solid var(--line);
 }
 
 /* 3.18.0: three section links on a phone's top bar (Recipes, Tasks, Screens) stay on one line beside the avatar. */
@@ -155,10 +157,17 @@
   display: flex;
   gap: 4px;
   min-width: 0;
+  /* One row in every configuration (the terminal button on or off): the pills scroll if the room runs out. */
+  flex: 1 1 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 [data-ui='bold'] .bold-top-links .btn.sm {
-  padding-inline: 10px;
-  font-size: 13px;
+  flex: none;
+}
+[data-ui='bold'] .bold-top-links .btn.sm {
+  padding-inline: 8px;
+  font-size: 12.5px;
 }
 
 [data-ui='bold'] .word {
@@ -331,6 +340,11 @@
   letter-spacing: -0.03em;
   color: var(--ink);
   cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-title {
+  margin: 0;
+  cursor: default;
 }
 
 [data-ui='bold'] .bold-room-kind {
@@ -743,6 +757,18 @@ body.fit [data-ui='bold'] .stream {
 }
 
 @media (max-width: 860px) {
+  /* Phone top bar: wordmark, three section pills, terminal button and avatar share one row at 360-390px. */
+  [data-ui='bold'] .top {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding-inline: max(14px, env(safe-area-inset-left, 0px))
+      max(14px, env(safe-area-inset-right, 0px));
+  }
+
+  [data-ui='bold'] .top .word {
+    font-size: 21px;
+  }
+
   [data-ui='bold'] .top .nav,
   [data-ui='bold'] .top .dock,
   [data-ui='bold'] .top .searchbtn,
@@ -867,8 +893,7 @@ body.fit [data-ui='bold'] .stream {
 /* A landscape tablet keeps the desktop layout, but a finger still needs 44px (the phone rules above, for touch only). */
 /* A finger needs 44px on a message's actions too, at any width (a landscape tablet has no hover, so they always show). */
 @media (pointer: coarse) {
-  body [data-ui='bold'] .bold-act,
-  body [data-ui='bold'] .bold-dm-msg-actions .btn {
+  body [data-ui='bold'] .bold-act {
     min-height: 44px;
   }
 }

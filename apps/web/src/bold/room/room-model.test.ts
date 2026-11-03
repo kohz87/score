@@ -7,30 +7,14 @@ import {
   exchangePauseTitle,
   exchangeStatus,
   exchangeTurns,
-  jobMatchesFilter,
   jobStateLabel,
   jobStateLine,
   needsYou,
   optionLabel,
-  pinsMoreLabel,
 } from './room-model.ts'
 import { makeExchange, makeJob } from './room-test-utils.tsx'
 
 const job = (state: Job['state']) => makeJob({ state })
-
-test('the D10 filters split jobs by the state the person sees', () => {
-  expect(jobMatchesFilter(job('open'), 'working')).toBe(true)
-  expect(jobMatchesFilter(job('working'), 'working')).toBe(true)
-  expect(jobMatchesFilter(job('waiting_on_you'), 'needs')).toBe(true)
-  expect(jobMatchesFilter(job('done'), 'done')).toBe(true)
-  expect(jobMatchesFilter(job('closed'), 'closed')).toBe(true)
-  expect(jobMatchesFilter(job('closed'), 'done')).toBe(false)
-  expect(jobMatchesFilter(job('closed'), 'all')).toBe(false)
-  for (const filter of ['needs', 'working', 'done', 'closed'] as const)
-    expect(jobMatchesFilter(job('open'), filter)).toBe(filter === 'working')
-  expect(jobMatchesFilter(job('waiting_on_you'), 'all')).toBe(true)
-  expect(jobMatchesFilter(job('done'), 'all')).toBe(true)
-})
 
 test('job state labels name the four states and closed', () => {
   expect(jobStateLabel(job('waiting_on_you'))).toBe('Needs you')
@@ -139,14 +123,6 @@ test('capsule status and turns read from the exchange, not from its job', () => 
   expect(exchangeStatus(makeExchange({ pause: null, state: 'live', round: 2 }))).toBe(
     'round 2 · working',
   )
-})
-
-test('the pins chip uses the prototype’s singular and plural count', () => {
-  expect(pinsMoreLabel(0, false)).toBeNull()
-  expect(pinsMoreLabel(1, false)).toBeNull()
-  expect(pinsMoreLabel(2, false)).toBe('1 more needs you')
-  expect(pinsMoreLabel(3, false)).toBe('2 more need you')
-  expect(pinsMoreLabel(3, true)).toBe('Show fewer')
 })
 
 test('an approval belongs to every room its run touched, and to every room when it names none', () => {

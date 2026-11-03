@@ -2,7 +2,7 @@ import type { AgentSummary, Job, Room } from '@score/contract'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
-import { jobDot } from '../room/RoomTabs.tsx'
+import { jobDot } from '../room/job-dot.ts'
 import { jobStateLabel } from '../room/room-model.ts'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
@@ -115,7 +115,7 @@ export function ChatInfo({
         {phone && (
           <div className="bold-chat-jobs-actions">
             <Link className="btn sm" to={jobsLink(room, everyone)} onClick={onNavigate}>
-              All jobs
+              All topics
             </Link>
             {room.role === 'team' && (
               <button
@@ -132,6 +132,9 @@ export function ChatInfo({
           </div>
         )}
       </section>
+      <Link className="bold-chat-knowledge" to="/b/knowledge" onClick={onNavigate}>
+        Open Knowledge
+      </Link>
     </div>
   )
 }

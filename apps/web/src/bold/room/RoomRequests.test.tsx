@@ -138,7 +138,7 @@ function stubRoom(
   return fetchMock
 }
 
-test('an approval leads the pins, the count expands the rest, and both are protected', async () => {
+test('an approval leads the pins, every other card shows beneath it with no fold, and all are protected', async () => {
   stubRoom(makeExchange())
   renderInRoom(
     <RoomRequests
@@ -161,11 +161,10 @@ test('an approval leads the pins, the count expands the rest, and both are prote
   expect(approvalCard.textContent).toContain('npm install ws@8')
   expect(approvalCard.textContent).toContain('Activity feed')
 
+  // Item 8 (3.22.0): no "N more need you" bar; every card is already in view.
   const pins = screen.getByLabelText('Needs you')
-  expect(pins.getAttribute('data-expanded')).toBe('false')
-  fireEvent.click(await screen.findByRole('button', { name: '1 more needs you' }))
-  expect(pins.getAttribute('data-expanded')).toBe('true')
-  expect(screen.getByRole('button', { name: 'Show fewer' })).toBeDefined()
+  expect(pins.getAttribute('data-expanded')).toBeNull()
+  expect(screen.queryByRole('button', { name: /more needs? you|Show fewer/ })).toBeNull()
 
   const exchangeCard = await screen.findByRole('article', {
     name: /The exchange used its turns/,
@@ -183,8 +182,9 @@ test('a global fence is a protected review card, and the card goes when the fenc
     name: /Starting work is blocked until you review the runs it stopped/,
   })
   expect(card.getAttribute('data-protected')).toBe('flex')
-  // The fence counts like any card: with the approval also waiting, the folded strip offers the rest.
-  expect(await screen.findByRole('button', { name: '1 more needs you' })).toBeDefined()
+  // The fence is one card among the others: with the approval also waiting, both show and nothing folds.
+  expect(await screen.findByRole('article', { name: /May I install a package/ })).toBeDefined()
+  expect(screen.queryByRole('button', { name: /more needs? you/ })).toBeNull()
   expect(screen.getByRole('link', { name: 'Review the runs' }).getAttribute('href')).toBe(
     '/b/settings/system#global-fence',
   )
@@ -862,8 +862,7 @@ test('report-back decisions are protected cards counted with the strip', async (
   const cards = await screen.findAllByRole('article', { name: /Report back:/ })
   expect(cards).toHaveLength(2)
   expect(cards.every((card) => card.getAttribute('data-protected') === 'flex')).toBe(true)
-  expect(await screen.findByRole('button', { name: '2 more need you' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: '2 more need you' }))
+  expect(screen.queryByRole('button', { name: /more needs? you/ })).toBeNull()
   const card = screen.getByRole('article', { name: 'Needs you: Report back: Release notes' })
   fireEvent.click(within(card).getByRole('button', { name: 'Send' }))
   await waitFor(() =>

@@ -14,7 +14,7 @@ import { apiFetch } from '../data/api.ts'
 import { newId } from '../data/ids.ts'
 import { clearDeviceLook, lookStore } from '../themes/look-store.ts'
 import { SETTINGS_SECTIONS } from './BoldSettings.tsx'
-import { jobDot } from './room/RoomTabs.tsx'
+import { jobDot } from './room/job-dot.ts'
 import { BookIcon, SearchIcon } from './BoldIcons.tsx'
 import {
   boldAddAgentLink,

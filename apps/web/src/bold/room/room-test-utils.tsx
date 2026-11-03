@@ -8,7 +8,7 @@ import type {
   TaskSummary,
 } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { vi } from 'vitest'
 import type { ReactNode } from 'react'
@@ -199,4 +199,10 @@ export function mockFetch(
 
 export function disposeRoomTest() {
   cleanup()
+}
+
+/** The desktop header has no switcher caret: the room ⋯ menu opens the older, imported and elsewhere chats. */
+export async function openOtherRooms() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Room menu' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: /Older, imported and elsewhere/ }))
 }

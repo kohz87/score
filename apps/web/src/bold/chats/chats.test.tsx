@@ -122,6 +122,26 @@ beforeEach(() => {
         return Promise.resolve(
           Response.json({ asOfSeq: 1, room: teamRoom, jobs: jobs['team-room'] }),
         )
+      if (path === '/api/agents/builder/direct')
+        return Promise.resolve(
+          Response.json({
+            asOfSeq: 1,
+            room: { ...directBuilder, leadAgentId: 'builder' },
+            chats: [
+              {
+                ...job(
+                  'c-builder',
+                  'd-builder',
+                  'Sockets or polling',
+                  'working',
+                  '2026-10-24T11:12:00.000Z',
+                ),
+                lastMessageAt: '2026-10-24T11:14:00.000Z',
+                messageCount: 2,
+              },
+            ],
+          }),
+        )
       if (path === '/api/workspaces')
         return Promise.resolve(
           Response.json({
@@ -316,9 +336,39 @@ test('on a phone the list is the first screen; a chat opens full screen and Back
 
   fireEvent.click(await within(await list()).findByRole('link', { name: /builder/ }))
   await waitFor(() => expect(router.state.location.search).toBe('?with=builder'))
-  fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Back to chats' }))
   await waitFor(() => expect(router.state.location.search).toBe(''))
   expect(await list()).toBeDefined()
+})
+
+test('a one-to-one is the chat view: the agent’s header in the chat column and its Info in the panel', async () => {
+  open('/b?with=builder')
+  await screen.findByPlaceholderText('Message builder privately')
+  const heading = await screen.findByRole('heading', { name: 'builder' })
+  const bar = heading.closest('.bold-chat-bar') as HTMLElement
+  expect(bar.textContent).toContain('Direct · working')
+  expect(bar.textContent).toContain('Only you and builder see this')
+  // The chat column holds the conversation and the composer; the old side-panel one-to-one is gone.
+  expect(screen.getByRole('region', { name: 'Chat with builder' })).toBeDefined()
+  expect(screen.getByPlaceholderText('Message builder privately')).toBeDefined()
+  const info = await screen.findByLabelText('builder, chat info')
+  expect(within(info).getByRole('heading', { name: 'Chats' })).toBeDefined()
+  expect(await within(info).findByRole('link', { name: /Sockets or polling/ })).toBeDefined()
+  expect(screen.queryByRole('tab', { name: 'Results' })).toBeNull()
+  // Chat info closes and reopens the panel, as in a group chat.
+  const button = within(bar).getByRole('button', { name: 'Chat info' })
+  expect(button.getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(button)
+  expect(document.querySelector('.bold-sidecol')?.hasAttribute('hidden')).toBe(true)
+})
+
+test('on a phone a one-to-one opens in the chat view with the Info sheet one tap away', async () => {
+  phone = true
+  open('/b?with=builder')
+  const info = await screen.findByRole('button', { name: 'Chat info' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.click(info)
+  expect(await screen.findByLabelText('builder, chat info')).toBeDefined()
 })
 
 test('on a phone every group chat has the back bar, and the chat opens on its conversation with the title once', async () => {

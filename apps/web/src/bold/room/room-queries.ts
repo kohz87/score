@@ -89,6 +89,8 @@ export function changeCachedJob(queryClient: QueryClient, job: Job, change: JobL
       queryKey: ['bold', 'room-messages-seek', job.roomId, job.id],
       exact: false,
     })
+    // The chat's merged conversation drops the topic on delete; an undo needs it read again.
+    queryClient.removeQueries({ queryKey: ['bold', 'room-messages-all', job.roomId], exact: false })
   }
 }
 
@@ -188,6 +190,54 @@ export function roomMessagesQuery(
   })
 }
 
+/**
+ * 3.22.0: a chat is one conversation. This page reads the messages of every non-deleted job of the room, newest first
+ * (`?all=1`), and `before` pages backwards through that one list. A created message without a job belongs to the
+ * room's default job; every other event is handled as for one job's page.
+ */
+export function roomChatMessagesQuery(
+  roomId: string,
+  before: string | null = null,
+  defaultJobId: string | null = null,
+) {
+  return defineStreamQuery<MessagePageData>({
+    key: ['bold', 'room-messages-all', roomId, before],
+    async fetch(signal) {
+      const params = new URLSearchParams({ limit: '50', all: '1' })
+      if (before !== null) params.set('before', before)
+      const page = MessagePageSchema.parse(
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`, { signal }),
+      )
+      return { asOfSeq: page.asOfSeq, data: { ...page, typing: {} } }
+    },
+    types: [
+      'message.created',
+      'message.delta',
+      'message.completed',
+      'message.deleted',
+      'message.updated',
+      'message.progressed',
+      'typing',
+      'lane.upserted',
+      'job.deleted',
+    ],
+    reduce(data, event) {
+      if (event.type === 'job.deleted') {
+        if (event.data.roomId !== roomId) return data
+        return { ...data, items: data.items.filter((message) => message.jobId !== event.data.id) }
+      }
+      if (event.type === 'message.created' && event.data.jobId == null && defaultJobId !== null)
+        return reduceMessages(
+          data,
+          { ...event, data: { ...event.data, jobId: defaultJobId } },
+          roomId,
+          before === null,
+        )
+      return reduceMessages(data, event, roomId, before === null)
+    },
+  })
+}
+
 export type MessageSeekData = MessagePageData & { found: boolean }
 
 /**
@@ -195,9 +245,9 @@ export type MessageSeekData = MessagePageData & { found: boolean }
  * fetch until it appears (or the history ends), so seeking needs no state update from an effect. The cap keeps a bad
  * cursor chain from reading forever.
  */
-export function roomSeekQuery(roomId: string, jobId: string | null, seek: string) {
+export function roomSeekQuery(roomId: string, jobId: string | null, seek: string, all = false) {
   return defineStreamQuery<MessageSeekData>({
-    key: ['bold', 'room-messages-seek', roomId, jobId, seek],
+    key: ['bold', 'room-messages-seek', roomId, all ? '*' : jobId, seek],
     async fetch(signal) {
       const items = new Map<string, Message>()
       const cursors = new Set<string>()
@@ -207,7 +257,8 @@ export function roomSeekQuery(roomId: string, jobId: string | null, seek: string
       let found = false
       for (let page = 0; page < 40; page += 1) {
         const params = new URLSearchParams({ limit: '50' })
-        if (jobId !== null) params.set('jobId', jobId)
+        if (all) params.set('all', '1')
+        else if (jobId !== null) params.set('jobId', jobId)
         if (before !== null) params.set('before', before)
         const snapshot = MessagePageSchema.parse(
           await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`, { signal }),

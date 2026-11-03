@@ -10,6 +10,7 @@ import type {
 } from '@score/contract'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { cardsBelow } from './pins-overflow.ts'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -23,14 +24,12 @@ import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { useFence } from '../../routes/orchestrations/orchestration-queries.ts'
 import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
 import { pairingProblem } from '../bold-errors.ts'
-import { ChevronIcon } from '../BoldIcons.tsx'
 import {
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeTurns,
   needsYou,
   optionLabel,
-  pinsMoreLabel,
   approvalInRoom,
   approvalNeedsYou,
   reportBackWaiting,
@@ -638,9 +637,10 @@ export function RoomRequests({
   teamRoom?: boolean
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const [expanded, setExpanded] = useState(false)
   const pins = usePinRegistry()
   const heading = useRef<HTMLHeadingElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState<{ count: number; scrollTo: number } | null>(null)
   const focusedKey = useRef<string | null>(null)
   const lastCards = useRef<typeof pins.cards>([])
   const lastVisible = useRef<string[]>([])
@@ -663,7 +663,6 @@ export function RoomRequests({
     questionsRead.status === 'success',
     agents,
   )
-  const moreLabel = pinsMoreLabel(total, expanded)
   const lastTotal = useRef<number | null>(null)
   const settled = useRef(false)
   const [announcement, setAnnouncement] = useState('')
@@ -682,12 +681,9 @@ export function RoomRequests({
     lastTotal.current = countedTotal
   }, [needs.ready, countedTotal, total])
 
-  // With one card or none left the strip folds, so the next burst of cards doesn't arrive already expanded.
-  if (expanded && total <= 1) setExpanded(false)
-
   // A card that goes takes the focus with it: the next card (or the strip's heading) gets it instead.
   useEffect(() => {
-    const visible = pins.cards.filter((_, index) => expanded || index === 0).map((card) => card.key)
+    const visible = pins.cards.map((card) => card.key)
     const lost = lastVisible.current.find((key) => !visible.includes(key))
     if (lost && focusedKey.current === lost) {
       const active = document.activeElement
@@ -708,7 +704,36 @@ export function RoomRequests({
     }
     lastCards.current = pins.cards
     lastVisible.current = visible
-  }, [expanded, pins.cards])
+  }, [pins.cards])
+
+  // The pinned box scrolls on a short screen: say so at its bottom edge when a card (and its buttons) is out of view.
+  useEffect(() => {
+    const element = box.current
+    if (!element) return
+    const measure = () => {
+      const top = element.getBoundingClientRect().top
+      const cards = [...element.querySelectorAll<HTMLElement>('[data-pin-key]')].map((card) => {
+        const rect = card.getBoundingClientRect()
+        return {
+          top: rect.top - top + element.scrollTop,
+          bottom: rect.bottom - top + element.scrollTop,
+        }
+      })
+      const next = cardsBelow(element, cards)
+      setMore((previous) =>
+        previous?.count === next?.count && previous?.scrollTo === next?.scrollTo ? previous : next,
+      )
+    }
+    measure()
+    element.addEventListener('scroll', measure, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(element)
+    for (const child of element.children) observer?.observe(child)
+    return () => {
+      element.removeEventListener('scroll', measure)
+      observer?.disconnect()
+    }
+  }, [total, pins.cards])
 
   return (
     <PinsProvider value={pins.value}>
@@ -723,8 +748,8 @@ export function RoomRequests({
       {total > 0 && (
         <div
           id="bold-pins"
+          ref={box}
           className="bold-pins"
-          data-expanded={expanded ? 'true' : 'false'}
           role="region"
           aria-label="Needs you"
           onFocusCapture={(event) => {
@@ -750,21 +775,19 @@ export function RoomRequests({
           <RoomReportBacks roomId={roomId} jobs={jobs} />
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />
           <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
+          {more && (
+            <div className="bold-pins-fade">
+              <button
+                type="button"
+                className="bold-pins-more"
+                data-protected="inline-flex"
+                onClick={() => box.current?.scrollTo({ top: more.scrollTo, behavior: 'smooth' })}
+              >
+                {more.count} more below ↓
+              </button>
+            </div>
+          )}
         </div>
-      )}
-      {total > 0 && moreLabel && (
-        <button
-          type="button"
-          className="bold-pins-more"
-          data-protected="inline-flex"
-          aria-expanded={expanded}
-          aria-controls="bold-pins"
-          aria-live="polite"
-          onClick={() => setExpanded((open) => !open)}
-        >
-          {moreLabel}
-          <ChevronIcon />
-        </button>
       )}
     </PinsProvider>
   )

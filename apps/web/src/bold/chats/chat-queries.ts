@@ -39,7 +39,12 @@ export function chatJobsQuery(roomIds: string[]) {
 }
 
 /** The chat list's two groups, from reads the shell already makes (rooms, team rooms, agents, approvals, questions). */
-export function useChatLists(): ChatLists & { ready: boolean } {
+export function useChatLists(): ChatLists & {
+  ready: boolean
+  /** Every listed chat's jobs by room id, and whether that read has finished (or failed). */
+  jobsByRoom: Record<string, Job[]>
+  jobsSettled: boolean
+} {
   const rooms = useStreamQuery(roomsQuery).data
   const teamRooms = useStreamQuery(teamRoomsQuery).data
   const agents = useStreamQuery(agentsQuery).data
@@ -56,7 +61,8 @@ export function useChatLists(): ChatLists & { ready: boolean } {
   ].map((room) => room.id)
   const key = roomIds.join('\u0000')
   const definition = useMemo(() => chatJobsQuery(key ? key.split('\u0000') : []), [key])
-  const read = useStreamQuery(definition).data
+  const jobsRead = useStreamQuery(definition)
+  const read = jobsRead.data
   // While a new set of rooms loads, the last read keeps the order steady instead of flashing the list unordered.
   const [kept, setKept] = useState<Record<string, Job[]> | undefined>(read)
   if (read !== undefined && read !== kept) setKept(read)
@@ -73,8 +79,10 @@ export function useChatLists(): ChatLists & { ready: boolean } {
         questions: questions ?? [],
       }),
       ready: rooms !== undefined && teamRooms !== undefined && agents !== undefined,
+      jobsByRoom: jobs ?? {},
+      jobsSettled: jobsRead.status !== 'pending',
     }),
-    [rooms, teamRooms, agents, jobs, approvals, questions],
+    [rooms, teamRooms, agents, jobs, jobsRead.status, approvals, questions],
   )
 }
 
