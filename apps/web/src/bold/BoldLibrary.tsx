@@ -55,7 +55,8 @@ type Dialog =
 
 type ExportRequest = { request: KnowledgeExportRequest; heading: string }
 const PHONE = '(max-width: 860px)'
-const PAGE_PHONE = '(max-width: 600px)'
+// The Knowledge page goes to one column where the shell itself switches to its phone layout (the tab bar).
+const PAGE_PHONE = '(max-width: 860px)'
 
 function Byline({
   author,

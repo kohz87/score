@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.19.1] — 2026-11-03
+
+### Fixed
+- The top bar stays on one row on a laptop-width window (search shrinks to its icon, the agent rings make room).
+- The Knowledge page fits the window: two columns on a mid-width window (folders above the notes), one on a narrow one.
+
 ## [3.19.0] — 2026-11-03
 
 ### Added

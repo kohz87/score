@@ -262,6 +262,12 @@ function BoldShellFrame() {
       onClick={go(to)}
     >
       {label}
+      {/* 3.19.1: where the team rings make room (≤ 1100px) the Room button carries the needs-you count instead. */}
+      {target === 'room' && roomBadge && (
+        <span className="bold-nav-count" data-protected="inline-flex">
+          {roomBadge}
+        </span>
+      )}
     </button>
   )
 
@@ -337,7 +343,7 @@ function BoldShellFrame() {
                 onClick={openCommand}
               >
                 <SearchIcon />
-                Search
+                <span className="searchbtn-label">Search</span>
                 <span className="kbd">⌘K</span>
               </button>
             )}
