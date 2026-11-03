@@ -2196,3 +2196,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   Contract test listed the new schema. Accepted P3s: a run topic in an archived chat isn't refused by the server (same
   as `POST …/jobs`); a finished run's card shows its status, not the who-did-what line; a phone rotation with
   `?work=graph` still in the address reopens the sheet.
+- **v3.23.0 deployed live** (~18:04 UTC), backup score-pre-3.23.0-20261104.db, health ok, fence off; pushed. Live
+  screenshot (owner's data): the run topics that showed only a divider in 3.22 now carry their run cards (Succeeded 3/3,
+  Stopped 10/15), and Graph shows the real orchestration (lead, advisor checkpoints, swarm helpers) with its log.
