@@ -29,6 +29,8 @@ export const protectedClasses = [
   // 3.21.0: the chat list's "needs you" pill and a folded-rail tile of a chat that needs you
   'bold-chat-needs',
   'bold-chat-rail-item',
+  // 3.22.0: the "N more below" cue of the scrolling needs-you box (a card's buttons may be out of view)
+  'bold-pins-more',
   // PLAN 11.12c: a replay cannot answer an approval, so it hands the person back to the live screen
   'bold-screen-needs-live',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
@@ -72,8 +74,6 @@ export const protectedClasses = [
   'bold-request',
   // 2.3.0 (decision 128): an agent's question to the person, a decision like an approval
   'bold-question',
-  // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
-  'bold-pins-more',
   // PLAN 11.11b: the shell-wide notice that starting work is blocked until the person reviews the fence
   'bold-fence-notice',
   // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.

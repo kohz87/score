@@ -5,7 +5,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
 import { boldAsideLink } from '../bold-links.ts'
-import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
+import { exchangeStatus, exchangeTurns } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 import { currentExchange } from './thread-model.ts'
 
@@ -113,22 +113,15 @@ function JobCapsule({
 export function RoomCapsules({
   jobs,
   agents,
-  selectedJob,
-  filter,
   onOpenThread,
 }: {
   jobs: Job[]
   agents: AgentSummary[]
-  selectedJob: string
-  filter: JobFilter
   onOpenThread: (jobId: string) => void
 }) {
-  const shown = jobs.filter(
-    (job) => jobMatchesFilter(job, filter) && (selectedJob === 'all' || job.id === selectedJob),
-  )
   return (
     <div className="bold-capsules" aria-label="Exchanges">
-      {shown.map((job) => (
+      {jobs.map((job) => (
         <JobCapsule key={job.id} job={job} agents={agents} onOpenThread={onOpenThread} />
       ))}
     </div>

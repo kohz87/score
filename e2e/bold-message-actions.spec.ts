@@ -11,7 +11,7 @@ const sizes = [
   { name: '390×844', viewport: { width: 390, height: 844 }, agent: 'lead' },
 ] as const
 
-const side = (page: Page) => page.locator('#bold-side-panel')
+const side = (page: Page) => page.locator('#bold-room-stream') // 3.22.0: a one-to-one is the chat's one conversation (no side-panel thread)
 
 async function makeChat(page: Page, agent: string, text: string) {
   const made = await page.request.post(`/api/agents/${agent}/chats`, { headers: web, data: {} })
@@ -27,9 +27,11 @@ async function makeChat(page: Page, agent: string, text: string) {
 
 /** The fake agent answers a new message, and Edit, Delete and Delete chat wait until it has finished. */
 async function settled(page: Page, roomId: string, chatId: string) {
-  const replies = side(page).locator('.bold-dm-message:not(:has(.chat-message--you))')
+  const replies = side(page).locator(
+    'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
+  )
   await expect(replies.first()).toBeVisible({ timeout: 30_000 })
-  await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
+  await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
   await expect(side(page).getByRole('button', { name: /^Stop/ })).toHaveCount(0, {
     timeout: 30_000,
   })
@@ -55,7 +57,7 @@ async function settled(page: Page, roomId: string, chatId: string) {
 
 async function openChat(page: Page, agent: string, chatId: string) {
   await page.goto(`/b?with=${agent}&chat=${chatId}`)
-  await expect(side(page).locator('.bold-dm-thread')).toBeVisible({ timeout: 30_000 })
+  await expect(side(page).locator('.bold-stream')).toBeVisible({ timeout: 30_000 })
 }
 
 // A rewind or a delete waits while anything in the same room is running, so each size works in its own agent's room
@@ -73,7 +75,7 @@ for (const { name, viewport, agent } of sizes) {
       const chat = await makeChat(page, agent, `First ${tag}`)
       await openChat(page, agent, chat.id)
       await settled(page, chat.roomId, chat.id)
-      const mine = side(page).locator('.bold-dm-message', { hasText: `First ${tag}` })
+      const mine = side(page).locator('.bold-message', { hasText: `First ${tag}` })
       await expect(mine).toBeVisible()
       await mine.hover()
       await expect(mine.getByRole('button', { name: 'Edit message from You' })).toBeVisible()
@@ -86,13 +88,13 @@ for (const { name, viewport, agent } of sizes) {
 
       // Edit: the message loads into this chat's composer; on Send the rewind happens and the correction replaces it.
       await mine.getByRole('button', { name: 'Edit message from You' }).click()
-      const composer = side(page).getByPlaceholder(`Message ${agent} privately`)
+      const composer = page.getByPlaceholder(`Message ${agent} privately`)
       await expect(composer).toHaveValue(`First ${tag}`)
       await composer.fill(`Corrected ${tag}`)
-      await side(page).getByRole('button', { name: 'Send correction', exact: true }).click()
+      await page.getByRole('button', { name: 'Send correction', exact: true }).click()
       // 2.0.12: Send rewinds and posts by itself when every agent can be rewound.
       await expect(
-        side(page).locator('.bold-dm-message', { hasText: `Corrected ${tag}` }),
+        side(page).locator('.bold-message', { hasText: `Corrected ${tag}` }),
       ).toBeVisible({
         timeout: 20_000,
       })
@@ -103,24 +105,31 @@ for (const { name, viewport, agent } of sizes) {
       const tag = `retry-${Date.now().toString(36)}`
       const chat = await makeChat(page, agent, `Question ${tag}`)
       await openChat(page, agent, chat.id)
-      const replies = side(page).locator('.bold-dm-message:not(:has(.chat-message--you))')
+      // 3.22.0: the action row sits beside the article, inside the message's `.bold-message` row.
+      const replies = side(page)
+        .locator('.bold-message')
+        .filter({
+          has: page.locator(
+            'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
+          ),
+        })
       await settled(page, chat.roomId, chat.id)
-      await replies.first().hover()
+      await replies.last().hover()
       await replies
-        .first()
+        .last()
         .getByRole('button', { name: /^Try another reply from/ })
         .click()
       // The new reply is a second version of the same message (one message with a pager), not a new message.
       await expect(side(page).getByText('2 / 2')).toBeVisible({ timeout: 30_000 })
       await settled(page, chat.roomId, chat.id)
 
-      const mine = side(page).locator('.bold-dm-message', { hasText: `Question ${tag}` })
+      const mine = side(page).locator('.bold-message', { hasText: `Question ${tag}` })
       await mine.hover()
       await mine.getByRole('button', { name: 'Delete message from You' }).click()
       const rewind = page.getByRole('dialog', { name: 'Delete this message?' })
       await rewind.getByRole('button', { name: /^Rewind and delete/ }).click()
       await expect(side(page).getByText(`Question ${tag}`)).toHaveCount(0, { timeout: 20_000 })
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
       await expect(
         side(page).getByRole('region', { name: 'Deleted messages' }).first(),
@@ -132,7 +141,7 @@ for (const { name, viewport, agent } of sizes) {
       const chat = await makeChat(page, agent, `Bye ${tag}`)
       await openChat(page, agent, chat.id)
       await settled(page, chat.roomId, chat.id)
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await page.getByRole('menuitem', { name: 'Delete chat' }).click()
       const dialog = page.getByRole('dialog', { name: /^Delete this chat with/ })
       await expect(dialog).toHaveAttribute('data-protected', 'any')
@@ -166,7 +175,7 @@ for (const { name, viewport, agent } of sizes) {
       await openChat(page, agent, main!.id)
       await settled(page, other.roomId, main!.id)
       await expect(side(page).getByText(`Main ${tag}`)).toBeVisible()
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await expect(page.getByRole('menuitem', { name: 'Delete chat' })).toHaveCount(0)
       await page.getByRole('menuitem', { name: 'Clear chat' }).click()
       const dialog = page.getByRole('dialog', { name: /^Clear this chat with/ })

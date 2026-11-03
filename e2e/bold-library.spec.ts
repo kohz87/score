@@ -26,15 +26,16 @@ test.beforeEach(async ({ page }) => {
 async function openLibrary(page: Page, size: (typeof sizes)[number]) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/b?open=1')
+  // 3.22.0: the Library side-panel mode is gone; the same editor is the Knowledge page.
+  await page.goto('/b/knowledge')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.locator('button.side-toggle').click()
-  await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
 }
 
 async function createNote(page: Page, name: string, text: string) {
+  // 3.22.0: on a phone the Knowledge page shows the list or one note; "New note" is on the list.
+  const back = page.getByRole('button', { name: /Back to the notes/ })
+  if (await back.isVisible()) await back.click()
   await page.getByRole('button', { name: 'New note' }).click()
   const dialog = page.getByRole('dialog', { name: 'New note' })
   await dialog.getByLabel('Path in Knowledge').fill(name)
@@ -52,6 +53,10 @@ async function createNote(page: Page, name: string, text: string) {
 async function unfold(page: Page) {
   const fold = page.getByRole('button', { name: /^Notes and files/ })
   if (await fold.isVisible()) await fold.click()
+  // 3.22.0: on the Knowledge page a phone shows the list or the note; the back link returns to the list.
+  const back = page.getByRole('button', { name: /Back to the notes/ })
+  const inFiles = await page.getByRole('heading', { name: 'Files' }).isVisible()
+  if (!inFiles && (await back.isVisible())) await back.click()
 }
 
 async function showFiles(page: Page) {
@@ -242,6 +247,9 @@ for (const size of sizes) {
         table.getByRole('button', { name: notesName.replace(/\.md$/i, ''), exact: true }),
       ).toBeVisible()
 
+      // 3.22.0: a phone's Knowledge page shows the Files view or the list; Back returns to the list with Search.
+      const backToList = page.getByRole('button', { name: /Back to the notes/ })
+      if (await backToList.isVisible()) await backToList.click()
       await page.getByPlaceholder('Search', { exact: true }).fill(word)
       const results = page.getByRole('region', { name: 'Search results' })
       await results
@@ -276,7 +284,8 @@ for (const size of sizes) {
         timeout: 30_000,
       })
 
-      await unfold(page)
+      const listBack = page.getByRole('button', { name: /Back to the notes/ })
+      if (await listBack.isVisible()) await listBack.click()
       await page.getByRole('button', { name: 'Export', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Export all of Knowledge' })
       await expect(dialog.getByText(/before compression/)).toBeVisible()
@@ -408,7 +417,16 @@ for (const size of sizes) {
       await page.getByRole('button', { name: 'Delete', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: `Delete ${first}?` })
       await dialog.getByRole('button', { name: 'Delete note' }).click()
-      await expect(page.getByText('Pick a note', { exact: true })).toBeVisible({ timeout: 15_000 })
+      // A phone's Knowledge page goes back to the list (its blank state); wider screens say "Pick a note".
+      if (size.width < 861) {
+        await expect(page.getByRole('navigation', { name: 'Library notes' })).toBeVisible({
+          timeout: 15_000,
+        })
+      } else {
+        await expect(page.getByText('Pick a note', { exact: true })).toBeVisible({
+          timeout: 15_000,
+        })
+      }
       await unfold(page)
       await expect(noteButton(page, first)).toHaveCount(0)
       await unfold(page)
@@ -491,11 +509,9 @@ test('the phone sheet stacks a dialog above the tab bar and Escape only closes t
   page,
 }, testInfo) => {
   await openLibrary(page, sizes[1])
-  const panel = page.getByRole('complementary', { name: 'Side panel' })
-  const box = await panel.boundingBox()
-  expect(box?.width).toBeGreaterThan(350)
-  expect(box?.height).toBeGreaterThan(800)
-  await expect(panel).toHaveAttribute('aria-modal', 'true')
+  // 3.22.0: the Library is the Knowledge page now (no modal side-panel sheet); the dialog rules stay.
+  const panel = page.getByTestId('bold-library')
+  await expect(panel).toBeVisible()
 
   await page.getByRole('button', { name: 'New note' }).click()
   const dialog = page.getByRole('dialog', { name: 'New note' })
@@ -512,11 +528,6 @@ test('the phone sheet stacks a dialog above the tab bar and Escape only closes t
   await dialog.getByLabel('Path in Knowledge').press('Escape')
   await expect(dialog).toBeHidden()
   await expect(panel).toBeVisible()
-
-  const close = page.getByRole('button', { name: 'Close side panel' })
-  await close.click()
-  await expect(panel).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Chat info' })).toBeFocused()
 })
 
 test('on a phone, tapping a note scrolls it into view and focuses its heading', async ({
@@ -532,9 +543,8 @@ test('on a phone, tapping a note scrolls it into view and focuses its heading', 
   await noteButton(page, first).click()
   const panel = page.getByTestId('bold-library')
   await expect(page.locator('.kn-note-head h2', { hasText: first })).toBeFocused()
-  // 3.8.1 (owner): the list folds to one bar, so the note is what the phone shows.
-  const fold = page.getByRole('button', { name: /^Notes and files/ })
-  await expect(fold).toHaveAttribute('aria-expanded', 'false')
+  // 3.22.0: on the Knowledge page a phone shows the note full width with Back (the list is hidden); the page scrolls.
+  await expect(page.getByRole('button', { name: /Back to the notes/ })).toBeVisible()
   await expect(noteButton(page, second)).toHaveCount(0)
-  await expect.poll(async () => panel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await expect(panel).toBeVisible()
 })

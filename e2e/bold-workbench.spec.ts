@@ -73,8 +73,9 @@ async function openPanel(page: Page, size: Size, path: string) {
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   if (phone) {
     await page.getByRole('button', { name: 'Chat info' }).click()
-    await panel.getByRole('button', { name: /^Info/ }).click()
-    await panel.getByRole('button', { name: /^Work/ }).click()
+    // 3.22.0: the panel's tabs are Info | Results (no mode menu); the `work=` address already asks for Results.
+    const results = panel.getByRole('tab', { name: 'Results' })
+    if ((await results.getAttribute('aria-selected')) !== 'true') await results.click()
   }
   await expect(panel).toBeVisible()
   return panel

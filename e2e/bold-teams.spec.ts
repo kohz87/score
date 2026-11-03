@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openRoomPicker } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 // 3.4.0 (decision 136): a second team of chosen agents next to the first team room, on the fake adapter.
@@ -38,7 +39,7 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   expect(refused.ok()).toBe(false)
 
   // New team…: builder + reviewer, led by reviewer.
-  await page.locator('.roomtitle').click()
+  await openRoomPicker(page)
   await page.getByRole('option', { name: /New team…/ }).click()
   const dialog = page.getByRole('dialog', { name: 'New team' })
   await expect(dialog).toHaveAttribute('data-protected', 'any')
@@ -68,7 +69,9 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   await expect.poll(() => jobTitles(page, roomId)).toContain(jobTitle)
   expect(await jobTitles(page, first.room.id)).not.toContain(jobTitle)
   await start.getByRole('button', { name: 'Done' }).click()
-  await expect(page.getByRole('tab', { name: new RegExp(jobTitle) })).toBeVisible()
+  await expect(
+    page.getByRole('separator', { name: new RegExp(`^Topic: ${jobTitle}`) }),
+  ).toBeVisible() // 3.22.0: no job tabs; the topic is a divider
 
   // Rename it.
   await page.getByRole('button', { name: 'Room menu' }).click()

@@ -17,7 +17,8 @@ import {
   type ReactNode,
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, useBlocker, useNavigate, useParams } from 'react-router'
+import { Link, useBlocker, useNavigate, useParams, useSearchParams } from 'react-router'
+import { BoldRuns } from './BoldRuns.tsx'
 import { statusLabel } from '../routes/orchestrations/orch-model.ts'
 import { graphOutcomeLabel } from '../routes/workflows/workflow-run-model.ts'
 import { ApiError } from '../data/api.ts'
@@ -119,6 +120,23 @@ function describeError(error: unknown): string {
 
 /** The route: `/b/recipes`, `/b/recipes/new`, `/b/recipes/lead-decides` or `/b/recipes/:workflowId`. */
 export function BoldRecipesPage() {
+  const [query, setQuery] = useSearchParams()
+  const runBrief = query.get('run')
+  // 3.22.0: a run (`?run=<brief id>`) opens here, as the list of runs when none is named.
+  if (runBrief !== null)
+    return (
+      <div className="bold-run-page">
+        <BoldRuns
+          briefId={runBrief || null}
+          onOpen={(briefId) => setQuery({ run: briefId })}
+          onBack={() => setQuery({})}
+        />
+      </div>
+    )
+  return <BoldRecipesList />
+}
+
+function BoldRecipesList() {
   const { workflowId } = useParams()
   const navigate = useNavigate()
   const workflows = useWorkflows()

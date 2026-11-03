@@ -115,6 +115,49 @@
       0 0 0 2px #ececf1,
       0 0 0 4px #12131a !important;
   }
+  /* 3.22.0: the needs-you card (approval, paused exchange, question, run request) and its buttons wear Score's own
+     two colours, so no theme can leave a decision's words or buttons unreadable now that every card shows. The card
+     is the light object in the dark look and the dark one in the light look, as the prototype has it. */
+  /* The composer's Stop (a red square on a light ground of Score's own): a theme's panel colour can't swallow it. */
+  html[data-look='custom'] [data-ui='bold'] .chat-send--stop[data-protected] {
+    background-color: #ececf1 !important;
+    box-shadow: inset 0 0 0 2px #12131a !important;
+  }
+  html[data-look='custom'] [data-ui='bold'] .bold-request[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
+  html[data-look='custom'] [data-ui='bold'][data-look='light'] .bold-request[data-protected] {
+    background-color: #12131a !important;
+    color: #ffffff !important;
+  }
+  html[data-look='custom'] [data-ui='bold'] .bold-request[data-protected] .btn {
+    background-color: #12131a !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+  html[data-look='custom'] [data-ui='bold'] .bold-request[data-protected] .btn.ghost {
+    background-color: transparent !important;
+    color: #12131a !important;
+    box-shadow: inset 0 0 0 1.5px #12131a !important;
+  }
+  html[data-look='custom'] [data-ui='bold'][data-look='light'] .bold-request[data-protected] .btn {
+    background-color: #ffffff !important;
+    color: #12131a !important;
+  }
+  html[data-look='custom']
+    [data-ui='bold'][data-look='light']
+    .bold-request[data-protected]
+    .btn.ghost {
+    background-color: transparent !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1.5px #ffffff !important;
+  }
+  /* 3.22.0: the "N more below" cue at the bottom of the scrolling needs-you box is a light object of Score's own. */
+  html[data-look='custom'] .bold-pins-more[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */
@@ -205,15 +248,6 @@
   }
   html[data-look='custom'] [data-protected='grid'] {
     display: grid !important;
-  }
-  /* The Needs-you strip's own fold (bold/room): the cards behind "N more need you" are hidden by Score, through
-     attributes only Score sets (the fold state and each card's rank), so a theme can't use this to hide a card. It must
-     come after the display rules above, which would otherwise show every folded card. */
-  html[data-look='custom']
-    [data-ui='bold']
-    .bold-pins[data-expanded='false']
-    > [data-protected][data-pin-rank]:not([data-pin-rank='0']) {
-    display: none !important;
   }
   html[data-look='custom'] [data-protected='inline'] {
     display: inline !important;

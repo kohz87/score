@@ -16,19 +16,44 @@ function tag(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-const side = (page: Page) => page.locator('#bold-side-panel')
+// 3.22.0: a one-to-one is the chat view itself (header, one conversation with the agent's chats as topics, composer,
+// context bar); the side panel is only Info (the agent, its chats, Add someone) and Results.
+const stream = (page: Page) => page.locator('#bold-room-stream')
+const messages = (page: Page) => stream(page).locator('.bold-message')
+const composerOf = (page: Page, agent: string) =>
+  page.getByPlaceholder(`Message ${agent} privately`)
 
 async function expectPrivacy(page: Page, agent: string) {
-  const label = side(page).locator('[data-protected].bold-dm-privacy')
-  await expect(label).toBeVisible()
-  await expect(label).toHaveText(`Only you and ${agent} see this`)
+  const label = page.locator('[data-protected].bold-dm-privacy')
+  await expect(label.first()).toBeVisible()
+  await expect(label.first()).toHaveText(`Only you and ${agent} see this`)
 }
 
-async function openEarlier(page: Page, agent: string) {
-  await side(page).getByRole('button', { name: 'Earlier chats' }).click()
-  const dialog = page.getByRole('dialog', { name: `Earlier chats with ${agent}` })
-  await expect(dialog).toBeVisible()
-  return dialog
+/** Chat info: open by default on a desktop, a sheet behind the "i" button on a phone. Returns the Info panel. */
+async function openInfo(page: Page) {
+  const panel = page.getByRole('complementary', { name: 'Side panel' })
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Chat info' }).click()
+  await expect(panel).toBeVisible()
+  const info = panel.getByRole('tab', { name: 'Info' })
+  if ((await info.count()) > 0 && (await info.getAttribute('aria-selected')) !== 'true')
+    await info.click()
+  return panel
+}
+
+/** The share action of the newest agent reply; the action row shows on hover (always on touch), so hover its message. */
+async function shareAction(page: Page) {
+  const share = 'button[aria-label^="Share message from "][aria-label$=" to the team room"]'
+  const message = messages(page)
+    .filter({ has: page.locator(share) })
+    .last()
+  await message.hover()
+  return message.locator(share)
+}
+
+/** The agent's chats in Info, found by title. Picking one makes it the current topic. */
+async function openChatFromInfo(page: Page, title: RegExp) {
+  const panel = await openInfo(page)
+  await panel.getByRole('link', { name: title }).click()
 }
 
 async function teamRoomId(page: Page) {
@@ -79,46 +104,40 @@ for (const { name, viewport } of sizes) {
     test('opens from the dock, lands in the latest chat and always shows the privacy label', async ({
       page,
     }) => {
-      await page.goto('/b?open=1')
+      // `?open=1` opens the team room's chat; a phone's `/b` is its chat list.
+      await page.goto(phone ? '/b' : '/b?open=1')
       if (phone) {
-        // A phone has no dock (board 19); the side panel's menu lists every agent under "One to one".
-        await page.getByRole('button', { name: 'Chat info' }).click()
-        await side(page).getByRole('button', { name: /^Info/ }).click()
-        await side(page)
-          .getByRole('button', { name: /^builder/ })
+        // A phone has no dock (board 19); its chat list has a Direct group with every agent.
+        await page
+          .getByRole('complementary', { name: 'Chats', exact: true })
+          .getByRole('link', { name: /^builder/ })
           .click()
       } else {
         const ring = page.getByRole('button', { name: /^One to one with builder,/ })
         await expect(ring).toBeVisible()
         await ring.click()
       }
-      await expect(page).toHaveURL(/\/b\?with=builder&chat=job_/)
+      await expect(page).toHaveURL(/[?&]with=builder/)
       await expectPrivacy(page, 'builder')
-      // It lands in a chat (the newest one; other specs add chats, so which one is not pinned here).
-      await expect(side(page).locator('.bold-dm-thread')).toBeVisible()
-      // A chat reads oldest first: the seeded websockets chat has the question, then the answer.
-      const dialogFirst = await openEarlier(page, 'builder')
-      await dialogFirst.getByRole('button', { name: /Websockets or server-sent events/ }).click()
-      const thread = side(page).locator('.bold-dm-thread')
-      await expect(thread.locator('.bold-dm-message')).toHaveCount(2)
-      await expect(thread.locator('.bold-dm-message').first()).toContainText(
-        'Why websockets and not server-sent events?',
-      )
-      await expect(thread.locator('.bold-dm-message').last()).toContainText(
-        'Server-sent events only go one way.',
-      )
-      await expect(side(page).getByPlaceholder('Message builder privately')).toBeVisible()
-      // The panel carries the agent's colour (board 19: agent-coloured), and the glyph shows its shape.
-      await expect(side(page)).toHaveCSS('--dm-color', /#[0-9a-f]{6}/i)
-      await expect(side(page).locator('.bold-dm-privacy')).toHaveAttribute('data-protected', /.+/)
-      // The label survives a switch to an earlier chat and to a brand-new one.
-      const dialog = await openEarlier(page, 'builder')
-      await dialog.getByRole('button', { name: /The cursor bug/ }).click()
+      await expect(stream(page)).toBeVisible()
+      // The agent's earlier chats are topics of the one conversation, listed in Info: picking one makes it current.
+      await openChatFromInfo(page, /Websockets or server-sent events/)
+      await expect(page).toHaveURL(/chat=job_/)
+      await expect(
+        messages(page).filter({ hasText: 'Why websockets and not server-sent events?' }),
+      ).toHaveCount(1)
+      await expect(
+        messages(page).filter({ hasText: 'Server-sent events only go one way.' }),
+      ).toHaveCount(1)
+      await expect(composerOf(page, 'builder')).toBeVisible()
+      // The label survives a switch to another earlier chat.
+      await openChatFromInfo(page, /The cursor bug/)
       await expect(page).toHaveURL(/chat=job_/)
       await expectPrivacy(page, 'builder')
-      await expect(side(page).locator('.bold-dm-message').first()).toContainText(
-        'Why did reviewer send the read layer back?',
-      )
+      await expect(
+        messages(page).filter({ hasText: 'Why did reviewer send the read layer back?' }),
+      ).toHaveCount(1)
+      await expect(page.locator('.bold-dm-privacy').first()).toHaveAttribute('data-protected', /.+/)
     })
 
     test('opens from the Team page Message button', async ({ page }) => {
@@ -127,11 +146,11 @@ for (const { name, viewport } of sizes) {
         .locator('.bold-agentcard')
         .filter({ has: page.getByRole('link', { name: 'reviewer', exact: true }) })
       await card.getByRole('link', { name: 'Message', exact: true }).click()
-      await expect(page).toHaveURL(/\/b\?with=reviewer&chat=job_/)
+      await expect(page).toHaveURL(/[?&]with=reviewer/)
       await expectPrivacy(page, 'reviewer')
-      await expect(side(page).locator('.bold-dm-message').first()).toContainText(
-        'How strict should you be on docs?',
-      )
+      await expect(
+        messages(page).filter({ hasText: 'How strict should you be on docs?' }),
+      ).toHaveCount(1)
     })
 
     test('opens from Search (a chat result)', async ({ page }) => {
@@ -142,42 +161,41 @@ for (const { name, viewport } of sizes) {
       await page.getByRole('option', { name: /Working in the Docker sandbox/ }).click()
       await expect(page).toHaveURL(/\/b\?with=builder&chat=job_/)
       await expectPrivacy(page, 'builder')
-      await expect(side(page).locator('.bold-dm-message').first()).toContainText(
-        'Can you work inside the Docker sandbox',
-      )
+      await expect(
+        messages(page).filter({ hasText: 'Can you work inside the Docker sandbox' }),
+      ).toHaveCount(1)
     })
 
-    test('earlier chats list, search and New chat', async ({ page }) => {
+    test('Info lists the chats, searches them and starts a New chat', async ({ page }) => {
       await page.goto('/b?with=builder')
       await expectPrivacy(page, 'builder')
-      const dialog = await openEarlier(page, 'builder')
-      const rows = dialog.locator('.bold-dm-history-row')
+      const info = await openInfo(page)
+      const rows = info.locator('.bold-chat-topics li')
       await expect(rows.filter({ hasText: 'Websockets or server-sent events' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'The cursor bug' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'Working in the Docker sandbox' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'How strict to be on docs' })).toHaveCount(0)
 
-      await dialog.getByRole('textbox', { name: 'Search chats' }).fill('cursor')
+      const search = info.getByRole('searchbox', { name: 'Search chats' })
+      await search.fill('cursor')
       await expect(rows.filter({ hasText: 'The cursor bug' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'Docker sandbox' })).toHaveCount(0)
-      await dialog.getByRole('textbox', { name: 'Search chats' }).fill('zzz-nothing')
-      await expect(dialog.getByText('No chats match “zzz-nothing”.')).toBeVisible()
-      await dialog.getByRole('textbox', { name: 'Search chats' }).fill('')
+      await search.fill('zzz-nothing')
+      await expect(info.getByText('No chats match “zzz-nothing”.')).toBeVisible()
+      await search.fill('')
 
       const before = new URL(page.url()).searchParams.get('chat')
       const posts = recordPosts(page)
-      await dialog.getByRole('button', { name: 'New chat with builder' }).click()
+      await info.getByRole('button', { name: 'New chat with builder' }).click()
       await expect.poll(() => posts.length).toBeGreaterThan(0)
       expect(posts[0]).toEqual({ url: '/api/agents/builder/chats', body: {} })
       await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before)
-      await expect(side(page).getByRole('heading', { name: 'New chat with builder' })).toBeVisible()
       await expectPrivacy(page, 'builder')
-      await expect(dialog).toHaveCount(0)
-      // The new chat is now in the list.
-      const again = await openEarlier(page, 'builder')
-      await expect(again.locator('.bold-dm-history-row.sel')).toHaveCount(1)
+      // The new chat is now in the list, as the current one.
+      const again = await openInfo(page)
+      await expect(again.locator('.bold-chat-topics a[aria-current="true"]')).toHaveCount(1)
       await expect
-        .poll(() => again.locator('.bold-dm-history-row').count())
+        .poll(() => again.locator('.bold-chat-topics li').count())
         .toBeGreaterThanOrEqual(4)
     })
 
@@ -193,19 +211,19 @@ for (const { name, viewport } of sizes) {
       await aside.click()
       await expect(page).toHaveURL(/\/b\?with=builder&ref=job_[^&]+$/)
       await expectPrivacy(page, 'builder')
-      const chip = side(page).locator('.bold-dm-ref')
+      const chip = page.locator('.bold-dm-ref')
       await expect(chip).toContainText('Referring to')
-      await expect(side(page).getByRole('heading', { name: 'New chat with builder' })).toBeVisible()
-      // Looking is free: nothing was created, so Earlier chats has no empty chat in it.
+      await expect(page.getByRole('heading', { name: 'New chat with builder' })).toBeVisible()
+      // Looking is free: nothing was created, so the agent's chats have no empty chat in them.
       expect(posts).toHaveLength(0)
 
       const text = tag('About the review')
-      await side(page).getByPlaceholder('Message builder privately').fill(text)
-      await side(page).locator('button.chat-send').click()
+      await composerOf(page, 'builder').fill(text)
+      await page.locator('button.chat-send').click()
       await expect(page).toHaveURL(/\/b\?with=builder&chat=job_[^&]+$/)
-      await expect(side(page).locator('.bold-dm-message').filter({ hasText: text })).toBeVisible()
+      await expect(messages(page).filter({ hasText: text })).toBeVisible()
       // The message carries a frozen reference to the team-room job, and the chip is spent.
-      await expect(side(page).locator('.bold-ref-chip')).toContainText('Referring to')
+      await expect(page.locator('.bold-ref-chip').first()).toContainText('Referring to')
       await expect(chip).toHaveCount(0)
       const made = posts.filter((post) => post.url === '/api/agents/builder/chats')
       expect(made).toHaveLength(1)
@@ -214,32 +232,32 @@ for (const { name, viewport } of sizes) {
       expect(sent?.body).toMatchObject({ text, refs: [{ jobId: expect.stringMatching(/^job_/) }] })
     })
 
-    test('a normal message carries no references, and a draft stays in its own chat', async ({
+    test('a normal message carries no references, and a draft follows the one conversation', async ({
       page,
     }) => {
       const first = await seededChat(page, 'builder', 'The cursor bug')
       const second = await seededChat(page, 'builder', 'Working in the Docker sandbox')
       await page.goto(`/b?with=builder&chat=${first}`)
-      const box = side(page).getByPlaceholder('Message builder privately')
+      const box = composerOf(page, 'builder')
       await box.fill('half a thought for the cursor chat')
-      const dialog = await openEarlier(page, 'builder')
-      await dialog.getByRole('button', { name: /Docker sandbox/ }).click()
+      await openChatFromInfo(page, /Docker sandbox/)
       await expect(page).toHaveURL(new RegExp(`chat=${second}`))
-      await expect(side(page).getByPlaceholder('Message builder privately')).toHaveValue('')
+      // 3.22.0: a chat is one conversation with one composer, so the draft belongs to the conversation and follows
+      // the person from topic to topic; what is sent goes to the topic that is current when it is sent.
+      await expect(composerOf(page, 'builder')).toHaveValue('half a thought for the cursor chat')
+      await composerOf(page, 'builder').fill('')
       const posts = recordPosts(page)
       const text = tag('No refs')
-      await side(page).getByPlaceholder('Message builder privately').fill(text)
-      await side(page).locator('button.chat-send').click()
-      await expect(side(page).locator('.bold-dm-message').filter({ hasText: text })).toBeVisible()
+      await composerOf(page, 'builder').fill(text)
+      await page.locator('button.chat-send').click()
+      await expect(messages(page).filter({ hasText: text })).toBeVisible()
       const sent = posts.find((post) => /\/api\/rooms\/[^/]+\/messages$/.test(post.url))
       expect(sent?.body).toMatchObject({ text, jobId: second })
       expect(sent?.body).not.toHaveProperty('refs')
-      // Back in the first chat the half-written text is still there.
-      const again = await openEarlier(page, 'builder')
-      await again.getByRole('button', { name: /The cursor bug/ }).click()
-      await expect(side(page).getByPlaceholder('Message builder privately')).toHaveValue(
-        'half a thought for the cursor chat',
-      )
+      // The draft is kept per conversation: switching topics back and forth does not lose it.
+      await composerOf(page, 'builder').fill('another half thought')
+      await openChatFromInfo(page, /The cursor bug/)
+      await expect(composerOf(page, 'builder')).toHaveValue('another half thought')
     })
 
     test('a shared reply appears in the team room labelled "shared from a one-to-one"', async ({
@@ -254,14 +272,16 @@ for (const { name, viewport } of sizes) {
       expect(made.status()).toBe(201)
       await page.goto('/b?with=reviewer')
       await expectPrivacy(page, 'reviewer')
-      await expect(side(page).locator('.bold-dm-message')).toHaveCount(2)
+      await expect(
+        messages(page).filter({ hasText: 'I’ll block only when steps are missing or wrong' }),
+      ).toHaveCount(1)
       const posts = recordPosts(page)
-      await side(page).getByRole('button', { name: 'Share to the team room' }).click()
+      await (await shareAction(page)).click()
       const menu = page.getByRole('dialog', { name: 'Share to the team room' })
       await expect(menu).toHaveAttribute('data-protected', 'block')
       await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
       await expect(
-        side(page).getByRole('status').filter({ hasText: 'Shared to the team room' }),
+        stream(page).getByRole('status').filter({ hasText: 'Shared to the team room' }),
       ).toBeVisible()
       const share = posts.find((post) => /\/api\/messages\/[^/]+\/share$/.test(post.url))
       expect(share?.body).toEqual({ jobId: (await made.json()).id })
@@ -269,10 +289,16 @@ for (const { name, viewport } of sizes) {
       // The team room shows a frozen copy, named for the one-to-one it came from.
       await page.goto(`/b?job=${(await made.json()).id}`)
       const shared = page.locator('.bold-shared')
-      await expect(shared).toHaveCount(1)
-      await expect(shared).toContainText('shared from a one-to-one with you')
-      await expect(shared).toContainText('I’ll block only when steps are missing or wrong')
-      await expect(shared).toHaveAttribute('data-protected', 'block')
+      // 3.22.0: the team room is one merged conversation, so the copies shared to earlier jobs show too.
+      await expect(shared.first()).toBeVisible()
+      expect(await shared.count()).toBeGreaterThanOrEqual(1)
+      const mine = shared
+        .filter({ hasText: 'I’ll block only when steps are missing or wrong' })
+        .first()
+      await expect(mine).toContainText('shared from a one-to-one with you')
+      await expect(mine).toHaveAttribute('data-protected', 'block')
+      for (const copy of await shared.all())
+        await expect(copy).toHaveAttribute('data-protected', 'block')
     })
 
     test('Add someone says what leaves, then moves the talk to the team room with the chat referenced', async ({
@@ -281,7 +307,8 @@ for (const { name, viewport } of sizes) {
       const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
       await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
-      await side(page).getByRole('button', { name: 'Add someone' }).click()
+      const info = await openInfo(page)
+      await info.getByRole('button', { name: 'Add someone' }).click()
       const dialog = page.getByRole('dialog', { name: 'Add someone to this one-to-one' })
       await expect(dialog).toContainText('A one-to-one has no room for a third')
       await expect(dialog).toHaveAttribute('data-protected', 'block')
@@ -297,7 +324,10 @@ for (const { name, viewport } of sizes) {
       await expect(page).toHaveURL(/\/b\?job=job_/)
       await expect(page).not.toHaveURL(/with=/)
       await expect(
-        page.locator('[data-message-id]').filter({ hasText: '@reviewer Let’s continue this chat' }),
+        page
+          .locator('[data-message-id]')
+          .filter({ hasText: '@reviewer Let’s continue this chat' })
+          .first(),
       ).toBeVisible({ timeout: 30_000 })
       await expect(
         page.getByText('Referring to “Websockets or server-sent events”').first(),
@@ -311,34 +341,23 @@ for (const { name, viewport } of sizes) {
       })
     })
 
-    test('Escape, a press outside and focus return work for the popover and the small dialogs', async ({
+    test('Escape, a press outside and focus return work for the small dialogs', async ({
       page,
     }) => {
+      // 3.22.0: the "Earlier chats" popover is gone (the chats are Info's list), so only the dialogs remain.
       const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
       await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
 
-      const earlier = side(page).getByRole('button', { name: 'Earlier chats' })
-      const popover = await openEarlier(page, 'builder')
-      await page.keyboard.press('Escape')
-      await expect(popover).toHaveCount(0)
-      await expect(earlier).toBeFocused()
-      // Escape closed only the popover: the one-to-one itself is still open.
-      await expect(page).toHaveURL(/with=builder/)
-      await openEarlier(page, 'builder')
-      await side(page)
-        .locator('.bold-dm-scroll')
-        .click({ position: { x: 5, y: 5 } })
-      await expect(page.getByRole('dialog', { name: 'Earlier chats with builder' })).toHaveCount(0)
-
-      const share = side(page).getByRole('button', { name: 'Share to the team room' })
+      const share = await shareAction(page)
       await share.click()
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toHaveCount(0)
       await expect(share).toBeFocused()
 
-      const add = side(page).getByRole('button', { name: 'Add someone' })
+      const info = await openInfo(page)
+      const add = info.getByRole('button', { name: 'Add someone' })
       await add.click()
       await expect(
         page.getByRole('dialog', { name: 'Add someone to this one-to-one' }),
@@ -349,54 +368,20 @@ for (const { name, viewport } of sizes) {
       ).toHaveCount(0)
       await expect(add).toBeFocused()
       await expect(page).toHaveURL(/with=builder/)
-
-      if (phone) {
-        // With nothing open, Escape on the sheet closes it the way Back does: `?with=` goes.
-        await page.keyboard.press('Escape')
-        await expect(page).not.toHaveURL(/with=/)
-        await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
-      }
     })
 
-    test('the context meter reads the chat’s own session, and the room session for a default thread', async ({
+    test('the context bar names who it goes to and the topic, and back leads to the chat list', async ({
       page,
     }) => {
-      const made = await page.request.post('/api/agents/designer/chats', {
-        headers: web,
-        data: { title: tag('Own session') },
-      })
-      expect(made.status()).toBe(201)
-      const own = (await made.json()) as { id: string; roomId: string }
-      const direct = (await (await page.request.get('/api/agents/designer/direct')).json()) as {
-        chats: { id: string; isDefault: boolean }[]
-      }
-      const thread = direct.chats.find((chat) => chat.isDefault)
-      expect(thread, 'the direct room’s default thread').toBeDefined()
-      const paths: string[] = []
-      page.on('request', (request) => {
-        const path = new URL(request.url()).pathname
-        if (/\/sessions\/[^/]+\/context$/.test(path)) paths.push(decodeURIComponent(path))
-      })
-      await page.goto(`/b?with=designer&chat=${own.id}`)
-      await expect(side(page).getByRole('group', { name: 'Context use' })).toBeVisible()
-      await expect
-        .poll(() => paths)
-        .toContain(`/api/agents/designer/sessions/score-${own.roomId}-${own.id}-designer/context`)
-      await page.goto(`/b?with=designer&chat=${thread!.id}`)
-      await expect(side(page).getByRole('group', { name: 'Context use' })).toBeVisible()
-      await expect
-        .poll(() => paths)
-        .toContain(`/api/agents/designer/sessions/score-${own.roomId}-designer/context`)
-    })
-
-    test('context meter and back to the room', async ({ page }) => {
+      // 3.22.0: the per-chat context ring under the composer is replaced by the context bar (agent-level reading).
       const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
       await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
-      await expect(side(page).getByRole('group', { name: 'Context use' })).toBeVisible()
-      await expect(side(page).locator('.bold-dm-context')).toContainText(/\d+%/)
+      const bar = page.getByLabel('Where this message goes')
+      await expect(bar).toContainText('builder')
+      await expect(bar).toContainText('Websockets or server-sent events')
       if (phone) {
-        await side(page).getByRole('button', { name: 'Back' }).click()
+        await page.getByRole('button', { name: 'Back to chats' }).click()
         await expect(page).not.toHaveURL(/with=/)
         await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
       }

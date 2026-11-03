@@ -6,7 +6,7 @@ import { pair } from './pair.ts'
 test.use({ reducedMotion: 'reduce' })
 
 const web = { 'x-score-client': 'web' }
-const side = (page: Page) => page.locator('#bold-side-panel')
+const side = (page: Page) => page.locator('#bold-room-stream') // 3.22.0: a one-to-one is the chat's one conversation (no side-panel thread)
 
 async function makeChat(page: Page, agent: string, text: string) {
   const made = await page.request.post(`/api/agents/${agent}/chats`, { headers: web, data: {} })
@@ -22,20 +22,22 @@ async function makeChat(page: Page, agent: string, text: string) {
 
 async function open(page: Page, agent: string, chatId: string) {
   await page.goto(`/b?with=${agent}&chat=${chatId}`)
-  await expect(side(page).locator('.bold-dm-thread')).toBeVisible({ timeout: 30_000 })
+  await expect(side(page).locator('.bold-stream')).toBeVisible({ timeout: 30_000 })
 }
 
-const group = (page: Page) => side(page).locator('.bold-reply-group')
+// 3.22.0: a one-to-one shows every earlier chat with the agent too; this chat's reply is the newest one.
+const group = (page: Page) => side(page).locator('.bold-reply-group').last()
 
 async function tryAnother(page: Page) {
-  const reply = group(page)
-    .count()
-    .then((n) =>
-      n
-        ? group(page)
-        : side(page).locator('.bold-dm-message:not(:has(.chat-message--you))').first(),
-    )
-  const row = await reply
+  // The newest reply (this chat's): its action row sits beside the article, inside the `.bold-message` row.
+  const row = side(page)
+    .locator('.bold-message')
+    .filter({
+      has: page.locator(
+        'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
+      ),
+    })
+    .last()
   await row.hover()
   const button = row.getByRole('button', { name: /^Try another reply from/ })
   await expect(button).toBeEnabled({ timeout: 30_000 })
@@ -60,19 +62,22 @@ for (const size of sizes) {
       const chat = await makeChat(page, size.agent, `Question try-${Date.now().toString(36)}`)
       await open(page, size.agent, chat.id)
       await expect(
-        side(page).locator('.bold-dm-message:not(:has(.chat-message--you))').first(),
+        side(page)
+          .locator('article[aria-label^="Message from "]:not([aria-label="Message from You"])')
+          .first(),
       ).toBeVisible({ timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
+      await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
       await expect(side(page).getByText('remembers its earlier answers')).toHaveCount(0)
 
+      const groupsBefore = await side(page).locator('.bold-reply-group').count()
       await tryAnother(page)
       await expect(group(page).getByText('2 / 2')).toBeVisible({ timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
+      await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
       await tryAnother(page)
       await expect(group(page).getByText('3 / 3')).toBeVisible({ timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
-      // One message, however many versions.
-      await expect(group(page)).toHaveCount(1)
+      await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
+      // One message, however many versions: this chat added exactly one reply group.
+      await expect(side(page).locator('.bold-reply-group')).toHaveCount(groupsBefore + 1)
       await expect(side(page).getByText(/remembers its earlier answers/)).toBeVisible()
 
       await group(page).getByRole('button', { name: 'Previous version' }).click()
@@ -85,13 +90,15 @@ for (const size of sizes) {
       test('a sideways swipe changes the version', async ({ page }) => {
         const chat = await makeChat(page, size.agent, `Question swipe-${Date.now().toString(36)}`)
         await open(page, size.agent, chat.id)
-        await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
+        await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
         await expect(
-          side(page).locator('.bold-dm-message:not(:has(.chat-message--you))').first(),
+          side(page)
+            .locator('article[aria-label^="Message from "]:not([aria-label="Message from You"])')
+            .last(), // 3.22.0: Try another is on the latest reply
         ).toBeVisible({ timeout: 30_000 })
         await tryAnother(page)
         await expect(group(page).getByText('2 / 2')).toBeVisible({ timeout: 30_000 })
-        await expect(side(page).locator('.bold-dm-typing')).toHaveCount(0, { timeout: 30_000 })
+        await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
 
         const swipe = (dx: number, dy: number) =>
           group(page).evaluate(

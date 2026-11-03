@@ -30,22 +30,22 @@ async function openResults(page: Page, size: Size, path = '/b?open=1') {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   // 3.21.0: the side panel opens on Info by default. On desktop `?work=results` asks for Work; on a phone Chat info opens
-  // the sheet on Info and the mode menu switches it to Work.
+  // the sheet on Info and the Results tab switches it.
   const phone = size.width < 861
   await page.goto(phone ? path : `${path}${path.includes('?') ? '&' : '?'}work=results`)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
   if (phone) {
     await page.getByRole('button', { name: 'Chat info' }).click()
     const sheet = page.getByRole('complementary', { name: 'Side panel' })
-    await sheet.getByRole('button', { name: /^Info/ }).click()
-    await sheet.getByRole('button', { name: /^Work/ }).click()
+    await sheet.getByRole('tab', { name: 'Results' }).click()
   }
 
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   await expect(panel).toBeVisible()
   const work = panel.getByRole('navigation', { name: 'How to see the work' })
   await expect(work.getByText('Results', { exact: true })).toHaveAttribute('aria-current', 'page')
-  await expect(panel.getByRole('tablist')).toHaveCount(0)
+  // 3.22.0: the panel is Info | Results only (pill tabs); Results is the chosen one.
+  await expect(panel.getByRole('tab', { name: 'Results' })).toHaveAttribute('aria-selected', 'true')
   await expect(panel.getByTestId('bold-results')).toBeVisible()
   return panel
 }
@@ -127,6 +127,11 @@ for (const size of sizes) {
       await page.route('**/api/rooms/*/jobs**', (route) =>
         route.fulfill({ json: { asOfSeq: 1, items: [] } }),
       )
+      // The live fake stream replays its seeded jobs into the room read; a hello-only stream keeps the empty room empty.
+      const hello = `event: stream.hello\ndata: ${JSON.stringify(visualHello)}\n\n`
+      await page.route('**/api/stream**', (route) =>
+        route.fulfill({ contentType: 'text/event-stream', body: hello }),
+      )
       const panel = await openResults(page, size)
       await expect(panel.getByRole('heading', { name: 'Nothing being made yet' })).toBeVisible()
     })
@@ -202,22 +207,23 @@ for (const size of sizes) {
       expect(resultsCalls).toBeGreaterThan(before)
     })
 
-    test('switching Library and Results keeps both working', async ({ page }) => {
+    test('switching Info and Results keeps both working', async ({ page }) => {
       await pair(page)
       const panel = await openResults(page, size)
       await expect(
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
       ).toBeVisible()
 
-      await panel.locator('button.side-toggle').click()
-      await page.getByRole('button', { name: /^Library/ }).click()
-      const library = page.getByTestId('bold-library')
-      await expect(library).toBeVisible()
-      await expect(library.getByRole('button', { name: 'New note' })).toBeVisible()
+      // 3.22.0: the Library mode is gone from the panel (Knowledge has its own page); Info takes its place here.
+      await panel.getByRole('tab', { name: 'Info' }).click()
+      await expect(panel.getByRole('tab', { name: 'Info' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
       await expect(panel.getByTestId('bold-results')).toBeHidden()
+      await expect(page.getByTestId('bold-library')).toHaveCount(0)
 
-      await page.getByRole('button', { name: /^Library/ }).click()
-      await page.getByRole('button', { name: /^Work What/ }).click()
+      await panel.getByRole('tab', { name: 'Results' }).click()
       await expect(panel.getByTestId('bold-results')).toBeVisible()
       await expect(
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),

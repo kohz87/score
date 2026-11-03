@@ -2121,3 +2121,45 @@ One entry per completed task: what landed, review results, and any **rejected re
   job list; archived chats lost badge/Unarchive on a phone; the 3.19.1 top-bar needs-you count was unreadable over a
   picture theme so the look guard switched the theme off (protected fill). Final: affected specs all pass.
 - **v3.21.0 deployed live** (~11:50 UTC), backup score-pre-3.21.0-20261103.db, health ok.
+
+## 3.22.0 — Chats, stage 2: topics, commands and direct chats (2026-11-03)
+- Owner: stage 2 of the chats redesign (docs/briefs/3.22.0-topics-commands.md, items 1–13 incl. the owner's "the job
+  shortcuts are still on top of the chat and the width… should fully align with the mock up" and the lead's live
+  screenshot findings). Part A (topics): one merged conversation per chat (`GET …/messages?all=1`, contract updated), topic
+  dividers, the `/` palette (/new, /rename, /done, /reopen, /lead, /add, /remove, /workspace…), the context bar, Info |
+  Results only (Thread/Runs/Library redirected), the mock-up's widths. Part B (direct chats): one-to-ones in the chat
+  view with the privacy label in the header, earlier chats as topics, Share to the team room on every reply.
+- Review (Sonnet) P2s fixed: a busy topic marked another topic's unseen messages read (server, `jobsUnreadBefore`);
+  a send right after /new could land in the previous topic; a stale `?job=` posted to the general conversation while
+  jobs loaded; /remove of the last member, /add and /lead of unusable agents; `?run=` opens its chat and topic when
+  known; a job delete flipped the panel. Lead: phone "N more below" cue for the needs-you cards (protected), the room
+  caret removed from the header. Fix-round review P2s (composer held forever on a failed jobs read; the cue over a card's
+  buttons) fixed by the lead.
+- Gate 1: check green; e2e 322 failed (541 passed). Two triage coders in parallel (A: Library, thread, room, themes,
+  classic, runs…; B: one-to-ones, phone, tablet, needs-you, questions, results, search), 20-minute self-checks.
+  ~260 tests updated without weakening, ~95 baselines regenerated and viewed, tests moved to where the behaviour lives.
+- Real regressions found by the triage and fixed: the deleted thread panel's status, run card, report-back, Hermes tasks
+  and Stop had no home → **Info › This topic** (Sonnet coder, reviewed clean); the context bar read the agent's latest
+  session (possibly another chat's) → it reads the session the message lands in (lead); **compaction was unreachable**
+  (/compress pointed at removed views) → the bar's meter is the context meter with its Compact, /compress opens it
+  (lead); phone composer under the tab bar and the phone topic list squeezed to 6px (B); Knowledge note toolbar not
+  sticky and the phone Files view unreachable; deleted-message markers repeated per topic; focus lost after the
+  older-rooms list; the topic "working" state at 1.7:1; Harbour dark switched off by the composer Stop and the
+  needs-you buttons (protected.css now pins their colours; the guard tests measure on the card title, plus a new test
+  for the buttons) (A). Phone Info sheet headings restored (lead).
+- Deliberately dropped (DECISIONS 159): the thread's round headings, its own Step-in box (the needs-you card has it),
+  the per-job Compact ring (the bar has it), the Library fold/chevrons in the composer, the "N more need you" fold.
+  Lead slip: briefly stashed coder B's uncommitted work (restored at once, B re-ran its spec).
+- Accepted P3s: a legacy room-scheme topic's meter 404s quietly; a tall approval card can be partly clipped in the
+  capped strip (it scrolls, with the cue); /compress to several recipients has no meter to open; the Elsewhere view
+  has no mode tab on desktop; the phone All topics screen is tight at 360×740 with two cards (stage 4).
+- Gates 2–4 (after the triage): 38 → 22 → 10 e2e failures. Lead fixes found by them: a chat lost its end when its own
+  box got shorter after settling (the context bar's meter and the needs-you cards arrive later) → the follow logic
+  watches the box's size (vitest); the Knowledge page scrolled sideways by a wide note (A's sticky fix had set
+  `overflow: visible`) → `overflow-x: clip`; the phone topic list keeps its composer (my hiding broke 3.21.0's tested
+  layout; reverted, stage 4); theme Room baselines shoot the conversation at its end (a chat opens at its first unread,
+  ±37px with the cue's late layout — accepted P3); the contrast-guard cases moved to the card title (protected.css pins
+  the buttons; a new test checks the buttons). Final gate: check green (contract 1607, web 3227, server 4969); e2e 854
+  passed, 10 failed under parallel load, every one passing on its own (phone 360 list, + menu phone, room unread,
+  workspace screenshot, orchestration dots, a theme switch) and the tablet/Knowledge one fixed (104 passed together).
+

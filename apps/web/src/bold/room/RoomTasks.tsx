@@ -210,7 +210,7 @@ export function ThreadTasks({ roomId, agents }: { roomId: string; agents: AgentS
   if (tasks.length === 0) return null
   return (
     <section className="bold-thread-tasks" aria-labelledby="bold-thread-tasks-title">
-      <h3 id="bold-thread-tasks-title">Room tasks</h3>
+      <h3 id="bold-thread-tasks-title">Hermes tasks</h3>
       <p className="small muted">Tasks are not tied to a job yet; these are for the whole room.</p>
       {tasks.map((task) => (
         <ThreadTask key={task.id} task={task} agents={agents} />

@@ -103,7 +103,7 @@ for (const size of sizes) {
       expect(url.searchParams.get('chat')).toBe(chat.id)
     })
 
-    test('a Library note opens in the Library with its path', async ({ page }) => {
+    test('a Library note opens on the Knowledge page with its path', async ({ page }) => {
       await pair(page)
       await openBold(page)
       await openSearch(page)
@@ -115,11 +115,13 @@ for (const size of sizes) {
       const library = page.getByTestId('bold-library')
       await expect(library).toBeVisible()
       await expect(library.locator('.kn-note-head h2')).toHaveText('Roadmap')
-      // The request is one-shot: the parameter is consumed once the Library has it.
-      await expect.poll(() => new URL(page.url()).searchParams.get('note')).toBeNull()
+      // 3.22.0: Knowledge is its own page and the note path is its selection, so it stays in the address.
+      const url = new URL(page.url())
+      expect(url.pathname).toBe('/b/knowledge')
+      expect(url.searchParams.get('note')).toBe('Projects/Roadmap.md')
     })
 
-    test('the same Library note opens again after a visit to Work', async ({ page }) => {
+    test('the same Library note opens again after a visit to Chats', async ({ page }) => {
       await pair(page)
       await openBold(page)
       const openRoadmap = async () => {
@@ -132,14 +134,15 @@ for (const size of sizes) {
         const library = page.getByTestId('bold-library')
         await expect(library).toBeVisible()
         await expect(library.locator('.kn-note-head h2')).toHaveText('Roadmap')
-        await expect.poll(() => new URL(page.url()).searchParams.get('note')).toBeNull()
+        expect(new URL(page.url()).searchParams.get('note')).toBe('Projects/Roadmap.md')
       }
       await openRoadmap()
-      await page.locator('.side-toggle').click()
-      await page.getByRole('button', { name: 'Work What the team is making' }).click()
+      // 3.22.0: the side panel's Work/Library modes are gone; the visit away is to the Chats page.
+      await page
+        .getByRole('navigation', { name: 'Main' })
+        .getByRole('button', { name: 'Chats' })
+        .click()
       await expect(page.getByTestId('bold-library')).toBeHidden()
-      const close = page.getByRole('button', { name: 'Close side panel' })
-      if (await close.isVisible()) await close.click()
       await openRoadmap()
     })
 

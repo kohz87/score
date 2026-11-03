@@ -12,6 +12,10 @@
   min-height: calc(100vh - 120px);
   padding: 0;
   border-top: 1px solid var(--line);
+  /* The page scrolls, not this box: with overflow auto the note toolbar's sticky top stuck to a box that never scrolls.
+     `clip` (not a scroll container, so sticky still works) keeps a wide note or table from pushing the page sideways. */
+  overflow: visible;
+  overflow-x: clip;
 }
 
 [data-ui='bold'] .is-page > .bold-knowledge-rail {

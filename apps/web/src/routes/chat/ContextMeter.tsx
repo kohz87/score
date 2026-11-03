@@ -117,6 +117,8 @@ interface MeterProps {
   finishedReplies: number
   /** Opens the popover on the compact confirmation (the `/compress` command). */
   confirmSignal?: number | undefined
+  /** `bar`: the chat's context bar draws it as "Context ▬ N%" (mock-up board 18) instead of the ring. */
+  variant?: 'ring' | 'bar'
 }
 
 /**
@@ -160,6 +162,7 @@ function MeterView({
   sessionId: suppliedSessionId,
   finishedReplies,
   confirmSignal,
+  variant = 'ring',
   data,
   refetch,
 }: MeterProps & { data: SessionContextState | undefined; refetch: () => void }) {
@@ -297,7 +300,11 @@ function MeterView({
       <button
         ref={button}
         type="button"
-        className={`chat-ctx-ring chat-ctx-ring--${level}`}
+        className={
+          variant === 'bar'
+            ? `bold-context-meter chat-ctx-bar-trigger chat-ctx-ring--${level}`
+            : `chat-ctx-ring chat-ctx-ring--${level}`
+        }
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -305,7 +312,17 @@ function MeterView({
         title={label}
         onClick={() => setOpen((value) => !value)}
       >
-        <RingFace fraction={fraction} used={used} />
+        {variant === 'bar' ? (
+          <>
+            Context{' '}
+            <span className="bold-context-track" aria-hidden="true">
+              <span style={{ width: `${Math.round((fraction ?? 0) * 100)}%` }} />
+            </span>
+            <span>{fraction !== null ? `${Math.round(fraction * 100)}%` : '–'}</span>
+          </>
+        ) : (
+          <RingFace fraction={fraction} used={used} />
+        )}
       </button>
       {busy && (
         <span className="chat-ctx-status" role="status">

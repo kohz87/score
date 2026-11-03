@@ -101,3 +101,36 @@ test('interaction UI (the hover action row) never moves a reader near the end; c
   await act(tick)
   expect(el.scrollTop).toBe(1200)
 })
+
+test('the stream box getting shorter keeps the end while following, and leaves a reader who scrolled up alone', async () => {
+  // jsdom has no ResizeObserver: a stand-in that the test fires by hand.
+  const observers: (() => void)[] = []
+  const previous = globalThis.ResizeObserver
+  globalThis.ResizeObserver = class {
+    constructor(private readonly callback: () => void) {
+      observers.push(() => this.callback())
+    }
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  } as unknown as typeof ResizeObserver
+  try {
+    const view = render(<Stream />)
+    const el = view.getByTestId('stream')
+    geometry(el, () => 1000)
+    await act(tick)
+    el.scrollTop = 900
+    // The composer grew: the box is 17px shorter, nothing inside changed.
+    Object.defineProperty(el, 'clientHeight', { configurable: true, value: 83 })
+    el.scrollTop = 900
+    observers.forEach((fire) => fire())
+    expect(el.scrollTop).toBe(1000)
+    // A reader who scrolled up is not moved by a resize.
+    el.scrollTop = 200
+    el.dispatchEvent(new Event('scroll'))
+    observers.forEach((fire) => fire())
+    expect(el.scrollTop).toBe(200)
+  } finally {
+    globalThis.ResizeObserver = previous
+  }
+})

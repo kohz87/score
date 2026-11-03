@@ -37,6 +37,7 @@ import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs
 import { useMenuPlacement } from './menu-placement.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { setShowDeleted, useShowDeleted } from '../../routes/chat/deleted-toggle.ts'
 import { setRoomWorkspace, useSharedWorkspaces, workspacesKey } from '../workspaces-queries.ts'
 
 function DotsIcon() {
@@ -127,6 +128,7 @@ export function RoomSwitcher({
   agents,
   onSelectRoom,
   onOpenElsewhere,
+  controlled,
 }: {
   current: Room | null
   teamRoom: Room | null
@@ -135,10 +137,20 @@ export function RoomSwitcher({
   agents: AgentSummary[]
   onSelectRoom: (room: Room) => void
   onOpenElsewhere: (session: OutsideSession) => void
+  /** The desktop header has no caret: the room ⋯ menu opens this list (older, imported and elsewhere chats). */
+  controlled?: {
+    open: boolean
+    setOpen: (open: boolean) => void
+    /** The button that opened it, so closing returns focus there. */
+    returnTo?: RefObject<HTMLButtonElement | null>
+  }
 }) {
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlled ? controlled.open : ownOpen
+  const setOpen = controlled ? controlled.setOpen : setOwnOpen
   const root = useRef<HTMLSpanElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
+  const ownTrigger = useRef<HTMLButtonElement>(null)
+  const trigger = controlled?.returnTo ?? ownTrigger
   const menuId = useId()
   const sessions = useOutsideSessions(open)
   const close = useMenu(open, setOpen, root, trigger)
@@ -186,19 +198,21 @@ export function RoomSwitcher({
 
   return (
     <span className="bold-room-switch-wrap" ref={root}>
-      <button
-        ref={trigger}
-        type="button"
-        className="roomtitle"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {current?.name ?? 'Team room'}
-        {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
-        <ChevronIcon />
-      </button>
+      {!controlled && (
+        <button
+          ref={trigger}
+          type="button"
+          className="roomtitle"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          onClick={() => setOpen(!open)}
+        >
+          {current?.name ?? 'Team room'}
+          {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
+          <ChevronIcon />
+        </button>
+      )}
       {open && (
         <div
           className="menu bold-room-switch"
@@ -1048,20 +1062,28 @@ export function RoomMenu({
   room,
   onShare,
   onDelete,
+  onOtherRooms,
+  triggerRef,
 }: {
   room: Room
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
+  /** Desktop: opens the list of older, imported and elsewhere chats (the title no longer has a switcher). */
+  onOtherRooms?: () => void
+  /** Lets the room switcher return focus to this button when it closes. */
+  triggerRef?: RefObject<HTMLButtonElement | null>
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
   useMenuPlacement(root, open)
-  const trigger = useRef<HTMLButtonElement>(null)
+  const ownTrigger = useRef<HTMLButtonElement>(null)
+  const trigger = triggerRef ?? ownTrigger
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
   // `team` = any team room (the lead and members live here); `everyone` = the first one, which can't be changed.
   const team = room.role === 'team'
   const everyone = isEveryoneRoom(room)
+  const showDeleted = useShowDeleted(room.id)
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
   const workspaces = useSharedWorkspaces(open)
   const workspaceName =
@@ -1102,6 +1124,19 @@ export function RoomMenu({
           data-protected="flex"
           onKeyDown={moveInMenu}
         >
+          {onOtherRooms && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                onOtherRooms()
+              }}
+            >
+              Older, imported and elsewhere chats…
+            </button>
+          )}
           {!everyone && (
             <>
               <button
@@ -1197,6 +1232,18 @@ export function RoomMenu({
           >
             Export as JSON
           </a>
+          <button
+            type="button"
+            className="mi"
+            role="menuitemcheckbox"
+            aria-checked={showDeleted}
+            onClick={() => {
+              close(false)
+              setShowDeleted(room.id, !showDeleted)
+            }}
+          >
+            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
+          </button>
           <button
             type="button"
             className="mi"
@@ -1477,6 +1524,8 @@ export function RoomTitle({
   onDelete: (room: Room) => void
 }) {
   const startJob = useStartJob()
+  const [otherRooms, setOtherRooms] = useState(false)
+  const roomMenuButton = useRef<HTMLButtonElement>(null)
   if (phone && current && !phoneList) {
     return (
       <ChatPhoneBar
@@ -1538,6 +1587,10 @@ export function RoomTitle({
     <div className="roomhead bold-chat-bar">
       <div className="bold-chat-bar-id">
         <div className="bold-chat-bar-name">
+          <h1 className="roomtitle bold-chat-title">
+            {current?.name ?? 'Team room'}
+            {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
+          </h1>
           <RoomSwitcher
             current={current}
             teamRoom={teamRoom}
@@ -1546,13 +1599,22 @@ export function RoomTitle({
             agents={agents}
             onSelectRoom={onSelectRoom}
             onOpenElsewhere={onOpenElsewhere}
+            controlled={{ open: otherRooms, setOpen: setOtherRooms, returnTo: roomMenuButton }}
           />
           <ArchivedBadge room={current} />
         </div>
         {current && chatMeta?.(current)}
       </div>
       <span className="bold-room-grow" aria-hidden="true" />
-      {current && <RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
+      {current && (
+        <RoomMenu
+          room={current}
+          onShare={onShare}
+          onDelete={onDelete}
+          onOtherRooms={() => setOtherRooms(true)}
+          triggerRef={roomMenuButton}
+        />
+      )}
       {current?.role === 'team' && (
         <button
           type="button"

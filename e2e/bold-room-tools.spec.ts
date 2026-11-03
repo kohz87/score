@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { openRoomPicker } from './bold-room-fixtures.ts'
 import { openBoldRoomById } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 import { makeRoom } from './rooms.ts'
@@ -72,18 +73,14 @@ for (const viewport of sizes) {
     await expect(page.getByRole('button', { name: 'Unarchive' })).toBeVisible()
     // The open archived room stays reachable from its own switcher (desktop; the phone chat has no switcher).
     if (!phone) {
-      await page.locator('.roomtitle').click()
       await expect(
-        page
-          .getByRole('listbox', { name: 'Rooms and chats elsewhere' })
-          .getByRole('option', { name: new RegExp(`#${renamed}`) }),
+        (await openRoomPicker(page)).getByRole('option', { name: new RegExp(`#${renamed}`) }),
       ).toBeVisible()
       await page.keyboard.press('Escape')
     }
     // 3.21.0: a phone has the room switcher on the job list.
     await page.goto(phone ? '/b?jobs=1' : '/b?open=1')
-    await page.locator('.roomtitle').click()
-    const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
+    const picker = await openRoomPicker(page)
     await expect(picker).toBeVisible()
     await expect(picker.getByRole('option', { name: new RegExp(`#${renamed}`) })).toHaveCount(0)
     await picker.getByRole('option', { name: /Show archived/ }).click()
@@ -96,7 +93,10 @@ for (const viewport of sizes) {
     const made = await makeRoom(page, 'emptied')
     await openBoldRoomById(page, made.id)
     // Nothing was deleted, so a fresh room offers no toggle on its starter board.
-    await expect(page.getByRole('button', { name: /deleted messages/ })).toHaveCount(phone ? 1 : 0)
+    // 3.22.0: the toggle is not on the board any more; it is always in the room menu.
+    await expect(page.getByRole('button', { name: /deleted messages/ })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Room menu' }).click()
+    await expect(page.getByRole('menuitemcheckbox', { name: /deleted messages/ })).toBeVisible()
   })
 
   test(`Recent runs filters by outcome and shows each run's cost at ${at}`, async ({ page }) => {

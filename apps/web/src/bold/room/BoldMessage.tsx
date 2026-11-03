@@ -77,6 +77,7 @@ export function buildMessageNodes({
   onlyJobId,
   renderMessage,
   notes,
+  usedMarkers,
 }: {
   items: Message[]
   versions: RoomVersion[]
@@ -92,13 +93,15 @@ export function buildMessageNodes({
    * line shows once; `tail` says whether the lines after the last message go here (the stream's final run).
    */
   notes?: { items: { id: string; at: string; node: ReactNode }[]; used: Set<string>; tail: boolean }
+  /** Shared by the runs of one stream (topics) so a deleted-messages block shows once, not once per run. */
+  usedMarkers?: Set<string>
 }): { nodes: ReactNode[]; branched: boolean } {
   const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
   const effective = anchor ? branch : null
   const nodes: ReactNode[] = []
   const markers = showDeleted
     ? versions
-        .filter((version) => version.mode === 'delete')
+        .filter((version) => version.mode === 'delete' && !usedMarkers?.has(version.id))
         .sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
     : []
   let marker = 0
@@ -115,6 +118,7 @@ export function buildMessageNodes({
     flushNotes(until)
     while (markers[marker] && (until === null || markers[marker]!.anchorCreatedAt <= until)) {
       const version = markers[marker++]!
+      usedMarkers?.add(version.id)
       nodes.push(
         <DeletedBlock
           key={`deleted-${version.id}`}
@@ -158,7 +162,8 @@ export function buildMessageNodes({
       ),
     )
   }
-  flush(null)
+  // A run that is not the stream's last leaves later markers and notes to the runs after it.
+  if (!notes || notes.tail) flush(null)
   return { nodes, branched: effective !== null }
 }
 
@@ -176,6 +181,7 @@ export function BoldMessage({
   canRetry = false,
   replyGroup,
   onEdit,
+  extraActions,
   children,
 }: {
   message: Message
@@ -196,7 +202,9 @@ export function BoldMessage({
   replyGroup?: ReplyGroupParts | undefined
   /** Runs after Edit hands the message to the composer (the phone sheet closes so the composer can be used). */
   onEdit?: () => void
-  /** Extra rows that belong to the message (the one-to-one's share row). */
+  /** Extra buttons at the end of the action row (a one-to-one's Share to the team room). */
+  extraActions?: ReactNode
+  /** Extra rows that belong to the message (the one-to-one's share menu). */
   children?: ReactNode
 }) {
   const [copied, setCopied] = useState(false)
@@ -391,6 +399,7 @@ export function BoldMessage({
               Delete
             </button>
           )}
+          {extraActions}
         </div>
       )}
       {saving &&

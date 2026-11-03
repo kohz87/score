@@ -414,11 +414,6 @@
     border-left: 1px solid var(--line);
   }
 
-  /* A one-to-one is the chat itself: it takes the centre and the panel's width, the group's column steps aside. */
-  [data-ui='bold'] .roomgrid.bold-direct-chat > .roomcol {
-    display: none;
-  }
-
   /* The composer: a 26px box with a hairline and a 44px send circle. */
   [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room {
     border: 1px solid var(--line);
@@ -477,6 +472,16 @@
     margin: 0;
   }
 
+  /* 3.22.0: the Info sheet keeps its section headings (Members, Workspace, This topic, Topics); only the list hides them. */
+  [data-ui='bold'] .bold-chat-info .bold-chat-kicker {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    margin: 14px 0 6px;
+  }
+
   [data-ui='bold'] .bold-chat-row,
   [data-ui='bold'] .bold-chat-row.direct {
     padding: 10px;
@@ -518,4 +523,277 @@
   [data-ui='bold'] .bold-chat-phone-bar {
     display: none;
   }
+}
+
+/* 3.22.0 stage 2: the three columns run edge to edge under the top bar, as board 18 draws them. List 300-340px (rail
+   72px), the chat takes the rest with its content in a centred 860px column, Info is a flat 300px column. */
+@media (min-width: 861px) {
+  [data-ui='bold'] .main:has(> .roomgrid.bold-chats) {
+    padding: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats {
+    gap: 0;
+    align-items: stretch;
+  }
+
+  [data-ui='bold'] .bold-chat-list {
+    flex: 1 1 300px;
+    max-width: 340px;
+    width: auto;
+  }
+
+  [data-ui='bold'] .bold-chat-list.rail {
+    flex: 0 0 72px;
+    max-width: 72px;
+    width: 72px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol,
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .roomcol {
+    flex: 999 1 560px;
+    max-width: none;
+    min-width: 0;
+    gap: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .bold-chat-bar {
+    padding: 14px 24px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .bold-sidecol {
+    flex: 0 0 300px;
+    width: 300px;
+  }
+
+  /* Results and the Workbench widen the panel only while chosen. */
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .bold-sidecol {
+    flex: 0 0 480px;
+    width: 480px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats .side {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    border-left: 1px solid var(--line);
+    min-height: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
+    padding-inline: 24px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .stream {
+    padding-block: 22px;
+  }
+}
+
+/* A topic starts with a hairline divider (board 18): "Topic · title · state". */
+[data-ui='bold'] .bold-topic-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-topic-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-topic-text strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-topic-state.is-working,
+[data-ui='bold'] .bold-topic-state.is-open {
+  /* The bold scope has no link token; the violet name tint is readable in both looks (the pale fallback was 1.7:1 on light). */
+  color: var(--agent-violet-name);
+}
+
+[data-ui='bold'] .bold-topic-state.is-done {
+  color: var(--ok);
+}
+
+/* What a command changed: one quiet centred line in the flow. */
+[data-ui='bold'] .bold-system-line {
+  margin: 6px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The / palette opens above the composer in the layout flow, not over the messages. */
+[data-ui='bold'] .bold-room-composer .chat-menu {
+  position: static;
+  width: auto;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-room-composer .chat-menu button .chat-menu-command {
+  min-width: 150px;
+}
+
+/* The context bar under the composer. */
+[data-ui='bold'] .bold-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-context-bar strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-bar code {
+  font-family: var(--font-c, 'JetBrains Mono', monospace);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-context-track {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-context-track > span {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-spacer {
+  flex: 1;
+}
+
+/* Info | Results as pill tabs (board 18's Info | Graph). */
+[data-ui='bold'] .bold-side-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-side-tabs button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-side-tabs button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-top-links,
+[data-ui='bold'] .top .word,
+[data-ui='bold'] .bold-avatar,
+[data-ui='bold'] .bold-terminal-btn {
+  flex-shrink: 0;
+}
+[data-ui='bold'] .bold-top-links {
+  flex-shrink: 1;
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-room-composer {
+    padding-bottom: 16px;
+  }
+}
+
+/* Info › This topic (3.22.0): the old thread panel's status, run, report-back and tasks, compact for a 300px column. */
+[data-ui='bold'] .bold-topic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-topic-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-d);
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-topic-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe,
+[data-ui='bold'] .bold-topic-info .bold-thread-tasks {
+  margin: 0;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head > b {
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-stop-confirm {
+  padding: 12px 14px;
+}
+
+/* 3.22.0 review: the bar's meter is the context meter's trigger (its popover holds the breakdown and Compact). */
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger {
+  min-height: 28px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:hover {
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The bar's meter sits on the left: its popover opens up and to the right, inside the screen. */
+[data-ui='bold'] .bold-context-bar .chat-ctx-panel {
+  right: auto;
+  left: 0;
 }

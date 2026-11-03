@@ -27,7 +27,8 @@ test('an older room opens with its history, an enabled composer, a disabled Send
   const asked = `Where are we with pagination ${Date.now()}`
   await say(page, made.id, asked)
   await openBoldRoomById(page, made.id)
-  await expect(page.getByRole('button', { name: new RegExp(`^${made.label}`) })).toBeVisible()
+  // 3.22.0: the chat header is the plain name (an <h1>), no longer a switcher button.
+  await expect(page.locator('.roomtitle')).toContainText(made.label)
   await expect(streamOf(page).getByText(asked).first()).toBeAttached({ timeout: 15_000 })
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
   await page.setViewportSize({ width: 360, height: 800 })
@@ -117,12 +118,33 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   await composer.fill('/')
   const commands = page.getByRole('listbox', { name: 'Commands' })
   // /remember and /skill are not offered (501); /compress and /usage are the composer's own (PLAN 5.25).
-  await expect(commands.getByRole('option')).toHaveCount(5)
+  // 3.22.0: the palette also lists the topic and chat commands (/new, /rename, /done, /reopen, /lead, /add, /remove,
+  // /workspace); the five existing ones are all still there.
+  for (const name of ['/assign', '/model', '/usage', '/compress'])
+    await expect(commands.getByRole('option', { name: new RegExp(`^${name}\\b`) })).toHaveCount(1)
+  for (const name of [
+    '/new',
+    '/rename',
+    '/done',
+    '/reopen',
+    '/lead',
+    '/add',
+    '/remove',
+    '/workspace',
+  ])
+    await expect(commands.getByRole('option', { name: new RegExp(`^${name}\\b`) })).toHaveCount(1)
+  await expect(commands.getByRole('option', { name: /^\/(remember|skill)\b/ })).toHaveCount(0)
   // 3.7.8 (owner): every option is inside the list's box, not cut off after the first row.
   const box = (await commands.boundingBox())!
-  const last = (await commands.getByRole('option').last().boundingBox())!
+  const lastOption = commands.getByRole('option').last()
+  const last = (await lastOption.boundingBox())!
   expect(box.height).toBeGreaterThan(4 * last.height)
-  expect(last.y + last.height).toBeLessThanOrEqual(box.y + box.height + 1)
+  // 3.22.0: with thirteen commands the list scrolls; the last one is inside the box once scrolled to.
+  await lastOption.scrollIntoViewIfNeeded()
+  const scrolled = (await lastOption.boundingBox())!
+  const view = (await commands.boundingBox())!
+  expect(scrolled.y + scrolled.height).toBeLessThanOrEqual(view.y + view.height + 1)
+  expect(scrolled.y).toBeGreaterThanOrEqual(view.y - 1)
   await composer.press('Enter')
   await expect(composer).toHaveValue('/assign ')
   await composer.pressSequentially('@bu')
@@ -283,7 +305,9 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await page.reload()
   await expect(composerOf(page)).toBeEnabled({ timeout: 15_000 })
   await expect(mine).toHaveCount(0)
-  await page.getByRole('button', { name: 'Show deleted messages' }).click()
+  // 3.22.0: "Show deleted messages" is in the room menu.
+  await page.getByRole('button', { name: 'Room menu' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
   const previous = page.getByRole('region', { name: 'Deleted messages' }).last()
   const old = previous.getByRole('article', { name: /Message from You/ }).filter({ hasText: text })
   await expect(old).toBeVisible()

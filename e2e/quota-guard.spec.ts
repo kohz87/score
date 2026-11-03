@@ -115,7 +115,7 @@ test.describe('a step held for a low limit', () => {
   }) => {
     const { answers } = await serveHeldRun(page)
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/b?run=brief-orch-1')
+    await page.goto('/b/recipes?run=brief-orch-1')
     // The decision is on the Steps tab (2.5.0), the diagram on the Graph tab.
     const card = page.getByRole('region', { name: 'reviewer’s limit is low' })
     await expect(card).toBeVisible()

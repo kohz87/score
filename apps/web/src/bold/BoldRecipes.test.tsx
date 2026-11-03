@@ -137,7 +137,7 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   const status = await within(dialog).findByLabelText('Runs of this recipe')
   expect(status.textContent).toContain('1 run going')
   expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
-    /^\/b\?run=brief-/,
+    /^\/b\/recipes\?run=brief-/,
   )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() =>
@@ -551,7 +551,7 @@ test('the editor draws a run of the version on screen over the canvas, and links
     within(live.closest('p')!)
       .getByRole('link', { name: /Open the run/ })
       .getAttribute('href'),
-  ).toBe('/b?run=brief-wfrun-1')
+  ).toBe('/b/recipes?run=brief-wfrun-1')
   // The gate of the running run waits for you; the steps before it are done. The draft is untouched.
   expect(
     await screen.findByRole('button', { name: /Gate Approve the draft.*needs you/ }),
@@ -678,4 +678,11 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
   } finally {
     fixtures['/api/workflows'] = original
   }
+})
+
+// The run links (`?run=`) now land on the Recipes page, so the page itself must show a run's list rather than the recipes.
+test('/b/recipes?run= shows the list of runs instead of the recipes', async () => {
+  mount('/b/recipes?run=')
+  expect(await screen.findByRole('list', { name: 'Runs' })).toBeDefined()
+  expect(screen.queryByRole('navigation', { name: 'Recipes' })).toBeNull()
 })

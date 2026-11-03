@@ -55,7 +55,8 @@ export function boldNoteLink(path: string): string {
 
 /** 2.5.0 Runs: open a run (by its brief id) in the side panel's Runs view. */
 export function boldRunLink(briefId: string): string {
-  return boldQuery({ run: briefId })
+  // 3.22.0: a run opens on the Recipes page (the side panel is chat info only).
+  return `/b/recipes?run=${encodeURIComponent(briefId)}`
 }
 
 /** 11.10c Start a job: open its dialog, optionally with a saved recipe already chosen (2.8.0). */

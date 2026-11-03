@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { mockBoldRoom, openBoldJob } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
-// PLAN 11.4c: a job's thread in the bold side panel. The seeded fake room moves over time, so the contract-shaped
+// PLAN 11.4c, moved in 3.22.0: the thread panel is gone. Its parts live in Info › This topic (status, rounds and turns,
+// Stop, run card, report-back, tasks), on the needs-you card (a paused exchange, step in) and in the chat itself. The seeded fake room moves over time, so the contract-shaped
 // reads are pinned to fixtures (as in bold-room.spec.ts); the shell, pairing and request validation stay real.
 test.use({ reducedMotion: 'reduce' })
 
@@ -90,6 +91,14 @@ async function openThread(
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
     if (request.method() === 'GET' && path === '/api/rooms/team-room/messages') {
+      // 3.22.0: the chat reads every topic in one list; this fixture's thread messages are the Activity feed's.
+      if (url.searchParams.get('all') === '1')
+        return json({
+          asOfSeq: 12,
+          items: [...activityMessages].reverse(),
+          nextCursor: null,
+          jobId: null,
+        })
       if (url.searchParams.get('jobId') === 'job-activity')
         return json({
           asOfSeq: 12,
@@ -162,6 +171,11 @@ async function openThread(
         return json({ ok: true })
       }
     }
+    // The decision POST comes back without the exchange leaving its pause (as bold-room.spec.ts does).
+    if (request.method() === 'POST' && /^\/api\/exchanges\/[^/]+\/decision$/.test(path)) {
+      posts.push({ path, body: JSON.parse(request.postData() ?? 'null') })
+      return json({ ok: true })
+    }
     const handled = options.handle?.(path, request.method())
     if (handled) return json(handled.body, handled.status)
     return route.fallback()
@@ -171,9 +185,14 @@ async function openThread(
   return { ...state, posts }
 }
 
-async function openJobThread(page: Page, title: RegExp) {
+/** Makes the topic current and returns Info's "This topic" section (on a phone Info is the Chat info sheet). */
+async function openTopicInfo(page: Page, title: RegExp) {
   await openBoldJob(page, title)
-  await page.locator('.bold-job-thread').click()
+  if ((page.viewportSize()?.width ?? 1440) <= 860)
+    await page.getByRole('button', { name: 'Chat info' }).click()
+  const section = page.locator('.bold-topic-info')
+  await expect(section).toBeVisible()
+  return section
 }
 
 const recipeRoom = {
@@ -233,6 +252,31 @@ const orchestration = {
   endedAt: null,
 }
 
+function budgetPause(turnsUsed: number, reason: 'exchange_budget' | 'job_limit') {
+  return {
+    id: 'exchange-notes',
+    jobId: 'job-notes',
+    roomId: 'team-room',
+    kind: 'ask',
+    parentId: null,
+    from: 'lead',
+    to: 'reviewer',
+    state: 'paused_budget',
+    round: 1,
+    turnsUsed,
+    budget: 8,
+    outcome: null,
+    endedReason: null,
+    pause: {
+      reason,
+      options: reason === 'job_limit' ? ['more_turns', 'stop'] : ['more_turns', 'step_in', 'stop'],
+    },
+    queuedBehind: null,
+    createdAt: at(8),
+    updatedAt: at(9),
+  }
+}
+
 for (const viewport of sizes) {
   const size = `${viewport.width}×${viewport.height}`
   test.describe(size, () => {
@@ -240,62 +284,26 @@ for (const viewport of sizes) {
       await page.setViewportSize(viewport)
     })
 
-    test(`a live job's thread shows rounds, turns, step-in, compact and stop at ${size}`, async ({
-      page,
-    }) => {
+    test(`a live topic shows its status, turns and Stop in Info at ${size}`, async ({ page }) => {
       const state = await openThread(page)
-      await openJobThread(page, /Activity feed/)
+      const topic = await openTopicInfo(page, /Activity feed/)
 
-      const thread = page.locator('.bold-thread')
-      await expect(thread.getByRole('heading', { name: 'Activity feed', level: 2 })).toBeVisible()
-      await expect(thread.locator('.bold-thread-status').first()).toContainText('5 of 8 turns used')
-      await expect(thread.getByRole('heading', { name: 'Round 1' })).toBeVisible()
-      await expect(thread.getByRole('heading', { name: 'Round 2' })).toBeVisible()
-      await expect(thread).toContainText('The cursor jumps on refresh.')
-      await expect(thread).toContainText('Cursor is stable now.')
-      // Round 2 starts after the send-back, so the fix sits under it and the first cut under Round 1.
-      await expect(
-        page.getByRole('region', { name: 'Round 1 messages' }).getByText('The cursor jumps'),
-      ).toBeVisible()
-      await expect(
-        page.getByRole('region', { name: 'Round 2 messages' }).getByText('Cursor is stable now.'),
-      ).toBeVisible()
-
-      // No exchange waits on the person, so no decision card shows.
-      await expect(page.locator('.bold-thread .bold-request')).toHaveCount(0)
-
-      // Step in: an ordinary message to the job.
-      await page.getByLabel('Step in', { exact: true }).fill('Also cover the empty state.')
-      await page.getByRole('button', { name: 'Send step-in' }).click()
-      await expect(page.getByRole('status').filter({ hasText: 'Message sent.' })).toBeVisible()
-      expect(
-        state.requests.some(
-          (item) =>
-            item.method === 'POST' &&
-            item.path === '/api/rooms/team-room/messages' &&
-            JSON.stringify(item.body) ===
-              JSON.stringify({ text: 'Also cover the empty state.', jobId: 'job-activity' }),
-        ),
-      ).toBe(true)
-
-      // Compact asks the job's own session.
-      await page.getByRole('button', { name: /builder context: 42 %/ }).click()
-      await page.getByRole('button', { name: 'Compact', exact: true }).click()
-      await page.getByRole('button', { name: 'Compact now' }).click()
-      await expect
-        .poll(() => state.posts.filter((item) => item.path.endsWith('/compact')).length)
-        .toBe(1)
-      // The ring toggles the popover; Escape would also close the phone sheet.
-      await page.getByRole('button', { name: /builder context: 42 %/ }).click()
+      await expect(topic.getByText('Activity feed', { exact: true }).first()).toBeVisible()
+      await expect(topic.locator('.bold-topic-status')).toContainText('5 of 8 turns used')
+      // No exchange waits on the person, so no needs-you pill shows.
+      await expect(topic.locator('.bold-topic-status [data-protected]')).toHaveCount(0)
+      // The topic's messages are in the one conversation (the rounds headings of the old panel are gone).
+      await expect(page.getByText('The cursor jumps on refresh.')).toBeVisible()
+      await expect(page.getByText('Cursor is stable now.')).toBeVisible()
 
       // Stop asks first, and the confirmation is a protected surface.
-      await page.getByRole('button', { name: 'Stop', exact: true }).click()
+      await topic.getByRole('button', { name: 'Stop', exact: true }).click()
       const confirm = page.getByRole('alertdialog', { name: 'Stop Activity feed?' })
       await expect(confirm).toHaveAttribute('data-protected', 'block')
       await confirm.getByRole('button', { name: 'Keep going' }).click()
       await expect(confirm).toHaveCount(0)
       expect(state.posts.some((item) => item.path === '/api/jobs/job-activity/stop')).toBe(false)
-      await page.getByRole('button', { name: 'Stop', exact: true }).click()
+      await topic.getByRole('button', { name: 'Stop', exact: true }).click()
       await page.getByRole('button', { name: 'Stop job' }).click()
       await expect(page.getByRole('status').filter({ hasText: 'Stop sent.' })).toBeVisible()
       expect(
@@ -307,7 +315,7 @@ for (const viewport of sizes) {
       )
     })
 
-    test(`a thread message has the action row and delete works at ${size}`, async ({ page }) => {
+    test(`a topic's messages have the action row and delete works at ${size}`, async ({ page }) => {
       const deletes: string[] = []
       await openThread(page, {
         handle: (path, method) => {
@@ -318,19 +326,19 @@ for (const viewport of sizes) {
           return undefined
         },
       })
-      await openJobThread(page, /Activity feed/)
-      const own = page.locator('.bold-thread-message[data-message-id="t-1"]')
+      await openBoldJob(page, /Activity feed/)
+      const own = page.locator('[data-message-id="t-1"]')
       await own.hover()
       await expect(own.getByRole('button', { name: 'Edit message from You' })).toBeVisible()
       await expect(own.getByRole('button', { name: 'Copy message from You' })).toBeVisible()
       await expect(own.getByRole('button', { name: 'Pin message from You' })).toBeVisible()
-      const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
+      const reply = page.locator('[data-message-id="t-2"]')
       await reply.hover()
       await expect(
         reply.getByRole('button', { name: 'Try another reply from builder' }),
       ).toBeVisible()
       // A later agent message in the same run of replies answers the person too.
-      const later = page.locator('.bold-thread-message[data-message-id="t-4"]')
+      const later = page.locator('[data-message-id="t-4"]')
       await later.hover()
       await expect(later.getByRole('button', { name: /^Try another reply/ })).toHaveCount(1)
 
@@ -342,26 +350,23 @@ for (const viewport of sizes) {
       await expect
         .poll(() => deletes, { timeout: 15_000 })
         .toEqual(['/api/rooms/team-room/messages/t-2'])
-      // On a phone Edit closes the sheet so the team-room composer, which holds the message now, can be used.
       await own.hover()
       await own.getByRole('button', { name: 'Edit message from You' }).click()
-      if (viewport.width <= 860) {
-        await expect(page.locator('.bold-sidecol')).toBeHidden()
-        await expect(page.locator('.bold-room-composer textarea')).toBeFocused()
-      }
+      await expect(page.locator('.bold-room-composer textarea')).toBeFocused()
       await expect(page.getByText('Editing your message')).toBeVisible()
     })
 
-    test(`a paused exchange is answered from the thread at ${size}`, async ({ page }) => {
+    test(`a paused exchange is answered from its needs-you card at ${size}`, async ({ page }) => {
       const state = await openThread(page)
-      await openJobThread(page, /Release notes 2\.4/)
+      const topic = await openTopicInfo(page, /Release notes 2\.4/)
+      // The pause is also named in Info: the protected Needs you pill.
+      await expect(topic.locator('.bold-topic-status [data-protected]')).toBeVisible()
+      if (viewport.width <= 860)
+        await page.getByRole('button', { name: 'Close side panel' }).click()
 
-      const thread = page.locator('.bold-thread')
-      await expect(
-        thread.getByRole('heading', { name: 'Release notes 2.4', level: 2 }),
-      ).toBeVisible()
-      const card = thread.locator('.bold-request[data-protected]')
-      await expect(card).toHaveCount(1)
+      const card = page.getByRole('article', { name: /The review ended without a verdict/ })
+      await expect(card).toHaveAttribute('data-protected', 'flex')
+      await card.scrollIntoViewIfNeeded()
       await expect(card).toContainText('8 of 8')
       await card.getByRole('button', { name: /Send back/ }).click()
       await card.getByLabel('Note for the author').fill('Tighten the migration steps.')
@@ -371,9 +376,8 @@ for (const viewport of sizes) {
         .click()
       await expect(card).toContainText('Sent back with your note.')
       expect(
-        state.requests.some(
+        state.posts.some(
           (item) =>
-            item.method === 'POST' &&
             item.path === '/api/exchanges/exchange-notes/decision' &&
             JSON.stringify(item.body) ===
               JSON.stringify({ option: 'send_back', note: 'Tighten the migration steps.' }),
@@ -381,39 +385,21 @@ for (const viewport of sizes) {
       ).toBe(true)
     })
 
-    test(`the step-in box answers a budget pause with step_in at ${size}`, async ({ page }) => {
-      const state = await openThread(page, {
-        exchange: {
-          id: 'exchange-notes',
-          jobId: 'job-notes',
-          roomId: 'team-room',
-          kind: 'ask',
-          parentId: null,
-          from: 'lead',
-          to: 'reviewer',
-          state: 'paused_budget',
-          round: 1,
-          turnsUsed: 8,
-          budget: 8,
-          outcome: null,
-          endedReason: null,
-          pause: { reason: 'exchange_budget', options: ['more_turns', 'step_in', 'stop'] },
-          queuedBehind: null,
-          createdAt: at(8),
-          updatedAt: at(9),
-        },
-      })
-      await openJobThread(page, /Release notes 2\.4/)
-      await expect(
-        page.locator('.bold-thread .bold-status, .bold-thread-status').first(),
-      ).toContainText('8 of 8 turns used')
-      await page.getByLabel('Step in', { exact: true }).fill('Go on with the short version.')
-      await page.getByRole('button', { name: 'Send step-in' }).click()
-      await expect(page.getByRole('status').filter({ hasText: 'Step in sent.' })).toBeVisible()
+    test(`the card's Step in answers a budget pause with step_in at ${size}`, async ({ page }) => {
+      const state = await openThread(page, { exchange: budgetPause(8, 'exchange_budget') })
+      const topic = await openTopicInfo(page, /Release notes 2\.4/)
+      await expect(topic.locator('.bold-topic-status')).toContainText('8 of 8 turns used')
+      if (viewport.width <= 860)
+        await page.getByRole('button', { name: 'Close side panel' }).click()
+      const card = page.getByRole('article', { name: /The exchange used its turns/ })
+      await card.scrollIntoViewIfNeeded()
+      await card.getByRole('button', { name: 'Step in', exact: true }).click()
+      await card.getByLabel('What should happen next?').fill('Go on with the short version.')
+      await card.getByRole('button', { name: 'Step in', exact: true }).click()
+      await expect(card.getByRole('status')).toContainText('Decision sent.')
       expect(
-        state.requests.some(
+        state.posts.some(
           (item) =>
-            item.method === 'POST' &&
             item.path === '/api/exchanges/exchange-notes/decision' &&
             JSON.stringify(item.body) ===
               JSON.stringify({ option: 'step_in', text: 'Go on with the short version.' }),
@@ -421,7 +407,7 @@ for (const viewport of sizes) {
       ).toBe(true)
     })
 
-    test(`a job with a recipe shows its run card with the step count at ${size}`, async ({
+    test(`a topic with a recipe shows its run card with the step count at ${size}`, async ({
       page,
     }) => {
       await pair(page)
@@ -434,7 +420,8 @@ for (const viewport of sizes) {
         }),
       ]
       await page.route('**/api/**', async (route) => {
-        const path = new URL(route.request().url()).pathname
+        const url = new URL(route.request().url())
+        const path = url.pathname
         const json = (body: unknown) =>
           route.fulfill({
             status: 200,
@@ -448,23 +435,28 @@ for (const viewport of sizes) {
         if (path === '/api/orchestrations') return json({ asOfSeq: 12, items: [orchestration] })
         if (/^\/api\/jobs\/[^/]+\/exchanges$/.test(path)) return json({ asOfSeq: 12, items: [] })
         if (path === '/api/rooms/team-room/messages')
-          return json({ asOfSeq: 12, items: [], nextCursor: null, jobId: 'job-plan' })
+          return json({
+            asOfSeq: 12,
+            items: [],
+            nextCursor: null,
+            jobId: url.searchParams.get('all') === '1' ? null : 'job-plan',
+          })
         return route.fallback()
       })
       await page.goto('/b?open=1')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
-      await openJobThread(page, /Activity feed plan/)
+      await openTopicInfo(page, /Activity feed plan/)
       const card = page.getByRole('region', { name: 'Recipe run' })
       await expect(card).toContainText('Orchestration')
       await expect(card).toContainText('Activity feed plan')
       await expect(card).toContainText('2 of 4 steps done')
       await expect(card.getByRole('link', { name: 'Open the run' })).toHaveAttribute(
         'href',
-        /\/b\?run=brief-activity$/,
+        /\/b\/recipes\?run=brief-activity$/,
       )
     })
 
-    test(`the thread shows report-back, sends it, and lists Hermes tasks at ${size}`, async ({
+    test(`Info shows report-back, sends it, and lists Hermes tasks at ${size}`, async ({
       page,
     }) => {
       const state = await openThread(page, {
@@ -487,8 +479,7 @@ for (const viewport of sizes) {
           },
         ],
       })
-      await openJobThread(page, /Activity feed/)
-      const thread = page.locator('.bold-thread')
+      const thread = await openTopicInfo(page, /Activity feed/)
       const report = thread
         .getByRole('status')
         .filter({ hasText: 'Send the result back to TCK-142' })
@@ -498,7 +489,7 @@ for (const viewport of sizes) {
         .poll(() => state.posts.some((item) => item.path === '/api/jobs/job-activity/report-back'))
         .toBe(true)
 
-      const tasks = thread.getByRole('region', { name: 'Room tasks' })
+      const tasks = thread.getByRole('region', { name: 'Hermes tasks' })
       await expect(tasks).toContainText('Fix the login timeout')
       await expect(tasks).toContainText('OPS-9')
       await expect(tasks).toContainText('not tied to a job yet')
@@ -516,7 +507,9 @@ for (const viewport of sizes) {
       ).toEqual({ action: 'comment', text: 'Check the staging logs.' })
     })
 
-    test(`the default job's thread uses the room session at ${size}`, async ({ page }) => {
+    test(`the general conversation's context bar uses the room session at ${size}`, async ({
+      page,
+    }) => {
       await pair(page)
       await mockBoldRoom(page)
       const asked: string[] = []
@@ -540,58 +533,41 @@ for (const viewport of sizes) {
       })
       await page.goto('/b?job=job-default')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
-      if (viewport.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
-      await page.locator('button.side-toggle').click()
-      await page.getByRole('button', { name: /^Thread/ }).click()
-      await expect(page.getByRole('button', { name: /lead context: 10 %/ })).toBeVisible()
+      // 3.22.0: the meter is in the context bar under the composer (the thread panel's ring is gone; /compress is its
+      // Compact). It reads the session the message lands in: the room session for the general conversation.
+      const meter = page
+        .locator('.bold-context-bar')
+        .getByRole('button', { name: /^lead context: 10 % of 100k/ })
+      await expect(meter).toBeVisible()
+      await expect(meter).toContainText('10%')
       expect(asked.length).toBeGreaterThan(0)
       expect(
         asked.every((path) => path === '/api/agents/lead/sessions/score-team-room-lead/context'),
       ).toBe(true)
     })
 
-    test(`a job-limit pause says so in the header at ${size}`, async ({ page }) => {
-      await openThread(page, {
-        exchange: {
-          id: 'exchange-notes',
-          jobId: 'job-notes',
-          roomId: 'team-room',
-          kind: 'ask',
-          parentId: null,
-          from: 'lead',
-          to: 'reviewer',
-          state: 'paused_budget',
-          round: 1,
-          turnsUsed: 3,
-          budget: 8,
-          outcome: null,
-          endedReason: null,
-          pause: { reason: 'job_limit', options: ['more_turns', 'stop'] },
-          queuedBehind: null,
-          createdAt: at(8),
-          updatedAt: at(9),
-        },
-      })
-      await openJobThread(page, /Release notes 2\.4/)
-      await expect(page.locator('.bold-thread-status').first()).toContainText(
-        'Job turn limit reached (40)',
-      )
-      await expect(page.locator('.bold-thread-status').first()).not.toContainText('3 of 8')
+    test(`a job-limit pause says so in Info at ${size}`, async ({ page }) => {
+      await openThread(page, { exchange: budgetPause(3, 'job_limit') })
+      const topic = await openTopicInfo(page, /Release notes 2\.4/)
+      await expect(topic.locator('.bold-topic-status')).toContainText('Job turn limit reached (40)')
+      await expect(topic.locator('.bold-topic-status')).not.toContainText('3 of 8')
     })
 
-    test(`a 403 on the step-in box asks to pair this browser at ${size}`, async ({ page }) => {
-      await openThread(page)
-      await page.route('**/api/rooms/team-room/messages', async (route) => {
-        if (route.request().method() !== 'POST') return route.fallback()
-        return route.fulfill({
+    test(`a 403 on the card's Step in asks to pair this browser at ${size}`, async ({ page }) => {
+      await openThread(page, { exchange: budgetPause(8, 'exchange_budget') })
+      await page.route('**/api/exchanges/exchange-notes/decision', async (route) =>
+        route.fulfill({
           status: 403,
           contentType: 'application/json',
           body: JSON.stringify({ error: { code: 'forbidden', message: 'no' } }),
-        })
-      })
-      await openJobThread(page, /Activity feed/)
-      await page.getByLabel('Step in', { exact: true }).fill('Hello')
-      await page.getByRole('button', { name: 'Send step-in' }).click()
+        }),
+      )
+      await openBoldJob(page, /Release notes 2\.4/)
+      const card = page.getByRole('article', { name: /The exchange used its turns/ })
+      await card.scrollIntoViewIfNeeded()
+      await card.getByRole('button', { name: 'Step in', exact: true }).click()
+      await card.getByLabel('What should happen next?').fill('Hello')
+      await card.getByRole('button', { name: 'Step in', exact: true }).click()
       await expect(
         page.getByRole('alert').filter({ hasText: 'Pair this browser first.' }),
       ).toBeVisible()
