@@ -167,6 +167,25 @@ export function chatAddress(entry: Pick<ChatEntry, 'kind' | 'id' | 'everyone'>, 
   return `/b?room=${encodeURIComponent(entry.id)}`
 }
 
+/** The chat and topic a run belongs to (a job whose recipe ref is the run), or null when no loaded job links to it. */
+export function chatForRun(
+  lists: ChatLists,
+  jobsByRoom: Record<string, Job[]>,
+  runId: string,
+): string | null {
+  for (const entry of [...lists.groups, ...lists.directs]) {
+    if (!entry.room) continue
+    const job = (jobsByRoom[entry.room.id] ?? []).find((item) => item.recipe?.ref === runId)
+    if (!job) continue
+    if (entry.kind === 'direct')
+      return `/b?with=${encodeURIComponent(entry.id)}&chat=${encodeURIComponent(job.id)}`
+    return entry.everyone
+      ? `/b?job=${encodeURIComponent(job.id)}`
+      : `/b?room=${encodeURIComponent(entry.id)}&job=${encodeURIComponent(job.id)}`
+  }
+  return null
+}
+
 /** On a phone `/b` is the list; any of these says a chat (or one of its views) is open. */
 const OPEN_PARAMS = [
   'with',

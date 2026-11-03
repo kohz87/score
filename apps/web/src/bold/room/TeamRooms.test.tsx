@@ -10,6 +10,7 @@ import {
   mockFetch,
   renderInRoom,
   room as firstTeam,
+  openOtherRooms,
 } from './room-test-utils.tsx'
 
 afterEach(() => {
@@ -73,7 +74,7 @@ function title(current: Room, onSelectRoom: (room: Room) => void = () => undefin
 test('the switcher lists the first team room, then the teams, then New team…', async () => {
   stub([everyone, chosen])
   title(everyone)
-  fireEvent.click(await screen.findByRole('button', { name: /Team room/ }))
+  await openOtherRooms()
   const list = await screen.findByRole('listbox')
   await waitFor(() => expect(within(list).getByText('Review crew')).toBeDefined())
   const names = within(list)
@@ -87,7 +88,7 @@ test('choosing a team selects that room', async () => {
   stub([everyone, chosen])
   const onSelectRoom = vi.fn()
   title(everyone, onSelectRoom)
-  fireEvent.click(await screen.findByRole('button', { name: /Team room/ }))
+  await openOtherRooms()
   fireEvent.click(await screen.findByRole('option', { name: /Review crew/ }))
   expect(onSelectRoom).toHaveBeenCalledWith(expect.objectContaining({ id: 'team-2' }))
 })
@@ -96,7 +97,7 @@ test('New team… makes a team from the checked agents and a lead among them, th
   const calls = stub([everyone])
   const onSelectRoom = vi.fn()
   title(everyone, onSelectRoom)
-  fireEvent.click(await screen.findByRole('button', { name: /Team room/ }))
+  await openOtherRooms()
   fireEvent.click(await screen.findByRole('option', { name: /New team…/ }))
   const dialog = await screen.findByRole('dialog', { name: 'New team' })
   expect(dialog.getAttribute('data-protected')).toBe('any')

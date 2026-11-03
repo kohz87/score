@@ -128,6 +128,7 @@ export function RoomSwitcher({
   agents,
   onSelectRoom,
   onOpenElsewhere,
+  controlled,
 }: {
   current: Room | null
   teamRoom: Room | null
@@ -136,8 +137,12 @@ export function RoomSwitcher({
   agents: AgentSummary[]
   onSelectRoom: (room: Room) => void
   onOpenElsewhere: (session: OutsideSession) => void
+  /** The desktop header has no caret: the room ⋯ menu opens this list (older, imported and elsewhere chats). */
+  controlled?: { open: boolean; setOpen: (open: boolean) => void }
 }) {
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlled ? controlled.open : ownOpen
+  const setOpen = controlled ? controlled.setOpen : setOwnOpen
   const root = useRef<HTMLSpanElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
@@ -187,19 +192,21 @@ export function RoomSwitcher({
 
   return (
     <span className="bold-room-switch-wrap" ref={root}>
-      <button
-        ref={trigger}
-        type="button"
-        className="roomtitle"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {current?.name ?? 'Team room'}
-        {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
-        <ChevronIcon />
-      </button>
+      {!controlled && (
+        <button
+          ref={trigger}
+          type="button"
+          className="roomtitle"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          onClick={() => setOpen(!open)}
+        >
+          {current?.name ?? 'Team room'}
+          {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
+          <ChevronIcon />
+        </button>
+      )}
       {open && (
         <div
           className="menu bold-room-switch"
@@ -1049,10 +1056,13 @@ export function RoomMenu({
   room,
   onShare,
   onDelete,
+  onOtherRooms,
 }: {
   room: Room
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
+  /** Desktop: opens the list of older, imported and elsewhere chats (the title no longer has a switcher). */
+  onOtherRooms?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
@@ -1104,6 +1114,19 @@ export function RoomMenu({
           data-protected="flex"
           onKeyDown={moveInMenu}
         >
+          {onOtherRooms && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                onOtherRooms()
+              }}
+            >
+              Older, imported and elsewhere chats…
+            </button>
+          )}
           {!everyone && (
             <>
               <button
@@ -1491,6 +1514,7 @@ export function RoomTitle({
   onDelete: (room: Room) => void
 }) {
   const startJob = useStartJob()
+  const [otherRooms, setOtherRooms] = useState(false)
   if (phone && current && !phoneList) {
     return (
       <ChatPhoneBar
@@ -1552,6 +1576,10 @@ export function RoomTitle({
     <div className="roomhead bold-chat-bar">
       <div className="bold-chat-bar-id">
         <div className="bold-chat-bar-name">
+          <h1 className="roomtitle bold-chat-title">
+            {current?.name ?? 'Team room'}
+            {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
+          </h1>
           <RoomSwitcher
             current={current}
             teamRoom={teamRoom}
@@ -1560,13 +1588,21 @@ export function RoomTitle({
             agents={agents}
             onSelectRoom={onSelectRoom}
             onOpenElsewhere={onOpenElsewhere}
+            controlled={{ open: otherRooms, setOpen: setOtherRooms }}
           />
           <ArchivedBadge room={current} />
         </div>
         {current && chatMeta?.(current)}
       </div>
       <span className="bold-room-grow" aria-hidden="true" />
-      {current && <RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
+      {current && (
+        <RoomMenu
+          room={current}
+          onShare={onShare}
+          onDelete={onDelete}
+          onOtherRooms={() => setOtherRooms(true)}
+        />
+      )}
       {current?.role === 'team' && (
         <button
           type="button"

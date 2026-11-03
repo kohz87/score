@@ -4,6 +4,7 @@ import {
   activityLabel,
   buildChatLists,
   chatAddress,
+  chatForRun,
   chatIsOpen,
   filterEntries,
   isChatGroup,
@@ -124,4 +125,30 @@ test('the row time is the clock today, a weekday this week, else the date', () =
   expect(activityLabel(new Date(2026, 10, 3, 9, 40).toISOString(), now)).toMatch(/^09[:.]40$/)
   expect(activityLabel(new Date(2026, 10, 1, 9, 40).toISOString(), now)).toMatch(/^\p{L}+\.?$/u)
   expect(activityLabel(new Date(2026, 9, 20, 9, 40).toISOString(), now)).toMatch(/\d/)
+})
+
+test('a run opens at the chat and topic whose job links to it, else nowhere (the Recipes page keeps it)', () => {
+  const recipe = (ref: string) => ({ recipe: { kind: 'workflow' as const, ref } })
+  const lists = buildChatLists({
+    rooms: [room('feed')],
+    teamRooms: [room('team', { role: 'team', name: 'Team room' })],
+    directRooms: [room('d-lead', { kind: 'direct', members: ['lead'] })],
+    agents: [agent('lead')],
+    jobsByRoom: {
+      team: [job('job-t', 'team', '2026-11-01T10:00:00.000Z', recipe('run-team'))],
+      feed: [job('job-f', 'feed', '2026-11-01T10:00:00.000Z', recipe('run-feed'))],
+      'd-lead': [job('job-d', 'd-lead', '2026-11-01T10:00:00.000Z', recipe('run-direct'))],
+    },
+    approvals: [],
+    questions: [],
+  })
+  const jobs = {
+    team: [job('job-t', 'team', '', recipe('run-team'))],
+    feed: [job('job-f', 'feed', '', recipe('run-feed'))],
+    'd-lead': [job('job-d', 'd-lead', '', recipe('run-direct'))],
+  } as Record<string, Job[]>
+  expect(chatForRun(lists, jobs, 'run-team')).toBe('/b?job=job-t')
+  expect(chatForRun(lists, jobs, 'run-feed')).toBe('/b?room=feed&job=job-f')
+  expect(chatForRun(lists, jobs, 'run-direct')).toBe('/b?with=lead&chat=job-d')
+  expect(chatForRun(lists, jobs, 'run-unknown')).toBeNull()
 })

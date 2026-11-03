@@ -27,6 +27,7 @@ import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
 import { ChatInfo } from './chats/ChatInfo.tsx'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
 import { chatIsOpen } from './chats/chat-model.ts'
+import { chatForRun } from './chats/chat-model.ts'
 import { useChatLists, useOpenGroup } from './chats/chat-queries.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
 
@@ -157,7 +158,6 @@ export function BoldRoom() {
         next.delete('message')
         next.delete('work')
         next.delete('file')
-        setMode('work')
         if (phone) setSheetOpen(false)
         // Same history state as the team room's own handler, so whichever runs last leaves the same entry.
         setParams(next, { replace: true, state: location.state })
@@ -179,9 +179,12 @@ export function BoldRoom() {
       if (notePath) target.set('note', notePath)
       void navigate(`/b/knowledge${target.size ? `?${target}` : ''}`, { replace: true })
     } else if (runId) {
-      void navigate(`/b/recipes?run=${encodeURIComponent(runId)}`, { replace: true })
+      // Wait for the chats' jobs: a run that belongs to a chat opens there, otherwise on the Recipes page.
+      if (!chatLists.ready || !chatLists.jobsSettled) return
+      const chat = chatForRun(chatLists, chatLists.jobsByRoom, runId)
+      void navigate(chat ?? `/b/recipes?run=${encodeURIComponent(runId)}`, { replace: true })
     }
-  }, [libraryOpen, navigate, notePath, runId])
+  }, [chatLists, libraryOpen, navigate, notePath, runId])
 
   const withoutDirect = (next: URLSearchParams) => {
     next.delete('with')

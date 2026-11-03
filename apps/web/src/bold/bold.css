@@ -342,6 +342,11 @@
   cursor: pointer;
 }
 
+[data-ui='bold'] .bold-chat-title {
+  margin: 0;
+  cursor: default;
+}
+
 [data-ui='bold'] .bold-room-kind {
   font-family: var(--font-b);
   font-size: 12px;

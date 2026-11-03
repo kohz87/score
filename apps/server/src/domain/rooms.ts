@@ -754,6 +754,25 @@ export function messagePage(
   return { items, nextCursor, jobId: job || null }
 }
 
+/** Jobs of the room that still hold an unread agent message older than `boundary` (a page's oldest message). */
+export function jobsUnreadBefore(
+  sqlite: DatabaseSync,
+  roomId: string,
+  boundary: { createdAt: string; id: string },
+): Set<string> {
+  const rows = sqlite
+    .prepare(
+      `SELECT DISTINCT m.job_id AS job_id FROM messages m
+      JOIN jobs j ON j.id = m.job_id AND j.deleted_at IS NULL
+      LEFT JOIN job_reads r ON r.job_id = m.job_id
+    WHERE m.room_id = ? AND m.author_kind = 'agent' AND m.deleted_at IS NULL AND
+      (m.created_at, m.id) < (?, ?) AND
+      (r.job_id IS NULL OR (m.created_at, m.id) > (r.last_read_message_created_at, r.last_read_message_id))`,
+    )
+    .all(roomId, boundary.createdAt, boundary.id) as { job_id: string }[]
+  return new Set(rows.map((row) => row.job_id))
+}
+
 export function markRoomRead(
   sqlite: DatabaseSync,
   roomId: string,

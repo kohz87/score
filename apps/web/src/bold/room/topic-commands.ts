@@ -1,8 +1,11 @@
+import type { QueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { JobSchema, RoomSchema, type AgentSummary, type Job, type Room } from '@score/contract'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import type { SlashCommand } from '../../routes/chat/composer-model.ts'
-import { agentDisplayName } from '../bold-agents.ts'
+import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
+import { changeCachedJob } from './room-queries.ts'
 import { setRoomWorkspace, useSharedWorkspaces } from '../workspaces-queries.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
@@ -38,12 +41,14 @@ function problem(error: unknown): Error {
   return new Error('That didn’t work. Try again.')
 }
 
-function findAgent(agents: AgentSummary[], word: string): AgentSummary {
+function findAgent(agents: AgentSummary[], word: string, needsToTalk: boolean): AgentSummary {
   const key = word.replace(/^@/, '').toLowerCase()
   const agent = agents.find(
     (item) => item.id.toLowerCase() === key || item.name.toLowerCase() === key,
   )
   if (!agent) throw new Error(`There is no agent called ${word}. Type @ to pick one.`)
+  if (needsToTalk && !canTalkTo(agent))
+    throw new Error(`${agentDisplayName(agent)} can’t take messages right now.`)
   return agent
 }
 
@@ -54,6 +59,8 @@ export type TopicCommandContext = {
   /** The topic the composer sends to: picked, else the newest open one, else the general conversation. */
   current: Job | undefined
   workspaces: { id: string; name: string }[]
+  /** A started, closed or reopened topic goes into the cached job list before it is picked. */
+  queryClient: QueryClient
   /** Makes a topic the current one (the address names it). */
   pick: (jobId: string | null) => void
   /** A small line in the stream for what changed. */
@@ -75,6 +82,7 @@ export async function runTopicCommand(
       const job = JobSchema.parse(
         await post(`rooms/${encodeURIComponent(room.id)}/jobs`, { title: title.slice(0, 200) }),
       )
+      changeCachedJob(ctx.queryClient, job, 'upsert')
       pick(job.id)
       say(`You started the topic “${job.title}”`)
     } else if (name === 'rename') {
@@ -91,7 +99,8 @@ export async function runTopicCommand(
       say(`You renamed the topic “${topic.title}” to “${job.title}”`)
     } else if (name === 'done') {
       if (!topic) throw new Error('There is no open topic to close.')
-      await post(`jobs/${encodeURIComponent(topic.id)}/close`)
+      const closed = JobSchema.parse(await post(`jobs/${encodeURIComponent(topic.id)}/close`))
+      changeCachedJob(ctx.queryClient, closed, 'upsert')
       pick(null)
       say(`You closed the topic “${topic.title}”`)
     } else if (name === 'reopen') {
@@ -102,13 +111,14 @@ export async function runTopicCommand(
               .filter((job) => !job.isDefault && (job.state === 'done' || job.state === 'closed'))
               .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
       if (!target) throw new Error('No finished topic to reopen.')
-      await post(`jobs/${encodeURIComponent(target.id)}/reopen`)
-      pick(target.id)
+      const reopened = JobSchema.parse(await post(`jobs/${encodeURIComponent(target.id)}/reopen`))
+      changeCachedJob(ctx.queryClient, reopened, 'upsert')
+      pick(reopened.id)
       say(`You reopened the topic “${target.title}”`)
     } else if (name === 'lead' || name === 'add' || name === 'remove') {
       const word = args.trim().split(/\s+/)[0] ?? ''
       if (!word) throw new Error(`Say who: /${name} @agent`)
-      const agent = findAgent(agents, word)
+      const agent = findAgent(agents, word, name !== 'remove')
       const who = agentDisplayName(agent)
       let body: object
       let line: string
@@ -123,6 +133,8 @@ export async function runTopicCommand(
         line = `You added ${who}`
       } else {
         if (!room.members.includes(agent.id)) throw new Error(`${who} isn’t in this chat.`)
+        if (room.members.length <= 1)
+          throw new Error(`${who} is the only one in this chat. A chat needs at least one member.`)
         if (room.leadAgentId === agent.id)
           throw new Error(`${who} is the owner. Make someone else the owner first with /lead.`)
         body = { members: room.members.filter((id) => id !== agent.id) }
@@ -159,10 +171,12 @@ export async function runTopicCommand(
 }
 
 /** The hook the room uses: the palette items and a runner bound to the open chat. */
-export function useTopicCommands(ctx: Omit<TopicCommandContext, 'workspaces'>) {
+export function useTopicCommands(ctx: Omit<TopicCommandContext, 'workspaces' | 'queryClient'>) {
   const workspaces = useSharedWorkspaces().data ?? []
+  const queryClient = useQueryClient()
   return {
     items: TOPIC_COMMANDS,
-    run: (name: string, args: string) => runTopicCommand(name, args, { ...ctx, workspaces }),
+    run: (name: string, args: string) =>
+      runTopicCommand(name, args, { ...ctx, workspaces, queryClient }),
   }
 }

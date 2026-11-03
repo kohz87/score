@@ -1,16 +1,20 @@
+import { QueryClient } from '@tanstack/react-query'
 import type { AgentSummary, Room } from '@score/contract'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { roomJobsQuery } from './room-queries.ts'
 import { agents, makeJob, room } from './room-test-utils.tsx'
 import { runTopicCommand, TOPIC_COMMANDS, type TopicCommandContext } from './topic-commands.ts'
 
 type Call = { path: string; method: string; body: unknown }
 let calls: Call[]
+let queryClient: QueryClient
 let said: string[]
 let picked: (string | null)[]
 let respond: (call: Call) => unknown
 
 beforeEach(() => {
   calls = []
+  queryClient = new QueryClient()
   said = []
   picked = []
   respond = () => ({})
@@ -43,6 +47,7 @@ function context(over: Partial<TopicCommandContext> = {}): TopicCommandContext {
     jobs: [general, feed],
     current: feed,
     workspaces: [{ id: 'ws-1', name: 'Docs' }],
+    queryClient,
     pick: (jobId) => picked.push(jobId),
     say: (text) => said.push(text),
     ...over,
@@ -82,6 +87,23 @@ test('/new creates a topic in this chat, makes it current and says so', async ()
   expect(said).toEqual(['You started the topic “Fix login”'])
 })
 
+test('/new puts the topic in the cached job list before it is picked, so a send posts to it', async () => {
+  const created = makeJob({ id: 'job-new', title: 'Fix login' })
+  respond = () => created
+  queryClient.setQueryData(roomJobsQuery(room.id).key, { asOfSeq: 1, data: [general] })
+  let cached: string[] = []
+  await run('new', 'Fix login', {
+    pick: (jobId) => {
+      picked.push(jobId)
+      cached = (
+        queryClient.getQueryData(roomJobsQuery(room.id).key) as { data: { id: string }[] }
+      ).data.map((job) => job.id)
+    },
+  })
+  expect(picked).toEqual(['job-new'])
+  expect(cached).toContain('job-new')
+})
+
 test('/new without a title asks for one and sends nothing', async () => {
   await expect(run('new', '  ')).rejects.toThrow('Give the topic a title: /new <title>')
   expect(calls).toHaveLength(0)
@@ -108,6 +130,7 @@ test('/rename needs an open topic and a title', async () => {
 })
 
 test('/done closes the current topic and leaves the choice to the newest open one', async () => {
+  respond = () => makeJob({ id: 'job-feed', title: 'Activity feed', state: 'closed' })
   await run('done', '')
   expect(calls[0]).toMatchObject({ path: '/api/jobs/job-feed/close', method: 'POST' })
   expect(picked).toEqual([null])
@@ -119,6 +142,7 @@ test('/done closes the current topic and leaves the choice to the newest open on
 
 test('/reopen reopens the current finished topic, else the latest finished one', async () => {
   const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
+  respond = () => ({ ...closed, state: 'open' })
   await run('reopen', '', { current: closed, jobs: [general, feed, closed] })
   expect(calls[0]).toMatchObject({ path: '/api/jobs/job-closed/reopen', method: 'POST' })
   expect(picked).toEqual(['job-closed'])
@@ -137,6 +161,7 @@ test('/reopen reopens the current finished topic, else the latest finished one',
     state: 'done',
     updatedAt: '2026-10-22T09:00:00.000Z',
   })
+  respond = () => ({ ...newer, state: 'open' })
   await run('reopen', '', { jobs: [general, feed, older, newer] })
   expect(calls[0]!.path).toBe('/api/jobs/job-done-2/reopen')
 
@@ -171,6 +196,22 @@ test('/lead, /add and /remove explain what cannot be done and send nothing', asy
   await expect(run('add', '@builder')).rejects.toThrow('builder is already in this chat')
   await expect(run('remove', '@reviewer')).rejects.toThrow('reviewer isn’t in this chat')
   await expect(run('remove', '@lead')).rejects.toThrow('lead is the owner')
+  expect(calls).toHaveLength(0)
+})
+
+test('/remove refuses the last member, and /add and /lead skip agents that cannot take messages', async () => {
+  const solo: Room = { ...chat, members: ['builder'], leadAgentId: 'lead' }
+  await expect(run('remove', '@builder', { room: solo })).rejects.toThrow('only one in this chat')
+  const setup: AgentSummary[] = roster.map((agent) =>
+    agent.id === 'reviewer'
+      ? ({ ...agent, lifecycle: { state: 'setting-up' } } as unknown as AgentSummary)
+      : agent,
+  )
+  await expect(run('add', '@reviewer', { agents: setup })).rejects.toThrow('can’t take messages')
+  const inRoom: Room = { ...chat, members: ['lead', 'builder', 'reviewer'] }
+  await expect(run('lead', '@reviewer', { agents: setup, room: inRoom })).rejects.toThrow(
+    'can’t take messages',
+  )
   expect(calls).toHaveLength(0)
 })
 

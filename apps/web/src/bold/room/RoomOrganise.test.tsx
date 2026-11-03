@@ -8,6 +8,7 @@ import {
   mockFetch,
   renderInRoom,
   room as teamRoom,
+  openOtherRooms,
 } from './room-test-utils.tsx'
 import { RoomTitle } from './RoomMenus.tsx'
 
@@ -74,7 +75,7 @@ test('the switcher lists pinned first, groups by project and keeps archived room
     older('room-d', '#delta', { archived: true }),
   ]
   setup(rooms, [project], rooms[0]!)
-  fireEvent.click(await screen.findByRole('button', { name: /alpha/ }))
+  await openOtherRooms()
   const list = await screen.findByRole('listbox')
   await waitFor(() => expect(within(list).getByText('Launch')).toBeDefined())
   const names = within(list)
@@ -176,7 +177,7 @@ test('an archived room that is open stays in the switcher and offers Unarchive i
   const b = older('room-b', '#beta', { archived: true })
   const { calls } = setup([b, older('room-a', '#alpha')], [], b)
   expect(await screen.findByText('Archived')).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: /beta/ }))
+  await openOtherRooms()
   const list = await screen.findByRole('listbox')
   expect(within(list).getByRole('option', { name: /#beta/ })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }))

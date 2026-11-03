@@ -340,9 +340,9 @@ test('/b draws the frame and the dock', async () => {
   expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Agents' })).toBeDefined()
-  const roomTitle = screen.getByRole('button', { name: 'Team room' })
-  expect(roomTitle.getAttribute('aria-haspopup')).toBe('listbox')
-  expect(roomTitle.getAttribute('aria-expanded')).toBe('false')
+  // The title has no switcher: the chat list switches chats, and the room menu keeps the older ones.
+  expect(screen.getByRole('heading', { name: 'Team room' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Team room' })).toBeNull()
 
   const dock = screen.getByRole('group', { name: /Your team/ })
   expect(within(dock).queryByText('Rings show progress')).toBeNull()

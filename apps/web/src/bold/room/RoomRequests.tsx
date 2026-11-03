@@ -10,6 +10,7 @@ import type {
 } from '@score/contract'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { cardsBelow } from './pins-overflow.ts'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -638,6 +639,8 @@ export function RoomRequests({
   const approvals = useStreamQuery(approvalsQuery).data ?? []
   const pins = usePinRegistry()
   const heading = useRef<HTMLHeadingElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState<{ count: number; scrollTo: number } | null>(null)
   const focusedKey = useRef<string | null>(null)
   const lastCards = useRef<typeof pins.cards>([])
   const lastVisible = useRef<string[]>([])
@@ -703,6 +706,35 @@ export function RoomRequests({
     lastVisible.current = visible
   }, [pins.cards])
 
+  // The pinned box scrolls on a short screen: say so at its bottom edge when a card (and its buttons) is out of view.
+  useEffect(() => {
+    const element = box.current
+    if (!element) return
+    const measure = () => {
+      const top = element.getBoundingClientRect().top
+      const cards = [...element.querySelectorAll<HTMLElement>('[data-pin-key]')].map((card) => {
+        const rect = card.getBoundingClientRect()
+        return {
+          top: rect.top - top + element.scrollTop,
+          bottom: rect.bottom - top + element.scrollTop,
+        }
+      })
+      const next = cardsBelow(element, cards)
+      setMore((previous) =>
+        previous?.count === next?.count && previous?.scrollTo === next?.scrollTo ? previous : next,
+      )
+    }
+    measure()
+    element.addEventListener('scroll', measure, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(element)
+    for (const child of element.children) observer?.observe(child)
+    return () => {
+      element.removeEventListener('scroll', measure)
+      observer?.disconnect()
+    }
+  }, [total, pins.cards])
+
   return (
     <PinsProvider value={pins.value}>
       {/* The status node stays mounted at zero so its first 0 → 1 change is announced. */}
@@ -716,6 +748,7 @@ export function RoomRequests({
       {total > 0 && (
         <div
           id="bold-pins"
+          ref={box}
           className="bold-pins"
           role="region"
           aria-label="Needs you"
@@ -742,6 +775,18 @@ export function RoomRequests({
           <RoomReportBacks roomId={roomId} jobs={jobs} />
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />
           <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
+          {more && (
+            <div className="bold-pins-fade">
+              <button
+                type="button"
+                className="bold-pins-more"
+                data-protected="inline-flex"
+                onClick={() => box.current?.scrollTo({ top: more.scrollTo, behavior: 'smooth' })}
+              >
+                {more.count} more below ↓
+              </button>
+            </div>
+          )}
         </div>
       )}
     </PinsProvider>

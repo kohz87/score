@@ -31,6 +31,7 @@ import {
   clearDirectThread,
   freeRoomName,
   insertRoom,
+  jobsUnreadBefore,
   markRoomRead,
   messageFromRow,
   messagePage,
@@ -489,10 +490,16 @@ export function registerRoomRoutes(
     }
     // An all-jobs read acknowledges each job up to its newest settled message in the page (reading a chat reads its topics).
     const newest = readTarget(items)
+    // A job whose older unread messages fell outside this page stays unread: the page didn't show them.
+    const oldest = items.at(-1)
+    const unreadOutside =
+      all && page.data.nextCursor && oldest
+        ? db.read((sqlite) => jobsUnreadBefore(sqlite, roomId, oldest))
+        : new Set<string>()
     const newestPerJob = all
       ? [...Map.groupBy(items, (item) => item.jobId ?? '').values()].flatMap((list) => {
           const target = readTarget(list)
-          return target ? [target] : []
+          return target && !unreadOutside.has(target.jobId ?? '') ? [target] : []
         })
       : []
     if (!before)

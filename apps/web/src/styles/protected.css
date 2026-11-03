@@ -115,6 +115,11 @@
       0 0 0 2px #ececf1,
       0 0 0 4px #12131a !important;
   }
+  /* 3.22.0: the "N more below" cue at the bottom of the scrolling needs-you box is a light object of Score's own. */
+  html[data-look='custom'] .bold-pins-more[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */

@@ -126,6 +126,30 @@
   border-radius: calc(22px * var(--bold-r, 1));
 }
 
+/* The cue at the bottom edge of the scrolling pinned box: it sticks while the cards scroll under its fade. */
+[data-ui='bold'] .bold-pins-fade {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 18px;
+  margin-top: -18px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bg) 70%);
+}
+
+[data-ui='bold'] .bold-pins-more {
+  pointer-events: auto;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #ececf1;
+  color: #12131a;
+  font-size: 12px;
+  font-weight: 700;
+  align-items: center;
+}
+
 [data-ui='bold'] .bold-pins:empty {
   display: none;
 }

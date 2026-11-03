@@ -11,6 +11,7 @@ import {
   mockFetch,
   renderInRoom,
   room,
+  openOtherRooms,
 } from './room-test-utils.tsx'
 import { BoldTeamRoom } from './BoldTeamRoom.tsx'
 import { JobUndoToast } from './JobUndoToast.tsx'
@@ -319,7 +320,7 @@ test('an imported room is listed under Imported chats, not as an older room', as
   stubRoom([makeJob()], { imported: true })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
 
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  await openOtherRooms()
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
   expect(picker.textContent).toContain('Imported chats')
   expect(picker.textContent).toContain('Imported from Telegram · read-write')
@@ -330,7 +331,7 @@ test('the room dropdown closes when Tab moves focus outside it', async () => {
   stubRoom([makeJob()], { older: true })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
 
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  await openOtherRooms()
   await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
   await waitFor(() =>
     expect(screen.getByRole('option', { name: /Team room/ })).toBe(document.activeElement),
@@ -390,10 +391,10 @@ test('an imported room opens read-write and sends through the normal room route'
   vi.stubGlobal('fetch', fetchMock)
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
 
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  await openOtherRooms()
   fireEvent.click(await screen.findByRole('option', { name: /#telegram-plan/ }))
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: /^#telegram-plan #imported/ })).toBeDefined(),
+    expect(screen.getByRole('heading', { name: /^#telegram-plan #imported/ })).toBeDefined(),
   )
   const composer = await screen.findByRole('combobox', { name: /^Message #telegram-plan/ })
   fireEvent.change(composer, { target: { value: '@builder Continue here?' } })
@@ -418,7 +419,7 @@ test('Elsewhere lists the agents’ own sessions as read-only chats to open', as
   const opened = vi.fn()
   renderInRoom(<BoldTeamRoom agents={agents} onOpenElsewhere={opened} />, ['/b'])
 
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  await openOtherRooms()
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
   expect(picker.textContent).toContain('Elsewhere · the agents’ own chats outside Score')
   const row = await screen.findByRole('option', { name: /Plan the launch checklist/ })
@@ -1267,4 +1268,27 @@ test('a failing chat command shows its reason under the composer and keeps what 
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect(await screen.findByText(/There is no agent called @nobody/)).toBeDefined()
   expect(composer.value).toBe('/add @nobody')
+})
+
+test('with ?job= set and the topics still loading, the composer is held rather than posting to the general conversation', async () => {
+  const inner = stubRoom([], { older: true })
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes('/api/rooms/room-old/jobs')
+      ? gate.then(() => inner(input, init))
+      : inner(input, init),
+  )
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?room=room-old&job=job-old'])
+  const held = (await screen.findByRole(
+    'combobox',
+    { name: /^Message #activity-feed/ },
+    { timeout: 4000 },
+  )) as HTMLTextAreaElement
+  expect(held.disabled).toBe(true)
+  expect(held.placeholder).toBe('Loading the topic…')
+  release()
+  await waitFor(() => expect(held.disabled).toBe(false), { timeout: 4000 })
 })

@@ -117,6 +117,7 @@ export function Composer({
   roomMode = false,
   toLabel,
   placeholder,
+  hold,
   messagesKey,
   initialText,
   references = [],
@@ -154,6 +155,8 @@ export function Composer({
   /** The room composer's fixed To chip ("To: new job" or "To: <job title>"). */
   toLabel?: string
   placeholder?: string
+  /** Holds the composer (typing and sending off) with this reason as its placeholder, e.g. while the topic loads. */
+  hold?: string
   /** The live message page the composer sends into; defaults to the classic room's default-job thread. */
   messagesKey?: QueryKey
   /** Text to load once on mount, taking precedence over the stored draft (the bold room's command hand-off). */
@@ -555,7 +558,7 @@ export function Composer({
     const body = text.trim()
     // Reopen resends through the closure captured before the failed send; only that retry may bypass its stale
     // `pending` flag (the request it belonged to has already failed).
-    if (!body || (pending && !force) || uploading) return
+    if (!body || hold || (pending && !force) || uploading) return
     const orchestration =
       orchestrate && !editing ? /^\/orchestrate(?:\s+([\s\S]*))?$/i.exec(body) : null
     if (orchestrate && orchestration) {
@@ -1052,7 +1055,8 @@ export function Composer({
           rows={lines}
           value={text}
           aria-describedby={roomMode && !footer ? `${ids}-hint` : undefined}
-          placeholder={placeholder ?? (roomMode ? 'Message the team…' : 'Write a message…')}
+          disabled={Boolean(hold)}
+          placeholder={hold ?? placeholder ?? (roomMode ? 'Message the team…' : 'Write a message…')}
           role="combobox"
           aria-expanded={menu !== null && count > 0}
           aria-controls={`${ids}-menu`}
@@ -1411,7 +1415,7 @@ export function Composer({
               <button
                 type="submit"
                 className="chat-send"
-                disabled={!text.trim() || pending || uploading > 0}
+                disabled={!text.trim() || Boolean(hold) || pending || uploading > 0}
               >
                 {roomMode ? (
                   <>
