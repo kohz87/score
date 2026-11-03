@@ -216,6 +216,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'wf_tokens',
     'workflow_definitions',
     'workflow_versions',
+    'workspace_agents',
+    'workspaces',
   ])
   expect(
     db.sqlite

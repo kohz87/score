@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workspaces</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 820px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; box-sizing: border-box; padding: 28px 24px 40px">
+<div style="max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #9AA0AD">Settings ›</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 30px; font-weight: 700">Workspaces</h1>
+<p style="margin: 0; color: #9AA0AD; max-width: 640px">A workspace is a folder your agents can work in. Tick who may use each one; an agent can be in several. A chat picks the workspace its agents work in.</p>
+</div>
+<button type="button" style="min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-weight: 700">New workspace</button>
+</div>
+<sc-for list="{{spaces}}" as="w" hint-placeholder-count="3">
+<section aria-label="{{w.name}}" style="background: #1A1C23; border-radius: 26px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<h2 style="margin: 0; font-size: 19px; font-weight: 700">{{w.name}}</h2>
+<code style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9AA0AD">{{w.path}}</code>
+</div>
+<span style="font-size: 13px; color: #9AA0AD">{{w.used}}</span>
+</div>
+<div role="group" aria-label="Agents who may work here" style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{w.agents}}" as="a" hint-placeholder-count="5">
+<button type="button" onClick="{{a.toggle}}" aria-pressed="{{a.on}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: #ECEEF2; font-weight: 600; font-size: 14px">
+<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="{{a.path}}" fill="{{a.color}}"></path></svg>{{a.name}}<span aria-hidden="true" style="color: {{a.tick}}">{{a.mark}}</span>
+</button>
+</sc-for>
+</div>
+</section>
+</sc-for>
+<p style="margin: 0; font-size: 13px; color: #9AA0AD">Coding agents (sonnet55 here) work in the chat’s workspace when they’re ticked for it; otherwise in their own folder.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":820}}'>
+const AG = [
+  ['lead', 'M12 2l9 5v10l-9 5-9-5V7z', '#A893F7'], ['builder', 'M3 3h18v18H3z', '#F5A35B'],
+  ['reviewer', 'M12 2a10 10 0 1 0 0.01 0z', '#4FC8D1'], ['designer', 'M12 2l10 19H2z', '#F28AC0'],
+  ['sonnet55', 'M3 3h18v18H3z', '#7DB8FF'],
+];
+const SPACES = [
+  { id: 'feed', name: 'activity-feed', path: '~/code/activity-feed', used: 'Used by 2 chats' },
+  { id: 'billing', name: 'billing-export', path: '~/code/billing-export', used: 'Used by 1 chat' },
+  { id: 'notes', name: 'team-notes', path: '~/Documents/team-notes', used: 'Not used by a chat yet' },
+];
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { on: { feed: ['lead', 'builder', 'reviewer', 'designer', 'sonnet55'], billing: ['lead', 'builder', 'sonnet55'], notes: ['lead', 'designer'] } };
+  }
+  renderVals() {
+    const on = this.state.on;
+    return {
+      spaces: SPACES.map((s) => ({
+        ...s,
+        agents: AG.map(([name, path, color]) => {
+          const yes = on[s.id].includes(name);
+          return {
+            name, path, color, on: yes, mark: yes ? '✓' : '+',
+            tick: yes ? '#4FD1A5' : '#7C8291', bg: yes ? '#22252E' : 'transparent', border: yes ? '#4FD1A5' : '#3A3E4A',
+            toggle: () => this.setState({ on: { ...on, [s.id]: yes ? on[s.id].filter((n) => n !== name) : [...on[s.id], name] } }),
+          };
+        }),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

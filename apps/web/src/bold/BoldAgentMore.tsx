@@ -102,6 +102,7 @@ export function BoldAgentMore({
             agentId={agent.id}
             agentName={agent.name}
             initialPath={files.path}
+            canSetFolder={false}
             key={files.path ?? ''}
           />
         </section>

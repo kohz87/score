@@ -106,12 +106,13 @@ function open(path = '/b/settings') {
   return router
 }
 
-test('the prototype Settings nav has nine sections, opens Usage and selects a section', async () => {
+test('the Settings nav has the prototype sections plus Workspaces, opens Usage and selects a section', async () => {
   const router = open('/b/settings')
   expect(await screen.findByRole('heading', { name: 'Usage' })).toBeDefined()
   const nav = screen.getByRole('navigation', { name: 'Settings' })
   const labels = [
     'Connections',
+    'Workspaces',
     'Tools and triggers',
     'Rules',
     'Notifications',

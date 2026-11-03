@@ -16,6 +16,7 @@ import type {
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
+import { roomWorkspacePathFor } from '../../domain/workspaces.ts'
 import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { HttpError } from '../../errors.ts'
 import { runDraft, type StopOutcome } from '../../hermes/index.ts'
@@ -787,6 +788,23 @@ export class CodingRuntime {
     })
   }
 
+  private roomOf(turnId: string): string | null {
+    const row = this.deps.db.sqlite
+      .prepare('SELECT room_id FROM message_runs WHERE turn_id = ?')
+      .get(turnId) as { room_id: string } | undefined
+    return row?.room_id ?? null
+  }
+
+  /**
+   * 3.20.0 (shared workspaces): the folder a chat turn of this agent works in. The room's workspace when the room has one
+   * AND this agent is assigned to it, else the agent's own folder. It only names a folder: both callers (admission and
+   * launch) run the result through `checkRoot`, so a coding agent never starts in a folder that failed the root policy.
+   */
+  private workspaceFor(agent: StoredCodingAgent, roomId: string | null): string {
+    if (roomId === null) return agent.workspace
+    return roomWorkspacePathFor(this.deps.db.sqlite, roomId, agent.id) ?? agent.workspace
+  }
+
   private jobOf(turnId: string): string | null {
     const row = this.deps.db.sqlite
       .prepare('SELECT job_id FROM message_runs WHERE turn_id = ?')
@@ -873,7 +891,9 @@ export class CodingRuntime {
         notice: refusal.notice,
         cause: refusal.cause,
       })
-    const checked = await checkRoot(agent.workspace, this.deps.policy)
+    // The room's shared workspace (3.20.0) unless an orchestration worker, which keeps the folder its policy froze.
+    const folder = req.owner ? agent.workspace : this.workspaceFor(agent, this.roomOf(req.turnId))
+    const checked = await checkRoot(folder, this.deps.policy)
     if (!checked.ok)
       throw new HttpError(422, 'workspace_unavailable', checked.reason, {
         notice: `The workspace is unavailable: ${checked.reason}`,
@@ -1381,6 +1401,10 @@ export class CodingRuntime {
       agent.permission = frozenPolicy.policy.permission
       agent.workspace = frozenPolicy.policy.workspace.real
       model = frozenPolicy.policy.model
+    } else {
+      // The room's shared workspace for this agent (3.20.0), read now: the room may have changed since admission. From here
+      // on `agent.workspace` is the one folder: the root check below, `checked.real` for the spawn, the parser and the args.
+      agent.workspace = this.workspaceFor(agent, this.roomOf(entry.turnId))
     }
     // Ends the run without a launch having been requested. An owned run leaves the reason class for its executor.
     const endUnlaunched = async (cause: string, info: TerminalInfo): Promise<void> => {

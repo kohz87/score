@@ -941,7 +941,7 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
 
 ### Conversations: organise, search, export (PLAN 5.26; schemas in `packages/contract/src/conversations.ts`)
 
-- `Room` also carries `pinned`, `archived` (booleans), `projectId: string | null`, `tags: string[]` (explicit tags, else the
+- `Room` also carries `workspaceId: string | null` (3.20.0, optional for older readers; § 18), `pinned`, `archived` (booleans), `projectId: string | null`, `tags: string[]` (explicit tags, else the
   `#tag` words after the first word of the name) and `importedFrom: RoomImport | null` (§ Outside sessions). Room names may
   end in tag words: `#launch #q4 #urgent`. Score-side only; `room.upserted` carries them.
 - `GET /api/rooms` also returns `projects: RoomProject[]` (`{ id; name; color: '#RRGGBB' }`, by name).
@@ -2998,3 +2998,32 @@ theme_rejected { reasons[] }` names the same problems an import would; the files
 resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
   itself sends no event, devices see the new number on their next `GET /api/themes`, which they repeat on focus).
   Per-device overrides live in the browser (localStorage) and never reach the server.
+
+## 18. Shared workspaces (3.20.0; schemas in `packages/contract/src/workspaces.ts`; design docs/briefs/3.20.0-workspaces.md)
+A **workspace** is a named folder. Agents are **assigned** to workspaces (many to many); a room may be set to one. Every
+route needs a paired browser; mutations also carry the web-client header and honour `Idempotency-Key`.
+```ts
+type SharedWorkspace = { id: string; name: string; path: string; agentIds: AgentId[]; roomIds: string[] }
+```
+- `GET /api/workspaces` → `{ workspaces: SharedWorkspace[] }` (by name).
+- `POST /api/workspaces { name, path, create?: boolean }` → `201 SharedWorkspace`. `path` (`~/` allowed) must pass the same
+  root policy as an agent's own folder (`checkRoot`: an existing directory owned by the user, not `/`, not the home folder or
+  a parent of it, not Hermes/Score/SSH data, no `.git` or credential folders, symlinks resolved); the stored `path` is the
+  resolved one. Otherwise `422 workspace_unavailable { message }`. `create: true` makes a missing folder (mode 0700, only that
+  one level) when its parent passes the policy; a parent that fails it is `422` too and nothing is created. `409 conflict`
+  for a name or folder that is already a workspace.
+- `PATCH /api/workspaces/:id { name?, agentIds? }` → `SharedWorkspace`. `agentIds` replaces the assignment; an unknown agent is
+  `400 bad_request`; `404`; `409 conflict` for a name in use.
+- `DELETE /api/workspaces/:id` → `204`. Rooms that used it go back to none (each emits `room.upserted`) and its assignments are
+  removed. The folder on disk is never touched.
+- `PUT /api/rooms/:roomId/workspace { workspaceId: string | null }` → `Room` (`room.upserted` when it changed); `404` for an
+  unknown room or workspace.
+- `POST /api/workspaces/:id/use-as-folder { agentId }` → `{ root }`. For a **Hermes** agent assigned to the workspace: sets the
+  agent's working folder (its profile's `terminal.cwd`) to the workspace's folder, after checking it again. `409 not_assigned`;
+  `409 unsupported` for a coding agent (it follows the room instead); `422 workspace_unavailable` when the agent runs on a
+  remote terminal or the folder no longer passes the policy.
+- **Coding agents.** A turn of a coding agent in a room whose workspace the agent is assigned to runs in that workspace's
+  folder; otherwise (no workspace, or the agent not assigned) in the agent's own folder (`CodingAgent.workspace`, unchanged).
+  The folder is checked with the root policy at admission and again at launch; a folder that fails refuses the turn
+  (`422 workspace_unavailable` at admission, a failed run at launch), it never falls back silently. Orchestration worker
+  steps keep the folder their frozen policy names.
