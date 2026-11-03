@@ -26,15 +26,15 @@ async function openLibrary(page: Page, size: (typeof sizes)[number] = sizes[0]) 
   await page.setViewportSize({ width: size.width, height: size.height })
   // The Library needs the width: a folded chat list (3.21.0) gives it back.
   await page.addInitScript(() => localStorage.setItem('score.chats.folded', '1'))
-  await page.goto('/b?open=1')
+  // 3.22.0: the Library side-panel mode is gone; the same editor is the Knowledge page.
+  await page.goto('/b/knowledge')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.locator('button.side-toggle').click()
-  await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
 }
 
 async function createNote(page: Page, name: string, text: string) {
+  const back = page.getByRole('button', { name: /Back to the notes/ })
+  if (await back.isVisible()) await back.click()
   await page.getByRole('button', { name: 'New note' }).click()
   const dialog = page.getByRole('dialog', { name: 'New note' })
   await dialog.getByLabel('Path in Knowledge').fill(name)
@@ -358,10 +358,9 @@ for (const size of sizes) {
       await page.keyboard.press('Control+End')
       const toolbar = page.getByRole('toolbar', { name: 'Formatting' })
       await expect(toolbar).toBeInViewport({ ratio: 1 })
-      // Near the top of the panel that scrolls, not far down the page.
-      const panel = page.getByTestId('bold-library')
-      const gap = (await toolbar.boundingBox())!.y - (await panel.boundingBox())!.y
-      expect(gap).toBeLessThan(120)
+      // 3.22.0: the page scrolls on Knowledge; the toolbar sticks near the top of the window, under the top bar.
+      const gap = (await toolbar.boundingBox())!.y
+      expect(gap).toBeLessThan(160)
     })
   })
 }

@@ -281,7 +281,9 @@ export function BoldLibrary({
   // Folded only once the person chose a note (not the first one shown by default), and not while browsing files.
   const chosen = !page && phone && section === 'notes' && selected != null
   // The phone page shows the list or, once a note is chosen, the note full width with Back.
-  const reading = page && pagePhone && section === 'notes' && selected != null
+  // The Files view is a full-width view too (it was hidden on a phone page with no way to see it).
+  const reading =
+    page && pagePhone && (section === 'files' || (section === 'notes' && selected != null))
   const folded = chosen && !listOpen
 
   if (openPath && openPath !== openedPath) {
@@ -723,6 +725,7 @@ export function BoldLibrary({
             onClick={() => {
               setReturnedFrom(active ?? null)
               setSelected(undefined)
+              setSection('notes')
               onOpened?.(null)
             }}
           >

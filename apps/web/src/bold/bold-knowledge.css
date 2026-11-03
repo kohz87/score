@@ -12,6 +12,8 @@
   min-height: calc(100vh - 120px);
   padding: 0;
   border-top: 1px solid var(--line);
+  /* The page scrolls, not this box: with overflow auto the note toolbar's sticky top stuck to a box that never scrolls. */
+  overflow: visible;
 }
 
 [data-ui='bold'] .is-page > .bold-knowledge-rail {

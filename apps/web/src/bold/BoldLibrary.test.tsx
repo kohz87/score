@@ -132,7 +132,7 @@ function respond(input: string, init: RequestInit = {}): Response {
 let router: ReturnType<typeof createMemoryRouter>
 let client: ReturnType<typeof createQueryClient>
 
-function mount(openPath: string | null = null) {
+function mount(openPath: string | null = null, page = false) {
   const queryClient = createQueryClient()
   client = queryClient
   queryClient.setDefaultOptions({ queries: { retry: false } })
@@ -141,7 +141,7 @@ function mount(openPath: string | null = null) {
     onControl: () => () => undefined,
   }
   router = createMemoryRouter([
-    { path: '/', element: <BoldLibrary agents={[reviewer]} openPath={openPath} /> },
+    { path: '/', element: <BoldLibrary agents={[reviewer]} openPath={openPath} page={page} /> },
   ])
   render(
     <QueryClientProvider client={queryClient}>
@@ -216,6 +216,21 @@ test('on a phone the list folds once a note is chosen, unfolds on a tap and fold
   ).toBe('true')
   fireEvent.click(within(nav).getAllByRole('button', { name: /Last edited by/ })[1]!)
   expect(await within(nav).findByRole('button', { name: /Notes and files/ })).toBeDefined()
+})
+
+test('3.22.0: on the phone Knowledge page the Files view is shown full width, with Back to the notes', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }))
+  mount(null, true)
+  fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+  expect(await screen.findByRole('heading', { name: 'Files' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: /Back to the notes/ }))
+  expect(await screen.findByRole('navigation', { name: 'Library notes' })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'Files' })).toBeNull()
 })
 
 test('an outside edit gets its own wording in the byline', async () => {
