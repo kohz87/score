@@ -319,6 +319,27 @@ test('show deleted reads the version and shows the deleted messages of every top
   expect(screen.getByText(/Deleted, read-only. 2 hidden messages/)).toBeDefined()
 })
 
+test('3.22.0: the deleted-messages block shows once in a chat of several topics, not once per topic run', async () => {
+  const version: RoomVersion = {
+    id: 'version-1',
+    roomId: 'room-1',
+    anchorId: 'anchor-1',
+    anchorCreatedAt: '2000-01-01T00:00:00.000Z',
+    mode: 'delete',
+    replacedBy: null,
+    number: 1,
+    count: 1,
+    hiddenCount: 1,
+    rewound: [],
+    skipped: [],
+    createdAt: '2000-01-01T00:01:00.000Z',
+  }
+  stubStream({ versions: [version] })
+  renderStream(true)
+  await screen.findByText('Drafted the 2.4 notes.')
+  await waitFor(() => expect(screen.getAllByTestId('deleted-messages')).toHaveLength(1))
+})
+
 test('an edited message’s version control opens the older read-only branch', async () => {
   const version: RoomVersion = {
     id: 'version-1',

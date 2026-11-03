@@ -82,7 +82,8 @@ test('on a phone the list is the first screen, a chat opens and Back returns', a
 
   await list.getByRole('link', { name: /^builder/ }).click()
   await expect(page).toHaveURL(/with=builder/)
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  // 3.22.0: a one-to-one has the group chat's bar, so its Back is Back to chats.
+  await page.getByRole('button', { name: 'Back to chats' }).click()
   await expect(list).toBeVisible()
 
   await list.getByRole('link', { name: /Team room/ }).click()

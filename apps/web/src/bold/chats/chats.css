@@ -611,7 +611,8 @@
 
 [data-ui='bold'] .bold-topic-state.is-working,
 [data-ui='bold'] .bold-topic-state.is-open {
-  color: var(--link, #7db8ff);
+  /* The bold scope has no link token; the violet name tint is readable in both looks (the pale fallback was 1.7:1 on light). */
+  color: var(--agent-violet-name);
 }
 
 [data-ui='bold'] .bold-topic-state.is-done {

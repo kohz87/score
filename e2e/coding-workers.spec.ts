@@ -243,7 +243,7 @@ test.describe('a coding step in the live diagram', () => {
     })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/b?run=brief-orch-1')
+    await page.goto('/b/recipes?run=brief-orch-1')
     // The decision is on the Steps tab (2.5.0); the diagram and the log are their own tabs.
     const card = page.getByRole('region', { name: 'New settings for reviewer' })
     await expect(card).toBeVisible()

@@ -95,7 +95,7 @@ async function wasSeen(page: Page, selector: string) {
 async function openLive(page: Page, goal: string) {
   // The run opens in the Runs side panel, addressed by its brief id; its Graph and Log tabs carry the diagram and the
   // log. Selection and replay carry over between them; the decisions are above every tab.
-  await page.goto(`/b?run=${encodeURIComponent(await runBriefId(page, goal))}`)
+  await page.goto(`/b/recipes?run=${encodeURIComponent(await runBriefId(page, goal))}`)
   await tab(page, 'Graph')
   // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
   await page.getByRole('button', { name: 'Show the step diagram' }).click()

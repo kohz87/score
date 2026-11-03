@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { openBoldRoomWith } from './bold-room-fixtures.ts'
+import { openBoldJob, openBoldRoomWith } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 import {
   boldThemeIds,
@@ -92,7 +92,7 @@ for (const mode of ['light', 'dark'] as const) {
 
     // The privacy promise in a one-to-one: Score's muted text on Score's panel fill.
     await page.goto('/b?with=builder')
-    const privacy = page.locator('#bold-side-panel .bold-dm-privacy[data-protected]')
+    const privacy = page.locator('.bold-dm-privacy[data-protected]')
     await expect(privacy).toContainText('Only you and builder see this')
     await expect(privacy).toHaveCSS('color', expected.privacy[0])
     await expect(privacy).toHaveCSS('background-color', expected.privacy[1])
@@ -132,7 +132,7 @@ test('a failing theme on a dark device, with Look on system, keeps the bold ligh
   // Open the one-to-one through the shell: a page load would drop the visit-only light override.
   await page.getByRole('button', { name: /^One to one with builder,/ }).click()
   await expect(shell).toHaveAttribute('data-look', 'light')
-  const privacy = page.locator('#bold-side-panel .bold-dm-privacy[data-protected]')
+  const privacy = page.locator('.bold-dm-privacy[data-protected]')
   await expect(privacy).toBeVisible()
   await expect(privacy).toHaveCSS('color', 'rgb(94, 98, 108)')
   await expect(privacy).toHaveCSS('background-color', 'rgb(255, 255, 255)')
@@ -151,7 +151,7 @@ test('a failing theme gives protected text with no fill an opaque Score ground',
   const expected: [string, string] = ['rgb(236, 236, 241)', 'rgb(26, 28, 35)']
 
   // A shared message paints its text bubble itself; its wrapper is the protected surface that needs the fill.
-  await page.getByRole('tab', { name: /Activity feed/ }).click()
+  await openBoldJob(page, /Activity feed/)
   const shared = page.locator('[data-ui="bold"] .bold-shared')
   await expect(shared).toContainText('shared from a one-to-one with you')
   // Asserted on the element itself, so an ancestor's fill can't stand in for the fallback's.

@@ -1369,7 +1369,9 @@
 
 /* Stop is an icon, so the button stays round like Send; a light ground makes the red square read. */
 [data-ui='bold'] .chat-composer-box--room .chat-send--stop {
-  background: var(--panel);
+  /* Light in both looks: on the dark panel the red square measured 1.2:1 (3.22.0, found by the Harbour guard check). */
+  background: #ececf1;
+  box-shadow: inset 0 0 0 2px #12131a;
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-attachments {

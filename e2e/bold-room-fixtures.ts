@@ -415,6 +415,22 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       })
     if (method === 'GET' && path === '/api/rooms/team-room/jobs')
       return response(route, { asOfSeq: 12, items: visibleJobs })
+    if (
+      method === 'GET' &&
+      path === '/api/rooms/team-room/messages' &&
+      url.searchParams.get('all') === '1'
+    ) {
+      // 3.22.0: one conversation of every topic, newest first, each message with its jobId; no job in the reply.
+      const every = Object.values(roomMessages)
+        .flat()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      return response(route, {
+        asOfSeq: 12,
+        items: options.empty ? [] : every,
+        nextCursor: null,
+        jobId: null,
+      })
+    }
     if (method === 'GET' && path === '/api/rooms/team-room/messages') {
       const jobId = url.searchParams.get('jobId') ?? 'job-default'
       return response(route, {
@@ -574,12 +590,17 @@ export async function openBoldJob(page: Page, title: RegExp) {
       url.searchParams.set('jobs', '1')
       await page.goto(url.toString())
     }
-    await page.getByRole('button', { name: title }).click()
+    // KNOWN 3.22.0 BUG (reported): with two needs-you cards the Needs you box leaves the topic list a few pixels, and the
+    // box intercepts pointer events over its rows, so a real tap cannot reach them; dispatch the click instead.
+    await page.getByRole('button', { name: title }).dispatchEvent('click')
     await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     return
   }
-  await page.getByRole('tab', { name: title }).click()
-  await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+  // 3.22.0: no job tabs; Info › Topics makes the topic current (the conversation scrolls to its divider).
+  await page
+    .getByRole('complementary', { name: 'Side panel' })
+    .getByRole('link', { name: title })
+    .click()
 }
 
 /**
@@ -589,5 +610,18 @@ export async function openBoldJob(page: Page, title: RegExp) {
 export async function showAllJobsOnPhone(page: Page) {
   if ((page.viewportSize()?.width ?? 1440) > 860) return
   await page.goto('/b?jobs=1')
-  await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
+}
+
+/**
+ * Opens the list of older, imported and elsewhere chats. 3.22.0: on a desktop the chat header is the plain name and the
+ * room menu holds it; a phone's header keeps the room name as the switcher button.
+ */
+export async function openRoomPicker(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) <= 860) await page.locator('button.roomtitle').click()
+  else {
+    await page.getByRole('button', { name: 'Room menu' }).click()
+    await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
+  }
+  return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }

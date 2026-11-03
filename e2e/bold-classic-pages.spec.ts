@@ -90,7 +90,7 @@ for (const size of sizes) {
       const status = editor.getByLabel('Runs of this recipe')
       await expect(status).toContainText('1 run going')
       await status.getByRole('link', { name: 'Running' }).click()
-      await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1$/)
+      await expect(page).toHaveURL(/\/b\/recipes\?run=brief-wfrun-1$/)
       await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
       await page.goBack()
       await expect(page).toHaveURL(/\/b\/recipes\/wf-release$/)
@@ -172,7 +172,8 @@ test('old classic paths on the new shell redirect to /b and keep the query', asy
   await page.goto('/workflows')
   await expect(page).toHaveURL(/\/b\/recipes$/)
   await page.goto('/runs/brief-wfrun-1?x=1')
-  await expect(page).toHaveURL(/\/b\?x=1&run=brief-wfrun-1$/)
+  // 3.22.0: a run opens on the Recipes page (the side panel's Runs mode is gone).
+  await expect(page).toHaveURL(/\/b\/recipes\?x=1&run=brief-wfrun-1$/)
   await page.goto('/watch/builder?from=3')
   await expect(page).toHaveURL(/\/b\/screen\/builder\?from=3$/)
   await page.goto('/settings/look/customize/score')
@@ -194,11 +195,11 @@ for (const size of sizes) {
       await expect.poll(() => posts).toContain(`/api/approvals/${watchApprovalFixture.id}/decision`)
     })
 
-    test(`a run opens in the Runs side panel as a thread of steps at ${size.name}`, async ({
+    test(`a run opens on the Recipes page as a thread of steps at ${size.name}`, async ({
       page,
     }) => {
       await page.goto('/b/runs/brief-wfrun-1')
-      await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1$/)
+      await expect(page).toHaveURL(/\/b\/recipes\?run=brief-wfrun-1$/)
       await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
       await noSideScroll(page)
       await expect(page).toHaveScreenshot(`bold-run-${size.name}.png`, {
@@ -213,20 +214,17 @@ for (const size of sizes) {
     })
 
     test(`the Runs view lists every run and opens one at ${size.name}`, async ({ page }) => {
-      await page.goto('/b?open=1')
-      // 3.21.0: this spec mocks the room away, so the phone shows the room title row, whose button opens the panel.
-      if (size.name === 'phone') await page.getByRole('button', { name: 'Open side panel' }).click()
-      const panel = page.getByRole('complementary', { name: 'Side panel' })
-      await panel.locator('.side-toggle').click()
-      await panel.getByRole('button', { name: /^Runs/ }).click()
-      const list = panel.getByRole('list', { name: 'Runs' })
+      // 3.22.0: the side panel's Runs mode is gone; the same list is the Recipes page with an empty `?run=`.
+      await page.goto('/b/recipes?run=')
+      const list = page.getByRole('list', { name: 'Runs' })
       await expect(list.getByRole('listitem').first()).toBeVisible()
-      await panel.getByRole('button', { name: 'Needs you', exact: true }).click()
+      await page.getByRole('button', { name: 'Needs you', exact: true }).click()
       await list.getByRole('button').first().click()
-      await expect(page).toHaveURL(/\/b\?(open=1&)?run=/)
-      await expect(panel.getByRole('list', { name: 'Steps' })).toBeVisible()
-      await panel.getByRole('button', { name: 'All runs' }).click()
-      await expect(list).toBeVisible()
+      await expect(page).toHaveURL(/\/b\/recipes\?(.*&)?run=/)
+      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+      // "All runs" leaves the run for the Recipes page (the list of runs is `?run=`).
+      await page.getByRole('button', { name: 'All runs' }).click()
+      await expect(page).toHaveURL(/\/b\/recipes$/)
     })
 
     test(`a run's needs-you card decides a gate inside /b at ${size.name}`, async ({ page }) => {
@@ -430,5 +428,5 @@ test.describe('the Customizer way back inside /b', () => {
 
 test('the old path keeps its #hash through the redirect', async ({ page }) => {
   await page.goto('/runs/brief-wfrun-1#step')
-  await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1#step$/)
+  await expect(page).toHaveURL(/\/b\/recipes\?run=brief-wfrun-1#step$/)
 })

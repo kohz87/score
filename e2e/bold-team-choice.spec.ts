@@ -16,6 +16,7 @@ test('a trigger starts jobs in the second team, and a one-to-one reply is shared
 }: {
   page: Page
 }) => {
+  test.setTimeout(90_000)
   await pair(page)
   const teamName = tag('Docs crew')
   const jobTitle = tag('Crew job')
@@ -56,9 +57,14 @@ test('a trigger starts jobs in the second team, and a one-to-one reply is shared
 
     // A one-to-one: the share menu offers the team choice and that team's jobs.
     await page.goto('/b?with=reviewer')
-    const side = page.locator('#bold-side-panel')
-    await expect(side.locator('.bold-dm-message').first()).toBeVisible()
-    await side.getByRole('button', { name: 'Share to the team room' }).click()
+    const side = page.locator('#bold-room-stream') // 3.22.0: a one-to-one is the chat's one conversation (no side-panel thread)
+    await expect(side.locator('.bold-message').first()).toBeVisible()
+    // The hover row appears over the reply; Share is one of its actions.
+    await side.locator('.bold-message').last().hover()
+    await side
+      .getByRole('button', { name: /^Share message from .* to the team room/ })
+      .last()
+      .click()
     const menu = page.getByRole('dialog', { name: 'Share to a team' })
     await expect(menu).toHaveAttribute('data-protected', 'block')
     await menu.getByLabel('Team').selectOption({ label: teamName })

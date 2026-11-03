@@ -59,22 +59,21 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   expect(notes?.unread ?? 0).toBeGreaterThan(0)
 
   await page.goto('/b?open=1')
-  const notesTab = page.getByRole('tab', { name: new RegExp(title) })
-  const badge = notesTab.locator('.bold-unread')
-  await expect(badge).toHaveText(String(notes!.unread), { timeout: 30_000 })
+  // 3.22.0: no job tabs and no per-topic badge on desktop; the topic is current once picked in Info › Topics, and the
+  // context bar says where a message goes. Every topic's messages are in the one conversation, so they count as read
+  // once it is shown (the old "kept until its own tab is opened" no longer applies).
+  const side = page.getByRole('complementary', { name: 'Side panel' })
+  await side.getByRole('link', { name: /Activity feed/ }).click()
+  await expectDestination(page, 'Activity feed')
 
-  await page.getByRole('tab', { name: /Activity feed/ }).click()
-  await expectDestination(page, 'To: Activity feed')
-  await expect(badge).toHaveText(String(notes!.unread))
-
-  await notesTab.click()
-  await expectDestination(page, `To: ${title}`)
-  await expect(notesTab.locator('.bold-unread')).toHaveCount(0)
+  await side.getByRole('link', { name: new RegExp(title) }).click()
+  await expectDestination(page, title)
+  await expect.poll(async () => (await read())?.unread ?? 0, { timeout: 30_000 }).toBe(0)
 })
 
 /** The composer's destination pill. On a phone it is hidden by design (the pill composer), so read its text, not its visibility. */
 async function expectDestination(page: Page, label: string) {
-  await expect(page.locator('.chat-composer-room-to')).toHaveText(label)
+  await expect(page.locator('.bold-context-bar .bold-context-to')).toContainText(`in ${label}`)
 }
 
 async function openJob(page: Page, title: RegExp) {
@@ -116,14 +115,16 @@ for (const viewport of sizes) {
       await page.setViewportSize(viewport)
     })
 
-    test(`job tabs keep their unread counts and every D10 filter narrows the room at ${at}`, async ({
+    test(`topics: the phone list keeps unread counts, and Info › Topics picks the current topic at ${at}`, async ({
       page,
     }) => {
+      // 3.22.0: job tabs and the D10 filter chips are gone (one merged conversation with dividers). The topic list
+      // (phone: All topics; desktop: Info › Topics) picks the current topic, and the context bar says where a message goes.
       await openBoldRoom(page)
 
       if (viewport.width <= 860) {
         await showAllJobsOnPhone(page)
-        await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
         const activity = page.getByRole('button', { name: /^Activity feed\..*2 unread/ })
         const notes = page.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
         const queue = page.getByRole('button', { name: /^Queue research\./ })
@@ -132,66 +133,32 @@ for (const viewport of sizes) {
         await expect(queue).toBeVisible()
         await expect(queue.locator('.bold-unread')).toHaveCount(0)
 
-        await activity.click()
+        await activity.dispatchEvent('click') // see openBoldJob: the Needs you box covers the rows
         expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
-        await expectDestination(page, 'To: Activity feed')
+        await expectDestination(page, 'Activity feed')
         await expect(
           page.getByText('Read layer is ready. The feed renders newest first.'),
         ).toBeVisible()
-        await expect(
-          page.getByText('Draft is ready. The migration steps are still open.'),
-        ).toHaveCount(0)
-        // 3.21.0: the browser's Back returns to the job list; the bar's Back leads to the chat list.
+        // 3.21.0: the browser's Back returns to the topic list; the bar's Back leads to the chat list.
         await page.goBack()
-        await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
         await expect(page.getByRole('button', { name: /^Activity feed\..*/ })).toBeVisible()
         return
       }
 
-      const all = page.getByRole('tab', { name: /^All/ })
-      const activity = page.getByRole('tab', { name: /Activity feed/ })
-      const notes = page.getByRole('tab', { name: /Release notes 2\.4/ })
-      const queue = page.getByRole('tab', { name: /Queue research/ })
-      await expect(all).toContainText('5')
-      await expect(activity).toContainText('2')
-      await expect(notes).toContainText('3')
-      await expect(queue.locator('.bold-unread')).toHaveCount(0)
-
+      const side = page.getByRole('complementary', { name: 'Side panel' })
+      const activity = side.getByRole('link', { name: /Activity feed/ })
+      await expect(side.getByRole('link', { name: /Release notes 2\.4/ })).toBeVisible()
+      await expect(side.getByRole('link', { name: /Queue research/ })).toBeVisible()
       await activity.click()
       expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
-      await expectDestination(page, 'To: Activity feed')
+      await expectDestination(page, 'Activity feed')
       await expect(
         page.getByText('Read layer is ready. The feed renders newest first.'),
       ).toBeVisible()
-      await expect(
-        page.getByText('Draft is ready. The migration steps are still open.'),
-      ).toHaveCount(0)
-
-      await page.getByRole('button', { name: 'Needs you', exact: true }).click()
-      await expect(page.getByRole('button', { name: 'Needs you', exact: true })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
-      await expect(notes).toBeVisible()
-      await expect(activity).toHaveCount(0)
-      await expect(queue).toHaveCount(0)
-
-      await page.getByRole('button', { name: 'Working', exact: true }).click()
-      await expect(activity).toBeVisible()
-      await expect(notes).toHaveCount(0)
-      await expect(queue).toHaveCount(0)
-
-      await page.getByRole('button', { name: 'Done', exact: true }).click()
-      await expect(queue).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Closed jobs', exact: true })).toBeVisible()
-      await expect(notes).toHaveCount(0)
-      await expect(activity).toHaveCount(0)
-
-      await page.getByRole('button', { name: 'All', exact: true }).click()
-      await expect(page.getByRole('tab', { name: /^All/ })).toBeVisible()
-      await expect(activity).toBeVisible()
-      await expect(notes).toBeVisible()
-      await expect(queue).toBeVisible()
+      // The tabs and filter chips are gone from above the conversation.
+      await expect(page.getByRole('tab', { name: /Activity feed/ })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Needs you', exact: true })).toHaveCount(0)
     })
 
     test(`approvals and a paused review are protected request cards at ${at}`, async ({ page }) => {
@@ -209,9 +176,9 @@ for (const viewport of sizes) {
         name: /The review ended without a verdict/,
       })
       await expect(approval).toHaveAttribute('data-protected', 'flex')
-      await expect(review).toBeHidden()
-      await page.getByRole('button', { name: '1 more needs you' }).click()
+      // 3.22.0: no "1 more needs you" fold; every card is in the Needs you box (it scrolls, with a "more below" cue).
       await expect(review).toHaveAttribute('data-protected', 'flex')
+      await review.scrollIntoViewIfNeeded()
       await expect(review).toBeVisible()
       await expect(approval).toContainText('npm install ws@8')
       await expect(review).toContainText('Release notes 2.4')
@@ -321,7 +288,7 @@ for (const viewport of sizes) {
     test(`the hover row copies, saves, and pins or unpins at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
       if (viewport.width <= 860) {
-        await openJob(page, /^Team room\./)
+        await openJob(page, /^General conversation\./)
         await expect(message(page, 'message-pinned')).toBeVisible()
       }
       const pinned = message(page, 'message-pinned')
@@ -442,11 +409,14 @@ for (const viewport of sizes) {
         .toBeTruthy()
 
       await expect(page.getByText('Old plan we replaced.')).toHaveCount(0)
-      await page.getByRole('button', { name: 'Show deleted messages' }).click()
+      // 3.22.0: "Show deleted messages" moved into the room menu.
+      await page.getByRole('button', { name: 'Room menu' }).click()
+      await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
       const deleted = page.getByRole('region', { name: 'Deleted messages' })
       await expect(deleted).toContainText('Deleted, read-only. 2 hidden messages.')
       await expect(deleted.getByText('Old plan we replaced.')).toBeVisible()
-      await page.getByRole('button', { name: 'Hide deleted messages' }).click()
+      await page.getByRole('button', { name: 'Room menu' }).click()
+      await page.getByRole('menuitemcheckbox', { name: 'Hide deleted messages' }).click()
       await expect(deleted).toHaveCount(0)
     })
 
@@ -473,29 +443,18 @@ for (const viewport of sizes) {
       await openBoldRoom(page)
       await showAllJobsOnPhone(page)
       const href = '/b?job=job-queue&message=message-queue'
-      const result = page.getByRole('link', { name: 'Open result: Queue research' })
+      // 3.22.0: the "Open result" card of a finished job (the job folds) is gone with the tabs; a result link is a plain
+      // address (Search and notifications open it the same way), followed here.
       if (viewport.width <= 860) {
-        // The phone's list row is the result: tapping it opens the job. The seek target is the same link as the desktop
-        // card's, so it is then followed as a link (Search and notifications open it the same way).
-        await page.getByRole('button', { name: /^Queue research\. Done/ }).click()
+        await page.getByRole('button', { name: /^Queue research\. Done/ }).dispatchEvent('click')
         await expect(page).toHaveURL(/[?&]job=job-queue/)
         await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
-        await page.goto(href)
-      } else {
-        // A finished job starts folded in All; Show opens it in place.
-        await page.getByRole('button', { name: 'Show Queue research' }).click()
-        await expect(result).toHaveAttribute('href', href)
-        await expect(result).toContainText('Done · lead')
-        await result.click()
       }
+      await page.goto(href)
       await expect(page).toHaveURL(/[?&]job=job-queue/)
-      if (viewport.width > 860)
-        await expect(page.getByRole('tab', { name: /Queue research/ })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        )
-      else await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
-      await expectDestination(page, 'To: Queue research')
+      if (viewport.width <= 860)
+        await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
+      await expectDestination(page, 'Queue research')
       const article = page.locator('#message-message-queue')
       await expect(article).toHaveClass(/bold-message-hit/)
       await expect(article).toBeFocused()

@@ -138,13 +138,19 @@ export function RoomSwitcher({
   onSelectRoom: (room: Room) => void
   onOpenElsewhere: (session: OutsideSession) => void
   /** The desktop header has no caret: the room ⋯ menu opens this list (older, imported and elsewhere chats). */
-  controlled?: { open: boolean; setOpen: (open: boolean) => void }
+  controlled?: {
+    open: boolean
+    setOpen: (open: boolean) => void
+    /** The button that opened it, so closing returns focus there. */
+    returnTo?: RefObject<HTMLButtonElement | null>
+  }
 }) {
   const [ownOpen, setOwnOpen] = useState(false)
   const open = controlled ? controlled.open : ownOpen
   const setOpen = controlled ? controlled.setOpen : setOwnOpen
   const root = useRef<HTMLSpanElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
+  const ownTrigger = useRef<HTMLButtonElement>(null)
+  const trigger = controlled?.returnTo ?? ownTrigger
   const menuId = useId()
   const sessions = useOutsideSessions(open)
   const close = useMenu(open, setOpen, root, trigger)
@@ -1057,17 +1063,21 @@ export function RoomMenu({
   onShare,
   onDelete,
   onOtherRooms,
+  triggerRef,
 }: {
   room: Room
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
   /** Desktop: opens the list of older, imported and elsewhere chats (the title no longer has a switcher). */
   onOtherRooms?: () => void
+  /** Lets the room switcher return focus to this button when it closes. */
+  triggerRef?: RefObject<HTMLButtonElement | null>
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
   useMenuPlacement(root, open)
-  const trigger = useRef<HTMLButtonElement>(null)
+  const ownTrigger = useRef<HTMLButtonElement>(null)
+  const trigger = triggerRef ?? ownTrigger
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
   // `team` = any team room (the lead and members live here); `everyone` = the first one, which can't be changed.
@@ -1515,6 +1525,7 @@ export function RoomTitle({
 }) {
   const startJob = useStartJob()
   const [otherRooms, setOtherRooms] = useState(false)
+  const roomMenuButton = useRef<HTMLButtonElement>(null)
   if (phone && current && !phoneList) {
     return (
       <ChatPhoneBar
@@ -1588,7 +1599,7 @@ export function RoomTitle({
             agents={agents}
             onSelectRoom={onSelectRoom}
             onOpenElsewhere={onOpenElsewhere}
-            controlled={{ open: otherRooms, setOpen: setOtherRooms }}
+            controlled={{ open: otherRooms, setOpen: setOtherRooms, returnTo: roomMenuButton }}
           />
           <ArchivedBadge room={current} />
         </div>
@@ -1601,6 +1612,7 @@ export function RoomTitle({
           onShare={onShare}
           onDelete={onDelete}
           onOtherRooms={() => setOtherRooms(true)}
+          triggerRef={roomMenuButton}
         />
       )}
       {current?.role === 'team' && (

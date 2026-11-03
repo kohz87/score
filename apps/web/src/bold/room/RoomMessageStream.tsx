@@ -296,9 +296,11 @@ export function RoomMessageStream({
         node: <QuestionNote question={question} agents={agents} />,
       }))
     const usedNotes = new Set<string>()
+    const usedMarkers = new Set<string>()
     const build = (list: Message[], tail = true) =>
       buildMessageNodes({
         notes: { items: noteItems, used: usedNotes, tail },
+        usedMarkers,
         items: list,
         versions,
         agents,

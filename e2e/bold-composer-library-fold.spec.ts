@@ -12,7 +12,7 @@ for (const size of sizes) {
   test.describe(size.name, () => {
     test.use({ reducedMotion: 'reduce', viewport: { width: size.width, height: size.height } })
 
-    test('the team composer placeholder fits one line and the hint shows on focus', async ({
+    test('the team composer placeholder fits one line and names @ and / commands', async ({
       page,
     }) => {
       await openBoldRoom(page)
@@ -20,9 +20,8 @@ for (const size of sizes) {
       await expect(box).toBeVisible()
       const fits = await box.evaluate((el) => el.scrollHeight <= el.clientHeight)
       expect(fits).toBe(true)
-      await box.focus()
-      await expect(page.locator('.chat-composer-hint')).toBeVisible()
-      await expect(box).toHaveAccessibleDescription(/@name for one agent/)
+      // 3.22.0: the context bar replaces the focus hint (it is not rendered with a footer); the placeholder says it.
+      await expect(box).toHaveAttribute('placeholder', /@ someone · \/ for commands/)
     })
 
     test('long text is fully visible or scrollable in the composer', async ({ page }) => {
@@ -43,22 +42,18 @@ for (const size of sizes) {
       expect(twelve).toEqual({ scrolls: true, auto: true })
     })
 
-    test('a finished job is folded; Show opens it and Hide folds it again', async ({ page }) => {
+    test('a finished topic stays in the conversation, marked done, with its menu', async ({
+      page,
+    }) => {
+      // 3.22.0: the folded "Show / Hide" job cards are gone with the job tabs; a finished topic is a divider.
       await openBoldRoom(page)
-      const show = page.getByRole('button', { name: 'Show Queue research' })
       if (size.width <= 860) {
-        // The phone reads one job at a time: no fold in a job's own thread.
         await expect(page.locator('.bold-job-fold')).toHaveCount(0)
         return
       }
-      await expect(show).toBeVisible()
-      await expect(page.locator('.bold-job-fold', { hasText: 'Queue research' })).toContainText(
-        'message',
-      )
-      await show.click()
-      await expect(page.getByRole('link', { name: 'Open result: Queue research' })).toBeVisible()
-      await page.getByRole('button', { name: 'Hide' }).click()
-      await expect(show).toBeVisible()
+      const divider = page.getByRole('separator', { name: /^Topic: Queue research, done/ })
+      await expect(divider).toBeVisible()
+      await expect(divider.getByRole('button', { name: 'Job menu' })).toBeVisible()
     })
   })
 }
@@ -66,11 +61,9 @@ for (const size of sizes) {
 async function openLibrary(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/b?open=1')
+  // 3.22.0: the Library side-panel mode is gone; the same list and editor are the Knowledge page.
+  await page.goto('/b/knowledge')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.locator('button.side-toggle').click()
-  await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
 }
 
@@ -84,22 +77,16 @@ for (const size of sizes) {
     const dialog = page.getByRole('dialog', { name: 'New folder' })
     await dialog.getByLabel('Folder path').fill(folder)
     await dialog.getByRole('button', { name: /^Create/ }).click()
-    const heading = nav.getByRole('button', { name: new RegExp(`^${folder}`) })
-    const chevron = nav.getByRole('button', { name: `Collapse ${folder}` })
+    // 3.22.0: the Knowledge page lists folders in its Folders rail (no collapsible folder headings in the notes list).
+    const rail = page.getByRole('complementary', { name: 'Folders' })
+    const heading = rail.getByRole('button', { name: new RegExp(`^${folder}`) })
     await expect(heading).toBeVisible()
-    await nav.getByRole('button', { name: 'New note' }).click()
+    await heading.click()
+    await page.getByRole('button', { name: 'New note' }).first().click()
     const note = page.getByRole('dialog', { name: 'New note' })
     await expect(note.getByLabel('Path in Knowledge')).toHaveValue(`${folder}/`)
     await note.getByLabel('Path in Knowledge').fill(`${folder}/first`)
     await note.getByRole('button', { name: 'Create note' }).click()
     await expect(page.getByLabel(`Contents of ${folder}/first.md`)).toBeVisible({ timeout: 15_000 })
-    // 3.8.1: on a phone the list folds once a note is open; the bar opens it again.
-    const fold = nav.getByRole('button', { name: /^Notes and files/ })
-    if (await fold.isVisible()) await fold.click()
-    await chevron.click()
-    await expect(nav.getByRole('button', { name: `Expand ${folder}` })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    )
   })
 }

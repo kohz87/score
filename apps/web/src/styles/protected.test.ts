@@ -388,3 +388,19 @@ test('the top bar’s Needs-you count and the chat list’s needs-you marks wear
     )
   expect(css).toContain("html[data-look='custom'] .bold-chat-rail-item[data-protected]")
 })
+
+test('the needs-you card and its buttons wear Score’s own colours under a custom look (3.22.0)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  const card = "html[data-look='custom'] [data-ui='bold'] .bold-request[data-protected]"
+  expect(css).toMatch(
+    new RegExp(
+      `${card.replace(/[[\]()]/g, '\\$&')} \\{[^}]*background-color: #ececf1 !important;[^}]*color: #12131a !important;`,
+    ),
+  )
+  expect(css).toContain(
+    "html[data-look='custom'] [data-ui='bold'] .chat-send--stop[data-protected] {",
+  )
+  expect(css).toContain(`${card} .btn.ghost {`)
+  expect(css).toContain(`${card} .btn {`)
+  expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-request[data-protected]")
+})

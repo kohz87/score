@@ -13,25 +13,33 @@ const sizes = [
 ] as const
 
 async function openRoomPicker(page: Page) {
-  await page.locator('.roomtitle').click()
+  // 3.22.0: the chat header is the plain name; other rooms are one item in the room menu.
+  // A phone's header keeps the room name as the switcher button.
+  if ((page.viewportSize()?.width ?? 1440) <= 860) await page.locator('button.roomtitle').click()
+  else {
+    await page.getByRole('button', { name: 'Room menu' }).click()
+    await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
+  }
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
 /** 3.21.0: a phone chat shows its conversation; its job list is behind the Info sheet's "All jobs" link (in-app, so toasts stay). */
 async function openPhoneJobList(page: Page) {
   await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.getByRole('link', { name: 'All jobs' }).click()
-  await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+  await page.getByRole('link', { name: 'All topics' }).click()
+  await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
 }
 
 // The app's phone composer hides the "to" chip (bold-room.css); the label stays in the DOM.
 async function expectOlderRoomLabel(page: Page) {
-  const label = page.getByText('Older room · @name')
-  if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
-  else {
+  if ((page.viewportSize()?.width ?? 0) > 600) {
+    // 3.22.0: the composer's "Older room · @name" chip is gone; the header badge and the context bar say it.
+    await expect(page.locator('.roomtitle .bold-room-kind')).toHaveText('Older room')
+    await expect(page.getByPlaceholder('Message this room')).toBeVisible()
+  } else {
     await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
     await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
-    await expect(label).toBeAttached()
+    await expect(page.getByPlaceholder('Message this room')).toBeAttached()
   }
 }
 
@@ -41,6 +49,12 @@ async function openOlderRoom(page: Page) {
   await expectOlderRoomLabel(page)
   await expect(page.getByRole('button', { name: 'Start a job' })).toHaveCount(0)
 }
+
+/** 3.22.0: each topic's divider in the conversation carries its job menu (there are no job tabs). */
+const topicHead = (page: Page, title: string) =>
+  page.getByRole('separator', { name: new RegExp(`^Topic: ${title}(,|$)`) })
+const jobMenu = (page: Page, title: string) =>
+  topicHead(page, title).getByRole('button', { name: 'Job menu' })
 
 async function share(page: Page, title: string) {
   const dialog = page.getByRole('dialog')
@@ -129,8 +143,11 @@ for (const viewport of sizes) {
 
     test(`the room dropdown works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
-      const trigger = page.locator('.roomtitle')
-      await trigger.click()
+      const trigger =
+        viewport.width <= 860
+          ? page.locator('button.roomtitle')
+          : page.getByRole('button', { name: 'Room menu' })
+      await openRoomPicker(page)
       const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
       const team = picker.getByRole('option', { name: /Team room/ })
       const older = picker.getByRole('option', { name: /#activity-feed/ })
@@ -145,7 +162,7 @@ for (const viewport of sizes) {
       await expect(picker).toHaveCount(0)
       await expect(trigger).toBeFocused()
 
-      await trigger.click()
+      await openRoomPicker(page)
       await expect(team).toBeFocused()
       await page.keyboard.press('ArrowDown')
       await expect(older).toBeFocused()
@@ -157,7 +174,7 @@ for (const viewport of sizes) {
       }
       await expect(trigger).toBeFocused()
 
-      await trigger.click()
+      await openRoomPicker(page)
       await expect(outside).toBeVisible()
       await expect(team).toBeFocused() // the menu's first-focus has landed
       await page.keyboard.press('End')
@@ -251,7 +268,7 @@ for (const viewport of sizes) {
     test(`the job menu shares that job and exports the classic room at ${at}`, async ({ page }) => {
       const state = await openMenuRoom(page)
       await openBoldJob(page, /Activity feed/)
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed').click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       await expect(menu).toHaveAttribute('data-protected', 'flex')
       await expect(menu).toContainText('Rename…')
@@ -272,7 +289,7 @@ for (const viewport of sizes) {
         jobId: 'job-activity',
       })
 
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed').click()
       const download = page.waitForEvent('download')
       await page.getByRole('menuitem', { name: 'Export the whole room as Markdown' }).click()
       expect(new URL((await download).url()).pathname).toMatch(/^\/api\/rooms\/[^/]+\/export\.md$/)
@@ -322,20 +339,20 @@ for (const viewport of sizes) {
         },
       })
       await openBoldJob(page, /Activity feed/)
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed').click()
       await page.getByRole('menuitem', { name: 'Rename…' }).click()
       const dialog = page.getByRole('dialog')
       await expect(dialog).toHaveAttribute('data-protected', 'any')
       await dialog.getByLabel('Name').fill('Activity feed v2')
       await dialog.getByRole('button', { name: 'Rename' }).click()
       await expect(page.getByRole('status').filter({ hasText: 'Renamed' })).toBeVisible()
-      if (viewport.width > 860)
-        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
-      else {
-        // 3.21.0: a phone's chat bar names the chat, not the job; the renamed job shows on the job list.
+      await expect(topicHead(page, 'Activity feed v2')).toBeVisible()
+      if (viewport.width <= 860) {
+        // A phone's chat bar names the chat, not the job; the renamed job shows on the topic list.
         await openPhoneJobList(page)
         await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toBeVisible()
-        await page.getByRole('button', { name: /^Activity feed v2\./ }).click()
+        // The Needs you box covers the rows on a phone (reported); a tap cannot reach them.
+        await page.getByRole('button', { name: /^Activity feed v2\./ }).dispatchEvent('click')
       }
       expect(
         state.requests.find(
@@ -343,23 +360,21 @@ for (const viewport of sizes) {
         )?.body,
       ).toEqual({ title: 'Activity feed v2' })
 
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed v2').click()
       await page.getByRole('menuitem', { name: 'Close' }).click()
       await expect(
         page.getByRole('status').filter({ hasText: 'Closed “Activity feed v2”' }),
       ).toBeVisible()
       if (viewport.width > 860) {
-        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toHaveCount(0)
-        await page.getByRole('button', { name: 'Closed jobs', exact: true }).click()
-        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
-        await page.getByRole('tab', { name: /Activity feed v2/ }).click()
+        // 3.22.0: a closed topic stays in the conversation, marked closed, with its menu (no Closed jobs chip).
+        await expect(topicHead(page, 'Activity feed v2')).toContainText('closed')
       } else {
         await openPhoneJobList(page)
         await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toHaveCount(0)
-        await page.getByRole('button', { name: 'Closed jobs (2)' }).click()
-        await page.getByRole('button', { name: /^Activity feed v2\./ }).click()
+        await page.getByRole('button', { name: 'Closed topics (2)' }).click()
+        await page.getByRole('button', { name: /^Activity feed v2\./ }).dispatchEvent('click')
       }
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed v2').click()
       await page.getByRole('menuitem', { name: 'Reopen' }).click()
       await expect(
         page.getByRole('status').filter({ hasText: 'Reopened “Activity feed v2”' }),
@@ -399,7 +414,7 @@ for (const viewport of sizes) {
         },
       })
       await openBoldJob(page, /Activity feed/)
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed').click()
       await page.getByRole('menuitem', { name: 'Delete job' }).click()
       const dialog = page.getByRole('dialog')
       await expect(dialog).toHaveAttribute('data-protected', 'any')
@@ -407,8 +422,7 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Delete job' }).click()
       const undo = page.getByRole('status').filter({ hasText: 'Job deleted' })
       await expect(undo).toBeVisible()
-      if (viewport.width > 860)
-        await expect(page.getByRole('tab', { name: /Activity feed/ })).toHaveCount(0)
+      if (viewport.width > 860) await expect(topicHead(page, 'Activity feed')).toHaveCount(0)
       else {
         await openPhoneJobList(page)
         await expect(page.getByRole('button', { name: /^Activity feed\./ })).toHaveCount(0)
@@ -417,8 +431,7 @@ for (const viewport of sizes) {
       await expect(
         page.getByRole('status').filter({ hasText: 'Restored “Activity feed”' }),
       ).toBeVisible()
-      if (viewport.width > 860)
-        await expect(page.getByRole('tab', { name: /Activity feed/ })).toBeVisible()
+      if (viewport.width > 860) await expect(topicHead(page, 'Activity feed')).toBeVisible()
       else await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeVisible()
       expect(
         state.requests.some(
@@ -433,10 +446,10 @@ for (const viewport of sizes) {
       await page.reload()
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
       if (viewport.width > 860) {
-        await page.getByRole('button', { name: 'Closed jobs', exact: true }).click()
-        await expect(page.getByRole('tab', { name: /Old import/ })).toBeVisible()
+        // 3.22.0: a closed topic is a divider in the conversation, marked closed.
+        await expect(topicHead(page, 'Old import')).toContainText('closed')
       } else {
-        await page.getByRole('button', { name: 'Closed jobs (1)' }).click()
+        await page.getByRole('button', { name: 'Closed topics (1)' }).click()
         await expect(page.getByRole('button', { name: /^Old import\./ })).toBeVisible()
       }
     })
@@ -474,7 +487,7 @@ for (const viewport of sizes) {
         },
       })
       await openBoldJob(page, /Activity feed/)
-      await page.getByRole('button', { name: 'Job menu' }).click()
+      await jobMenu(page, 'Activity feed').click()
       await page.getByRole('menuitem', { name: 'Delete job' }).click()
       const dialog = page.getByRole('dialog')
       await dialog.getByLabel(/Type Activity feed to confirm/).fill('Activity feed')
@@ -497,7 +510,7 @@ for (const viewport of sizes) {
     test(`the job menu works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
       await openBoldJob(page, /Activity feed/)
-      const trigger = page.getByRole('button', { name: 'Job menu' })
+      const trigger = jobMenu(page, 'Activity feed')
       await trigger.click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       const renameItem = menu.getByRole('menuitem', { name: 'Rename…' })
@@ -553,7 +566,7 @@ for (const viewport of sizes) {
       await side.getByRole('button', { name: 'Bring into a job' }).click()
       await expect(page).toHaveURL(/job=job-brought/)
       if (viewport.width > 860)
-        await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
+        await expect(topicHead(page, 'Plan the launch checklist')).toBeVisible()
       else {
         await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
         await expect(page.locator('.bold-chat-phone-id')).toContainText('Plan the launch checklist')
@@ -646,16 +659,16 @@ for (const viewport of sizes) {
       await expect(side.getByRole('alert')).toContainText('kept while this page is open')
 
       if (viewport.width > 860) {
-        // The side panel's mode button names the chat while Elsewhere is open; its menu switches back to Work.
-        await side.locator('.side-toggle').click()
-        await side.getByRole('button', { name: /^Work/ }).click()
+        // 3.22.0: the panel has no mode button; the header's Chat info brings Info back over the Elsewhere view.
+        await page.getByRole('button', { name: 'Chat info' }).click()
+        await expect(page.getByRole('tab', { name: 'Info' })).toBeVisible()
       } else {
         await side.getByRole('button', { name: 'Close side panel' }).click()
       }
       const reopened = page.getByRole('complementary', { name: 'Side panel' })
-      await page.locator('.roomtitle').click()
-      await page
-        .getByRole('listbox', { name: 'Rooms and chats elsewhere' })
+      await (
+        await openRoomPicker(page)
+      )
         .getByRole('option', { name: /Plan the launch checklist/ })
         .click()
       // On a phone the closed sheet keeps the view (and its loaded preview); on a desktop the view remounts, which is

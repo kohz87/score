@@ -84,7 +84,7 @@ for (const { name, viewport } of sizes) {
 
     test('one to one', async ({ page }) => {
       await page.goto('/b?with=builder')
-      const composer = page.locator('#bold-side-panel .chat-composer-box--room').first()
+      const composer = page.locator('.chat-composer-box--room').first() // 3.22.0: a one-to-one's composer is in the chat
       await expect(composer).toBeVisible({ timeout: 20_000 })
       await checkMenu(page, composer)
     })

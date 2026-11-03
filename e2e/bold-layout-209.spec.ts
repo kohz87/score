@@ -40,9 +40,14 @@ for (const viewport of sizes) {
           ? { status: 200, body: { items, unavailable: [] } }
           : undefined,
     })
-    // 3.21.0: a phone has the room switcher on the job list.
-    if (viewport.width < 861) await page.goto('/b?jobs=1')
-    await page.locator('.roomtitle').click()
+    // 3.21.0: a phone has the room switcher on the job list; 3.22.0: on a desktop it is in the room menu.
+    if (viewport.width < 861) {
+      await page.goto('/b?jobs=1')
+      await page.locator('button.roomtitle').click()
+    } else {
+      await page.getByRole('button', { name: 'Room menu' }).click()
+      await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
+    }
     const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
     const rows = picker.getByRole('option', { name: /lead · API/ })
     await expect(rows).toHaveCount(items.length)
@@ -69,13 +74,9 @@ for (const viewport of sizes) {
 async function openNote(page: Page, size: { width: number; height: number }) {
   await pair(page)
   await page.setViewportSize(size)
-  // The Library needs the width: a folded chat list (3.21.0) gives it back.
-  await page.addInitScript(() => localStorage.setItem('score.chats.folded', '1'))
-  await page.goto('/b?open=1')
+  // 3.22.0: the Library side-panel mode is gone; the same note view is the Knowledge page.
+  await page.goto('/b/knowledge')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
-  await page.locator('button.side-toggle').click()
-  await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
   await page
     .getByRole('navigation', { name: 'Library notes' })
@@ -104,7 +105,11 @@ for (const viewport of noteSizes) {
       expect(panel!.width).toBeGreaterThanOrEqual(1180)
       expect(rail!.x).toBeGreaterThanOrEqual(editor!.x + editor!.width)
     } else {
-      expect(rail!.y).toBeGreaterThanOrEqual(editor!.y + editor!.height - 1)
+      // 3.22.0: on the Knowledge page (not the narrow side panel) the details sit beside the note where there is room
+      // and below it where there is not; they never overlap it.
+      const beside = rail!.x >= editor!.x + editor!.width - 1
+      const below = rail!.y >= editor!.y + editor!.height - 1
+      expect(beside || below).toBe(true)
     }
     if (viewport.width === 1440) {
       const cards = await side.locator('.kn-panel').evaluateAll((nodes) =>

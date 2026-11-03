@@ -97,7 +97,10 @@ for (const id of boldThemeIds) {
         if (variant === 'phone') {
           await expect(page.locator('.bold-chat-phone-bar')).toBeVisible()
           await expect(page.getByRole('combobox', { name: 'Message Team room' })).toBeVisible()
-        } else await expect(page.getByRole('tab', { name: /Release notes 2\.4/ })).toBeVisible()
+        } else
+          await expect(
+            page.getByRole('separator', { name: /^Topic: Release notes 2\.4/ }),
+          ).toBeVisible()
         await settle(page)
         await expect(page).toHaveScreenshot(`bold-${id}-room-${variant}.png`, {
           animations: 'disabled',
