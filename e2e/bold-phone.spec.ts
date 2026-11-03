@@ -66,9 +66,9 @@ for (const size of sizes) {
       // 3.21.0: a chat opens in its conversation; the job list is one step away (`?jobs=1`, from the Info sheet).
       await page.goto('/b?jobs=1')
 
-      const jobs = page.getByRole('region', { name: 'Jobs' })
-      await expect(jobs.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-      const teamRow = jobs.getByRole('button', { name: /^Team room\./ })
+      const jobs = page.getByRole('region', { name: 'All topics' })
+      await expect(jobs.getByRole('heading', { name: 'All topics' })).toBeVisible()
+      const teamRow = jobs.getByRole('button', { name: /^General conversation\./ })
       await expect(teamRow).toBeVisible()
       const done = jobs.getByRole('button', { name: /^Queue research\./ })
       await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
@@ -88,11 +88,12 @@ for (const size of sizes) {
       const pinBox = await pinned.boundingBox()
       const stripBox = await page.locator('.bold-pins').boundingBox()
       expect(pinBox!.y + pinBox!.height).toBeLessThanOrEqual(stripBox!.y + stripBox!.height + 1)
-      expect(
-        await page
-          .locator('.bold-pins')
-          .evaluate((strip) => strip.scrollHeight <= strip.clientHeight),
-      ).toBe(true)
+      // 3.22.0: the strip no longer folds to one card; when the cards do not all fit it scrolls and says how many are
+      // below ("N more below"), so nothing is cut off silently.
+      const scrolls = await page
+        .locator('.bold-pins')
+        .evaluate((strip) => strip.scrollHeight > strip.clientHeight)
+      if (scrolls) await expect(page.locator('.bold-pins-more')).toBeVisible()
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       await expectAtLeast44(jobs.getByRole('button', { name: /^Activity feed\./ }))
       // The job list (`?jobs=1`) keeps the room title row, with its own side-panel button.
@@ -104,11 +105,15 @@ for (const size of sizes) {
       await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       await expect(page.locator('.bold-chat-phone-id')).toContainText('Activity feed')
       await expect(page.locator('.bold-chat-phone-id')).toContainText('working')
-      await expect(page.getByRole('region', { name: 'Jobs' })).toHaveCount(0)
+      await expect(page.getByRole('region', { name: 'All topics' })).toHaveCount(0)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
-      await expectAtLeast44(page.getByRole('button', { name: 'Open thread for Activity feed' }))
-      for (const label of ['Job menu', 'Show deleted messages'])
-        await expectAtLeast44(page.getByRole('button', { name: label }))
+      // 3.22.0: the Thread panel is gone (the chat is the thread) and "Show deleted messages" moved into the room menu;
+      // a topic divider has its own Job menu.
+      await expectAtLeast44(page.getByRole('button', { name: 'Job menu' }).first())
+      await expectAtLeast44(page.getByRole('button', { name: 'Room menu' }))
+      await page.getByRole('button', { name: 'Room menu' }).click()
+      await expectAtLeast44(page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }))
+      await page.keyboard.press('Escape')
       await expectAtLeast44(page.getByRole('button', { name: 'Chat info' }))
 
       const composer = page.getByRole('combobox', { name: /^Message Team room/ })
@@ -126,7 +131,7 @@ for (const size of sizes) {
 
       await page.goBack()
       await expect(page).toHaveURL(/jobs=1/)
-      await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
     })
 
@@ -141,7 +146,7 @@ for (const size of sizes) {
 
       await page.goBack()
       await expect(page).toHaveURL(/jobs=1/)
-      await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'All topics' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Back to chats' })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
     })
@@ -151,7 +156,7 @@ for (const size of sizes) {
     }) => {
       const state = await openBoldRoom(page)
       await page.goto('/b?jobs=1')
-      const teamRow = page.getByRole('button', { name: /^Team room\..*/ })
+      const teamRow = page.getByRole('button', { name: /^General conversation\..*/ })
       await expect(teamRow).toBeVisible()
       await expect(teamRow).toContainText('lead is working')
 
@@ -163,9 +168,9 @@ for (const size of sizes) {
         (request) => request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
       )?.body as Record<string, unknown> | undefined
       expect(sent).toEqual(expect.objectContaining({ text: 'A note to the team.' }))
-      // From the list the composer sends with no jobId, so the server files it in the default job (as All does on
-      // desktop): any other job here would be a regression.
-      expect(sent && 'jobId' in sent ? sent['jobId'] : undefined).toBeUndefined()
+      // 3.22.0 (brief item 2): the composer sends to the current topic, the newest open one (here Activity feed), and
+      // the context bar says so.
+      expect(sent?.['jobId']).toBe('job-activity')
 
       await teamRow.click()
       await expect(page).toHaveURL(/job=job-default/)
@@ -217,22 +222,19 @@ for (const size of sizes) {
       await expect(opener).toBeFocused()
     })
 
-    test('one Escape closes the side-panel menu, the next closes the sheet', async ({ page }) => {
+    test('Escape closes the sheet on its Results tab and returns focus', async ({ page }) => {
+      // 3.22.0: the panel's mode menu is gone (Info | Results tabs), so there is no inner menu to close first.
       await openBoldRoom(page)
       const opener = page.getByRole('button', { name: 'Chat info' }).first()
       await opener.click()
       const panel = page.getByRole('complementary', { name: 'Side panel' })
       await expect(panel).toBeVisible()
 
-      const toggle = panel.getByRole('button', { name: /^Info/ })
-      await toggle.click()
-      const menu = panel.locator('.side-menu')
-      await expect(menu).toBeVisible()
-
-      await page.keyboard.press('Escape')
-      await expect(menu).toHaveCount(0)
-      await expect(panel).toBeVisible()
-      await expect(toggle).toBeFocused()
+      await panel.getByRole('tab', { name: 'Results' }).click()
+      await expect(panel.getByRole('tab', { name: 'Results' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
 
       await page.keyboard.press('Escape')
       await expect(panel).toBeHidden()
@@ -357,24 +359,21 @@ for (const size of sizes) {
       .locator('.bold-agentcard')
       .filter({ has: page.getByRole('link', { name: 'builder', exact: true }) })
     await builder.getByRole('link', { name: 'Message', exact: true }).click()
-    await expect(page).toHaveURL(/\/b\?with=builder&chat=job_/)
-    const panel = page.getByRole('complementary', { name: 'Side panel' })
-    await expect(panel).toBeVisible()
-    await expect(panel).toHaveAttribute('aria-modal', 'true')
-    const privacy = panel.locator('[data-protected].bold-dm-privacy')
+    await expect(page).toHaveURL(/\/b\?with=builder/)
+    // 3.22.0: a one-to-one is the chat view itself (full screen on a phone), with the agent's earlier chats as topics.
+    const privacy = page.locator('[data-protected].bold-dm-privacy')
     await expect(privacy).toBeVisible()
     await expect(privacy).toHaveText('Only you and builder see this')
-    await expect(panel.locator('.bold-dm-thread')).toBeVisible()
-    await expectAtLeast44(panel.getByRole('button', { name: 'Earlier chats' }))
-    const composer = panel.getByPlaceholder('Message builder privately')
+    await expect(page.locator('#bold-room-stream, .bold-dm-welcome').first()).toBeVisible()
+    const composer = page.getByPlaceholder('Message builder privately')
     await expectAtLeast44(composer)
-    await expectAtLeast44(panel.locator('button.chat-send'))
+    await expectAtLeast44(page.locator('button.chat-send'))
     await page.screenshot({ path: testInfo.outputPath(`bold-phone-one-to-one-${size.width}.png`) })
 
-    await page.getByRole('button', { name: 'Back', exact: true }).click()
-    // A phone one-to-one is a sheet over the room: Back closes it where it came from.
+    await page.getByRole('button', { name: 'Back to chats' }).click()
+    // Back returns to the chat list.
     await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-    await expect(panel).toBeHidden()
+    await expect(composer).toBeHidden()
     await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
     await expectTabBar(page, 'Chats')
   })
@@ -389,13 +388,13 @@ test('Search opens a one-to-one full screen and Back returns to the job list', a
   await query.fill('Message reviewer')
   await search.getByRole('option', { name: 'Message reviewer' }).click()
   await expect(search).toBeHidden()
-  const panel = page.getByRole('complementary', { name: 'Side panel' })
-  await expect(panel).toBeVisible()
+  const composer = page.getByPlaceholder('Message reviewer privately')
+  await expect(composer).toBeVisible()
   await expect(page).toHaveURL(/with=reviewer/)
-  await expect(panel.locator('[data-protected].bold-dm-privacy')).toContainText(
+  await expect(page.locator('[data-protected].bold-dm-privacy')).toContainText(
     'Only you and reviewer see this',
   )
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Back to chats' }).click()
   await expect(page).toHaveURL(/\/b(\?open=1)?$/)
-  await expect(panel).toBeHidden()
+  await expect(composer).toBeHidden()
 })

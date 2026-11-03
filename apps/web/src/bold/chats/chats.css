@@ -769,3 +769,31 @@
 [data-ui='bold'] .bold-topic-info .bold-thread-stop-confirm {
   padding: 12px 14px;
 }
+
+/* 3.22.0 review: the bar's meter is the context meter's trigger (its popover holds the breakdown and Compact). */
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger {
+  min-height: 28px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:hover {
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The bar's meter sits on the left: its popover opens up and to the right, inside the screen. */
+[data-ui='bold'] .bold-context-bar .chat-ctx-panel {
+  right: auto;
+  left: 0;
+}

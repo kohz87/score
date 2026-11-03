@@ -541,7 +541,8 @@ for (const viewport of sizes) {
       ).toEqual({ option: 'more_turns', turns: 4 })
     })
 
-    test(`the strip shows one card and expands the rest at ${label}`, async ({ page }) => {
+    test(`the strip shows every card at once, with no fold, at ${label}`, async ({ page }) => {
+      // 3.22.0 (brief item 8): the strip no longer folds to one card behind an "N more need you" button.
       await openBoldRoom(page, {
         jobs: roomJobs(),
         approvals: [
@@ -553,14 +554,9 @@ for (const viewport of sizes) {
       const first = page.getByRole('article', { name: /May I install a package/ })
       const second = page.getByRole('article', { name: /May I deploy/ })
       await expect(first).toBeVisible()
-      await expect(second).toBeHidden()
-      await expect(page.locator('.bold-pins')).toHaveAttribute('data-expanded', 'false')
-
-      await page.getByRole('button', { name: '1 more needs you' }).click()
       await expect(second).toBeVisible()
-      await expect(page.locator('.bold-pins')).toHaveAttribute('data-expanded', 'true')
-      await page.getByRole('button', { name: 'Show fewer' }).click()
-      await expect(second).toBeHidden()
+      await expect(page.locator('.bold-pins')).not.toHaveAttribute('data-expanded', /.*/)
+      await expect(page.getByRole('button', { name: /more needs? you|Show fewer/ })).toHaveCount(0)
     })
 
     test(`a question from the lead is answered in place at ${label}`, async ({ page }) => {
@@ -709,7 +705,7 @@ for (const viewport of sizes) {
         ]),
       })
       await showAllJobsOnPhone(page)
-      await page.getByRole('button', { name: '2 more need you' }).click()
+      // 3.22.0: no fold; every card is already in view.
 
       const retry = page
         .getByRole('article', { name: /A step needs another try/ })

@@ -1553,7 +1553,9 @@
 
   [data-ui='bold'] .bold-phone-jobs {
     flex: 1;
-    min-height: 0;
+    /* With the needs-you cards unfolded and the composer's context bar, the list was squeezed to 6px at 360x740: keep
+       one row reachable (the cards above give way first, see .bold-pins). */
+    min-height: 6rem;
     overflow-y: auto;
     overscroll-behavior: contain;
     display: flex;
@@ -1783,6 +1785,10 @@
     /* The prototype's 40% clips the first card's actions at 360×740; the card is the decision, so let it fit. Capped so
        a short screen (the keyboard up) keeps room for the jobs and the stream. */
     max-height: min(52%, 22rem);
+    /* The context bar made the composer taller; the cards give way (and scroll) before the composer is pushed under the
+       tab bar, but never below the first card's decision. */
+    flex: 0 1 auto;
+    min-height: min(11rem, 100%);
   }
 
   [data-ui='bold'] .bold-starters {

@@ -539,8 +539,12 @@ function LoadedTeamRoom({
                 : 'Message the chat · @ someone · / for commands'
           }
           topicCommands={olderRoom ? undefined : topicCommands}
-          footer={({ to, subject }) => (
+          footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
+              finishedReplies={finishedReplies}
+              compactSignal={compactSignal}
+              compactSubject={compactSubject}
+              roomId={room.id}
               to={to}
               subjectId={subject}
               agents={agents}
