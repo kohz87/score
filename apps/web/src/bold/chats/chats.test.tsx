@@ -311,3 +311,14 @@ test('on a phone the list is the first screen; a chat opens full screen and Back
   await waitFor(() => expect(router.state.location.search).toBe(''))
   expect(await list()).toBeDefined()
 })
+
+test('on a phone every group chat has the back bar, and the chat opens on its conversation with the title once', async () => {
+  phone = true
+  const router = open('/b?room=feed')
+  const back = await screen.findByRole('button', { name: 'Back to chats' })
+  expect(screen.getAllByText('Feed crew').length).toBe(1)
+  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+  fireEvent.click(back)
+  await waitFor(() => expect(router.state.location.search).toBe(''))
+  expect(await list()).toBeDefined()
+})
