@@ -173,10 +173,10 @@ for (const id of themed) {
     test(`${id} paints the bold shell in ${mode}`, async ({ page }) => {
       await pair(page)
       await wearBuiltin(page, id, mode)
-      await page.goto('/b/team')
+      await page.goto('/b/agents')
       const shell = page.locator('[data-ui="bold"]')
       await expect(shell).toHaveAttribute('data-look', mode)
-      await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible()
       // The shell's ground and its panels are the theme's ground and card.
       // (A theme with a background picture lets it through: the shell is clear and the picture's veil is the ground.)
       const ground = rgb(themeColour(id, mode, 'ground'))
@@ -210,7 +210,7 @@ for (const id of themed) {
 test('Score itself keeps the prototype’s dark and light sets', async ({ page }) => {
   await pair(page)
   await wearBuiltin(page, 'score', 'dark')
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   const shell = page.locator('[data-ui="bold"]')
   await expect(shell).toHaveCSS('background-color', 'rgb(18, 19, 26)')
 })
@@ -218,7 +218,7 @@ test('Score itself keeps the prototype’s dark and light sets', async ({ page }
 test('safe mode and the reset shortcut work on the new shell', async ({ page }) => {
   await pair(page)
   await wearBuiltin(page, 'harbour', 'dark')
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   const shell = page.locator('[data-ui="bold"]')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   await expect
@@ -230,7 +230,7 @@ test('safe mode and the reset shortcut work on the new shell', async ({ page }) 
     })
     .toBe(rgb(themeColour('harbour', 'dark', 'ground')))
 
-  await page.goto('/b/team?look=safe')
+  await page.goto('/b/agents?look=safe')
   await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
   await expect(shell).toHaveCSS('background-color', 'rgb(18, 19, 26)')
   const banner = page.getByRole('status').filter({ hasText: 'Safe look' })
@@ -240,7 +240,7 @@ test('safe mode and the reset shortcut work on the new shell', async ({ page }) 
   await expect(page).toHaveURL(/\/b\/settings\/look/)
   await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
 
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   await page.keyboard.press('Control+Shift+Digit0')
   await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -255,8 +255,8 @@ test('the Customizer previews the new look’s screens in the chosen colours', a
   const frame = page.frameLocator('iframe[title="Preview of your theme"]')
   const hostBody = page.locator('body')
 
-  await picker.selectOption({ label: 'Team' })
-  await expect(frame.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible({
+  await picker.selectOption({ label: 'Agents' })
+  await expect(frame.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible({
     timeout: 30_000,
   })
   const shell = frame.locator('[data-ui="bold"]')

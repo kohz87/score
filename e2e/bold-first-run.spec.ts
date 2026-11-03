@@ -84,8 +84,8 @@ async function firstRunFlow(page: Page, origin: string, pairingToken: string) {
   for (const id of ['lead', 'builder', 'reviewer', 'designer'])
     await expect(members.getByText(id, { exact: true })).toBeVisible()
   await expect(
-    page.getByRole('link', { name: 'Add or remove agents on the Team page' }),
-  ).toHaveAttribute('href', '/b/team')
+    page.getByRole('link', { name: 'Add or remove agents on the Agents page' }),
+  ).toHaveAttribute('href', '/b/agents')
 
   const open = page.getByRole('button', { name: 'Open the team room' })
   await expect(open).toBeDisabled()

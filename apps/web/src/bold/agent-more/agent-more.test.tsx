@@ -315,28 +315,23 @@ test('Workspace shows the newest files first and opens one', async () => {
   expect(onOpen).toHaveBeenCalledWith('events.py')
   fireEvent.click(screen.getByRole('button', { name: 'Browse all files' }))
   expect(onOpen).toHaveBeenLastCalledWith(null)
-  fireEvent.click(screen.getByRole('button', { name: 'Set folder' }))
-  expect(screen.getByRole('textbox', { name: 'Folder on this computer' })).toBeDefined()
+  // 3.20.0: the folder is read-only here; shared workspaces are set in Settings.
+  expect(screen.queryByRole('button', { name: 'Set folder' })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: 'Folder on this computer' })).toBeNull()
+  expect(
+    screen
+      .getByRole('link', { name: 'Workspaces are set in Settings › Workspaces' })
+      .getAttribute('href'),
+  ).toBe('/b/settings/workspaces')
 })
 
-test('3.13.2: a coding agent’s folder is set through its own settings, a Hermes agent’s through the workspace', async () => {
-  override = (path, method) => {
-    if (path.endsWith('/coding-agents/coder') && method === 'PATCH') return Response.json({})
-    if (path.endsWith('/workspace/root') && method === 'PUT')
-      return Response.json({ root: '/home/user/repo', available: true, reason: null })
-    return null
-  }
+test('3.20.0: neither a coding agent’s nor a Hermes agent’s folder can be changed from the agent page', async () => {
   mount(
     <WorkspaceCard agent={{ ...agent, id: 'coder', runtime: 'claude-code' }} onOpen={vi.fn()} />,
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Set folder' }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Folder on this computer' }), {
-    target: { value: '/home/user/repo' },
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Use this folder' }))
-  await waitFor(() =>
-    expect(sent('PATCH', '/coding-agents/coder')?.body).toEqual({ workspace: '/home/user/repo' }),
-  )
+  await screen.findByRole('link', { name: /Settings › Workspaces/ })
+  expect(screen.queryByRole('button', { name: 'Set folder' })).toBeNull()
+  expect(sent('PATCH', '/coding-agents/coder')).toBeUndefined()
   expect(sent('PUT', '/workspace/root')).toBeUndefined()
 })
 

@@ -6,7 +6,7 @@ import { pair } from './pair.ts'
 // Settings. Everything is undone at the end so other specs see the demo as it was.
 test('fallback chain, aliases, speech models and the chosen-models list', async ({ page }) => {
   await pair(page)
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   const panel = page.locator('#agent-model')
 
   const chain = panel.getByRole('group', { name: 'Fallback models' })
@@ -49,7 +49,7 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
       await chosen.getByRole('checkbox', { name: /local-gpt-mini/ }).check()
       await chosen.getByRole('button', { name: 'Save chosen models' }).click()
       await expect(chosen.getByText('1 chosen. Pickers list only these.')).toBeVisible()
-      await page.goto('/b/team/designer')
+      await page.goto('/b/agents/designer')
       const picker = page
         .locator('#agent-model')
         .getByRole('combobox', { name: 'Model', exact: true })
@@ -76,7 +76,7 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
       })
     }
   })
-  await page.goto('/b/team/designer')
+  await page.goto('/b/agents/designer')
   const undo = page.locator('#agent-model')
   await undo.getByRole('button', { name: 'Remove alias quick' }).click()
   await expect(undo.getByText('No aliases yet.')).toBeVisible()

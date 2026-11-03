@@ -66,8 +66,8 @@ const recipesReady: Ready = async (page) => {
 const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'room', path: '/b', ready: roomReady },
   { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-head') },
-  { name: 'team', path: '/b/team', ready: visible('.bold-agentcard') },
-  { name: 'agent', path: '/b/team/builder', ready: visible('.bold-agent') },
+  { name: 'team', path: '/b/agents', ready: visible('.bold-agentcard') },
+  { name: 'agent', path: '/b/agents/builder', ready: visible('.bold-agent') },
   { name: 'recipes', path: '/b/recipes', ready: recipesReady },
   { name: 'settings', path: '/b/settings', ready: visible('.bold-settings-page') },
   { name: 'usage', path: '/b/settings/usage', ready: usageReady },

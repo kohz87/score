@@ -206,7 +206,7 @@ test('a run’s old addresses open it in the Runs panel and keep the query', asy
 
 test.each([
   ['/now', '/b'],
-  ['/now/routines', '/b/team'],
+  ['/now/routines', '/b/agents'],
   ['/now/unknown', '/b'],
   ['/tasks', '/b/tasks'],
   ['/tasks/demo', '/b/tasks'],
@@ -220,6 +220,19 @@ test.each([
   await waitFor(() => expect(router.state.location.pathname).toBe(target))
 })
 
+test.each([
+  ['/b/team', '/b/agents'],
+  ['/b/team?add=agent', '/b/agents?add=agent'],
+  ['/b/team/lead', '/b/agents/lead'],
+  ['/b/team/lead?path=a#agent-workspace', '/b/agents/lead?path=a'],
+  ['/b/knowledge?note=a.md', '/b/knowledge?note=a.md'],
+])('the Team page address %s leads to %s', async (from, to) => {
+  const router = renderRoute(from)
+  await waitFor(() =>
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(to),
+  )
+})
+
 test('old /now links keep their query string when they redirect', async () => {
   const router = renderRoute('/now/watch/builder?from=12')
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/screen/builder'))
@@ -229,11 +242,11 @@ test('old /now links keep their query string when they redirect', async () => {
 test.each([
   ['/chat', '/b'],
   ['/chat/room-1?job=j1', '/b?room=room-1&job=j1'],
-  ['/team?add=agent', '/b/team?add=agent'],
-  ['/team/lead', '/b/team/lead'],
-  ['/team/lead/workspace?path=a', '/b/team/lead?path=a'],
-  ['/knowledge', '/b?library=1'],
-  ['/knowledge/projects/plan.md', '/b?note=projects%2Fplan.md'],
+  ['/team?add=agent', '/b/agents?add=agent'],
+  ['/team/lead', '/b/agents/lead'],
+  ['/team/lead/workspace?path=a', '/b/agents/lead?path=a'],
+  ['/knowledge', '/b/knowledge'],
+  ['/knowledge/projects/plan.md', '/b/knowledge?note=projects%2Fplan.md'],
   ['/reports?range=30d', '/b/settings/usage?range=30d'],
   ['/settings', '/b/settings'],
   ['/settings/rules?x=1', '/b/settings/rules?x=1'],

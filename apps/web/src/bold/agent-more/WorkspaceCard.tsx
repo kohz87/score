@@ -1,17 +1,13 @@
-import { useState, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import type { AgentDetail } from '@score/contract'
-import { ApiError, apiFetch } from '../../data/api.ts'
+import { ApiError } from '../../data/api.ts'
 import {
   useGitStatus,
   useTree,
   useWorkspace,
-  useWorkspaceActions,
-  workspaceFailure,
-  workspaceKey,
   WorkspaceRootContext,
 } from '../../routes/team/workspace-queries.ts'
-import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
+import { Fail, Loading, MoreCard } from './MoreCard.tsx'
 
 function RecentFiles({
   agentId,
@@ -55,7 +51,7 @@ function RecentFiles({
   )
 }
 
-/** Where it works, the newest files, and the way into the full file browser (the Files panel under the cards). */
+/** Where it works (read-only), the newest files, and the way into the full file browser (the Files panel under the cards). */
 export function WorkspaceCard({
   agent,
   onOpen,
@@ -64,35 +60,9 @@ export function WorkspaceCard({
   onOpen: (path: string | null) => void
 }) {
   const info = useWorkspace(agent.id)
-  const actions = useWorkspaceActions(agent.id)
-  const queryClient = useQueryClient()
-  // 3.13.2 (owner: "Coding agents don't have this: it's a Hermes feature"): a coding agent's folder is one of its own
-  // settings, changed through its settings route; a Hermes agent's is its profile's working directory.
-  const codingFolder = useMutation({
-    mutationFn: (path: string) =>
-      apiFetch(`coding-agents/${encodeURIComponent(agent.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ workspace: path }),
-      }),
-    onSuccess: async () => {
-      queryClient.removeQueries({ queryKey: [...workspaceKey(agent.id), 'tree'] })
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: workspaceKey(agent.id) }),
-        queryClient.invalidateQueries({ queryKey: ['coding'] }),
-      ])
-    },
-  })
-  const setRoot =
-    agent.runtime !== undefined && agent.runtime !== 'hermes' ? codingFolder : actions.setRoot
-  const [setting, setSetting] = useState(false)
-  const [folder, setFolder] = useState('')
   const root = info.data?.root ?? null
   const usable = info.data?.available === true && root !== null
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    setRoot.mutate(folder.trim(), { onSuccess: () => setSetting(false) })
-  }
   return (
     <MoreCard id="agent-workspace" title="Workspace">
       {info.isPending && <Loading what="workspace" />}
@@ -113,50 +83,10 @@ export function WorkspaceCard({
           <RecentFiles agentId={agent.id} onOpen={onOpen} />
         </WorkspaceRootContext.Provider>
       )}
-      {info.isSuccess && !setting && (
-        <button
-          type="button"
-          className="btn sm bold-mc-start"
-          onClick={() => {
-            setFolder(root ?? '')
-            setRoot.reset()
-            setSetting(true)
-          }}
-        >
-          Set folder
-        </button>
-      )}
-      {setting && (
-        <form onSubmit={submit} aria-label="Set folder" className="bold-mc-form">
-          <label className="lab" htmlFor={`folder-${agent.id}`}>
-            Folder on this computer
-          </label>
-          <input
-            id={`folder-${agent.id}`}
-            className="field"
-            autoFocus
-            required
-            maxLength={4096}
-            placeholder="/home/you/projects/example"
-            value={folder}
-            onChange={(event) => setFolder(event.target.value)}
-          />
-          {setRoot.isError && (
-            <Fail>{problem(setRoot.error, workspaceFailure(setRoot.error, 'set the folder'))}</Fail>
-          )}
-          <span className="row">
-            <button type="submit" className="btn sm" disabled={setRoot.isPending || !folder.trim()}>
-              {setRoot.isPending ? 'Saving…' : 'Use this folder'}
-            </button>
-            <button type="button" className="link" onClick={() => setSetting(false)}>
-              Cancel
-            </button>
-          </span>
-          <span className="small muted">
-            The folder must already exist. Score never creates it.
-          </span>
-        </form>
-      )}
+      {/* 3.20.0: the folder is no longer changed here; workspaces are shared and set in Settings. */}
+      <Link className="link bold-mc-start" to="/b/settings/workspaces">
+        Workspaces are set in Settings › Workspaces
+      </Link>
     </MoreCard>
   )
 }

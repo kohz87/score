@@ -165,8 +165,11 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-const request = (method: 'POST' | 'PATCH' | 'DELETE' | 'GET', url: string, payload?: object) =>
-  app.inject({ method, url, headers, ...(payload ? { payload } : {}) })
+const request = (
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE' | 'GET',
+  url: string,
+  payload?: object,
+) => app.inject({ method, url, headers, ...(payload ? { payload } : {}) })
 const style = { color: '#19C39A', shape: 'hexagon' }
 async function addAgent(over: Record<string, unknown> = {}): Promise<CodingAgent> {
   const response = await request('POST', '/api/coding-agents', {
@@ -592,6 +595,85 @@ test('an @mention runs Claude Code in the workspace: reply, tool cards, run, usa
   expect(JSON.parse(readFileSync(settingsPath, 'utf8')).permissions.deny).toContain(
     `Read(/${home}/**)`,
   )
+})
+
+// 3.20.0 shared workspaces: where a chat turn of a coding agent runs.
+async function sharedWorkspace(
+  name: string,
+  assigned: string[],
+): Promise<{ id: string; path: string }> {
+  const folder = join(dir, name)
+  mkdirSync(folder)
+  const created = await request('POST', '/api/workspaces', { name, path: folder })
+  expect(created.statusCode, created.body).toBe(201)
+  const id = created.json().id as string
+  if (assigned.length)
+    expect(
+      (await request('PATCH', `/api/workspaces/${id}`, { agentIds: assigned })).statusCode,
+    ).toBe(200)
+  return { id, path: created.json().path as string }
+}
+const setRoomWorkspace = (workspaceId: string | null) =>
+  request('PUT', `/api/rooms/${roomId}/workspace`, { workspaceId })
+
+test('3.20.0: a coding agent runs in the room’s workspace when assigned to it, else in its own folder', async () => {
+  await addAgent()
+  await makeRoom()
+  const shared = await sharedWorkspace('shared', ['coder'])
+  const other = await sharedWorkspace('other', [])
+  expect((await setRoomWorkspace(shared.id)).json().workspaceId).toBe(shared.id)
+  await say('@coder please add a greeting')
+  await finished(1)
+  expect(calls().at(-1)!.cwd).toBe(shared.path)
+  // A room set to a workspace the agent is not assigned to: its own folder.
+  await setRoomWorkspace(other.id)
+  await say('@coder please add another greeting')
+  await finished(2)
+  expect(calls().at(-1)!.cwd).toBe(workspace)
+  // No workspace on the room: its own folder.
+  await setRoomWorkspace(null)
+  await say('@coder and one more')
+  await finished(3)
+  expect(calls().at(-1)!.cwd).toBe(workspace)
+})
+
+test('3.20.0: a room workspace that fails the root policy is refused at admission and at launch, nothing spawns', async () => {
+  await addAgent()
+  await makeRoom()
+  const shared = await sharedWorkspace('shared2', ['coder'])
+  // Admission: the stored folder has since become one the policy refuses (Score's own home), written past the route.
+  db.sqlite.prepare('UPDATE workspaces SET path = ? WHERE id = ?').run(home, shared.id)
+  await setRoomWorkspace(shared.id)
+  const before = launches
+  await say('@coder please add a greeting')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await ingest.drain()
+  expect(launches).toBe(before)
+  expect(existsSync(log) ? calls().length : 0).toBe(0)
+  expect(runs().every((row) => row.status !== 'completed')).toBe(true)
+})
+
+test('3.20.0: the launch check applies to the room’s workspace too (folder replaced after admission)', async () => {
+  await addAgent()
+  await makeRoom()
+  const shared = await sharedWorkspace('shared3', ['coder'])
+  await setRoomWorkspace(shared.id)
+  // Hold the first turn at admission's tail by blocking the agent's previous turn is awkward; instead point the room at a
+  // folder that passes admission, then swap the stored path to a forbidden one before the queued run starts.
+  const real = coding as unknown as {
+    executeRun: (...args: unknown[]) => Promise<void>
+  }
+  const original = real.executeRun.bind(coding)
+  real.executeRun = async (...args: unknown[]) => {
+    db.sqlite.prepare('UPDATE workspaces SET path = ? WHERE id = ?').run(home, shared.id)
+    return original(...args)
+  }
+  const before = launches
+  await say('@coder please add a greeting')
+  await finished(1)
+  expect(launches).toBe(before)
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/workspace is unavailable/)
 })
 
 test('the next turn in the same room resumes the CLI session; another room does not', async () => {

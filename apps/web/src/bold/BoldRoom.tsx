@@ -201,7 +201,7 @@ export function BoldRoom() {
     return () => clearTimeout(timer)
   }, [deletedNotice])
 
-  // A direct link (dock, Search, the Team page's Message button) opens the phone sheet itself.
+  // A direct link (dock, Search, the Agents page's Message button) opens the phone sheet itself.
   useEffect(() => {
     if (phone && directMode) setSheetOpen(true)
   }, [directMode, phone, setSheetOpen])

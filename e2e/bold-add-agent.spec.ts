@@ -46,7 +46,7 @@ async function deleteCoding(page: Page, id: string) {
 async function openAdd(page: Page, width: number) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
   await pair(page)
-  await page.goto('/b/team?add=agent')
+  await page.goto('/b/agents?add=agent')
   const dialog = page.getByRole('dialog', { name: 'Add an agent' })
   await expect(dialog.getByRole('heading', { name: 'Add an agent' })).toBeVisible()
   return dialog
@@ -174,7 +174,7 @@ for (const viewport of sizes) {
       await expect(dialog.getByText(runsOn.notes[0]!)).toBeVisible()
       await expect(dialog.getByRole('link', { name: 'Where it works' })).toHaveAttribute(
         'href',
-        `/b/team/${id}#agent-where`,
+        `/b/agents/${id}#agent-where`,
       )
       created = true
     } finally {
@@ -214,7 +214,7 @@ for (const viewport of sizes) {
       await expect(dialog.getByText(`Runs on this machine as you: ${reason}`)).toBeVisible()
       await expect(dialog.getByRole('link', { name: 'Where it works' })).toHaveAttribute(
         'href',
-        `/b/team/${id}#agent-where`,
+        `/b/agents/${id}#agent-where`,
       )
       created = true
     } finally {

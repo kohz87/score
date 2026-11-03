@@ -170,7 +170,7 @@ test('linkFor sends a job’s changed file to the Workbench and any other path t
     '/b?job=job-feed&work=code&file=api%2Fevents.py',
   )
   expect(screen.getByRole('link', { name: 'other' }).getAttribute('href')).toBe(
-    '/b/team/reviewer?path=notes%2Fother.md#agent-workspace',
+    '/b/agents/reviewer?path=notes%2Fother.md#agent-workspace',
   )
 })
 

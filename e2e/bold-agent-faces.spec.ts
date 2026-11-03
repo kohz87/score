@@ -5,7 +5,7 @@ import { pair } from './pair.ts'
 
 test('every glyph on the bold Team page has two blank eyes', async ({ page }) => {
   await pair(page)
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   const cards = page.locator('.bold-agentcard .agent-glyph')
   await expect(cards.first()).toBeVisible()
   const count = await cards.count()
@@ -35,7 +35,7 @@ test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce' })
   test('eyes are static: nothing on a glyph is animating', async ({ page }) => {
     await pair(page)
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     await expect(page.locator('.bold-agentcard .agent-face__socket').first()).toBeVisible()
     const running = await page.evaluate(() =>
       document
@@ -55,7 +55,7 @@ test('without reduced motion the glyph eyes do animate (so the test above proves
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await pair(page)
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   await expect(page.locator('.bold-agentcard .agent-face__socket').first()).toBeVisible()
   await expect
     .poll(() =>
@@ -73,7 +73,7 @@ test('without reduced motion the glyph eyes do animate (so the test above proves
 test('a lively hero glyph follows the pointer and greets on a click', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await pair(page)
-  await page.goto('/b/team/builder')
+  await page.goto('/b/agents/builder')
   const hero = page.locator('.pagehead .agent-glyph')
   await expect(hero).toBeVisible()
   await expect(hero).toHaveAttribute('data-face', /idle|working|resting|needs/u)

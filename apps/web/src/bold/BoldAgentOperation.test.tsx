@@ -93,10 +93,10 @@ function wrap(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/b/team/g3']}>
+      <MemoryRouter initialEntries={['/b/agents/g3']}>
         <Routes>
-          <Route path="/b/team/g3" element={children} />
-          <Route path="/b/team" element={<p>Team list</p>} />
+          <Route path="/b/agents/g3" element={children} />
+          <Route path="/b/agents" element={<p>Team list</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

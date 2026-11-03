@@ -229,7 +229,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
         }))
     : []
 
-  // A repeating job lives on its agent's Team page, under More › Routines (11.12b): the result opens that anchor.
+  // A repeating job lives on its agent's Agents page, under More › Routines (11.12b): the result opens that anchor.
   const routines: BoldSearchResult[] = input.routines
     .filter((routine) => matches(query, routine.title, routine.description, routine.schedule))
     .map((routine) => ({

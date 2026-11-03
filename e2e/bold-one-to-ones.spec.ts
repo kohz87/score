@@ -122,7 +122,7 @@ for (const { name, viewport } of sizes) {
     })
 
     test('opens from the Team page Message button', async ({ page }) => {
-      await page.goto('/b/team')
+      await page.goto('/b/agents')
       const card = page
         .locator('.bold-agentcard')
         .filter({ has: page.getByRole('link', { name: 'reviewer', exact: true }) })

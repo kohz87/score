@@ -88,7 +88,7 @@ test('Model, Skills, Memory and Tools cards read and edit', async ({ page }) => 
     await route.fulfill({ json: state.tools.find((tool) => tool.id === id) })
   })
 
-  await page.goto('/b/team/reviewer')
+  await page.goto('/b/agents/reviewer')
   await expect(page.getByRole('heading', { name: 'reviewer', level: 1 })).toBeVisible()
 
   // Model: the "Runs on" card

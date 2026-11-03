@@ -523,8 +523,9 @@ test('a note opens in the live editor with a toolbar and no Preview / Edit / Spl
   mount('/knowledge/projects/Plan.md')
   expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
   expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeDefined()
-  for (const name of ['Preview', 'Edit', 'Split'])
-    expect(screen.queryByRole('button', { name })).toBeNull()
+  for (const name of ['Preview', 'Split']) expect(screen.queryByRole('button', { name })).toBeNull()
+  // The page's Edit only moves focus into the editor; it is not a mode switch.
+  expect(screen.getByRole('button', { name: 'Edit' }).hasAttribute('aria-pressed')).toBe(false)
   expect(document.querySelector('.cm-lp-h1')).not.toBeNull()
 })
 

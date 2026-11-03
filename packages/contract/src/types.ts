@@ -258,6 +258,8 @@ export const RoomSchema = z.object({
   pinned: z.boolean().optional(),
   archived: z.boolean().optional(),
   projectId: z.string().min(1).nullable().optional(),
+  /** 3.20.0: the shared workspace this room works in (§ Workspaces); null/absent = none. */
+  workspaceId: z.string().min(1).nullable().optional(),
   /** Explicit tags, else the `#tag` words after the first word of the name. */
   tags: z.array(z.string()).optional(),
   /** Set on a room made from a Hermes session that Score did not start. */

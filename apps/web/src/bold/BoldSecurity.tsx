@@ -48,7 +48,7 @@ function AgentWhere({ agent }: { agent: AgentSummary }) {
           {SEPARATED[runsOn.data.separated]}
         </span>
       )}
-      <Link className="link" to={`/b/team/${encodeURIComponent(agent.id)}#agent-where`}>
+      <Link className="link" to={`/b/agents/${encodeURIComponent(agent.id)}#agent-where`}>
         Runs on
       </Link>
     </li>
