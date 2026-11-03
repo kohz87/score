@@ -66,7 +66,7 @@ test('a long agent description stays on one line in the @mention menu', async ({
 })
 
 async function checkMention(page: Page, id: string, suffix: string): Promise<void> {
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill(`@long-${suffix.slice(0, 3)}`)
   const option = page

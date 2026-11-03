@@ -16,10 +16,10 @@ const sizes = [
 
 const tabs = (page: Page) => page.getByRole('navigation', { name: 'Main' })
 
-async function expectTabBar(page: Page, current: 'Room' | 'Agents' | 'Settings') {
+async function expectTabBar(page: Page, current: 'Chats' | 'Agents' | 'Settings') {
   const bar = tabs(page)
   await expect(bar).toBeVisible()
-  for (const label of ['Room', 'Agents', 'Knowledge', 'Search', 'Settings'])
+  for (const label of ['Chats', 'Agents', 'Knowledge', 'Search', 'Settings'])
     await expect(bar.getByRole('button', { name: label })).toBeVisible()
   await expect(bar.getByRole('button', { name: current })).toHaveAttribute('aria-current', 'page')
 }
@@ -62,7 +62,9 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       const state = await openBoldRoom(page)
-      await expectTabBar(page, 'Room')
+      await expectTabBar(page, 'Chats')
+      // 3.21.0: a chat opens in its conversation; the job list is one step away (`?jobs=1`, from the Info sheet).
+      await page.goto('/b?jobs=1')
 
       const jobs = page.getByRole('region', { name: 'Jobs' })
       await expect(jobs.getByRole('heading', { name: 'Jobs' })).toBeVisible()
@@ -93,20 +95,21 @@ for (const size of sizes) {
       ).toBe(true)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       await expectAtLeast44(jobs.getByRole('button', { name: /^Activity feed\./ }))
+      // The job list (`?jobs=1`) keeps the room title row, with its own side-panel button.
       await expectAtLeast44(page.getByRole('button', { name: 'Open side panel' }))
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-jobs-${size.width}.png`) })
 
       await openBoldJob(page, /^Activity feed\./)
       await expect(page).toHaveURL(/job=job-activity/)
-      await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
-      await expect(page.locator('.bold-phone-chat-id')).toContainText('Activity feed')
-      await expect(page.locator('.bold-phone-chat-id')).toContainText('builder is working')
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
+      await expect(page.locator('.bold-chat-phone-id')).toContainText('Activity feed')
+      await expect(page.locator('.bold-chat-phone-id')).toContainText('working')
       await expect(page.getByRole('region', { name: 'Jobs' })).toHaveCount(0)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       await expectAtLeast44(page.getByRole('button', { name: 'Open thread for Activity feed' }))
       for (const label of ['Job menu', 'Show deleted messages'])
         await expectAtLeast44(page.getByRole('button', { name: label }))
-      await expectAtLeast44(page.getByRole('button', { name: 'Open side panel' }))
+      await expectAtLeast44(page.getByRole('button', { name: 'Chat info' }))
 
       const composer = page.getByRole('combobox', { name: /^Message Team room/ })
       await expectAtLeast44(composer)
@@ -121,8 +124,8 @@ for (const size of sizes) {
       ).toMatchObject({ jobId: 'job-activity', text: 'Check the activity feed on a phone.' })
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-chat-${size.width}.png`) })
 
-      await page.getByRole('button', { name: 'Back to jobs' }).click()
-      await expect(page).toHaveURL('/b')
+      await page.goBack()
+      await expect(page).toHaveURL(/jobs=1/)
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
     })
@@ -131,14 +134,15 @@ for (const size of sizes) {
       page,
     }) => {
       await openBoldRoom(page)
+      await page.goto('/b?jobs=1')
       await openBoldJob(page, /^Activity feed\./)
       await expect(page).toHaveURL(/job=job-activity/)
       await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
 
       await page.goBack()
-      await expect(page).toHaveURL('/b')
+      await expect(page).toHaveURL(/jobs=1/)
       await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Back to jobs' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
     })
 
@@ -146,6 +150,7 @@ for (const size of sizes) {
       page,
     }) => {
       const state = await openBoldRoom(page)
+      await page.goto('/b?jobs=1')
       const teamRow = page.getByRole('button', { name: /^Team room\..*/ })
       await expect(teamRow).toBeVisible()
       await expect(teamRow).toContainText('lead is working')
@@ -166,7 +171,7 @@ for (const size of sizes) {
       await expect(page).toHaveURL(/job=job-default/)
       await expect(page.locator('[data-phone-chat-title]')).toHaveText('Team room')
       await expect(page.getByText('Event cursors are (created_at, id).')).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     })
 
     test('answers the pinned approval in place and reports the POST', async ({ page }) => {
@@ -191,7 +196,7 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openBoldRoom(page)
-      const opener = page.getByRole('button', { name: 'Open side panel' }).first()
+      const opener = page.getByRole('button', { name: 'Chat info' }).first()
       await expectAtLeast44(opener)
       await opener.click()
 
@@ -214,12 +219,12 @@ for (const size of sizes) {
 
     test('one Escape closes the side-panel menu, the next closes the sheet', async ({ page }) => {
       await openBoldRoom(page)
-      const opener = page.getByRole('button', { name: 'Open side panel' }).first()
+      const opener = page.getByRole('button', { name: 'Chat info' }).first()
       await opener.click()
       const panel = page.getByRole('complementary', { name: 'Side panel' })
       await expect(panel).toBeVisible()
 
-      const toggle = panel.getByRole('button', { name: /^Work/ })
+      const toggle = panel.getByRole('button', { name: /^Info/ })
       await toggle.click()
       const menu = panel.locator('.side-menu')
       await expect(menu).toBeVisible()
@@ -238,7 +243,7 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openBoldRoom(page)
-      await expectTabBar(page, 'Room')
+      await expectTabBar(page, 'Chats')
 
       await tabs(page).getByRole('button', { name: 'Agents' }).click()
       await expect(page).toHaveURL('/b/agents')
@@ -263,17 +268,23 @@ for (const size of sizes) {
       await expectAboveTabBar(page, page.locator('.setmain'))
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-settings-${size.width}.png`) })
 
-      await tabs(page).getByRole('button', { name: 'Room' }).click()
-      await expect(page).toHaveURL('/b')
-      await expectTabBar(page, 'Room')
-      await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+      await tabs(page).getByRole('button', { name: 'Chats' }).click()
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
+      await expectTabBar(page, 'Chats')
+      const chats = page.getByRole('complementary', { name: 'Chats', exact: true })
+      await expect(chats).toBeVisible()
+      // Opening the team chat from the list lands in its conversation: its stream and composer, and a way back.
+      await chats.getByRole('link', { name: /^Team room/ }).click()
+      await expect(page.getByRole('region', { name: 'Team room' })).toBeVisible()
+      await expect(page.getByRole('combobox', { name: /^Message Team room/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     })
 
     test('the Room tab keeps the Needs-you count while Agents is open', async ({ page }) => {
       await openBoldRoom(page)
       const nav = tabs(page)
-      const room = nav.getByRole('button', { name: /^Room, \d+ need you$/ })
-      await expect(room).toHaveAccessibleName('Room, 2 need you')
+      const room = nav.getByRole('button', { name: /^Chats, \d+ need you$/ })
+      await expect(room).toHaveAccessibleName('Chats, 2 need you')
       const badge = room.locator('.bold-tab-count')
       await expect(badge).toHaveText('2')
       await expect(badge).toHaveAttribute('data-protected', 'inline-flex')
@@ -284,7 +295,7 @@ for (const size of sizes) {
       await nav.getByRole('button', { name: 'Agents' }).click()
       await expect(page).toHaveURL('/b/agents')
       await expectTabBar(page, 'Agents')
-      await expect(room).toHaveAccessibleName('Room, 2 need you')
+      await expect(room).toHaveAccessibleName('Chats, 2 need you')
       await expect(badge).toHaveText('2')
     })
 
@@ -292,12 +303,14 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openMenuRoom(page)
+      // 3.21.0: older and imported rooms are not in the chat list; a phone reaches them from the picker on the job list.
+      await page.goto('/b?jobs=1')
       const picker = page.getByRole('button', { name: 'Team room', exact: true })
       await picker.click()
       await page.getByRole('option', { name: /#activity-feed/ }).click()
 
       await expect(page).toHaveURL(/room=room-old/)
-      await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
       await expect(
         page.getByText('The feed is live. Ask builder for the cursor work.'),
@@ -306,18 +319,19 @@ for (const size of sizes) {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       )
       expect(overflow).toBeLessThanOrEqual(0)
-      await expectAtLeast44(page.getByRole('button', { name: 'Back to the team room' }))
+      await expectAtLeast44(page.getByRole('button', { name: 'Back to chats' }))
       await expectAtLeast44(page.getByRole('button', { name: 'Room menu' }))
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-older-${size.width}.png`) })
 
-      await page.getByRole('button', { name: 'Back to the team room' }).click()
-      await expect(page).toHaveURL('/b')
-      await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+      await page.getByRole('button', { name: 'Back to chats' }).click()
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
+      await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
 
+      await page.goto('/b?jobs=1')
       await page.getByRole('button', { name: 'Team room', exact: true }).click()
       await page.getByRole('option', { name: /#telegram-plan #imported/ }).click()
       await expect(page).toHaveURL(/room=room-imported/)
-      await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
       await expect(page.locator('[data-phone-chat-title]')).toHaveText('#telegram-plan #imported')
       await expect(page.getByText('Outline the launch checklist.')).toBeVisible()
       expect(
@@ -359,10 +373,10 @@ for (const size of sizes) {
 
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     // A phone one-to-one is a sheet over the room: Back closes it where it came from.
-    await expect(page).toHaveURL('/b')
+    await expect(page).toHaveURL(/\/b(\?open=1)?$/)
     await expect(panel).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Open side panel' })).toBeFocused()
-    await expectTabBar(page, 'Room')
+    await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
+    await expectTabBar(page, 'Chats')
   })
 }
 
@@ -382,6 +396,6 @@ test('Search opens a one-to-one full screen and Back returns to the job list', a
     'Only you and reviewer see this',
   )
   await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await expect(page).toHaveURL('/b')
+  await expect(page).toHaveURL(/\/b(\?open=1)?$/)
   await expect(panel).toBeHidden()
 })

@@ -65,7 +65,7 @@ for (const viewport of [
     await expect(page.getByRole('button', { name: 'Set folder' })).toHaveCount(0)
 
     // A room picks it from its menu.
-    await open(page, '/b')
+    await open(page, '/b?open=1')
     await page.getByRole('button', { name: 'Room menu' }).click()
     await page.getByRole('menuitem', { name: /^Workspace:/ }).click()
     await page.getByRole('radio', { name }).check()

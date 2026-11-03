@@ -65,10 +65,17 @@ async function workbenchData(page: Page, job: Job): Promise<WorkbenchData> {
 async function openPanel(page: Page, size: Size, path: string) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto(path)
+  // 3.21.0: the side panel opens on Info by default. On desktop a `?work=` link asks for Work; on a phone Chat info opens
+  // the sheet on Info and the mode menu switches it to Work (the address keeps its `work=` tab).
+  const phone = size.width < 861
+  await page.goto(phone || path.includes('work=') ? path : `${path}&work=results`)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
   const panel = page.getByRole('complementary', { name: 'Side panel' })
+  if (phone) {
+    await page.getByRole('button', { name: 'Chat info' }).click()
+    await panel.getByRole('button', { name: /^Info/ }).click()
+    await panel.getByRole('button', { name: /^Work/ }).click()
+  }
   await expect(panel).toBeVisible()
   return panel
 }

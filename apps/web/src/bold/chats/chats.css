@@ -1,0 +1,521 @@
+/* 3.21.0 chats layout. Sizes, radii, spacing and type sizes are copied from docs/design/bold/mockups/18-chats.dc.html
+   and 18-chats-phone.dc.html; colours come from the shell's theme tokens so the dark and light looks both work. */
+
+/* The chat list column: 320px, 14px padding, a hairline on its right. */
+[data-ui='bold'] .bold-chat-list {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 14px;
+  border-right: 1px solid var(--line);
+}
+
+/* The fold rail: 72px of tiles. */
+[data-ui='bold'] .bold-chat-list.rail {
+  flex-basis: 72px;
+  width: 72px;
+  align-items: center;
+  padding: 14px 0;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-chat-tools,
+[data-ui='bold'] .bold-chat-phone-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-chat-round {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--faint);
+  background: transparent;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-list.rail .bold-chat-round,
+[data-ui='bold'] .bold-chat-round.small {
+  /* 44px: the phone's Back and Info are finger targets (the 44px floor the phone specs hold every control to). */
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-chat-round.solid {
+  border: 0;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 22px;
+}
+
+[data-ui='bold'] .bold-chat-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-chat-search::placeholder {
+  color: var(--faint);
+}
+
+[data-ui='bold'] .bold-chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-ui='bold'] .bold-chat-scroll section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-ui='bold'] .bold-chat-kicker {
+  margin: 6px 6px 0;
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-scroll section + section .bold-chat-kicker {
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .bold-chat-title {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-note {
+  margin: 4px 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 18px;
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-row.direct {
+  padding: 8px 10px;
+}
+
+[data-ui='bold'] .bold-chat-row:hover {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-chat-row.on {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-chat-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-chat-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-top b {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-chat-row.direct .bold-chat-top b {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-chat-at {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-line {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-chat-tile,
+[data-ui='bold'] .bold-chat-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* A group's tile: the lead's colour lightened (the mock-up's pastel tiles) with the dark ink on it. */
+[data-ui='bold'] .bold-chat-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--chat-color, #9aa0ad) 55%, #ffffff);
+  color: #12131a;
+  font-family: var(--font-d);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-chat-tile.is-rail {
+  width: 48px;
+  height: 48px;
+}
+
+[data-ui='bold'] .bold-chat-avatar.is-rail {
+  width: 40px;
+  height: 40px;
+}
+
+/* The light "for you" pill, the same light object the room's Needs-you card uses. */
+[data-ui='bold'] .bold-chat-needs {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-rail-item {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 16px;
+  border: 2px solid transparent;
+}
+
+[data-ui='bold'] .bold-chat-rail-item.on {
+  border-color: var(--ink);
+}
+
+[data-ui='bold'] .bold-chat-meta {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-meta b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-chat-meta code,
+[data-ui='bold'] .bold-chat-info code {
+  font-family: var(--font-m);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-chat-meta code {
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-infobtn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--faint);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-infobtn[aria-pressed='true'] {
+  background: var(--field);
+}
+
+/* The Info tab: sections with small-caps headings, members with their role text, topics with a state mark. */
+[data-ui='bold'] .bold-chat-info {
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-chat-info section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-chat-info .bold-chat-kicker {
+  margin: 0;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-info code {
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-members,
+[data-ui='bold'] .bold-chat-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-chat-members li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-chat-members li > span:first-of-type:not(.bold-chat-role) {
+  flex: 1;
+}
+
+[data-ui='bold'] .bold-chat-role {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-topics a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-chat-topics a:hover .bold-chat-topic-title {
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-chat-check {
+  color: var(--muted);
+  width: 8px;
+  text-align: center;
+}
+
+[data-ui='bold'] .bold-chat-topic-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The side column can be closed from the header's Chat info button. A plain `hidden` loses to `display: flex`. */
+[data-ui='bold'] .bold-sidecol[hidden] {
+  display: none;
+}
+
+@media (min-width: 861px) {
+  /* One chat bar (board 18): the name in the display font with the owner line under it, the menus and Chat info at the
+     right, a hairline under it. */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .bold-chat-bar {
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-chat-bar-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-chat-bar-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .roomtitle {
+    font-size: 22px;
+    color: var(--ink);
+    min-height: 32px;
+  }
+
+  /* The chat gets the width: the Info panel is a 300px column and the chat's content a centred 860px column. */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
+    width: 100%;
+    max-width: 860px;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-info-open > .bold-sidecol {
+    flex: 0 0 300px;
+  }
+
+  /* The wide Work, Library, Runs and Thread views widen the panel only while one of them is chosen. */
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .roomcol {
+    flex: 1 1 440px;
+    max-width: 600px;
+  }
+
+  /* Info is the mock-up's plain column with a hairline, not the work panel's rounded card. */
+  [data-ui='bold'] .roomgrid.bold-info-open .side {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    border-left: 1px solid var(--line);
+  }
+
+  /* A one-to-one is the chat itself: it takes the centre and the panel's width, the group's column steps aside. */
+  [data-ui='bold'] .roomgrid.bold-direct-chat > .roomcol {
+    display: none;
+  }
+
+  /* The composer: a 26px box with a hairline and a 44px send circle. */
+  [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room {
+    border: 1px solid var(--line);
+    padding: 8px 8px 8px 18px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room .chat-send {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 860px) {
+  /* The list and the chat bar run edge to edge, past the shell's 20px page padding. */
+  [data-ui='bold'] .roomgrid.bold-chats {
+    margin-inline: -20px;
+  }
+
+  [data-ui='bold'] .bold-chat-row.direct .bold-chat-top b {
+    font-weight: 700;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
+    padding-inline: 14px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-chat-phone-bar {
+    margin-inline: -14px;
+  }
+
+  /* The list is a screen of its own on a phone: 28px heading, the + button, 48px tiles, no group headings. */
+  [data-ui='bold'] .bold-chat-list {
+    flex: 1;
+    width: auto;
+    border-right: 0;
+    padding: 14px 14px 0;
+    gap: 6px;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-head {
+    justify-content: space-between;
+    padding: 0 4px 6px;
+  }
+
+  [data-ui='bold'] .bold-chat-round.solid {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-chat-kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    margin: 0;
+  }
+
+  [data-ui='bold'] .bold-chat-row,
+  [data-ui='bold'] .bold-chat-row.direct {
+    padding: 10px;
+  }
+
+  [data-ui='bold'] .bold-chat-tile,
+  [data-ui='bold'] .bold-chat-avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* The phone chat bar: Back circle, name with the owner line, Info circle. */
+  [data-ui='bold'] .bold-chat-phone-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id strong:focus {
+    outline: none;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .bold-chat-phone-bar {
+    display: none;
+  }
+}

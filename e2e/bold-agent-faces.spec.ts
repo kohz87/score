@@ -25,7 +25,7 @@ test('every glyph on the bold Team page has two blank eyes', async ({ page }) =>
 
 test('the bold Room dock shows eyes too', async ({ page }) => {
   await pair(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   const dock = page.locator('[data-ui="bold"] .dock .agent-glyph')
   await expect(dock.first()).toBeVisible()
   await expect(dock.first().locator('.agent-face__socket')).toHaveCount(2)

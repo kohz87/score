@@ -260,7 +260,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
 
   test('#8: Settings stays on the top bar and “Reset look” in the palette', async ({ page }) => {
     await wear(page, hideSettings)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await settle(page)
     const settings = page.getByRole('button', { name: 'Settings', exact: true })
@@ -280,7 +280,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
   test('#8: the phone tab bar keeps Settings', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await wear(page, hideSettings)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await settle(page)
     const settings = page
@@ -295,7 +295,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
       page,
       '.bold-search-dialog { display: none; } .bold-search-scrim { display: none; } [role=dialog] { opacity: 0; }',
     )
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Search and commands' })

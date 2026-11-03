@@ -22,7 +22,7 @@ test('the app is installable: manifest and icons are served, the worker is regis
   for (const icon of body.icons) expect((await request.get(icon.src)).ok()).toBe(true)
   expect((await request.get('/sw.js')).headers()['service-worker-allowed']).toBe('/')
 
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.getByRole('banner')).toBeVisible()
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)
   expect(scope).toBe(new URL('/', page.url()).href)
@@ -49,13 +49,13 @@ test('when Score cannot be reached the app shows the offline page and recovers o
   context,
 }) => {
   await pair(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await page.evaluate(async () => navigator.serviceWorker.ready)
   await expect
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
     .toBe(true)
   await context.setOffline(true)
-  await page.goto('/b').catch(() => {})
+  await page.goto('/b?open=1').catch(() => {})
   await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toBeVisible()
   await context.setOffline(false)
   // The page also retries by itself when the connection returns, so the button may already be gone.

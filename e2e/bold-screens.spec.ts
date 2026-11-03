@@ -13,7 +13,7 @@ for (const size of sizes) {
   test(`screens from the top bar, open a screen, take over (${size.width}px)`, async ({ page }) => {
     await page.setViewportSize(size)
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     // Phone: the top bar's pills; desktop: the main navigation.
     const open =
       size.width < 600

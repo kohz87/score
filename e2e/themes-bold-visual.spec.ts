@@ -93,20 +93,17 @@ for (const id of boldThemeIds) {
             }),
           )
         })
-        // Desktop lists the jobs as tabs; the phone's Jobs list (11.10a) uses buttons.
-        await expect(
-          page
-            .getByRole('tab', { name: /Release notes 2\.4/ })
-            .or(
-              page
-                .getByRole('region', { name: 'Jobs' })
-                .getByRole('button', { name: /Release notes 2\.4/ }),
-            ),
-        ).toBeVisible()
+        // Desktop lists the jobs as tabs; 3.21.0: a phone opens the chat's conversation, with its bar and composer.
+        if (variant === 'phone') {
+          await expect(page.locator('.bold-chat-phone-bar')).toBeVisible()
+          await expect(page.getByRole('combobox', { name: 'Message Team room' })).toBeVisible()
+        } else await expect(page.getByRole('tab', { name: /Release notes 2\.4/ })).toBeVisible()
         await settle(page)
         await expect(page).toHaveScreenshot(`bold-${id}-room-${variant}.png`, {
           animations: 'disabled',
           maxDiffPixelRatio: 0.005,
+          // 3.21.0: the chat list is the shared server's real rooms, which other specs add to.
+          mask: [page.getByRole('complementary', { name: 'Chats', exact: true })],
         })
       })
 

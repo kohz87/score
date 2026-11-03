@@ -559,7 +559,7 @@ export async function openBoldRoomWith(
   await pair(page)
   const state = await mockBoldRoom(page, options)
   await before?.(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return state
 }
@@ -567,10 +567,27 @@ export async function openBoldRoomWith(
 /** Board 18 on a phone opens a job from the list; the desktop opens its tab. Both land on that job's chat. */
 export async function openBoldJob(page: Page, title: RegExp) {
   if ((page.viewportSize()?.width ?? 1440) <= 860) {
+    // 3.21.0: a phone chat opens in its conversation; the job list is `?jobs=1`.
+    // Decide by the address, not by what is on screen: while a chat's jobs load, the list region shows for a moment.
+    if (new URL(page.url()).searchParams.get('jobs') !== '1') {
+      const url = new URL(page.url())
+      url.searchParams.set('jobs', '1')
+      await page.goto(url.toString())
+    }
     await page.getByRole('button', { name: title }).click()
-    await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     return
   }
   await page.getByRole('tab', { name: title }).click()
   await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+}
+
+/**
+ * 3.21.0: a phone chat opens in its conversation (the default job). Cards of the room's other jobs are in the job list
+ * (`?jobs=1`, which shows every job); desktop shows them already.
+ */
+export async function showAllJobsOnPhone(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) > 860) return
+  await page.goto('/b?jobs=1')
+  await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
 }

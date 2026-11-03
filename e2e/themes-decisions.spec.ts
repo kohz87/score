@@ -178,7 +178,7 @@ test('#9: a host reset also clears the device’s light/dark choice', async ({ p
   const look: Look = { active: 'score', mode: 'system', resetGeneration: 0 }
   await mockThemes(page, [], look)
   await pair(page)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await page.evaluate(() => window.localStorage.setItem('score.theme', 'dark'))
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')

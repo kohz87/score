@@ -80,7 +80,8 @@ for (const viewport of sizes) {
       ).toBeVisible()
       await page.keyboard.press('Escape')
     }
-    await page.goto('/b')
+    // 3.21.0: a phone has the room switcher on the job list.
+    await page.goto(phone ? '/b?jobs=1' : '/b?open=1')
     await page.locator('.roomtitle').click()
     const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
     await expect(picker).toBeVisible()

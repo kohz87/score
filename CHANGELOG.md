@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.21.0] — 2026-11-03
+
+### Changed
+- **Chats** (first stage of the chats redesign): the main screen is a messenger. Your group chats and the one-to-one chats
+  with each agent are listed on the left (search, "needs you" badges, fold it into a rail for more room); the open chat
+  has one header with its owner, members and workspace; the side panel opens on **Info** (members, owner, workspace,
+  topics), with Work, Results and the rest one click away. On a phone the chat list comes first and a chat opens
+  straight into its conversation. "Room" is now **Chats**.
+
 ## [3.19.1] — 2026-11-03
 
 ### Fixed

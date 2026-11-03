@@ -166,7 +166,7 @@ async function openThread(
     if (handled) return json(handled.body, handled.status)
     return route.fallback()
   })
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return { ...state, posts }
 }
@@ -451,7 +451,7 @@ for (const viewport of sizes) {
           return json({ asOfSeq: 12, items: [], nextCursor: null, jobId: 'job-plan' })
         return route.fallback()
       })
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
       await openJobThread(page, /Activity feed plan/)
       const card = page.getByRole('region', { name: 'Recipe run' })
@@ -540,7 +540,7 @@ for (const viewport of sizes) {
       })
       await page.goto('/b?job=job-default')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
-      if (viewport.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+      if (viewport.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
       await page.locator('button.side-toggle').click()
       await page.getByRole('button', { name: /^Thread/ }).click()
       await expect(page.getByRole('button', { name: /lead context: 10 %/ })).toBeVisible()

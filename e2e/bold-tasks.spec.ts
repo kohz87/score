@@ -99,7 +99,7 @@ for (const size of sizes) {
     }) => {
       await mockTasks(page)
       await pair(page)
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await page.locator('header.top').getByRole('button', { name: 'Tasks', exact: true }).click()
       await expect(page).toHaveURL(/\/b\/tasks$/)
       await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible()

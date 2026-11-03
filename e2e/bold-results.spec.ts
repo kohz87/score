@@ -26,12 +26,20 @@ async function activityFeedJob(page: Page) {
   return job!
 }
 
-async function openResults(page: Page, size: Size, path = '/b') {
+async function openResults(page: Page, size: Size, path = '/b?open=1') {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto(path)
+  // 3.21.0: the side panel opens on Info by default. On desktop `?work=results` asks for Work; on a phone Chat info opens
+  // the sheet on Info and the mode menu switches it to Work.
+  const phone = size.width < 861
+  await page.goto(phone ? path : `${path}${path.includes('?') ? '&' : '?'}work=results`)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (phone) {
+    await page.getByRole('button', { name: 'Chat info' }).click()
+    const sheet = page.getByRole('complementary', { name: 'Side panel' })
+    await sheet.getByRole('button', { name: /^Info/ }).click()
+    await sheet.getByRole('button', { name: /^Work/ }).click()
+  }
 
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   await expect(panel).toBeVisible()

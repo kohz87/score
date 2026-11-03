@@ -264,7 +264,7 @@ test.describe('the way back', () => {
     await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
     // The device choice is untouched: the next ordinary visit has the theme again.
     expect(await page.evaluate(() => localStorage.getItem('score.look.device'))).toBe('hostile')
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   })
 
@@ -272,7 +272,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+Shift+Digit0')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -289,7 +289,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Search and commands' })
@@ -303,7 +303,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'gone', mode: 'light' }
     await mockThemes(page, [], look)
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('.look-banner')).toContainText('Your theme couldn’t be loaded')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
@@ -370,7 +370,7 @@ test.describe('shared and per-device looks', () => {
       })
     })
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-pack', 'score')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     // Another device saved a new shared theme.
@@ -433,7 +433,7 @@ test.describe('the sanitiser in a real browser', () => {
       mode: 'light',
     })
     await pair(page)
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const sheets = await sheetsText(page)
     expect(sheets).toContain('.keep')
@@ -600,7 +600,7 @@ test.describe('layout options never weaken a protected surface', () => {
       const hide = layoutTheme(`hide-${nav}`, { layout: { nav, menu: [{ to: '/chat' }] } })
       await mockThemes(page, [hide], { active: hide.id, mode: 'light' })
       await pair(page)
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible()
       // Room, Agents, Knowledge (3.19.0), Recipes, Tasks (3.16.0) and Screens (3.18.0): the shell's own buttons, whatever the theme's menu says.

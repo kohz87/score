@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chats on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+input::placeholder{color:#7C8291}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; display: flex; flex-direction: column; overflow: hidden">
+
+<sc-if value="{{list}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 14px 14px 0">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px 6px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 700">Chats</h1>
+<button type="button" aria-label="New chat" style="width: 44px; height: 44px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-size: 22px">+</button>
+</div>
+<sc-for list="{{chats}}" as="c" hint-placeholder-count="6">
+<button type="button" onClick="{{open}}" style="display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px; border-radius: 18px; border: 0; background: transparent; color: #ECEEF2">
+<span aria-hidden="true" style="flex: none; width: 48px; height: 48px; border-radius: {{c.radius}}; background: {{c.tile}}; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; color: #12131A">{{c.initial}}</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; justify-content: space-between"><span style="font-weight: 700">{{c.name}}</span><span style="font-size: 12px; color: #9AA0AD">{{c.at}}</span></span>
+<span style="font-size: 13px; color: #9AA0AD; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.preview}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+<nav aria-label="Sections" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 8px 14px; background: #1A1C23; border-top: 1px solid #2E313B; font-size: 12px; text-align: center; color: #C9CDD6">
+<span style="color: #ECEEF2; font-weight: 700; padding: 6px 0">Chats</span><span style="padding: 6px 0">Team</span><span style="padding: 6px 0">Knowledge</span><span style="padding: 6px 0">More</span>
+</nav>
+</sc-if>
+
+<sc-if value="{{chat}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #23262F">
+<button type="button" onClick="{{back}}" aria-label="Back to chats" style="width: 40px; height: 40px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2">‹</button>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column"><strong>Activity feed crew</strong><span style="font-size: 12px; color: #9AA0AD">Owner lead · 4 members</span></div>
+<button type="button" aria-label="Chat info" style="width: 40px; height: 40px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2">i</button>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 14px; overflow: hidden">
+<div style="text-align: center; font-size: 12px; color: #9AA0AD">New topic · <strong style="color: #ECEEF2">Swap polling for a socket</strong> · working</div>
+<div style="align-self: flex-end; max-width: 82%; background: #ECEEF2; color: #12131A; border-radius: 20px 20px 6px 20px; padding: 10px 14px; font-size: 14px; line-height: 1.45">@builder take the server side, @designer the empty states.</div>
+<div style="max-width: 86%; background: #1A1C23; border-radius: 6px 20px 20px 20px; padding: 10px 14px; font-size: 14px; line-height: 1.45"><strong style="color: #BFB0FA">lead</strong> · owner<br>On it. I'll run the review recipe when both are in.</div>
+<div style="max-width: 86%; background: #1A1C23; border-radius: 6px 20px 20px 20px; padding: 10px 14px; font-size: 14px; line-height: 1.45"><strong style="color: #F7B77A">builder</strong><br>Socket server is in, 3 tests pass. It needs ws@8.</div>
+<div data-protected="block" style="background: #ECEEF2; color: #12131A; border-radius: 20px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #4A4F5C">builder asks you</span>
+<code style="font-family: 'JetBrains Mono', monospace">npm install ws@8</code>
+<div style="display: flex; gap: 8px"><button type="button" style="flex: 1; min-height: 44px; border-radius: 999px; border: 0; background: #12131A; color: #ECEEF2; font-weight: 700">Allow</button><button type="button" style="flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid #B8BCC6; background: transparent; color: #12131A; font-weight: 600">Don’t allow</button></div>
+</div>
+</div>
+<div style="padding: 10px 12px 16px">
+<div style="display: flex; gap: 8px; align-items: center; background: #1A1C23; border: 1px solid #2E313B; border-radius: 24px; padding: 6px 6px 6px 16px">
+<label for="m" style="position: absolute; left: -9999px">Message</label>
+<input id="m" placeholder="Message · @ · /" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #ECEEF2; font: 15px 'Hanken Grotesk', sans-serif; min-height: 40px">
+<button type="button" aria-label="Send" style="width: 44px; height: 44px; border-radius: 50%; border: 0; background: #ECEEF2; color: #12131A; font-weight: 700">↑</button>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { open: false }; }
+  renderVals() {
+    const chats = [
+      { name: 'Activity feed crew', initial: 'A', tile: '#A893F7', at: 'now', preview: 'builder asks you: npm install ws@8', radius: '14px' },
+      { name: 'Team', initial: 'T', tile: '#4FC8D1', at: '09:40', preview: 'lead: Morning plan is pinned', radius: '14px' },
+      { name: 'Billing export', initial: 'B', tile: '#F5A35B', at: 'Mon', preview: 'Run · Monthly export finished', radius: '14px' },
+      { name: 'lead', initial: 'l', tile: '#BFB0FA', at: 'Mon', preview: 'Here when you need me', radius: '50%' },
+      { name: 'builder', initial: 'b', tile: '#F7B77A', at: 'Sun', preview: 'Pushed the branch', radius: '50%' },
+      { name: 'reviewer', initial: 'r', tile: '#7DD8DF', at: 'Sun', preview: 'Two comments on events.py', radius: '50%' },
+    ];
+    return {
+      chats, list: !this.state.open, chat: this.state.open,
+      open: () => this.setState({ open: true }), back: () => this.setState({ open: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

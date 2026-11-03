@@ -8,6 +8,7 @@ import type {
 import {
   openBoldJob,
   openBoldRoom,
+  showAllJobsOnPhone,
   type BoldRoomReply,
   type RoomRequest,
 } from './bold-room-fixtures.ts'
@@ -523,6 +524,7 @@ for (const viewport of sizes) {
         approvals: [],
         exchanges: [exchange('exchange-needs')],
       })
+      await showAllJobsOnPhone(page)
       const card = page.getByRole('article', { name: /The exchange used its turns/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('Release notes 2.4')
@@ -581,6 +583,7 @@ for (const viewport of sizes) {
           ],
         ),
       })
+      await showAllJobsOnPhone(page)
       const card = page.getByRole('article', { name: /The lead asks/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('Should the release notes mention the migration steps?')
@@ -608,6 +611,7 @@ for (const viewport of sizes) {
         exchanges: [],
         handle: orchestrationRun([{ kind: 'budget', reason: 'unknown_spend' }]),
       })
+      await showAllJobsOnPhone(page)
       const card = page.getByRole('article', { name: /Spend not settled/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('Spend is unknown: decide whether to continue')
@@ -639,6 +643,7 @@ for (const viewport of sizes) {
           },
         ]),
       })
+      await showAllJobsOnPhone(page)
       const card = page.getByRole('article', { name: /Quota is low/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('has 12% of its 5-hour limit left')
@@ -663,6 +668,7 @@ for (const viewport of sizes) {
         exchanges: [],
         handle: orchestrationRun([{ kind: 'unknown', attemptId: 'a3' }]),
       })
+      await showAllJobsOnPhone(page)
       const card = page.getByRole('article', { name: /Not confirmed as ended/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await card.getByLabel(/This may still be running/).check()
@@ -702,6 +708,7 @@ for (const viewport of sizes) {
           },
         ]),
       })
+      await showAllJobsOnPhone(page)
       await page.getByRole('button', { name: '2 more need you' }).click()
 
       const retry = page

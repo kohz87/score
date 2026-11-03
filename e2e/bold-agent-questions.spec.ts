@@ -102,7 +102,7 @@ for (const { name, viewport } of sizes) {
 
     test('a team-room question joins Needs you and leaves it when answered', async ({ page }) => {
       test.setTimeout(90_000)
-      await page.goto('/b')
+      await page.goto('/b?open=1')
       await expect
         .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
         .toBe(200)
