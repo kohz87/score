@@ -509,7 +509,7 @@ for (const size of [
     // The preview offers pages of the new shell.
     if (size.name === 'phone') await page.getByRole('radio', { name: 'Preview' }).click()
     const pages = await page.getByLabel('Page to preview').locator('option').allTextContents()
-    expect(pages).toEqual(['Team room', 'Team', 'Agent page', 'Agent screen', 'Settings'])
+    expect(pages).toEqual(['Team room', 'Agents', 'Agent page', 'Agent screen', 'Settings'])
     // The surface that asks you to decide keeps the protected marker.
     await expect(page.locator('.cz-back')).toHaveAttribute('data-protected', 'raised')
   })

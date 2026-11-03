@@ -20,7 +20,7 @@ for (const viewport of [
     await pair(page)
     await page.setViewportSize(viewport)
     await offerTerminal(page, true, null)
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     const icon = page.getByRole('banner').getByRole('button', { name: 'Terminal' })
     await expect(icon).toBeVisible()
     const box = await icon.boundingBox()
@@ -31,7 +31,7 @@ for (const viewport of [
     await expect(page.getByRole('heading', { name: 'Terminal' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.getByRole('button', { name: '← Back' }).click()
-    await expect(page).toHaveURL(/\/b\/team$/)
+    await expect(page).toHaveURL(/\/b\/agents$/)
 
     await expect(page.getByRole('heading', { name: 'Terminal' })).toHaveCount(0)
     // Ctrl+` toggles too, and the classic address lands in the frame.
@@ -39,7 +39,7 @@ for (const viewport of [
     await expect(page).toHaveURL(/\/b\/terminal$/)
     await expect(page.getByRole('heading', { name: 'Terminal' })).toBeVisible()
     await page.keyboard.press('Control+Backquote')
-    await expect(page).toHaveURL(/\/b\/team$/)
+    await expect(page).toHaveURL(/\/b\/agents$/)
     await page.goto('/terminal')
     await expect(page).toHaveURL(/\/b\/terminal$/)
   })

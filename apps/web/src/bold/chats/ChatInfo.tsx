@@ -4,6 +4,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { jobDot } from '../room/RoomTabs.tsx'
 import { jobStateLabel } from '../room/room-model.ts'
+import { useStartJob } from '../BoldStartJob.tsx'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
 
 function topicLink(room: Room, job: Job, everyone: boolean): string {
@@ -13,19 +14,33 @@ function topicLink(room: Room, job: Job, everyone: boolean): string {
   return `/b?${params}`
 }
 
+function jobsLink(room: Room, everyone: boolean): string {
+  const params = new URLSearchParams()
+  if (!everyone) params.set('room', room.id)
+  params.set('jobs', '1')
+  return `/b?${params}`
+}
+
 /** The side panel's Info tab (3.21.0): members, the chat's workspace and its jobs as Topics. */
 export function ChatInfo({
   room,
   agents,
   jobs,
   everyone,
+  phone = false,
+  onNavigate,
 }: {
   room: Room | null
   agents: AgentSummary[]
   jobs: Job[]
   everyone: boolean
+  /** On a phone the Info sheet is also the way to the job list and to Start a job (stage 2 turns jobs into topics). */
+  phone?: boolean
+  /** A link or button here leaves the sheet (the phone closes it). */
+  onNavigate?: () => void
 }) {
   const workspaces = useSharedWorkspaces(Boolean(room?.workspaceId)).data
+  const startJob = useStartJob()
   if (!room)
     return (
       <div className="sidebody bold-chat-info">
@@ -78,7 +93,7 @@ export function ChatInfo({
           <ul className="bold-chat-topics">
             {topics.map((job) => (
               <li key={job.id}>
-                <Link to={topicLink(room, job, everyone)}>
+                <Link to={topicLink(room, job, everyone)} onClick={onNavigate}>
                   {job.state === 'done' || job.state === 'closed' ? (
                     <span className="bold-chat-check" role="img" aria-label={jobStateLabel(job)}>
                       ✓
@@ -96,6 +111,25 @@ export function ChatInfo({
               </li>
             ))}
           </ul>
+        )}
+        {phone && (
+          <div className="bold-chat-jobs-actions">
+            <Link className="btn sm" to={jobsLink(room, everyone)} onClick={onNavigate}>
+              All jobs
+            </Link>
+            {room.role === 'team' && (
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => {
+                  onNavigate?.()
+                  startJob?.openStartJob()
+                }}
+              >
+                Start a job
+              </button>
+            )}
+          </div>
         )}
       </section>
     </div>

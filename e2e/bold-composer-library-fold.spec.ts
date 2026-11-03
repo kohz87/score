@@ -68,7 +68,7 @@ async function openLibrary(page: Page, width: number, height: number) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
   await page.locator('button.side-toggle').click()
   await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()

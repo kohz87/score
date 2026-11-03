@@ -1,12 +1,13 @@
 import { JobSchema, type Job, type Room } from '@score/contract'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 import { questionsQuery } from '../../data/question-queries.ts'
 import { agentsQuery, approvalsQuery, roomsQuery } from '../../routes/chat/queries.ts'
 import { fetchCompleteJobs } from '../bold-job-reads.ts'
 import { teamRoomQuery, teamRoomsQuery, withJob, withoutJob } from '../room/room-queries.ts'
-import { buildChatLists, type ChatLists } from './chat-model.ts'
+import { canTalkTo } from '../bold-agents.ts'
+import { buildChatLists, isChatGroup, type ChatLists } from './chat-model.ts'
 
 /** The jobs of several rooms in one registration, so the list can order and describe every chat it shows. */
 export function chatJobsQuery(roomIds: string[]) {
@@ -26,10 +27,12 @@ export function chatJobsQuery(roomIds: string[]) {
         const jobs = data[event.data.roomId]
         return jobs ? { ...data, [event.data.roomId]: withoutJob(jobs, event.data.id) } : data
       }
-      if (event.type !== 'job.upserted' || !(event.data.roomId in data)) return data
+      if (event.type !== 'job.upserted' || !ids.includes(event.data.roomId)) return data
+      // A listed room not read yet (just made, or listed since the key was made) still gets its job: dropping it would leave
+      // the row without its newest topic until the next read.
       return {
         ...data,
-        [event.data.roomId]: withJob(data[event.data.roomId]!, JobSchema.parse(event.data)),
+        [event.data.roomId]: withJob(data[event.data.roomId] ?? [], JobSchema.parse(event.data)),
       }
     },
   })
@@ -42,12 +45,22 @@ export function useChatLists(): ChatLists & { ready: boolean } {
   const agents = useStreamQuery(agentsQuery).data
   const approvals = useStreamQuery(approvalsQuery).data
   const questions = useStreamQuery(questionsQuery).data
-  const roomIds = [...(teamRooms ?? []), ...(rooms?.rooms ?? []), ...(rooms?.directs ?? [])].map(
-    (room) => room.id,
+  // Only the chats the list shows: a hidden run room or an archived one is never read, and a direct room is read for
+  // the agents that are listed.
+  const listedDirects = (rooms?.directs ?? []).filter((room) =>
+    (agents ?? []).some((agent) => canTalkTo(agent) && room.members.includes(agent.id)),
   )
+  const roomIds = [
+    ...[...(teamRooms ?? []), ...(rooms?.rooms ?? [])].filter(isChatGroup),
+    ...listedDirects,
+  ].map((room) => room.id)
   const key = roomIds.join('\u0000')
   const definition = useMemo(() => chatJobsQuery(key ? key.split('\u0000') : []), [key])
-  const jobs = useStreamQuery(definition).data
+  const read = useStreamQuery(definition).data
+  // While a new set of rooms loads, the last read keeps the order steady instead of flashing the list unordered.
+  const [kept, setKept] = useState<Record<string, Job[]> | undefined>(read)
+  if (read !== undefined && read !== kept) setKept(read)
+  const jobs = read ?? kept
   return useMemo(
     () => ({
       ...buildChatLists({

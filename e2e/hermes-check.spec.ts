@@ -41,7 +41,7 @@ test('a paused Hermes build is checked and re-enabled with one confirmed click',
     return route.fulfill({ json: { ok: true } })
   })
   // Every page of the shell says approvals are paused (the old header marker), and the link leads to the check.
-  await page.goto('/b/team')
+  await page.goto('/b/agents')
   const notice = page.getByRole('status').filter({ hasText: 'Approvals in Score are paused' })
   await expect(notice).toHaveAttribute('data-protected', 'flex')
   await notice.getByRole('link', { name: 'Check this Hermes version' }).click()
@@ -54,8 +54,8 @@ test('a paused Hermes build is checked and re-enabled with one confirmed click',
   await expect(banner.getByRole('table')).toContainText('0.21.5 → 0.21.6')
   await banner.getByRole('button', { name: 'Turn approvals back on' }).click()
   await expect(banner).toBeHidden()
-  await page.goto('/b/team')
-  await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
+  await page.goto('/b/agents')
+  await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible()
   await expect(page.locator('.bold-fence-notice')).toHaveCount(0)
 })
 

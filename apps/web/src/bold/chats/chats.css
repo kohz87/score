@@ -240,15 +240,6 @@
   border-color: var(--ink);
 }
 
-/* The header row under the room title: the owner line and the Chat info pill. */
-[data-ui='bold'] .bold-chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 [data-ui='bold'] .bold-chat-meta {
   font-size: 13px;
   color: var(--muted);
@@ -364,30 +355,57 @@
 }
 
 @media (min-width: 861px) {
-  /* The chat's name is the mock-up's 22px display heading. */
+  /* One chat bar (board 18): the name in the display font with the owner line under it, the menus and Chat info at the
+     right, a hairline under it. */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .bold-chat-bar {
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-chat-bar-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-chat-bar-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol .roomtitle {
     font-size: 22px;
     color: var(--ink);
+    min-height: 32px;
   }
 
-  /* The owner line sits right under the name, as in the mock-up's header. */
-  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-chat-header {
-    margin-top: -12px;
+  /* The chat gets the width: the Info panel is a 300px column and the chat's content a centred 860px column. */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
+    flex: 1 1 0;
+    max-width: none;
   }
 
-  /* The group chat widens into the space a closed panel leaves. */
-  [data-ui='bold'] .roomgrid.bold-panel-shut > .roomcol,
-  [data-ui='bold'] .roomgrid.bold-info-open > .roomcol {
-    flex: 1 1 auto;
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
+    width: 100%;
     max-width: 860px;
     margin-inline: auto;
+    box-sizing: border-box;
   }
 
-  /* Info is the mock-up's 300px column with a hairline, not the work panel's rounded card. */
   [data-ui='bold'] .roomgrid.bold-info-open > .bold-sidecol {
     flex: 0 0 300px;
   }
 
+  /* The wide Work, Library, Runs and Thread views widen the panel only while one of them is chosen. */
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .roomcol {
+    flex: 1 1 440px;
+    max-width: 600px;
+  }
+
+  /* Info is the mock-up's plain column with a hairline, not the work panel's rounded card. */
   [data-ui='bold'] .roomgrid.bold-info-open .side {
     border-radius: 0;
     box-shadow: none;
@@ -483,6 +501,10 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id strong:focus {
+    outline: none;
   }
 
   [data-ui='bold'] .bold-chat-phone-id span {

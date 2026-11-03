@@ -10,7 +10,7 @@ test('Team › agent › More › Plugins: toggles per agent, the bridge is lock
 }) => {
   await pair(page)
   const open = async (agent: string) => {
-    await page.goto(`/b/team/${agent}`)
+    await page.goto(`/b/agents/${agent}`)
     const more = page.getByRole('button', {
       name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
     })

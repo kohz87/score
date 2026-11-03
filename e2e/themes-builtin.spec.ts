@@ -89,7 +89,7 @@ for (const id of packagedThemeIds) {
             type: response.headers()['content-type'] ?? '',
           })
       })
-      await page.goto('/b/team')
+      await page.goto('/b/agents')
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await page.evaluate(() => document.fonts.ready)
       if (id === 'harbour') {

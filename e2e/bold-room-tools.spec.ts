@@ -127,7 +127,7 @@ for (const viewport of sizes) {
         },
       })
     })
-    await page.goto('/b/team/builder#agent-history')
+    await page.goto('/b/agents/builder#agent-history')
     const history = page.locator('#agent-history')
     await expect(history.getByText('Fix the pager')).toBeVisible()
     await expect(history).toContainText('$0.12')

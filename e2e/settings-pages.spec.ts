@@ -5,6 +5,7 @@ import { pair } from './pair.ts'
 // section list is the nine sections of the bold frame (decision 131/132 retired the eleven classic ones).
 const sections = [
   { id: 'connections', label: 'Connections', heading: 'Connections' },
+  { id: 'workspaces', label: 'Workspaces', heading: 'Workspaces' },
   { id: 'tools', label: 'Tools and triggers', heading: 'Tools and triggers' },
   { id: 'rules', label: 'Rules', heading: 'Rules' },
   { id: 'notifications', label: 'Notifications', heading: 'Notifications' },

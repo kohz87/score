@@ -37,7 +37,7 @@ for (const viewport of sizes) {
       items = items.filter((i) => i.id !== id)
       await route.fulfill({ status: 204, body: '' })
     })
-    await page.goto('/b/team/builder')
+    await page.goto('/b/agents/builder')
     await page
       .getByRole('button', {
         name: 'More: memory, skills, tools, workspace, repeating jobs, delete',

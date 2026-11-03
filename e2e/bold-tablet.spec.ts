@@ -66,8 +66,8 @@ const recipesReady: Ready = async (page) => {
 const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'room', path: '/b?open=1', ready: roomReady },
   { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-head') },
-  { name: 'team', path: '/b/team', ready: visible('.bold-agentcard') },
-  { name: 'agent', path: '/b/team/builder', ready: visible('.bold-agent') },
+  { name: 'team', path: '/b/agents', ready: visible('.bold-agentcard') },
+  { name: 'agent', path: '/b/agents/builder', ready: visible('.bold-agent') },
   { name: 'recipes', path: '/b/recipes', ready: recipesReady },
   { name: 'settings', path: '/b/settings', ready: visible('.bold-settings-page') },
   { name: 'usage', path: '/b/settings/usage', ready: usageReady },
@@ -78,7 +78,7 @@ const pages: { name: string; path: string; ready: Ready }[] = [
 /** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
  * close it, so the room underneath is what gets measured. */
 async function closeSheet(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Open side panel' })
+  const toggle = page.getByRole('button', { name: 'Chat info' })
   if ((await toggle.getAttribute('aria-expanded')) === 'true') await page.keyboard.press('Escape')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 }

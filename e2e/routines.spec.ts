@@ -46,7 +46,7 @@ test('pause, run now and delete a routine from the agent page', async ({ page })
     }
   })
 
-  await page.goto('/b/team/builder#agent-routines')
+  await page.goto('/b/agents/builder#agent-routines')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
   // The hash opens More at the repeating jobs card.
   const card = page.locator('#agent-routines')

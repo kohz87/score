@@ -9,6 +9,7 @@ import { BoldAttemptPage } from './bold/BoldAttempt.tsx'
 import { BoldScreenPage } from './bold/BoldScreen.tsx'
 import { BoldSettings } from './bold/BoldSettings.tsx'
 import { BoldTeam } from './bold/BoldTeam.tsx'
+import { BoldKnowledgePage } from './bold/BoldKnowledge.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 import { BoldTasksPage } from './bold/BoldTasks.tsx'
@@ -78,8 +79,16 @@ export const appRoutes: RouteObject[] = [
         HydrateFallback: BoldShell,
         children: [
           { index: true, Component: BoldHome },
-          { path: 'team', Component: BoldTeam },
-          { path: 'team/:agentId', Component: BoldAgentPage },
+          { path: 'agents', Component: BoldTeam },
+          { path: 'agents/:agentId', Component: BoldAgentPage },
+          { path: 'knowledge', Component: BoldKnowledgePage },
+          // 3.19.0: Team became Agents; the old addresses keep working, search and hash kept.
+          { path: 'team', loader: ({ request }) => redirect(keepAll(request, '/b/agents')) },
+          {
+            path: 'team/*',
+            loader: ({ request, params }) =>
+              redirect(keepAll(request, `/b/agents/${params['*'] ?? ''}`)),
+          },
           { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'tasks', Component: BoldTasksPage },
           { path: 'screens', Component: BoldScreensPage },
@@ -141,7 +150,7 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: '/now/routines',
-        loader: ({ request }) => redirect(keepSearch(request, '/b/team')),
+        loader: ({ request }) => redirect(keepSearch(request, '/b/agents')),
       },
       { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
       { path: '/tasks/*', loader: ({ request }) => redirect(keepSearch(request, '/b/tasks')) },

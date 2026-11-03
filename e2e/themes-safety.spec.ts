@@ -603,9 +603,9 @@ test.describe('layout options never weaken a protected surface', () => {
       await page.goto('/b?open=1')
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible()
-      // Room, Team, Recipes, Tasks (3.16.0) and Screens (3.18.0): the shell's own buttons, whatever the theme's menu says.
+      // Room, Agents, Knowledge (3.19.0), Recipes, Tasks (3.16.0) and Screens (3.18.0): the shell's own buttons, whatever the theme's menu says.
       await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button')).toHaveCount(
-        5,
+        6,
       )
       await page.unrouteAll({ behavior: 'ignoreErrors' })
     }

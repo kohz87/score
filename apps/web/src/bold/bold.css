@@ -699,6 +699,49 @@ body.fit [data-ui='bold'] .stream {
   }
 }
 
+/* 3.19.1: six destinations, the team rings, search and the avatar keep to one row on a laptop-width window. */
+@media (max-width: 1180px) {
+  [data-ui='bold'] .top .searchbtn-label,
+  [data-ui='bold'] .top .searchbtn .kbd {
+    display: none;
+  }
+
+  [data-ui='bold'] .nav button {
+    padding: 0 calc(10px * var(--bold-d, 1));
+  }
+}
+
+[data-ui='bold'] .nav .bold-nav-count {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  [data-ui='bold'] .top .dock {
+    display: none;
+  }
+
+  /* The needs-you count the rings carried moves onto the Room button (decision markers are never hidden). */
+  [data-ui='bold'] .nav .bold-nav-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--hi-bg);
+    color: var(--hi-ink);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  [data-ui='bold'] .nav button.on .bold-nav-count {
+    background: var(--panel);
+    color: var(--ink);
+  }
+}
+
 @media (max-width: 860px) {
   [data-ui='bold'] .top .nav,
   [data-ui='bold'] .top .dock,

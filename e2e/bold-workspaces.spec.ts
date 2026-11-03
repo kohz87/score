@@ -55,7 +55,7 @@ for (const viewport of [
     )
 
     // The agent page shows the folder but no longer changes it.
-    await open(page, '/b/team/lead')
+    await open(page, '/b/agents/lead')
     await page
       .getByRole('button', {
         name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
@@ -69,7 +69,7 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Room menu' }).click()
     await page.getByRole('menuitem', { name: /^Workspace:/ }).click()
     await page.getByRole('radio', { name }).check()
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('button', { name: 'Room menu' }).click()
     await expect(page.getByRole('menuitem', { name: `Workspace: ${name}` })).toBeVisible()
     await page.keyboard.press('Escape')

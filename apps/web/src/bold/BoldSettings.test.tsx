@@ -442,7 +442,7 @@ test('Remote access and security keeps the protected password, browsers and pass
   expect(where.textContent).toContain('Docker · node:24')
   expect(where.textContent).toContain('Partly separated')
   expect(within(where).getByRole('link', { name: 'Runs on' }).getAttribute('href')).toBe(
-    '/b/team/builder#agent-where',
+    '/b/agents/builder#agent-where',
   )
   const grid = document.querySelector('.bold-security-open')!
   expect(grid.getAttribute('data-protected')).toBe('grid')

@@ -191,7 +191,7 @@ function HistoryPopover({
       )}
       <div className="bold-dm-history-foot small muted">
         {agentDisplayName(agent)} remembers what matters across chats.{' '}
-        <a href={`/b/team/${encodeURIComponent(agent.id)}#agent-memory`}>See its memory</a>
+        <a href={`/b/agents/${encodeURIComponent(agent.id)}#agent-memory`}>See its memory</a>
       </div>
     </div>
   )

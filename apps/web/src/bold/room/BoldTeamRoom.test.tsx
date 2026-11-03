@@ -271,7 +271,7 @@ test('a phone opens on board 18 with the pinned request first, then jobs and the
     ],
     { approvals: [phoneApproval] },
   )
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b'])
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
 
   expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
   expect(screen.queryByRole('tablist', { name: 'Jobs' })).toBeNull()
@@ -305,21 +305,22 @@ test('a phone opens a job full screen and Back returns to the job list', async (
     <>
       <BoldTeamRoom agents={agents} phone />
       <ParamsProbe />
+      <HistoryBack />
     </>,
-    ['/b?message=old'],
+    ['/b?jobs=1&message=old'],
   )
 
   fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
   expect(await screen.findByText('To: Activity feed')).toBeDefined()
   await waitFor(() =>
-    expect(screen.getByText('Activity feed', { selector: '[data-phone-chat-title]' })).toBe(
-      document.activeElement,
-    ),
+    expect(document.querySelector('[data-phone-chat-title]')).toBe(document.activeElement),
   )
   expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
   expect(screen.getByTestId('params').textContent).not.toContain('message')
   expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
-  expect(screen.getByText('Activity feed')).toBeDefined()
+  expect(
+    screen.getByText(/^Activity feed · /, { selector: '.bold-chat-phone-id span' }),
+  ).toBeDefined()
   expect(
     screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
   ).toBe('Message the team')
@@ -329,7 +330,8 @@ test('a phone opens a job full screen and Back returns to the job list', async (
   expect(document.getElementById(described)?.textContent).toContain('@name for one agent')
   expect(screen.getByRole('button', { name: /Open thread for Activity feed/ })).toBeDefined()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Back to jobs' }))
+  // Back (the browser's) returns to the job list the job was opened from, on the row it left.
+  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
   expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
   expect(screen.getByTestId('params').textContent).not.toContain('job=')
   await waitFor(() =>
@@ -366,7 +368,7 @@ test('the phone list puts the default Team room row first and opens its chat', a
       <BoldTeamRoom agents={agents} phone />
       <ParamsProbe />
     </>,
-    ['/b'],
+    ['/b?jobs=1'],
   )
 
   const teamRow = await screen.findByRole('button', { name: /^Team room\..*4 unread/ })
@@ -375,11 +377,8 @@ test('the phone list puts the default Team room row first and opens its chat', a
   expect(teamRow.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
   fireEvent.click(teamRow)
-  expect(
-    await screen.findByText('builder is working', { selector: '.bold-phone-chat-id span' }),
-  ).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   expect(screen.getByTestId('params').textContent).toContain('job=job-default')
-  expect(screen.getByRole('button', { name: 'Back to jobs' })).toBeDefined()
   expect(screen.getByRole('combobox', { name: /^Message Team room/ })).toBeDefined()
 })
 
@@ -390,14 +389,14 @@ test('opening a phone job pushes history, so Back returns to the list instead of
       <BoldTeamRoom agents={agents} phone />
       <HistoryBack />
     </>,
-    ['/b'],
+    ['/b?jobs=1'],
   )
 
   fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to jobs' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'History back' }))
   expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Back to chats' })).toBeNull()
 })
 
 test('a missing phone job shows the list with a short note, never a Back header', async () => {
@@ -423,29 +422,31 @@ test('an older phone room with no messages still opens its chat, not the starter
   stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
   renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?room=room-old'])
 
-  expect(await screen.findByRole('button', { name: 'Back to the team room' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   expect(screen.getByRole('combobox', { name: /^Message #activity-feed/ })).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
 })
 
-test('an older room opens straight into its phone chat and Back returns to the team room', async () => {
+test('an older room opens straight into its phone chat and Back goes to the chat list', async () => {
+  const back = vi.fn()
   stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
   renderInRoom(
     <>
-      <BoldTeamRoom agents={agents} phone />
+      <BoldTeamRoom agents={agents} phone onBackToChats={back} />
       <ParamsProbe />
     </>,
     ['/b?room=room-old'],
   )
 
-  expect(await screen.findByRole('button', { name: 'Back to the team room' })).toBeDefined()
-  expect(screen.getByText('#activity-feed', { selector: '.bold-phone-chat-id b' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
+  expect(
+    screen.getByText('#activity-feed', { selector: '.bold-chat-phone-id strong' }),
+  ).toBeDefined()
   expect(screen.getByRole('combobox', { name: /^Message #activity-feed/ })).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Back to the team room' }))
-  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.getByTestId('params').textContent).not.toContain('room=')
+  fireEvent.click(screen.getByRole('button', { name: 'Back to chats' }))
+  expect(back).toHaveBeenCalledTimes(1)
 })
 
 test('selecting a job changes the composer destination and hides the message param', async () => {
@@ -813,10 +814,9 @@ test('a restore failure clears the undo toast and names the reason', async () =>
 test('the default job offers neither rename nor delete', async () => {
   stubRoom([makeJob({ id: 'job-default', title: 'Team room', isDefault: true })])
   renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-default'])
-  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
-  const menu = await screen.findByRole('menu', { name: 'Team room actions' })
-  expect(menu.textContent).not.toContain('Rename')
-  expect(menu.textContent).not.toContain('Delete job')
+  // The conversation itself has no job tools on a phone: nothing to rename or delete (named jobs keep their menu).
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Job menu' })).toBeNull()
 })
 
 test('closing a job posts close and tells the person where to find it', async () => {
@@ -1015,7 +1015,7 @@ test('a job.deleted event returns an open phone job to the list with a note', as
     </>,
     ['/b?job=job-activity'],
   )
-  await screen.findByRole('button', { name: 'Back to jobs' })
+  await screen.findByRole('button', { name: 'Back to chats' })
 
   view.emit({
     seq: 2,
@@ -1026,7 +1026,8 @@ test('a job.deleted event returns an open phone job to the list with a note', as
 
   expect(await screen.findByText('That job was deleted.')).toBeDefined()
   await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('job='))
-  expect(screen.getByRole('heading', { name: 'Jobs' })).toBeDefined()
+  // Back in the chat's own conversation (the default job), with the note.
+  expect(screen.getByRole('button', { name: 'Back to chats' })).toBeDefined()
 })
 
 test('the phone job list keeps closed jobs behind a Closed jobs entry', async () => {
@@ -1034,14 +1035,14 @@ test('the phone job list keeps closed jobs behind a Closed jobs entry', async ()
     makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' }),
     makeJob({ id: 'job-activity', title: 'Activity feed' }),
   ])
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b'])
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
 
   expect(await screen.findByRole('button', { name: /^Activity feed\./ })).toBeDefined()
   expect(screen.queryByRole('button', { name: /^Old import\./ })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Closed jobs (1)' }))
   expect(await screen.findByRole('heading', { name: 'Closed jobs' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: /^Old import\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to jobs' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
 })
 
 test('the team room’s share uses the selected job thread and says what All shares', async () => {

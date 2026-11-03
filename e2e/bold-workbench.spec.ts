@@ -67,7 +67,7 @@ async function openPanel(page: Page, size: Size, path: string) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(path)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   await expect(panel).toBeVisible()
   return panel

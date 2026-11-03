@@ -71,7 +71,7 @@ async function openNote(page: Page, size: { width: number; height: number }) {
   await page.addInitScript(() => localStorage.setItem('score.chats.folded', '1'))
   await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
   await page.locator('button.side-toggle').click()
   await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
@@ -112,10 +112,15 @@ for (const viewport of noteSizes) {
         }),
       )
       expect(cards).toHaveLength(4)
-      // 3.21.0: the chat list takes width from the side panel at 1440, so the four cards stack in one column
-      // instead of two per row; none may leave the panel.
+      // 3.21.0: the chat list (even folded) takes width from the side panel. Where the note's side column still has
+      // room for two 380px cards the four sit two per row as before; narrower, they stack. None leaves the panel.
       for (const card of cards) expect(card.x).toBeGreaterThanOrEqual(Math.floor(panel!.x))
-      expect(cards[1]!.y).toBeGreaterThan(cards[0]!.y)
+      if (side && (await side.boundingBox())!.width >= 800) {
+        expect(cards[1]!.y).toBe(cards[0]!.y)
+        expect(cards[1]!.x).toBeGreaterThan(cards[0]!.x)
+        expect(cards[2]!.y).toBeGreaterThan(cards[0]!.y)
+        expect(cards[3]!.y).toBe(cards[2]!.y)
+      } else expect(cards[1]!.y).toBeGreaterThan(cards[0]!.y)
     }
     if (viewport.width === 1440 || viewport.width === 1280) {
       const inside = await page.locator('.kn-toolbar').evaluate((toolbar) => {

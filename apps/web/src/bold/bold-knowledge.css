@@ -1,0 +1,305 @@
+/* 3.19.0: the Knowledge page. Three columns as docs/design/bold/mockups/16-knowledge.dc.html: folders, the note list,
+   the open note. The Library's editor and dialogs inside keep their own rules (bold-library.css). */
+[data-ui='bold'] .bold-knowledge {
+  max-width: 1392px;
+  margin: 0 auto;
+}
+
+[data-ui='bold'] .sidebody.bold-library.is-page {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  min-height: calc(100vh - 120px);
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+[data-ui='bold'] .is-page > .bold-knowledge-rail {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  padding: calc(16px * var(--bold-d, 1));
+  border-right: 1px solid var(--line);
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-knowledge-railhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-railhead h1 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-knowledge-plus {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-knowledge-folder {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-folder.is-on {
+  background: var(--field);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-knowledge-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+[data-ui='bold'] .bold-knowledge-readers {
+  margin-top: calc(14px * var(--bold-d, 1));
+  padding: 0 12px;
+}
+
+[data-ui='bold'] .bold-knowledge-readers h2 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+[data-ui='bold'] .bold-knowledge-readers ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-knowledge-readers p {
+  margin: 6px 0 0;
+}
+
+[data-ui='bold'] .is-page > .bold-library-nav {
+  flex: 0 0 380px;
+  max-width: 380px;
+  padding: calc(16px * var(--bold-d, 1));
+  border-right: 1px solid var(--line);
+  box-sizing: border-box;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .is-page > .bold-library-nav[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .is-page .bold-library-search {
+  min-height: 42px;
+  margin-bottom: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 0 calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-knowledge-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-row.is-on {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-knowledge-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .is-page > .bold-library-main {
+  flex: 999 1 420px;
+  min-width: 0;
+  padding: calc(8px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .is-page > .bold-library-main[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-knowledge-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-actions button,
+[data-ui='bold'] .bold-knowledge-back {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-knowledge-actions .bold-knowledge-edit {
+  border-color: transparent;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-knowledge-back {
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+/* 3.19.1: a mid-width window keeps two columns: the folders sit above the note list, the note takes the rest. */
+@media (min-width: 861px) and (max-width: 1180px) {
+  [data-ui='bold'] .sidebody.bold-library.is-page {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  [data-ui='bold'] .is-page > .bold-knowledge-rail {
+    grid-column: 1;
+    grid-row: 1;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-knowledge-folders {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 10px;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-nav {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-main {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Phone and narrow windows (the shell's tab-bar width): folders become a chip row above the list; a chosen note fills
+   the screen with Back. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .sidebody.bold-library.is-page {
+    flex-direction: column;
+    min-height: 0;
+    border-top: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-knowledge-rail {
+    flex: none;
+    border-right: 0;
+    padding: calc(12px * var(--bold-d, 1)) 0 0;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folders {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none;
+    min-height: 44px;
+    padding: 0 16px !important;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 10px;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-knowledge-readers {
+    padding: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-nav {
+    flex: none;
+    max-width: none;
+    border-right: 0;
+    padding: calc(12px * var(--bold-d, 1)) 0;
+  }
+
+  [data-ui='bold'] .bold-knowledge-row,
+  [data-ui='bold'] .bold-knowledge-plus {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-main {
+    padding: 0;
+  }
+}

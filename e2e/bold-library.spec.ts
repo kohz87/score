@@ -28,7 +28,7 @@ async function openLibrary(page: Page, size: (typeof sizes)[number]) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
   await page.locator('button.side-toggle').click()
   await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
@@ -516,7 +516,7 @@ test('the phone sheet stacks a dialog above the tab bar and Escape only closes t
   const close = page.getByRole('button', { name: 'Close side panel' })
   await close.click()
   await expect(panel).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Open side panel' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Chat info' })).toBeFocused()
 })
 
 test('on a phone, tapping a note scrolls it into view and focuses its heading', async ({

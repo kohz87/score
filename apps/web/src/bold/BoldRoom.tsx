@@ -39,7 +39,7 @@ import { BoldElsewhere, forgetBroughtOutsideSessions } from './room/BoldElsewher
 import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 import { roomJobsQuery } from './room/room-queries.ts'
-import { ChatHeader, ChatPhoneBar } from './chats/ChatHeader.tsx'
+import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
 import { ChatInfo } from './chats/ChatInfo.tsx'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
 import { chatIsOpen } from './chats/chat-model.ts'
@@ -69,7 +69,7 @@ export function BoldRoom() {
   const location = useLocation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const [mode, setMode] = useState<SideMode>('work')
+  const [mode, setMode] = useState<SideMode>('info')
   // 3.21.0: the chat list can fold into a rail (remembered per device), and Chat info opens and closes the side panel.
   const [folded, setFolded] = useState(readFolded)
   const [panelShut, setPanelShut] = useState(false)
@@ -147,7 +147,11 @@ export function BoldRoom() {
   const argued = chatIsOpen(params)
   if (argued && !chatKept) setChatKept(true)
   else if (!argued && chatKept && navigationType !== 'REPLACE') setChatKept(false)
-  const showList = phone && !sheetOpen && !argued && !chatKept
+  const showList = phone && !argued && !chatKept
+  // Pushing `/b` while the phone sheet is open lands on the list: the sheet closes with it.
+  useEffect(() => {
+    if (showList && sheetOpen) setSheetOpen(false)
+  }, [showList, sheetOpen, setSheetOpen])
   const panelClosed = !phone && panelShut && !directMode
   const infoShown = !panelClosed && mode === 'info' && !directMode
   const toggleInfo = () => {
@@ -257,7 +261,7 @@ export function BoldRoom() {
     return () => clearTimeout(timer)
   }, [deletedNotice])
 
-  // A direct link (dock, Search, the Team page's Message button) opens the phone sheet itself.
+  // A direct link (dock, Search, the Agents page's Message button) opens the phone sheet itself.
   useEffect(() => {
     if (phone && directMode) setSheetOpen(true)
   }, [directMode, phone, setSheetOpen])
@@ -413,21 +417,6 @@ export function BoldRoom() {
     </button>
   ) : undefined
 
-  // A phone's team room opens on its job list: the mock-up's chat bar gives it the way back to the chat list and Info.
-  const phoneBar =
-    phone && !directMode && !params.has('job') && openGroup?.role === 'team' ? (
-      <ChatPhoneBar
-        room={openGroup}
-        agents={agents}
-        onBack={() => void navigate('/b')}
-        onInfo={() => {
-          setMode('info')
-          setPanelShut(false)
-          setSheetOpen(true)
-        }}
-      />
-    ) : null
-
   const chatList = (
     <ChatList
       lists={chatLists}
@@ -445,7 +434,7 @@ export function BoldRoom() {
 
   return (
     <div
-      className={`roomgrid bold-chats${panelClosed ? ' bold-panel-shut' : ''}${infoShown ? ' bold-info-open' : ''}${directMode ? ' bold-direct-chat' : ''}`}
+      className={`roomgrid bold-chats${panelClosed ? ' bold-panel-shut' : ''}${infoShown ? ' bold-info-open' : ' bold-wide-panel'}${directMode ? ' bold-direct-chat' : ''}`}
     >
       {!phone && chatList}
       {deletedNotice && (
@@ -454,7 +443,6 @@ export function BoldRoom() {
         </p>
       )}
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        {phoneBar}
         <BoldTeamRoom
           agents={agents}
           phone={phone}
@@ -462,14 +450,19 @@ export function BoldRoom() {
           onOpenElsewhere={openElsewhere}
           onOpenThread={openThread}
           externalDeletedNotice
-          header={(room) => (
-            <ChatHeader
-              room={room}
-              agents={agents}
-              infoOpen={infoShown}
-              onToggleInfo={toggleInfo}
-            />
-          )}
+          chatMeta={(room) => <ChatMeta room={room} agents={agents} />}
+          chatAction={() => <ChatInfoButton open={infoShown} onToggle={toggleInfo} />}
+          infoRef={phoneOpenRef}
+          infoExpanded={sheetOpen}
+          onChatInfo={() => {
+            setMode('info')
+            setPanelShut(false)
+            setSheetOpen(true)
+          }}
+          onBackToChats={() => {
+            setSheetOpen(false)
+            void navigate('/b')
+          }}
         />
       </section>
 
@@ -665,6 +658,8 @@ export function BoldRoom() {
               agents={agents}
               jobs={openGroupJobs ?? []}
               everyone={everyoneOpen}
+              phone={phone}
+              onNavigate={() => setSheetOpen(false)}
             />
           ) : mode === 'thread' ? (
             <BoldThread

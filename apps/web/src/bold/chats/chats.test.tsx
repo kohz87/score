@@ -257,16 +257,15 @@ test('a folded list stays folded on the next visit, and a blocked storage does n
   vi.restoreAllMocks()
 })
 
-test('the header names the owner, members and workspace; Chat info toggles the Info tab', async () => {
+test('the chat bar names the owner, members and workspace; Info is the panel by default and Chat info closes it', async () => {
   open('/b?room=feed')
   const header = await screen.findByRole('group', { name: 'Feed crew, chat header' })
   expect(header.textContent).toContain('Owner lead')
   expect(header.textContent).toContain('2 members')
   await waitFor(() => expect(header.textContent).toContain('workspace activity-feed'))
 
-  const button = within(header).getByRole('button', { name: 'Chat info' })
-  expect(button.getAttribute('aria-pressed')).toBe('false')
-  fireEvent.click(button)
+  // The panel opens on Info (the mock-up's 300px column).
+  const button = screen.getByRole('button', { name: 'Chat info' })
   expect(button.getAttribute('aria-pressed')).toBe('true')
   const info = await screen.findByLabelText('Feed crew, chat info')
   const members = within(within(info).getByRole('heading', { name: 'Members' }).parentElement!)
@@ -279,10 +278,12 @@ test('the header names the owner, members and workspace; Chat info toggles the I
   const topic = await topics.findByRole('link', { name: /Swap polling for a socket/ })
   expect(topic.getAttribute('href')).toBe('/b?room=feed&job=j-feed')
 
-  // Closing the panel gives the chat the full width.
+  // Closing the panel gives the chat the full width; Chat info brings it back.
   fireEvent.click(button)
   expect(button.getAttribute('aria-pressed')).toBe('false')
   expect(document.querySelector('.bold-sidecol')?.hasAttribute('hidden')).toBe(true)
+  fireEvent.click(button)
+  expect(button.getAttribute('aria-pressed')).toBe('true')
 })
 
 test('the team room has a header too', async () => {

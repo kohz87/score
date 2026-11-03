@@ -1,5 +1,7 @@
-import type { AgentSummary, Room } from '@score/contract'
+import type { AgentSummary, Job, Room } from '@score/contract'
+import type { ReactNode, RefObject } from 'react'
 import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
+import { jobStateLabel } from '../room/room-model.ts'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
 
 /** What the header says about who owns a chat: its lead, else "no owner yet". */
@@ -9,57 +11,65 @@ export function ownerLabel(room: Room, agents: AgentSummary[]): string {
   return lead ? agentDisplayName(lead) : room.leadAgentId
 }
 
-/**
- * The group chat's header row (3.21.0): owner, member count, workspace and the Chat info button. The chat's name is the
- * room switcher right above it, so the name is not drawn twice.
- */
-export function ChatHeader({
-  room,
-  agents,
-  infoOpen,
-  onToggleInfo,
-}: {
-  room: Room
-  agents: AgentSummary[]
-  infoOpen: boolean
-  onToggleInfo: () => void
-}) {
+function membersLabel(room: Room): string {
+  return `${room.members.length} ${room.members.length === 1 ? 'member' : 'members'}`
+}
+
+/** The line under the chat's name (board 18): "Owner lead · 4 members · workspace activity-feed". */
+export function ChatMeta({ room, agents }: { room: Room; agents: AgentSummary[] }) {
   const workspaces = useSharedWorkspaces(Boolean(room.workspaceId)).data
   const workspace = room.workspaceId
     ? workspaces?.find((item) => item.id === room.workspaceId)
     : undefined
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   return (
-    <div className="bold-chat-header" role="group" aria-label={`${room.name}, chat header`}>
-      <span className="bold-chat-meta">
-        Owner{' '}
-        <b style={lead ? { color: agentNameColor(lead) } : undefined}>{ownerLabel(room, agents)}</b>{' '}
-        · {room.members.length} {room.members.length === 1 ? 'member' : 'members'}
-        {workspace && (
-          <>
-            {' '}
-            · workspace <code>{workspace.name}</code>
-          </>
-        )}
-      </span>
-      <button type="button" className="btn sm" aria-pressed={infoOpen} onClick={onToggleInfo}>
-        Chat info
-      </button>
-    </div>
+    <span className="bold-chat-meta" aria-label={`${room.name}, chat header`} role="group">
+      Owner{' '}
+      <b style={lead ? { color: agentNameColor(lead) } : undefined}>{ownerLabel(room, agents)}</b>
+      {' · '}
+      {membersLabel(room)}
+      {workspace && (
+        <>
+          {' · workspace '}
+          <code>{workspace.name}</code>
+        </>
+      )}
+    </span>
   )
 }
 
-/** The phone's chat bar (board 18, phone): a round Back, the name with its owner line, and a round Info button. */
+/** The pill at the right end of the chat bar; it opens and closes the side panel's Info. */
+export function ChatInfoButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="bold-chat-infobtn" aria-pressed={open} onClick={onToggle}>
+      Chat info
+    </button>
+  )
+}
+
+/**
+ * The phone's chat bar (board 18, phone): a round Back to the list, the name with its owner line (and the open topic),
+ * the chat's ⋯ menu and a round Info button that opens the side sheet.
+ */
 export function ChatPhoneBar({
   room,
   agents,
+  job,
+  infoRef,
+  infoExpanded,
   onBack,
   onInfo,
+  menu,
 }: {
   room: Room
   agents: AgentSummary[]
+  /** A named job that is open (not the chat's default conversation). */
+  job?: Job
+  infoRef?: RefObject<HTMLButtonElement | null>
+  infoExpanded?: boolean
   onBack: () => void
   onInfo: () => void
+  menu?: ReactNode
 }) {
   return (
     <div className="bold-chat-phone-bar">
@@ -72,16 +82,23 @@ export function ChatPhoneBar({
         ‹
       </button>
       <div className="bold-chat-phone-id">
-        <strong>{room.name}</strong>
+        <strong data-phone-chat-title tabIndex={-1}>
+          {room.name}
+        </strong>
         <span>
-          Owner {ownerLabel(room, agents)} · {room.members.length}{' '}
-          {room.members.length === 1 ? 'member' : 'members'}
+          {job
+            ? `${job.title} · ${jobStateLabel(job).toLowerCase()}`
+            : `Owner ${ownerLabel(room, agents)} · ${membersLabel(room)}`}
         </span>
       </div>
+      {menu}
       <button
+        ref={infoRef}
         type="button"
         className="bold-chat-round small"
         aria-label="Chat info"
+        aria-expanded={infoExpanded ?? false}
+        aria-controls="bold-side-panel"
         onClick={onInfo}
       >
         i

@@ -540,7 +540,7 @@ for (const viewport of sizes) {
       })
       await page.goto('/b?job=job-default')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
-      if (viewport.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+      if (viewport.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
       await page.locator('button.side-toggle').click()
       await page.getByRole('button', { name: /^Thread/ }).click()
       await expect(page.getByRole('button', { name: /lead context: 10 %/ })).toBeVisible()

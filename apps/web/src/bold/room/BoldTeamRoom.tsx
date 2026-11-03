@@ -6,7 +6,15 @@ import {
   type Room,
 } from '@score/contract'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
@@ -29,7 +37,6 @@ import {
   DeleteJobDialog,
   JobMenu,
   RenameJobDialog,
-  RoomMenu,
   RoomTitle,
   jobLifecycleError,
 } from './RoomMenus.tsx'
@@ -119,9 +126,6 @@ function LoadedTeamRoom({
   phone,
   phoneJob,
   phoneJobMissing,
-  phoneAction,
-  onShareRoom,
-  onDeleteRoom,
   onOpenThread,
   externalDeletedNotice,
 }: {
@@ -133,9 +137,6 @@ function LoadedTeamRoom({
   /** The one job the phone chat shows. The head and the body both read this, so they cannot disagree. */
   phoneJob?: Job
   phoneJobMissing: boolean
-  phoneAction?: ReactNode
-  onShareRoom: (room: Room) => void
-  onDeleteRoom: (room: Room) => void
   onOpenThread: (jobId: string) => void
   /** The shell already owns the deletion notice when the room is mounted inside it. */
   externalDeletedNotice: boolean
@@ -212,6 +213,7 @@ function LoadedTeamRoom({
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
       next.delete('message')
+      next.delete('jobs')
       // A file belongs to the job it was opened from; another job must not inherit it.
       if (jobId !== leaving) next.delete('file')
       // On a phone, opening a job from the list is a step Back undoes; moving from one job to another replaces it and
@@ -447,7 +449,7 @@ function LoadedTeamRoom({
           That job isn’t here any more.
         </p>
       )}
-      {phone && phoneJob && (
+      {phone && phoneJob && !phoneJob.isDefault && (
         <div className="bold-phone-chat-tools" aria-label="Job tools">
           <button
             type="button"
@@ -466,9 +468,6 @@ function LoadedTeamRoom({
             onReopen={(job) => void changeJobState(job, 'reopen')}
             onDelete={setDeletingJob}
           />
-          {room.role !== 'team' && (
-            <RoomMenu room={room} onShare={onShareRoom} onDelete={onDeleteRoom} />
-          )}
           <button
             type="button"
             className="bold-filter bold-deleted-toggle"
@@ -477,7 +476,6 @@ function LoadedTeamRoom({
           >
             {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
           </button>
-          {phoneAction}
         </div>
       )}
       {!phone && jobsStatus === 'success' && !empty && (
@@ -683,11 +681,22 @@ export function BoldTeamRoom({
   onOpenElsewhere,
   onOpenThread = () => undefined,
   externalDeletedNotice = false,
-  header,
+  chatMeta,
+  chatAction,
+  onChatInfo,
+  infoRef,
+  infoExpanded,
+  onBackToChats,
 }: {
   agents: AgentSummary[]
-  /** 3.21.0: the chat header row (owner, members, workspace, Chat info), drawn under the room title on desktop. */
-  header?: (room: Room) => ReactNode
+  /** 3.21.0 desktop chat bar: the owner/members line under the name, and the Chat info button after the menus. */
+  chatMeta?: (room: Room) => ReactNode
+  chatAction?: (room: Room) => ReactNode
+  /** 3.21.0 phone chat bar: the round Info button (it opens the side sheet), its ref, and the way back to the list. */
+  onChatInfo?: () => void
+  infoRef?: RefObject<HTMLButtonElement | null>
+  infoExpanded?: boolean
+  onBackToChats?: () => void
   /** The bold shell's phone breakpoint: board 18's job list and board 03's full-screen chat. */
   phone?: boolean
   phoneAction?: ReactNode
@@ -730,11 +739,15 @@ export function BoldTeamRoom({
       ? allJobs.find((job) => job.id === requestedPhoneJobId)
       : undefined
   const phoneDefaultJob = allJobs.find((job) => job.isDefault) ?? allJobs[0]
-  // A phone team room lists its jobs; an older or imported room has one job, so it opens straight into that chat.
+  // 3.21.0: a phone chat opens straight into its conversation (the default job); the job list is one step away
+  // (`?jobs=1`, from the Info sheet) and a named job is `?job=`.
+  const jobsView = params.get('jobs') === '1'
   const phoneJob = phoneRoom
-    ? current?.role === 'team'
-      ? requestedPhoneJob
-      : (requestedPhoneJob ?? phoneDefaultJob)
+    ? jobsView
+      ? undefined
+      : current?.role === 'team' && requestedPhoneJobId !== null && requestedPhoneJobId !== 'all'
+        ? requestedPhoneJob
+        : (requestedPhoneJob ?? phoneDefaultJob)
     : undefined
   const phoneJobId = phoneJob?.id ?? null
   const phoneJobMissing =
@@ -772,6 +785,12 @@ export function BoldTeamRoom({
   }, [phone, phoneJobId])
 
   const backToJobs = () => {
+    if (jobsView) {
+      const next = new URLSearchParams(params)
+      next.delete('jobs')
+      setParams(next, { replace: true })
+      return
+    }
     if (current?.role !== 'team') {
       const next = new URLSearchParams(params)
       next.delete('room')
@@ -822,8 +841,15 @@ export function BoldTeamRoom({
         phoneAction={phoneAction}
         phone={phoneRoom}
         phoneJob={phoneJob}
-        phoneBackLabel={current?.role === 'team' ? 'Back to jobs' : 'Back to the team room'}
+        phoneBackLabel="Back to chat"
         onBackToJobs={backToJobs}
+        phoneList={jobsView || phoneJobMissing}
+        onBackToChats={onBackToChats}
+        onChatInfo={onChatInfo}
+        infoRef={infoRef}
+        infoExpanded={infoExpanded}
+        chatMeta={chatMeta}
+        chatAction={chatAction}
         onSelectRoom={selectRoom}
         onOpenElsewhere={(session) => onOpenElsewhere?.(session)}
         onShare={(room) => {
@@ -836,7 +862,6 @@ export function BoldTeamRoom({
         }}
         onDelete={setDeleting}
       />
-      {!phoneRoom && current && header?.(current)}
       {status === 'pending' ? (
         <RoomWaiting />
       ) : status === 'error' || !room ? (
@@ -851,9 +876,6 @@ export function BoldTeamRoom({
           phone={phoneRoom}
           phoneJob={phoneJob}
           phoneJobMissing={phoneJobMissing}
-          phoneAction={phoneAction}
-          onShareRoom={(target) => setSharing({ room: target })}
-          onDeleteRoom={setDeleting}
           onOpenThread={onOpenThread}
           externalDeletedNotice={externalDeletedNotice}
         />

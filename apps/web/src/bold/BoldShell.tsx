@@ -33,7 +33,7 @@ import {
 } from './bold-agents.ts'
 import { boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
-import { GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
+import { BookIcon, GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
 import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
 import { isTerminalShortcut } from './terminal-shortcut.ts'
 import { terminalBackTarget } from './BoldTerminal.tsx'
@@ -49,10 +49,11 @@ import './bold-shape.css'
 
 const PHONE = '(max-width: 860px)'
 
-type View = 'room' | 'team' | 'recipes' | 'tasks' | 'screens' | 'settings'
+type View = 'room' | 'agents' | 'knowledge' | 'recipes' | 'tasks' | 'screens' | 'settings'
 
 function viewOf(path: string): View {
-  if (path.startsWith('/b/team')) return 'team'
+  if (path.startsWith('/b/agents')) return 'agents'
+  if (path.startsWith('/b/knowledge')) return 'knowledge'
   if (path.startsWith('/b/settings')) return 'settings'
   if (path.startsWith('/b/recipes')) return 'recipes'
   if (path.startsWith('/b/tasks')) return 'tasks'
@@ -193,7 +194,7 @@ function BoldShellFrame() {
   const dockHasProgress = agents.some(() => dockProgress() !== null)
 
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
-  // the room: Team and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
+  // the room: Agents, Knowledge and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
   // The player screen is an ordinary page, even though it belongs to Room in the navigation.
   const fit = view === 'room' && location.pathname === '/b'
   useEffect(() => {
@@ -261,6 +262,12 @@ function BoldShellFrame() {
       onClick={go(to)}
     >
       {label}
+      {/* 3.19.1: where the team rings make room (≤ 1100px) the Room button carries the needs-you count instead. */}
+      {target === 'room' && roomBadge && (
+        <span className="bold-nav-count" data-protected="inline-flex">
+          {roomBadge}
+        </span>
+      )}
     </button>
   )
 
@@ -286,10 +293,11 @@ function BoldShellFrame() {
             {!phone && (
               <nav className="nav" aria-label="Main">
                 {navButton('room', 'Chats', '/b')}
-                {navButton('team', 'Team', '/b/team')}
-                {navButton('recipes', 'Recipes', '/b/recipes')}
+                {navButton('agents', 'Agents', '/b/agents')}
+                {navButton('knowledge', 'Knowledge', '/b/knowledge')}
                 {navButton('tasks', 'Tasks', '/b/tasks')}
                 {navButton('screens', 'Screens', '/b/screens')}
+                {navButton('recipes', 'Recipes', '/b/recipes')}
               </nav>
             )}
             {!phone && (
@@ -335,7 +343,7 @@ function BoldShellFrame() {
                 onClick={openCommand}
               >
                 <SearchIcon />
-                Search
+                <span className="searchbtn-label">Search</span>
                 <span className="kbd">⌘K</span>
               </button>
             )}
@@ -386,15 +394,15 @@ function BoldShellFrame() {
                 aria-current={view === 'room' ? 'page' : undefined}
                 aria-label={
                   roomNeedsYou > 0
-                    ? `Room, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
+                    ? `Chats, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
                     : roomNeedsShort
-                      ? 'Room, couldn’t check everything that needs you'
-                      : 'Room'
+                      ? 'Chats, couldn’t check everything that needs you'
+                      : 'Chats'
                 }
                 onClick={go('/b')}
               >
                 <RoomIcon />
-                <span>Room</span>
+                <span>Chats</span>
                 {roomBadge && (
                   <span className="bold-tab-count" data-protected="inline-flex">
                     {roomBadge}
@@ -403,12 +411,21 @@ function BoldShellFrame() {
               </button>
               <button
                 type="button"
-                className={view === 'team' ? 'on' : undefined}
-                aria-current={view === 'team' ? 'page' : undefined}
-                onClick={go('/b/team')}
+                className={view === 'agents' ? 'on' : undefined}
+                aria-current={view === 'agents' ? 'page' : undefined}
+                onClick={go('/b/agents')}
               >
                 <TeamIcon />
-                Team
+                Agents
+              </button>
+              <button
+                type="button"
+                className={view === 'knowledge' ? 'on' : undefined}
+                aria-current={view === 'knowledge' ? 'page' : undefined}
+                onClick={go('/b/knowledge')}
+              >
+                <BookIcon size={22} />
+                Knowledge
               </button>
               <button ref={searchTrigger} type="button" onClick={openCommand}>
                 <SearchIcon size={22} />

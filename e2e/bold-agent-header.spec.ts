@@ -28,10 +28,10 @@ for (const size of [
   test(`the agent page header's text lines up at ${size.name}`, async ({ page }) => {
     await pair(page)
     await page.setViewportSize({ width: size.width, height: size.height })
-    await page.goto('/b/team/builder')
+    await page.goto('/b/agents/builder')
     await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
     const head = '.bold-agent .pagehead'
-    const team = await textMiddle(page, `${head} > a.link`, 'Team')
+    const team = await textMiddle(page, `${head} > a.link`, 'Agents')
     const slash = await textMiddle(page, `${head} > span.muted`, '/')
     expect(Math.abs(team - slash)).toBeLessThanOrEqual(2)
     if (size.name === 'desktop') {

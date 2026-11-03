@@ -130,7 +130,7 @@ for (const viewport of sizes) {
     await page.setViewportSize(viewport)
     await pair(page)
     const id = `rm-helper-${testInfo.repeatEachIndex}-${testInfo.retry}-${desktop ? 'd' : 'p'}`
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     await page.evaluate(async (agentId) => {
       const headers = { 'content-type': 'application/json', 'X-Score-Client': 'web' }
       const input = {
@@ -167,7 +167,7 @@ for (const viewport of sizes) {
 
     // A failed run must not leave the agent on the shared server (global teardown checks): remove it if still there.
     try {
-      await page.goto(`/b/team/${id}`)
+      await page.goto(`/b/agents/${id}`)
       await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
       const open = page.getByRole('button', { name: 'Remove agent…' })
       const fits = () =>
@@ -197,7 +197,7 @@ for (const viewport of sizes) {
       await panel.getByLabel(`Type ${id} to confirm`).fill(id)
       await expect(remove).toBeEnabled()
       await remove.click()
-      await expect(page).toHaveURL(/\/b\/team$/, { timeout: 30_000 })
+      await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 30_000 })
       await expect(page.getByRole('link', { name: id, exact: true })).toHaveCount(0)
     } finally {
       await page.evaluate(async (agentId) => {
@@ -225,7 +225,7 @@ for (const viewport of sizes) {
     await page.setViewportSize(viewport)
     await pair(page)
     const id = `rm-coder-${testInfo.repeatEachIndex}-${testInfo.retry}-${desktop ? 'd' : 'p'}`
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     await page.evaluate(async (agentId) => {
       const response = await fetch('/api/coding-agents', {
         method: 'POST',
@@ -242,13 +242,13 @@ for (const viewport of sizes) {
       })
       if (!response.ok) throw new Error(await response.text())
     }, id)
-    await page.goto(`/b/team/${id}`)
+    await page.goto(`/b/agents/${id}`)
     await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
     await page.getByRole('button', { name: 'Remove agent…' }).click()
     const panel = page.getByRole('group', { name: `Remove ${id}` })
     await expect(panel).toHaveAttribute('data-protected', 'block')
     await expect(panel).toContainText(`Removes ${id} from the team. Past work stays in rooms.`)
     await panel.getByRole('button', { name: 'Remove', exact: true }).click()
-    await expect(page).toHaveURL(/\/b\/team$/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/b\/agents$/, { timeout: 15_000 })
   })
 }

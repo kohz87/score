@@ -214,7 +214,7 @@ for (const size of sizes) {
 
     test(`the Runs view lists every run and opens one at ${size.name}`, async ({ page }) => {
       await page.goto('/b?open=1')
-      if (size.name === 'phone') await page.getByRole('button', { name: 'Open side panel' }).click()
+      if (size.name === 'phone') await page.getByRole('button', { name: 'Chat info' }).click()
       const panel = page.getByRole('complementary', { name: 'Side panel' })
       await panel.locator('.side-toggle').click()
       await panel.getByRole('button', { name: /^Runs/ }).click()

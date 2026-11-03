@@ -174,7 +174,7 @@ test('code shows builder’s colour bar, both reviewer notes and the cursor with
   expect(code.querySelector('[data-cursor="builder"]')).not.toBeNull()
   expect(within(code).getByText('Authorship may be incomplete for this file.')).toBeDefined()
   expect(within(code).getByRole('link', { name: 'Files' }).getAttribute('href')).toBe(
-    '/b/team/builder#agent-workspace',
+    '/b/agents/builder#agent-workspace',
   )
   expect(bench.querySelector('input, textarea, [contenteditable="true"]')).toBeNull()
 })
@@ -207,7 +207,7 @@ test('tabs choose a file, a screen and a draft, and mark the active one', () => 
   expect(within(draft).getByText('reviewer')).toBeDefined()
   expect(
     within(draft).getByRole('link', { name: 'Open in the workspace' }).getAttribute('href'),
-  ).toBe('/b/team/reviewer?path=docs%2Fwriting%2Fempty-states.md#agent-workspace')
+  ).toBe('/b/agents/reviewer?path=docs%2Fwriting%2Fempty-states.md#agent-workspace')
 })
 
 test('arrow keys move through the tabs and leave one tab in the tab order', async () => {

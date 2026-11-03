@@ -68,7 +68,7 @@ test.describe('background', () => {
     page,
   }) => {
     await wear(page, t.glassCover)
-    await page.goto('/b/team/builder')
+    await page.goto('/b/agents/builder')
     await expect(page.locator('.bold-agent')).toBeVisible()
     const holders = await page.evaluate(() =>
       [...document.querySelectorAll('[data-protected]:not(.agent-glyph):not(.needs-you-dot)')].map(
@@ -91,7 +91,7 @@ test.describe('old themes still load', () => {
   }) => {
     await wear(page, t.legacy)
     await expect(page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible()
-    await expect(page.getByRole('navigation', { name: 'Main' }).first()).toContainText('Team')
+    await expect(page.getByRole('navigation', { name: 'Main' }).first()).toContainText('Agents')
   })
 
   test('the boot cache holds the resolved look', async ({ page }) => {

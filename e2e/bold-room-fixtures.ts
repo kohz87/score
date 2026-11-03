@@ -567,8 +567,14 @@ export async function openBoldRoomWith(
 /** Board 18 on a phone opens a job from the list; the desktop opens its tab. Both land on that job's chat. */
 export async function openBoldJob(page: Page, title: RegExp) {
   if ((page.viewportSize()?.width ?? 1440) <= 860) {
+    // 3.21.0: a phone chat opens in its conversation; the job list is `?jobs=1`.
+    if (!(await page.getByRole('region', { name: 'Jobs' }).isVisible())) {
+      const url = new URL(page.url())
+      url.searchParams.set('jobs', '1')
+      await page.goto(url.toString())
+    }
     await page.getByRole('button', { name: title }).click()
-    await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     return
   }
   await page.getByRole('tab', { name: title }).click()

@@ -25,8 +25,8 @@ async function open(page: Page, variant: Variant) {
   if (variant !== 'phone') {
     const frame = page.frameLocator('iframe[title="Preview of your theme"]')
     // The Team page reads only what the frozen data holds (the room would wait for its own).
-    await page.getByLabel('Page to preview').selectOption({ label: 'Team' })
-    await expect(frame.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible({
+    await page.getByLabel('Page to preview').selectOption({ label: 'Agents' })
+    await expect(frame.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible({
       timeout: 30_000,
     })
     await expect(frame.getByText(/^Loading/)).toHaveCount(0)
@@ -63,9 +63,9 @@ for (const variant of ['light', 'dark', 'phone'] as const) {
 test('Customizer, phone preview', async ({ page }) => {
   await open(page, 'phone')
   await page.getByRole('radio', { name: 'Preview' }).click()
-  await page.getByLabel('Page to preview').selectOption({ label: 'Team' })
+  await page.getByLabel('Page to preview').selectOption({ label: 'Agents' })
   const frame = page.frameLocator('iframe[title="Preview of your theme"]')
-  await expect(frame.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible({
+  await expect(frame.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible({
     timeout: 30_000,
   })
   await page.waitForTimeout(800)

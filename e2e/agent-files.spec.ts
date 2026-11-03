@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test'
 test('edit SOUL.md: preview the diff, hit a conflict, see the diff and overwrite', async ({
   page,
 }) => {
-  await page.goto('/b/team/builder')
+  await page.goto('/b/agents/builder')
   // The personality file is the editor the page opens with ("How builder works").
   const box = page.getByRole('textbox', { name: 'SOUL.md contents' })
   await expect(box).toHaveValue(/I am builder/)
@@ -57,7 +57,7 @@ test('edit SOUL.md: preview the diff, hit a conflict, see the diff and overwrite
 })
 
 test('the rules file is reachable from the agent page', async ({ page }) => {
-  await page.goto('/b/team/lead')
+  await page.goto('/b/agents/lead')
   await page.getByRole('button', { name: 'Operating rules · AGENTS.md' }).click()
   await expect(page.getByRole('textbox', { name: 'AGENTS.md contents' })).toHaveValue(
     /Keep changes small/,

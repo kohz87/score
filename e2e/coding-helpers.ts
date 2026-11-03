@@ -47,11 +47,11 @@ export async function removeCodingAgent(page: Page, id: string): Promise<void> {
     items: { id: string; lifecycle?: { state?: string } }[]
   }
   if (!list.items.some((agent) => agent.id === id && agent.lifecycle?.state !== 'removed')) return
-  await page.goto(`/b/team/${encodeURIComponent(id)}`)
+  await page.goto(`/b/agents/${encodeURIComponent(id)}`)
   await page.getByRole('button', { name: 'Remove agent…' }).click()
   await page
     .getByRole('group', { name: `Remove ${id}` })
     .getByRole('button', { name: 'Remove', exact: true })
     .click()
-  await expect(page).toHaveURL(/\/b\/team$/)
+  await expect(page).toHaveURL(/\/b\/agents$/)
 }

@@ -14,7 +14,7 @@ export const BoldFrameContext = createContext<BoldFrame | null>(null)
 const SPLIT = /^([^?#]*)(.*)$/
 
 /** Paths that move under `/b` as they are: the kept classic pages. */
-const PREFIXED = ['/settings', '/team']
+const PREFIXED = ['/settings']
 
 /** Watch is the replay on the agent's screen page (2.6.0). */
 const WATCH = /^\/watch\/([^/]+)$/
@@ -41,7 +41,9 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
   if (under(path, '/chat')) return chatRoomPath(path, rooms)
   // The Workspace deep link has no /b page of its own: the agent's page is the nearest.
   const workspace = /^\/team\/([^/]+)\/workspace$/.exec(path)
-  if (workspace) return `/b/team/${workspace[1]}`
+  if (workspace) return `/b/agents/${workspace[1]}`
+  // 3.19.0: Team became Agents.
+  if (under(path, '/team')) return `/b/agents${path.slice('/team'.length)}${rest}`
   const recipes = recipesPath(path, rest)
   if (recipes) return recipes
   // A run opens in the room's Runs side panel (2.5.0); the query and #hash go with it.
@@ -111,11 +113,16 @@ export function classicRedirectFor(pathname: string, search: string, hash = ''):
     return boldRoot(roomId ? { room: roomId } : {}, search, hash)
   }
   const member = /^\/team\/([^/]+)(?:\/workspace)?$/.exec(pathname)
-  if (member) return `/b/team/${member[1]}${search}${hash}`
-  if (pathname === '/team') return `/b/team${search}${hash}`
+  if (member) return `/b/agents/${member[1]}${search}${hash}`
+  if (pathname === '/team') return `/b/agents${search}${hash}`
   if (under(pathname, '/knowledge')) {
     const note = pathname === '/knowledge' ? null : decoded(pathname.slice('/knowledge/'.length))
-    return boldRoot(note ? { note } : { library: '1' }, search, hash)
+    // 3.19.0: Knowledge has its own page; a note named in the address (path or ?note=) opens there.
+    const params = new URLSearchParams(note ? { note } : {})
+    for (const [key, value] of new URLSearchParams(search))
+      if (!params.has(key)) params.set(key, value)
+    const query = params.toString()
+    return `/b/knowledge${query ? `?${query}` : ''}${hash}`
   }
   if (pathname === '/reports') return `/b/settings/usage${search}${hash}`
   if (under(pathname, '/settings') || under(pathname, '/terminal'))

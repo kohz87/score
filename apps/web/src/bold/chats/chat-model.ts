@@ -172,6 +172,7 @@ const OPEN_PARAMS = [
   'with',
   'room',
   'job',
+  'jobs',
   'message',
   'command',
   'open',

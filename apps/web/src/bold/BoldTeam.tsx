@@ -87,7 +87,7 @@ function AgentCard({
         <ScreenGlimpse agent={agent} item={watch} />
       </div>
       <div className="bold-agentcard-name">
-        <Link to={`/b/team/${encodeURIComponent(agent.id)}`}>{agentDisplayName(agent)}</Link>
+        <Link to={`/b/agents/${encodeURIComponent(agent.id)}`}>{agentDisplayName(agent)}</Link>
         <span className="small muted">{agent.role || 'No role set'}</span>
       </div>
       <span className="bold-agentcard-state" style={{ color: stateColor(agent) }}>
@@ -100,7 +100,7 @@ function AgentCard({
             Message
           </Link>
         )}
-        <Link className="btn sm" to={`/b/team/${encodeURIComponent(agent.id)}`}>
+        <Link className="btn sm" to={`/b/agents/${encodeURIComponent(agent.id)}`}>
           Open
         </Link>
       </div>
@@ -161,7 +161,7 @@ export function BoldTeam() {
     <section className="page bold-team" aria-labelledby="bold-team-title">
       <div className="pagehead">
         <h1 className="big grow" id="bold-team-title">
-          {phone ? 'Team' : 'Your team'}
+          Agents
         </h1>
         <BoldAddAgent agents={visible} phone={phone} />
       </div>

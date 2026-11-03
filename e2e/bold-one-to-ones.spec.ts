@@ -82,7 +82,7 @@ for (const { name, viewport } of sizes) {
       await page.goto('/b?open=1')
       if (phone) {
         // A phone has no dock (board 19); the side panel's menu lists every agent under "One to one".
-        await page.getByRole('button', { name: 'Open side panel' }).click()
+        await page.getByRole('button', { name: 'Chat info' }).click()
         await side(page).getByRole('button', { name: /^Work/ }).click()
         await side(page)
           .getByRole('button', { name: /^builder/ })
@@ -122,7 +122,7 @@ for (const { name, viewport } of sizes) {
     })
 
     test('opens from the Team page Message button', async ({ page }) => {
-      await page.goto('/b/team')
+      await page.goto('/b/agents')
       const card = page
         .locator('.bold-agentcard')
         .filter({ has: page.getByRole('link', { name: 'reviewer', exact: true }) })

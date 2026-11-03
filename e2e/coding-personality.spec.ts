@@ -29,7 +29,7 @@ test('edit a coding agent’s personality, then the fake CLI reports that it rec
       style: { color: '#6B4EFF', shape: 'hexagon' },
     })
 
-    await page.goto(`/b/team/${encodeURIComponent(id)}`)
+    await page.goto(`/b/agents/${encodeURIComponent(id)}`)
     const card = page.getByRole('region', { name: 'Personality' })
     await expect(card).toContainText('Reviews build scripts')
     await expect(card).toContainText('No instructions yet')
@@ -47,7 +47,7 @@ test('edit a coding agent’s personality, then the fake CLI reports that it rec
     if (shotsFolder) await card.screenshot({ path: `${shotsFolder}/personality.png` })
 
     // The Team list shows the role under the name.
-    await page.goto('/b/team')
+    await page.goto('/b/agents')
     await expect(page.getByText('Lead builder').first()).toBeVisible()
 
     // A turn: the fake CLI echoes the block it was handed.

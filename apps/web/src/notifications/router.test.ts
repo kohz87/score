@@ -71,7 +71,7 @@ test('a finished routine notifies once, and a failed one is a routine result, no
   const { router } = setup()
   expect(router.handle(ev('run.updated', run({ origin: 'cron', status: 'running' })))).toBeNull()
   const done = router.handle(ev('run.updated', run({ origin: 'cron' })))!
-  expect(done).toMatchObject({ kind: 'routines', title: 'Routine finished', url: '/b/team' })
+  expect(done).toMatchObject({ kind: 'routines', title: 'Routine finished', url: '/b/agents' })
   expect(router.handle(ev('run.updated', run({ origin: 'cron' })))).toBeNull()
   const failed = router.handle(
     ev('run.updated', run({ id: 'r2', origin: 'cron', status: 'failed' })),

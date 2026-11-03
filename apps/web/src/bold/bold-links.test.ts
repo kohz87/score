@@ -37,7 +37,7 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   expect(boldRecipesLink('wf 1')).toBe('/b/recipes/wf%201')
   expect(boldFirstRunLink()).toBe('/b?first=run')
   expect(boldCommandLink('assign')).toBe('/b?command=assign')
-  expect(boldAddAgentLink()).toBe('/b/team?add=agent')
+  expect(boldAddAgentLink()).toBe('/b/agents?add=agent')
   expect(boldSettingsSectionLink('look')).toBe('/b/settings/look')
   expect(boldWorkbenchLink('?job=job+1&note=Projects%2FRoadmap.md')).toBe(
     '/b?job=job+1&note=Projects%2FRoadmap.md&work=workbench',
@@ -52,7 +52,7 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   )
   expect(boldAgentScreenLink('builder')).toBe('/b/screen/builder')
   expect(boldAgentWorkspaceLink('builder', 'api/events.py')).toBe(
-    '/b/team/builder?path=api%2Fevents.py#agent-workspace',
+    '/b/agents/builder?path=api%2Fevents.py#agent-workspace',
   )
 })
 
@@ -65,6 +65,6 @@ test('workspace:// links use the job Workbench for a changed file and the agent 
     '/b?job=job-feed&work=code&file=.%2Fdocs%2Frelease-notes.md',
   )
   expect(boldWorkspaceLink('reviewer', 'notes/other.md', job)).toBe(
-    '/b/team/reviewer?path=notes%2Fother.md#agent-workspace',
+    '/b/agents/reviewer?path=notes%2Fother.md#agent-workspace',
   )
 })

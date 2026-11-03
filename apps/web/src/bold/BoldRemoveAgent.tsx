@@ -46,7 +46,7 @@ export function BoldRemoveAgent({
       void client.invalidateQueries({ queryKey: ['team'] })
       void client.invalidateQueries({ queryKey: ['chat', 'agents'] })
       // The list refreshes even when the person has left; only the navigation needs the panel still open.
-      if (mounted.current) void navigate('/b/team')
+      if (mounted.current) void navigate('/b/agents')
     },
   })
 
@@ -61,7 +61,7 @@ export function BoldRemoveAgent({
     if (!done) return
     void client.invalidateQueries({ queryKey: ['team'] })
     void client.invalidateQueries({ queryKey: ['chat', 'agents'] })
-    void navigate('/b/team')
+    void navigate('/b/agents')
   }, [done, client, navigate])
 
   const preview = del.preview
