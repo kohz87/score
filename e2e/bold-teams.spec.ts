@@ -59,7 +59,9 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   expect([...made.room.members].sort()).toEqual(['builder', 'reviewer'])
 
   // A job started here lands here, not in the first team room.
-  await page.getByRole('button', { name: 'Start a job' }).click()
+  // 3.24.0: the header's "+ Job" is gone; the composer's + menu starts a run for this chat.
+  await page.getByRole('button', { name: 'Attach, voice and commands' }).click()
+  await page.getByRole('button', { name: 'Start a run…' }).click()
   const start = page.getByRole('dialog', { name: 'Start a job' })
   await start.getByRole('radio', { name: 'None' }).click()
   await start.getByLabel('What should the team do?').fill(jobTitle)

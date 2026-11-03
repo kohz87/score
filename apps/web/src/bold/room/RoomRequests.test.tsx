@@ -161,9 +161,9 @@ test('an approval leads the pins, every other card shows beneath it with no fold
   expect(approvalCard.textContent).toContain('npm install ws@8')
   expect(approvalCard.textContent).toContain('Activity feed')
 
-  // Item 8 (3.22.0): no "N more need you" bar; every card is already in view.
-  const pins = screen.getByLabelText('Needs you')
-  expect(pins.getAttribute('data-expanded')).toBeNull()
+  // 3.24.0: no pinned strip (and so no "N more below" cue); the cards sit in the conversation's slots.
+  expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull()
+  expect(document.querySelector('.bold-pins, .bold-pins-more')).toBeNull()
   expect(screen.queryByRole('button', { name: /more needs? you|Show fewer/ })).toBeNull()
 
   const exchangeCard = await screen.findByRole('article', {

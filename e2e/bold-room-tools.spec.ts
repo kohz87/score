@@ -15,7 +15,6 @@ const sizes = [
 
 for (const viewport of sizes) {
   const at = `${viewport.width}×${viewport.height}`
-  const phone = viewport.width <= 860
 
   test(`a room can be renamed, pinned, given a project and archived at ${at}`, async ({ page }) => {
     await page.setViewportSize(viewport)
@@ -71,15 +70,12 @@ for (const viewport of sizes) {
     await page.getByRole('menuitem', { name: 'Archive', exact: true }).click()
     await expect(page.getByText('Archived', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Unarchive' })).toBeVisible()
-    // The open archived room stays reachable from its own switcher (desktop; the phone chat has no switcher).
-    if (!phone) {
-      await expect(
-        (await openRoomPicker(page)).getByRole('option', { name: new RegExp(`#${renamed}`) }),
-      ).toBeVisible()
-      await page.keyboard.press('Escape')
-    }
-    // 3.21.0: a phone has the room switcher on the job list.
-    await page.goto(phone ? '/b?jobs=1' : '/b?open=1')
+    // The open archived room stays reachable from the room menu's list (3.24.0: on a phone too).
+    await expect(
+      (await openRoomPicker(page)).getByRole('option', { name: new RegExp(`#${renamed}`) }),
+    ).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.goto('/b?open=1')
     const picker = await openRoomPicker(page)
     await expect(picker).toBeVisible()
     await expect(picker.getByRole('option', { name: new RegExp(`#${renamed}`) })).toHaveCount(0)

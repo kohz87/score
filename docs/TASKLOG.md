@@ -2199,3 +2199,29 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.23.0 deployed live** (~18:04 UTC), backup score-pre-3.23.0-20261104.db, health ok, fence off; pushed. Live
   screenshot (owner's data): the run topics that showed only a divider in 3.22 now carry their run cards (Succeeded 3/3,
   Stopped 10/15), and Graph shows the real orchestration (lead, advisor checkpoints, swarm helpers) with its log.
+
+## 3.24.0 — Chats, stage 4: needs-you in the conversation, the phone (2026-11-04)
+- Owner (asleep): "continue until stage 4 is completed" (DECISIONS 160). Brief docs/briefs/3.24.0-phone-and-inline.md.
+  Sonnet coder built it on top of 3.23.0 while 3.23.0's gate ran.
+- Needs-you cards render in the merged stream after the message that asked (else the topic's end, else the
+  conversation's end, else a fallback list when there is no stream), each in one persistent host moved between slots (a
+  half-typed answer and focus survive); the pinned strip and its cue are gone; a protected jump chip ("N need you ↑/↓")
+  takes the person to the nearest card out of view. Phone: the All topics screen and title switcher retired (`?jobs=1` →
+  Info at Topics with unread counts, closed topics folded past 3, New topic; older chats from the ⋯ menu); "+ Job" left
+  the header ("Start a run…" in the + menu). Removed: PhoneJobList, pins-overflow; deviation noted: questions anchor to
+  their topic (the contract has no message id for them).
+- Review P2s fixed (coder round + lead): the chip could cover a card's buttons (the stream keeps room while a card
+  waits — first tied to the chip showing, which a re-review found makes the two toggle each other at the stream's end;
+  lead re-keyed it on a card waiting and kept the chip's last height); zero-size cards counted; the slot registry
+  could drop another slot's entry; Info lost per-topic unread counts; the card host/slots weren't protected; three tests
+  of still-live logic had been removed (restored). Re-reviews clean.
+- Gate 1: e2e 107 failed (757 passed); two triage coders (A themes/thread/follow, B needs-you/phone/room + the shared
+  fixtures), 20-minute self-checks. Real bugs fixed: Info's topic rows 21px on a phone (44px now); under a custom look
+  the stream's fade mask made it a stacking context, so a theme's dragged bar covered an inline card (the mask is off
+  under custom looks); the stream lost its end when the chip's room was added after it settled (34px). Lead checked the
+  phone history concern (a send adds no history entry; Back works). Lead freed two stale fake servers A's timed-out
+  runs left on 6460/6461 (by pid, after checking they were fake-mode test homes).
+- Final gate: check green (contract 1609, web 3273, server 4972); e2e 861 passed, 9 failed: 6 Room theme baselines made
+  before B's fixtures merged (regenerated, stable 63/63, viewed) and 3 load flakes passing alone (55 passed).
+- Accepted P3s: custom looks lose the stream's 22px top fade; the needs-you mark of the old phone presence strip has no
+  replacement beyond the chat list badge and the top-bar count; questions anchor to their topic.

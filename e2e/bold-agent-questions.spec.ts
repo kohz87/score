@@ -121,9 +121,8 @@ for (const { name, viewport } of sizes) {
         data: { text: '@reviewer ask me to pick' },
       })
       expect(sent.status(), await sent.text()).toBeLessThan(300)
-      const strip = page.getByRole('region', { name: 'Needs you' })
-      const card = strip.getByRole('region', { name: 'reviewer asks' })
-      // 3.22.0: no "N more need you" bar; every card of the strip is already in view.
+      // 3.24.0: the question card sits in the conversation (no Needs you strip above it).
+      const card = page.locator('#bold-room-stream').getByRole('region', { name: 'reviewer asks' })
       await expect(card).toBeVisible({ timeout: 30_000 })
       // The dock ring says the agent needs you while the question waits (a phone has no dock).
       const ring = page.getByRole('button', { name: /^One to one with reviewer,/ })

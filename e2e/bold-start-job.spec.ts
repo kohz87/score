@@ -18,9 +18,10 @@ function tag(prefix: string) {
 async function openStart(page: Page, from: 'link' | 'room') {
   if (from === 'link') await page.goto('/b?start=job')
   else {
-    // 3.21.0: on a phone the chat bar has no Job button; the job list (`?jobs=1`) does.
-    await page.goto((page.viewportSize()?.width ?? 1440) <= 860 ? '/b?jobs=1' : '/b?open=1')
-    await page.getByRole('button', { name: 'Start a job' }).click()
+    // 3.24.0: the header's "+ Job" and the phone job list are gone; the composer's + menu starts a run for this chat.
+    await page.goto('/b?open=1')
+    await page.getByRole('button', { name: 'Attach, voice and commands' }).click()
+    await page.getByRole('button', { name: 'Start a run…' }).click()
   }
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await expect(dialog).toBeVisible()
@@ -112,7 +113,7 @@ for (const size of sizes) {
       expect(job?.recipe).toEqual({ kind: 'orchestration', ref: run!.id })
     })
 
-    test('None starts a plain job in the team room from the room button', async ({ page }) => {
+    test('None starts a plain job in the team room from the composer + menu', async ({ page }) => {
       await pair(page)
       const title = tag('Plain job')
       const dialog = await openStart(page, 'room')

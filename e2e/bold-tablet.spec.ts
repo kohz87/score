@@ -22,7 +22,7 @@ const visible =
 
 const roomReady: Ready = async (page) => {
   await visible('.bold-room-composer')(page)
-  await visible('.bold-phone-job, .bold-topic-divider, .bold-empty-room')(page)
+  await visible('.bold-topic-divider, .bold-empty-room, .bold-message')(page)
 }
 
 const usageReady: Ready = async (page) => {
@@ -63,8 +63,8 @@ const recipesReady: Ready = async (page) => {
   ).toBeVisible({ timeout: 20_000 })
 }
 
-// 3.21.0: a portrait tablet opens a chat in its conversation; the job list (the old room screen) is `?jobs=1`.
-const roomPath = (width: number) => (width <= 860 ? '/b?jobs=1' : '/b?open=1')
+// 3.24.0: a portrait tablet opens a chat in its conversation; the job list screen (`?jobs=1`) is retired.
+const roomPath = () => '/b?open=1'
 
 const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'room', path: '/b?open=1', ready: roomReady },
@@ -82,8 +82,7 @@ const pages: { name: string; path: string; ready: Ready }[] = [
 /** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
  * close it, so the room underneath is what gets measured. */
 async function closeSheet(page: Page) {
-  // 3.21.0: the job list's own button is "Open side panel"; a chat's is "Chat info".
-  const toggle = page.getByRole('button', { name: /^(Chat info|Open side panel)$/ })
+  const toggle = page.getByRole('button', { name: 'Chat info' })
   if ((await toggle.getAttribute('aria-expanded')) === 'true') await page.keyboard.press('Escape')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 }
@@ -112,7 +111,7 @@ for (const size of sizes) {
       await expect(
         page.locator('#bold-room-stream').getByRole('button', { name: 'Copy' }).first(),
       ).toBeVisible()
-      await open(page, roomPath(size.width), roomReady)
+      await open(page, roomPath(), roomReady)
       // Landscape shows the room's messages: their actions must be there (no hover) to be measured.
       if (size.width >= 861)
         await expect(
@@ -139,34 +138,36 @@ for (const size of sizes) {
     test('layout uses the width', async ({ page }) => {
       await pair(page)
       const portrait = size.width < 861
-      await open(page, roomPath(size.width), roomReady)
+      await open(page, roomPath(), roomReady)
       if (portrait) {
-        // The title's text, the first job card and the composer share a left edge; the header tools and the content
-        // share a right edge.
+        // The chat bar's Back, the conversation's first topic divider and the composer share a left edge; the bar's
+        // tools, the divider and the composer share a right edge.
         await closeSheet(page)
-        await expect(page.locator('.bold-phone-job').first()).toBeVisible()
-        await expect(page.locator('.bold-phone-list-actions')).toBeVisible()
+        await expect(page.locator('.bold-chat-phone-bar')).toBeVisible()
+        await expect(page.locator('.bold-topic-divider').first()).toBeVisible()
         await expect(page.locator('.bold-room-composer .chat-composer-box--room')).toBeVisible()
         const edges = await page.evaluate(() => {
           const rect = (sel: string) => document.querySelector(sel)!.getBoundingClientRect()
-          // 3.21.0: the job list's head starts with the round Back button, so its left edge is the head's.
-          const first = rect('.bold-phone-job')
+          const first = rect('#bold-room-stream .bold-topic-divider')
           const composer = rect('.bold-room-composer .chat-composer-box--room')
           return {
-            titleLeft: rect('.bold-phone-list-title').left,
+            backLeft: rect('.bold-chat-phone-bar > button').left,
             cardLeft: first.left,
             composerLeft: composer.left,
             cardRight: first.right,
             composerRight: composer.right,
-            toolsRight: rect('.bold-phone-list-actions').right,
+            toolsRight: rect('.bold-chat-phone-bar > button:last-child').right,
           }
         })
-        expect(Math.abs(edges.titleLeft - edges.cardLeft), 'title vs card').toBeLessThanOrEqual(2)
+        expect(Math.abs(edges.backLeft - edges.cardLeft), 'back vs divider').toBeLessThanOrEqual(2)
         expect(
           Math.abs(edges.composerLeft - edges.cardLeft),
-          'composer vs card',
+          'composer vs divider',
         ).toBeLessThanOrEqual(2)
-        expect(Math.abs(edges.toolsRight - edges.cardRight), 'tools vs card').toBeLessThanOrEqual(2)
+        expect(
+          Math.abs(edges.toolsRight - edges.cardRight),
+          'tools vs divider',
+        ).toBeLessThanOrEqual(2)
         expect(
           Math.abs(edges.composerRight - edges.cardRight),
           'composer right',
@@ -214,7 +215,7 @@ for (const size of sizes) {
     test('no page scrolls sideways; screenshots', async ({ page }, testInfo) => {
       await pair(page)
       for (const where of pages) {
-        await open(page, where.name === 'room' ? roomPath(size.width) : where.path, where.ready)
+        await open(page, where.name === 'room' ? roomPath() : where.path, where.ready)
         const extra = await page.evaluate(
           () => document.documentElement.scrollWidth - window.innerWidth,
         )
@@ -225,12 +226,14 @@ for (const size of sizes) {
   })
 }
 
-// A big team (the full test run adds a dozen agents) used to squeeze the room title on a portrait tablet: the glyph
-// row now wraps under the title, which keeps its place.
-test('a big team’s glyph row never moves the room title on a portrait tablet', async ({ page }) => {
+// A long team name and a big team (the full test run adds a dozen agents) used to squeeze the room title on a portrait
+// tablet. 3.24.0: the glyph row is gone from the phone header (the job list screen is retired); the bar keeps its Back,
+// its title (the long name wraps or clips inside the bar) and its tools, and the page never scrolls sideways.
+test('a big team and a long name never push the chat bar past the screen on a portrait tablet', async ({
+  page,
+}) => {
   await pair(page)
   await page.setViewportSize({ width: 768, height: 1024 })
-  // A long team name too: it wraps inside the header instead of pushing past the actions.
   await page.route(/\/api\/team-room(\?.*)?$/, async (route) => {
     const response = await route.fetch()
     const body = (await response.json()) as { room: { name: string } }
@@ -250,29 +253,20 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
       ...body.items[0]!,
       id: `extra-${i}`,
       name: `extra-${i}`,
-      // The last one needs you: its protected mark must stay visible in the wrapped row.
-      ...(i === 11 ? { status: 'waiting' } : {}),
     }))
     await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
   })
-  await open(page, roomPath(768), roomReady)
+  await open(page, roomPath(), roomReady)
   await closeSheet(page)
-  await expect(page.locator('.bold-phone-job').first()).toBeVisible()
-  // The four demo agents plus twelve (more when other specs added agents to the shared server).
-  expect(await page.locator('.bold-phone-presence-agent').count()).toBeGreaterThanOrEqual(16)
-  const gap = await page.evaluate(() => {
-    const range = document.createRange()
-    range.selectNodeContents(document.querySelector('.roomhead .roomtitle')!)
-    return Math.abs(
-      range.getBoundingClientRect().left -
-        document.querySelector('.bold-phone-job')!.getBoundingClientRect().left,
-    )
-  })
-  expect(gap).toBeLessThanOrEqual(2)
+  await expect(page.locator('.bold-chat-phone-bar')).toBeVisible()
+  await expect(page.locator('[data-phone-chat-title]')).toContainText('The platform')
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
   ).toBeLessThanOrEqual(0)
-  const actions = await page.locator('.bold-phone-list-actions').boundingBox()
-  expect(actions!.x + actions!.width).toBeLessThanOrEqual(768)
-  await expect(page.locator('.bold-phone-presence-agent.needs')).toBeVisible()
+  const info = await page.getByRole('button', { name: 'Chat info' }).boundingBox()
+  expect(info!.x + info!.width).toBeLessThanOrEqual(768)
+  const back = await page.getByRole('button', { name: 'Back to chats' }).boundingBox()
+  expect(back!.x).toBeGreaterThanOrEqual(0)
+  const title = await page.locator('[data-phone-chat-title]').boundingBox()
+  expect(title!.x + title!.width).toBeLessThanOrEqual(info!.x + 1)
 })

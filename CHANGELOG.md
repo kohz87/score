@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.24.0] — 2026-11-04
+
+### Changed
+- **Chats, stage 4.** A needs-you card (an approval, a paused exchange, a question, a run's request) now sits **in the
+  conversation**, right after the message that asked, as the mock-ups show. Nothing sits above the conversation but its
+  header. When a card is out of view, a chip above the message box says how many need you and takes you there.
+- **Phone:** the All topics screen and the title switcher are gone. Topics, with their unread counts and a New topic
+  field, are in Info; older and imported chats are in the ⋯ menu. Old `?jobs=1` links open Info at Topics.
+- The chat header loses "+ Job": start work with **Start a run…** in the + menu, `/run` or `/new`.
+
 ## [3.23.0] — 2026-11-04
 
 ### Added

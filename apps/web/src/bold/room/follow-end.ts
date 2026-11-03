@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** Where the reader counts as "at the end", so new and growing messages keep being followed. */
-const FOLLOW_SLACK = 80
+export const FOLLOW_SLACK = 80
 
 /**
  * Keeps a scrolling message stream at its end: a room or job opened from another starts there, and new, growing or

@@ -115,52 +115,59 @@
   text-underline-offset: 3px;
 }
 
-[data-ui='bold'] .bold-pins {
-  flex: none;
+/* 3.24.0: a needs-you card sits in the conversation, after the message that asked (board 18: indented under the
+   thread, 78% wide). The slots take no room while empty. */
+[data-ui='bold'] .bold-needs-slot {
   display: flex;
   flex-direction: column;
-  gap: calc(12px * var(--bold-d, 1));
-  max-height: 40%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: calc(22px * var(--bold-r, 1));
+  gap: calc(10px * var(--bold-d, 1));
 }
 
-/* The cue at the bottom edge of the scrolling pinned box: it sticks while the cards scroll under its fade. */
-[data-ui='bold'] .bold-pins-fade {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  padding-top: 18px;
-  margin-top: -18px;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--bg) 70%);
-}
-
-[data-ui='bold'] .bold-pins-more {
-  pointer-events: auto;
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: #ececf1;
-  color: #12131a;
-  font-size: 12px;
-  font-weight: 700;
-  align-items: center;
-}
-
-[data-ui='bold'] .bold-pins:empty {
+[data-ui='bold'] .bold-needs-slot:empty {
   display: none;
 }
 
-[data-ui='bold'] .bold-pins-title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+[data-ui='bold'] .bold-needs-host {
+  display: block;
+}
+
+[data-ui='bold'] .bold-needs-slot .bold-request {
+  max-width: 78%;
+  margin-left: 40px;
+}
+
+/* Where no conversation is drawn (an empty room) the cards stand above the composer, full width. */
+[data-ui='bold'] .bold-needs-fallback {
+  flex: none;
+}
+
+[data-ui='bold'] .bold-needs-fallback .bold-request {
+  max-width: none;
+  margin-left: 0;
+}
+
+/* The jump chip: a zero-height sticky row at the end of the conversation; the chip floats just above the composer. */
+[data-ui='bold'] .bold-needs-chip-slot {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  z-index: 3;
+  align-items: center;
+  overflow: visible;
+}
+
+[data-ui='bold'] .bold-needs-jump {
+  position: relative;
+  transform: translateY(calc(-100% - 8px));
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #ececf1;
+  color: #12131a;
+  font-size: 13px;
+  font-weight: 700;
+  align-items: center;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
 }
 
 [data-ui='bold'] .bold-request {
@@ -1467,19 +1474,11 @@
   }
 
   /* PLAN 11.10a: board 18's job list, then board 03's full-screen job chat. The shell's tab bar stays under both. */
-  [data-ui='bold'] .bold-phone-list-head,
   [data-ui='bold'] .bold-phone-chat-head {
     gap: calc(8px * var(--bold-d, 1));
     padding: 0 2px;
   }
 
-  [data-ui='bold'] .bold-phone-list-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  [data-ui='bold'] .bold-phone-list-title,
-  [data-ui='bold'] .bold-phone-list-actions,
   [data-ui='bold'] .bold-phone-chat-head {
     display: flex;
     align-items: center;
@@ -1487,148 +1486,11 @@
     min-width: 0;
   }
 
-  [data-ui='bold'] .bold-phone-list-title .roomtitle {
-    flex: 1;
-    min-width: 0;
-    font-size: 28px;
-  }
-
-  [data-ui='bold'] .bold-phone-list-actions {
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-
-  [data-ui='bold'] .bold-phone-list-actions .chip,
-  [data-ui='bold'] .bold-phone-list-actions .btn.sm,
-  [data-ui='bold'] .bold-phone-list-actions .icon-btn.sm,
   [data-ui='bold'] .bold-phone-chat-tools button,
   [data-ui='bold'] .bold-phone-chat-tools .icon-btn.sm {
     min-height: 44px;
   }
 
-  [data-ui='bold'] .bold-phone-list-actions .icon-btn.sm {
-    width: 44px;
-    height: 44px;
-  }
-
-  [data-ui='bold'] .bold-phone-list-actions .phone-side-open {
-    margin-left: 0;
-  }
-
-  /* A big team wraps onto more rows instead of running off the right edge of the phone (the glyphs there were cut
-     by the viewport, and a theme's different widths then looked like a theme clipping them). */
-  [data-ui='bold'] .bold-phone-presence {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: calc(3px * var(--bold-d, 1));
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 100%;
-    border-radius: 999px;
-    background: var(--panel);
-    padding: calc(5px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
-  }
-
-  /* Beside the job's name it takes at most under half the row, so the name keeps its room. */
-  [data-ui='bold'] .bold-phone-chat-head .bold-phone-presence {
-    max-width: 45%;
-  }
-
-  [data-ui='bold'] .bold-phone-list-title {
-    flex-wrap: wrap;
-  }
-
-  [data-ui='bold'] .bold-phone-presence-agent {
-    display: inline-grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 999px;
-  }
-
-  [data-ui='bold'] .bold-phone-presence-agent.needs {
-    background: var(--hi-bg);
-  }
-
-  [data-ui='bold'] .bold-phone-jobs {
-    flex: 1;
-    /* With the needs-you cards unfolded and the composer's context bar, the list was squeezed to 6px at 360x740: keep
-       one row reachable (the cards above give way first, see .bold-pins). */
-    min-height: 6rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    display: flex;
-    flex-direction: column;
-    gap: calc(10px * var(--bold-d, 1));
-    padding: 2px 0 calc(4px * var(--bold-d, 1));
-  }
-
-  [data-ui='bold'] .bold-phone-jobs-head {
-    display: flex;
-    align-items: center;
-    min-height: 34px;
-    padding: calc(4px * var(--bold-d, 1));
-  }
-
-  [data-ui='bold'] .bold-phone-jobs-head h2 {
-    font-family: var(--font-b);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--muted);
-    letter-spacing: 0;
-  }
-
-  [data-ui='bold'] .bold-phone-job-list {
-    display: flex;
-    flex-direction: column;
-    gap: calc(10px * var(--bold-d, 1));
-  }
-
-  [data-ui='bold'] .bold-phone-job {
-    min-height: 72px;
-    width: 100%;
-    border: 0;
-    border-radius: calc(20px * var(--bold-r, 1));
-    background: var(--panel);
-    color: var(--ink);
-    padding: calc(14px * var(--bold-d, 1));
-    display: flex;
-    align-items: center;
-    gap: calc(12px * var(--bold-d, 1));
-    text-align: left;
-  }
-
-  [data-ui='bold'] .bold-phone-job-blank {
-    width: 44px;
-    height: 44px;
-    flex: none;
-    border-radius: calc(14px * var(--bold-r, 1));
-    background: var(--field);
-  }
-
-  [data-ui='bold'] .bold-phone-job-copy {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  [data-ui='bold'] .bold-phone-job-title {
-    display: flex;
-    align-items: center;
-    gap: calc(6px * var(--bold-d, 1));
-    min-width: 0;
-  }
-
-  [data-ui='bold'] .bold-phone-job-title b {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  [data-ui='bold'] .bold-phone-job-title .bold-unread,
   [data-ui='bold'] .bold-phone-state-mark {
     margin-left: auto;
   }
@@ -1652,12 +1514,6 @@
     display: inline-grid;
     place-items: center;
     color: var(--ok);
-  }
-
-  [data-ui='bold'] .bold-phone-job-state {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   [data-ui='bold'] .bold-phone-chat-head {
@@ -1761,8 +1617,6 @@
     min-height: 44px;
   }
 
-  [data-ui='bold'] .bold-phone-job,
-  [data-ui='bold'] .bold-phone-jobs-head,
   [data-ui='bold'] .bold-phone-chat-tools,
   [data-ui='bold'] .bold-phone-chat-head {
     scroll-margin-bottom: 104px;
@@ -1781,14 +1635,17 @@
     display: none;
   }
 
-  [data-ui='bold'] .bold-pins {
-    /* The prototype's 40% clips the first card's actions at 360×740; the card is the decision, so let it fit. Capped so
-       a short screen (the keyboard up) keeps room for the jobs and the stream. */
-    max-height: min(52%, 22rem);
-    /* The context bar made the composer taller; the cards give way (and scroll) before the composer is pushed under the
-       tab bar, but never below the first card's decision. */
-    flex: 0 1 auto;
-    min-height: min(11rem, 100%);
+  /* Board 18 (phone): the card is full width and its buttons are 44px tall, side by side. */
+  [data-ui='bold'] .bold-needs-slot .bold-request {
+    max-width: none;
+    margin-left: 0;
+    border-radius: 20px;
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  [data-ui='bold'] .bold-needs-slot .bold-request .bold-approval-actions .btn {
+    min-height: 44px;
   }
 
   [data-ui='bold'] .bold-starters {
@@ -2039,39 +1896,4 @@
 /* 3.7.0: on a portrait tablet the room's title and its actions share one row, flush with the content below (on a phone
    the actions drop to a second row). */
 @media (min-width: 601px) and (max-width: 860px) {
-  [data-ui='bold'] .roomhead.bold-phone-list-head {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  /* The title keeps its width; a long team's glyph row wraps under it (never clipped: an agent who needs you is a
-     protected mark). */
-  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title {
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    min-width: 0;
-  }
-
-  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title .roomtitle {
-    flex: 0 1 auto;
-    max-width: 100%;
-    min-width: 0;
-    white-space: normal;
-    text-align: left;
-  }
-
-  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-actions {
-    flex: none;
-    flex-wrap: nowrap;
-  }
-}
-
-/* 3.22.0 review: while the "N more below" cue shows, the box keeps room for it at its end, so the cue never sits over a
-   card's buttons once scrolled. */
-[data-ui='bold'] .bold-pins:has(.bold-pins-more) {
-  padding-bottom: 44px;
-  scroll-padding-bottom: 44px;
 }

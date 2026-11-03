@@ -193,8 +193,10 @@ function RunPin({
   since,
   notice,
   label,
+  jobId,
   children,
 }: {
+  jobId: string
   pinKey: string
   since: string
   notice: boolean
@@ -202,7 +204,14 @@ function RunPin({
   children: ReactNode
 }) {
   return (
-    <PinCard pinKey={pinKey} since={since} notice={notice} label={label} variant="run-request">
+    <PinCard
+      pinKey={pinKey}
+      since={since}
+      notice={notice}
+      label={label}
+      variant="run-request"
+      anchor={{ job: jobId }}
+    >
       {children}
     </PinCard>
   )
@@ -229,6 +238,7 @@ function OrchestrationRunRequests({ job, agents }: { job: Job; agents: AgentSumm
       {entries.map((entry) => (
         <RunPin
           key={entry.key}
+          jobId={job.id}
           pinKey={`run:${runId}:${entry.key}`}
           since={detail.updatedAt}
           notice={pinNotice(entry.item)}
@@ -371,6 +381,7 @@ function WorkflowRunRequests({ job, agents }: { job: Job; agents: AgentSummary[]
       {entries.map((entry) => (
         <RunPin
           key={entry.key}
+          jobId={job.id}
           pinKey={`workflow:${runId}:${entry.key}`}
           since={detail.updatedAt}
           notice={pinNotice(entry.item)}

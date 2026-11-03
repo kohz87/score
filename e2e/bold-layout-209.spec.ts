@@ -40,14 +40,9 @@ for (const viewport of sizes) {
           ? { status: 200, body: { items, unavailable: [] } }
           : undefined,
     })
-    // 3.21.0: a phone has the room switcher on the job list; 3.22.0: on a desktop it is in the room menu.
-    if (viewport.width < 861) {
-      await page.goto('/b?jobs=1')
-      await page.locator('button.roomtitle').click()
-    } else {
-      await page.getByRole('button', { name: 'Room menu' }).click()
-      await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
-    }
+    // 3.24.0: the phone's title switcher is gone; the room menu holds "Older, imported and elsewhere chats…" everywhere.
+    await page.getByRole('button', { name: 'Room menu' }).click()
+    await page.getByRole('menuitem', { name: /Older, imported and elsewhere chats/ }).click()
     const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
     const rows = picker.getByRole('option', { name: /lead · API/ })
     await expect(rows).toHaveCount(items.length)

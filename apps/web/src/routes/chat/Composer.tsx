@@ -1349,6 +1349,28 @@ export function Composer({
                     </button>
                   </li>
                 )}
+                {roomMode && topicCommands?.items.some((item) => item.name === 'run') && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachMenu(false)
+                        // The same dialog as /run: Start a run for this chat (3.24.0: the header's + Job is gone).
+                        topicCommands.run('run', '').catch((error: unknown) =>
+                          setNotice({
+                            kind: 'error',
+                            text:
+                              error instanceof Error
+                                ? error.message
+                                : 'That command failed. Try again.',
+                          }),
+                        )
+                      }}
+                    >
+                      Start a run…
+                    </button>
+                  </li>
+                )}
                 {orchestrate && (
                   <li>
                     <button

@@ -945,3 +945,49 @@
 [data-ui='bold'] .bold-topic-graph .jobmap-log li > span {
   grid-column: 2;
 }
+
+/* 3.24.0: New topic in Info (the same as /new <title>), and the phone bar's menu with its older-chats list. */
+[data-ui='bold'] .bold-chat-new-topic {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+[data-ui='bold'] .bold-chat-new-topic-row {
+  display: flex;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-chat-new-topic-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel, transparent);
+  color: inherit;
+}
+
+[data-ui='bold'] .bold-chat-phone-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+[data-ui='bold'] .bold-chat-phone-menu .bold-room-switch-wrap {
+  position: static;
+}
+
+[data-ui='bold'] .bold-chat-phone-menu .bold-room-switch {
+  left: auto;
+  right: 0;
+  width: min(420px, calc(100vw - 28px));
+}
+
+/* 3.24.0: on a phone Info › Topics is the only way to pick a topic (the All topics screen is gone): a 44px tap target. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-chat-topics a {
+    min-height: 44px;
+  }
+}
