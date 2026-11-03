@@ -2076,3 +2076,21 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Gate: check green (contract 1590, web 3153, server 4958); e2e 864 passed, 1 failed (bold-tablet flake: failed once
   more alone, then 13/13). Phone baselines regenerated twice (top-bar changes), 20 + 34, all checked as top-bar only.
 - **v3.18.0 deployed live** (~11:09 UTC), backup score-pre-3.18.0-20261102.db, health ok, `/b/screens` serves.
+
+## 3.19.0 — Knowledge page, Team → Agents, shared workspaces (2026-11-03)
+- Owner: "dedicated page for knowledge", "centralize workspace then assign agents", "rename team to agents … run in
+  parallel". Design docs/briefs/4.0-chats.md; mock-up canvas https://claude.ai/artifact/WgqdJ4PMsPacq8SC5cmnoB. Two
+  Sonnet coders in parallel (3.19.0 web; 3.20.0 server + web), released together.
+- Workspaces (decision-free: per the design note): tables workspaces / workspace_agents, rooms.workspace_id (0105);
+  routes under /api/workspaces + room workspace + use-as-folder; coding turns use the room's workspace when the agent is
+  assigned (lead checked line by line: one `workspaceFor`, checkRoot at admission and launch, orchestration workers
+  unchanged); Hermes agents: one workspace as their profile folder (Hermes' API has no per-turn folder, checked).
+  Security review: no P1/P2 (three P3 left: orphan assignments of removed agents, a safe EEXIST race, archived rooms).
+- Knowledge/Agents review: P2 Share overwrote a draft; phone Back focus and h1; an unhandled test error; missed regex
+  `/b/team` fragments. Fix-round review: P2 opening a note cleared a search being typed (fixed by the lead, `selected !==
+  openPath`); lead found Share to a chat never enabled (team rooms aren't in the rooms list: teamRoomQuery).
+- Gate: check green (contract 1607, web 3170, server 4967); e2e 852 passed, 13 failed, all from the merge
+  (Settings 9 → 10 sections, Agents heading/preview names, an ambiguous Save, baselines for the phone bottom bar, the
+  agent files without the folder form, dense phone Settings) + the tablet flake; fixed, affected specs 42 + 102 + 13
+  passed.
+- **v3.19.0 deployed live** (~07:45 UTC), backup score-pre-3.19.0-20261103.db, health ok.
