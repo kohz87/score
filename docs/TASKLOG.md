@@ -2105,3 +2105,19 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Gate: check green (contract 1607, web 3170, server 4967); e2e 860 passed, 5 failed under parallel load (workbench,
   workspace screenshot, phone manifest, a visual) — all passed on re-run with the review fix (106 passed).
 - **v3.19.1 deployed live** (~08:2x UTC), backup score-pre-3.19.1-20261103.db, health ok.
+
+## 3.21.0 — Chats, stage 1: the messenger layout (2026-11-03)
+- Owner: chats redesign (design docs/briefs/4.0-chats.md, mock-up boards 18-chats*, "make sure the outlook is same as
+  the mock up"). Web only, no data change. Chat list (groups/direct, search, needs-you, fold rail), one chat header
+  (owner, members, workspace, Chat info), side panel opens on Info, phone list → chat straight into the conversation,
+  "Room" → "Chats".
+- Process: first Sonnet coder stalled twice waiting on finished background jobs (lead stopped it, committed its work,
+  handed over); review P2s (protected list, query cost, phone back bar, weakened e2e) and the lead's mock-up diffs fixed;
+  fix-round review P1: `?work=` links landed on Info (lead fixed: a work request opens Work), P2 phone deleted toggle
+  (fixed); accepted P3: a same-value `?work=` link after switching to Info stays on Info.
+- Gate: check green (contract 1607, web 3189, server 4967); e2e 104 failed (layout). Triage coder (one froze, found by
+  the owner-requested 20-minute self-check, replaced): 53 tests updated without weakening, 28 baselines regenerated and
+  viewed, 2 load flakes, and 4 real bugs fixed with vitests: 44px phone chat-bar targets; a room switch kept the phone
+  job list; archived chats lost badge/Unarchive on a phone; the 3.19.1 top-bar needs-you count was unreadable over a
+  picture theme so the look guard switched the theme off (protected fill). Final: affected specs all pass.
+- **v3.21.0 deployed live** (~11:50 UTC), backup score-pre-3.21.0-20261103.db, health ok.
