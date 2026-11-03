@@ -472,9 +472,13 @@ export function RoomMessageStream({
           Load earlier
         </button>
       )}
-      {status === 'success' && items.length === 0 && !showDeleted && (
-        <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
-      )}
+      {status === 'success' &&
+        items.length === 0 &&
+        !showDeleted &&
+        // A topic with a run card is not empty (3.23.0): its card shows even before its first message.
+        !(onShowGraph && jobs.some((job) => job.recipe)) && (
+          <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
+        )}
       {nodes}
       {Object.entries(typing).map(([agentId, text]) => {
         const agent = agents.find((item) => item.id === agentId)
