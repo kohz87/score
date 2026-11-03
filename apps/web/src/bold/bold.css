@@ -888,8 +888,7 @@ body.fit [data-ui='bold'] .stream {
 /* A landscape tablet keeps the desktop layout, but a finger still needs 44px (the phone rules above, for touch only). */
 /* A finger needs 44px on a message's actions too, at any width (a landscape tablet has no hover, so they always show). */
 @media (pointer: coarse) {
-  body [data-ui='bold'] .bold-act,
-  body [data-ui='bold'] .bold-dm-msg-actions .btn {
+  body [data-ui='bold'] .bold-act {
     min-height: 44px;
   }
 }

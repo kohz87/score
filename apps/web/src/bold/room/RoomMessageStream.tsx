@@ -1,3 +1,4 @@
+import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import type { AgentSummary, Job, Message } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStreamQuery } from '../../data/query-client.ts'
@@ -87,6 +88,7 @@ export function RoomMessageStream({
   focusTopic = null,
   topicMenu,
   systemLines = [],
+  messageExtras,
 }: {
   roomId: string
   jobs: Job[]
@@ -100,6 +102,14 @@ export function RoomMessageStream({
   topicMenu?: (job: Job) => ReactNode
   /** Small local lines for what a command changed ("You made builder the owner"). */
   systemLines?: SystemLine[]
+  /**
+   * Extra buttons and rows on a message (a one-to-one adds Share to the team room). `lastReply` marks the newest
+   * finished reply of an agent in the conversation.
+   */
+  messageExtras?: (
+    message: Message,
+    info: { lastReply: boolean },
+  ) => { actions?: ReactNode; below?: ReactNode } | undefined
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
   const [older, setOlder] = useState<string[]>([])
@@ -159,6 +169,18 @@ export function RoomMessageStream({
   }, [allRefs, pageStates])
 
   const retryable = useMemo(() => retryableIds(allItems), [allItems])
+  const lastReplyId = useMemo(
+    () =>
+      [...allItems]
+        .reverse()
+        .find(
+          (message) =>
+            message.author.kind === 'agent' &&
+            !message.streaming &&
+            !message.id.startsWith('pending-'),
+        )?.id ?? null,
+    [allItems],
+  )
   const { versions, isPinned, pinBusy, pinError, togglePin } = useMessageTools(roomId)
   const approvalsData = useStreamQuery(approvalsQuery).data
   const questionsData = useStreamQuery(questionsQuery).data
@@ -283,21 +305,27 @@ export function RoomMessageStream({
         showDeleted,
         branch,
         onBranchSelect: (messageId, version) => setView(version ? { messageId, version } : null),
-        renderMessage: (message, replyGroup) => (
-          <BoldMessage
-            key={message.id}
-            message={message}
-            agents={agents}
-            versions={versions}
-            approvalPointerIds={approvalPointerIds}
-            canRetry={retryable.has(message.id)}
-            replyGroup={replyGroup}
-            onView={(version) => setView({ messageId: message.id, version })}
-            pinned={isPinned(message.id)}
-            pinBusy={pinBusy === message.id}
-            onTogglePin={() => void togglePin(message.id)}
-          />
-        ),
+        renderMessage: (message, replyGroup) => {
+          const extras = messageExtras?.(message, { lastReply: message.id === lastReplyId })
+          return (
+            <BoldMessage
+              key={message.id}
+              message={message}
+              agents={agents}
+              versions={versions}
+              approvalPointerIds={approvalPointerIds}
+              canRetry={retryable.has(message.id)}
+              replyGroup={replyGroup}
+              onView={(version) => setView({ messageId: message.id, version })}
+              pinned={isPinned(message.id)}
+              pinBusy={pinBusy === message.id}
+              onTogglePin={() => void togglePin(message.id)}
+              extraActions={extras?.actions}
+            >
+              {extras?.below}
+            </BoldMessage>
+          )
+        },
       })
     let built: { nodes: ReactNode[]; branched: boolean }
     if (!branch) {
@@ -415,6 +443,13 @@ export function RoomMessageStream({
         if (!agent) return null
         return (
           <p className="bold-typing" key={agentId} role="status">
+            <AgentGlyph
+              agent={agent}
+              size="xs"
+              bare
+              decorative
+              mood={text ? 'working' : 'thinking'}
+            />{' '}
             <b>{agentDisplayName(agent)}</b> {text}
           </p>
         )
