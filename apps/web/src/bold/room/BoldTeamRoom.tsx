@@ -42,7 +42,7 @@ import {
 import { PhoneJobList } from './PhoneJobList.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
-import { isEveryoneRoom, type JobFilter } from './room-model.ts'
+import { isEveryoneRoom } from './room-model.ts'
 import { ContextBar } from './ContextBar.tsx'
 import { useTopicCommands } from './topic-commands.ts'
 import type { SystemLine } from './topic-divider.tsx'
@@ -146,8 +146,6 @@ function LoadedTeamRoom({
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
-  // 3.22.0: the chat is one conversation, so no filter hides a topic; the value stays for the pinned cards' props.
-  const filter: JobFilter = 'all'
   const [systemLines, setSystemLines] = useState<SystemLine[]>([])
   const [composerKey, setComposerKey] = useState(0)
   const [phoneClosedList, setPhoneClosedList] = useState(false)
@@ -294,7 +292,7 @@ function LoadedTeamRoom({
         if (selectedJob === job.id) selectJob('all')
         setLifecycleNotice({
           job: changed,
-          text: `Closed “${changed.title}”. Find it under Closed jobs to reopen it.`,
+          text: `Closed “${changed.title}”. Reopen it from its topic menu.`,
           stillWorking: false,
         })
       } else {
@@ -344,7 +342,7 @@ function LoadedTeamRoom({
       }),
     )
     changeCachedJob(queryClient, reopened, 'upsert')
-    // The composer retries the message after this resolves. Leave the Closed jobs view and keep this job selected so
+    // The composer retries the message after this resolves. Keep this job selected so
     // the retry still goes into it instead of falling back to the room's default thread.
     setPhoneClosedList(false)
     if (selectedJob !== jobId) selectJob(jobId)
@@ -380,13 +378,6 @@ function LoadedTeamRoom({
     next.delete('message')
     setParams(next, { replace: true, state: location.state })
   }, [location.state, params, setParams])
-
-  const revealSeek = useCallback(
-    (jobId: string | null) => {
-      if (jobId && selectedJob !== 'all' && jobId !== selectedJob) selectJob(jobId)
-    },
-    [selectJob, selectedJob],
-  )
 
   const topicCommands = useTopicCommands({
     room,
@@ -469,7 +460,7 @@ function LoadedTeamRoom({
         roomId={room.id}
         jobs={allJobs}
         agents={agents}
-        selectedJob={selectedJob}
+        selectedJob="all"
         teamRoom={isEveryoneRoom(room)}
         messages={baseMessages.data?.items ?? []}
       />
@@ -502,23 +493,14 @@ function LoadedTeamRoom({
           {job && <StartedBy job={job} />}
           {/* On a phone the capsule (and its Take it aside) sits in the open job's chat, as the prototype shows it. */}
           {(!phone || phoneJob) && (
-            <RoomCapsules
-              jobs={allJobs}
-              agents={agents}
-              selectedJob={selectedJob}
-              filter={filter}
-              onOpenThread={onOpenThread}
-            />
+            <RoomCapsules jobs={allJobs} agents={agents} onOpenThread={onOpenThread} />
           )}
           <RoomMessageStream
             roomId={room.id}
             jobs={allJobs}
             agents={agents}
-            selectedJob={selectedJob}
-            filter={filter}
             showDeleted={showDeleted}
             seek={seek}
-            merged
             focusTopic={picked?.id ?? null}
             systemLines={systemLines}
             topicMenu={(topic) => (
@@ -532,8 +514,6 @@ function LoadedTeamRoom({
                 onDelete={setDeletingJob}
               />
             )}
-            openedJobs={[]}
-            onRevealSeek={revealSeek}
             onSeeked={clearSeek}
           />
         </div>

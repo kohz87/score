@@ -54,12 +54,14 @@ function stubStream(
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
     if (parsed.pathname === '/api/rooms/room-1/messages') {
+      // The chat reads every topic in one chain (`all=1`); a per-topic read is still answered for the other callers.
       const jobId = parsed.searchParams.get('jobId') ?? ''
+      const all = parsed.searchParams.get('all') === '1'
       return jsonResponse({
         asOfSeq: 1,
-        items: byJob[jobId] ?? [],
+        items: all ? Object.values(byJob).flat() : (byJob[jobId] ?? []),
         nextCursor: null,
-        jobId,
+        jobId: all ? null : jobId,
       })
     }
     if (parsed.pathname === '/api/approvals' && options.failApprovals)
@@ -116,12 +118,14 @@ function stubLiveStream(options: { pages?: Record<string, Message[]> } = {}) {
   const fetchMock = mockFetch((url) => {
     const parsed = new URL(url, 'http://x')
     if (parsed.pathname === '/api/rooms/room-1/messages') {
+      // The chat reads every topic in one chain (`all=1`); a per-topic read is still answered for the other callers.
       const jobId = parsed.searchParams.get('jobId') ?? ''
+      const all = parsed.searchParams.get('all') === '1'
       return jsonResponse({
         asOfSeq: 1,
-        items: byJob[jobId] ?? [],
+        items: all ? Object.values(byJob).flat() : (byJob[jobId] ?? []),
         nextCursor: null,
-        jobId,
+        jobId: all ? null : jobId,
       })
     }
     if (parsed.pathname === '/api/rooms/room-1/pins')
@@ -147,7 +151,6 @@ function stubLiveStream(options: { pages?: Record<string, Message[]> } = {}) {
 }
 
 function renderStream(
-  selectedJob = 'all',
   showDeleted = false,
   seek: string | null = null,
   onSeeked: () => void = () => undefined,
@@ -158,12 +161,8 @@ function renderStream(
       roomId="room-1"
       jobs={jobs}
       agents={[]}
-      selectedJob={selectedJob}
-      filter="all"
       showDeleted={showDeleted}
       seek={seek}
-      openedJobs={[]}
-      onRevealSeek={() => undefined}
       onSeeked={onSeeked}
     />,
     ['/b?room=room-1'],
@@ -179,18 +178,12 @@ function boldButton(name: RegExp | string) {
   return button
 }
 
-test('All folds every job’s messages and a job shows only its own', async () => {
+test('the chat reads as one conversation: every topic’s messages are on show together', async () => {
   stubStream()
-  const rendered = renderStream()
+  renderStream()
   await screen.findByText('Read layer is ready.')
   expect(screen.getByText('Add ws.')).toBeDefined()
   expect(screen.getByText('Drafted the 2.4 notes.')).toBeDefined()
-  rendered.unmount()
-
-  renderStream('job-2')
-  await screen.findByText('Drafted the 2.4 notes.')
-  expect(screen.queryByText('Read layer is ready.')).toBeNull()
-  expect(screen.queryByText('Add ws.')).toBeNull()
 })
 
 test('the hover row pins and unpins through the contract, and keeps the state pressed', async () => {
@@ -249,93 +242,9 @@ test('your own message offers edit and delete; the delete asks for a rewind', as
   expect(await screen.findByRole('dialog', { name: 'Delete this message?' })).toBeDefined()
 })
 
-test('a folded job shows its state, workers, outcome and message count', async () => {
-  const done = makeJob({
-    id: 'job-done',
-    title: 'Queue research',
-    state: 'done',
-    messageCount: 3,
-  })
-  stubStream({
-    pages: {
-      'job-done': [
-        makeMessage({
-          id: 'message-done',
-          jobId: 'job-done',
-          author: { kind: 'agent', agentId: 'lead' },
-          parts: [{ kind: 'text', text: 'Three queues compared.' }],
-        }),
-      ],
-    },
-  })
-  renderInRoom(
-    <RoomMessageStream
-      roomId="room-1"
-      jobs={[done]}
-      agents={agents}
-      selectedJob="all"
-      filter="all"
-      showDeleted={false}
-      seek={null}
-      openedJobs={[]}
-      onRevealSeek={() => undefined}
-      onSeeked={() => undefined}
-    />,
-  )
-  const row = (await screen.findByRole('button', { name: 'Show Queue research' })).parentElement!
-  expect(row.textContent).toContain('Done')
-  expect(row.textContent).toContain('3 messages')
-  expect(row.textContent).toContain('Three queues compared.')
-})
-
-test('a done job gets a result card linked to its latest agent message', async () => {
-  const done = makeJob({
-    id: 'job-done',
-    title: 'Queue research',
-    state: 'done',
-    holderAgentId: 'lead',
-  })
-  stubStream({
-    pages: {
-      ...pages,
-      'job-done': [
-        makeMessage({
-          id: 'message-done',
-          jobId: 'job-done',
-          author: { kind: 'agent', agentId: 'lead' },
-          parts: [{ kind: 'text', text: 'Three queues compared.' }],
-        }),
-      ],
-    },
-  })
-  renderInRoom(
-    <RoomMessageStream
-      roomId="room-1"
-      jobs={[...jobs, done]}
-      agents={agents}
-      selectedJob="all"
-      filter="all"
-      showDeleted={false}
-      seek={null}
-      openedJobs={[]}
-      onRevealSeek={() => undefined}
-      onSeeked={() => undefined}
-    />,
-  )
-  // A finished job starts folded; Show opens it in place, Hide folds it again.
-  expect(await screen.findByRole('button', { name: 'Show Queue research' })).toBeTruthy()
-  expect(screen.queryByText('Three queues compared.', { selector: 'p, div' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Show Queue research' }))
-  const result = await screen.findByRole('link', { name: 'Open result: Queue research' })
-  expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy()
-  expect(result.getAttribute('href')).toBe('/b?job=job-done&message=message-done')
-  expect(result.textContent).toContain('Queue research')
-  expect(result.textContent).toContain('Done · lead')
-})
-
 test('a seek target gets the hit marker after its message has loaded', async () => {
   stubStream()
-  renderStream('all', false, 'message-2')
+  renderStream(false, 'message-2')
   await screen.findByText('Add ws.')
   await waitFor(() =>
     expect(
@@ -363,13 +272,13 @@ test('a seek to a version hidden in a reply group selects it there, then highlig
   stubStream({ pages: { 'job-1': [first, second], 'job-2': [] } })
   const onSeeked = vi.fn()
   window.localStorage.clear()
-  renderStream('job-1', false, 'g-1', onSeeked)
+  renderStream(false, 'g-1', onSeeked)
   await waitFor(() => expect(onSeeked).toHaveBeenCalled())
   expect(document.getElementById('message-g-1')?.classList.contains('bold-message-hit')).toBe(true)
   expect(screen.getByText('1 / 2')).toBeDefined()
 })
 
-test('show deleted reads the version and hides another job’s messages from a selected job', async () => {
+test('show deleted reads the version and shows the deleted messages of every topic', async () => {
   const version: RoomVersion = {
     id: 'version-1',
     roomId: 'room-1',
@@ -404,9 +313,9 @@ test('show deleted reads the version and hides another job’s messages from a s
     return base(input, init)
   })
 
-  renderStream('job-1', true)
+  renderStream(true)
   await screen.findByText('Activity feed hidden message.')
-  expect(screen.queryByText('Release notes hidden message.')).toBeNull()
+  expect(screen.getByText('Release notes hidden message.')).toBeDefined()
   expect(screen.getByText(/Deleted, read-only. 2 hidden messages/)).toBeDefined()
 })
 
@@ -446,7 +355,7 @@ test('an edited message’s version control opens the older read-only branch', a
       return Promise.resolve(jsonResponse({ version, items: [original] }))
     return base(input, init)
   })
-  renderStream('job-1')
+  renderStream()
   await screen.findByText('Corrected wording.')
   const control = screen.getByRole('group', { name: 'Message versions' })
   expect(control.textContent).toContain('2 / 2')
@@ -475,7 +384,7 @@ function stubPagedHistory() {
           asOfSeq: 1,
           items: before === 'cursor-older' ? [olderMessage] : pages['job-1'],
           nextCursor: before === 'cursor-older' ? null : 'cursor-older',
-          jobId: parsed.searchParams.get('jobId'),
+          jobId: null,
         }),
       )
     }
@@ -484,9 +393,9 @@ function stubPagedHistory() {
   return fetchMock
 }
 
-test('Load earlier asks for the page before the job’s first page', async () => {
+test('Load earlier asks the chat’s one chain for the page before its first page', async () => {
   const fetchMock = stubPagedHistory()
-  renderStream('job-1')
+  renderStream()
   await screen.findByText('Read layer is ready.')
   fireEvent.click(screen.getByRole('button', { name: 'Load earlier' }))
   expect(await screen.findByText('Older history.')).toBeDefined()
@@ -494,7 +403,7 @@ test('Load earlier asks for the page before the job’s first page', async () =>
     fetchMock.mock.calls.some(
       ([url, init]) =>
         String(url).includes('before=cursor-older') &&
-        String(url).includes('jobId=job-1') &&
+        String(url).includes('all=1') &&
         (init?.method ?? 'GET') === 'GET',
     ),
   ).toBe(true)
@@ -503,7 +412,7 @@ test('Load earlier asks for the page before the job’s first page', async () =>
 test('a deep ?message= target loads older pages until it is found and is revealed', async () => {
   const fetchMock = stubPagedHistory()
   const onSeeked = vi.fn()
-  renderStream('job-1', false, 'message-older', onSeeked)
+  renderStream(false, 'message-older', onSeeked)
   expect(await screen.findByText('Older history.')).toBeDefined()
   await waitFor(() =>
     expect(
@@ -518,7 +427,7 @@ test('a deep ?message= target loads older pages until it is found and is reveale
 
 test('a ?message= target that is not in the history says it could not be found', async () => {
   stubStream({ pages: { 'job-1': pages['job-1']!, 'job-2': [] } })
-  renderStream('job-1', false, 'message-gone')
+  renderStream(false, 'message-gone')
   expect(
     await screen.findByText('Couldn’t find that message. It may have been deleted or moved.'),
   ).toBeDefined()
@@ -550,7 +459,7 @@ test('Retry is offered on agent replies that answer the person, and posts to the
       ],
     },
   })
-  renderStream('job-1')
+  renderStream()
   await screen.findByText('Read layer is ready.')
   // The reviewer also answers the person's message (it follows the builder's reply): Retry there too.
   expect(boldButton('Try another reply from reviewer')).toBeDefined()
@@ -568,7 +477,7 @@ test('Retry is offered on agent replies that answer the person, and posts to the
 
 test('a newly completed agent message is announced once, after history loads', async () => {
   const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
-  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  renderStream(false, null, () => undefined, live.stream as unknown as StreamClient)
   await screen.findByText('Read layer is ready.')
   const status = screen.getByRole('status')
   expect(status.textContent).toBe('')
@@ -596,7 +505,7 @@ test('a newly completed agent message is announced once, after history loads', a
 
 test('the person’s own messages are never announced', async () => {
   const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
-  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  renderStream(false, null, () => undefined, live.stream as unknown as StreamClient)
   await screen.findByText('Read layer is ready.')
   const status = screen.getByRole('status')
   act(() =>
@@ -619,7 +528,7 @@ test('the person’s own messages are never announced', async () => {
 
 test('a message that only becomes visible (older than what was seen) is not announced as new', async () => {
   const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
-  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  renderStream(false, null, () => undefined, live.stream as unknown as StreamClient)
   await screen.findByText('Read layer is ready.')
   const status = screen.getByRole('status')
   // An earlier page, a tab switch or an undone delete brings back an old agent message: it isn't news.
@@ -642,45 +551,164 @@ test('a message that only becomes visible (older than what was seen) is not anno
   expect(status.textContent).toBe('')
 })
 
-const finishedPages = {
-  'job-done': [
-    makeMessage({
-      id: 'message-done',
-      jobId: 'job-done',
-      author: { kind: 'agent', agentId: 'lead' },
-      parts: [{ kind: 'text', text: 'Three queues compared.' }],
-    }),
+// 3.22.0: the merged conversation.
+const general = makeJob({
+  id: 'general',
+  title: 'General',
+  isDefault: true,
+  state: 'open',
+  createdAt: '2026-10-24T08:00:00.000Z',
+})
+const feed = makeJob({
+  id: 'job-1',
+  title: 'Activity feed',
+  state: 'working',
+  createdAt: '2026-10-24T09:00:00.000Z',
+})
+const notes = makeJob({
+  id: 'job-2',
+  title: 'Release notes',
+  state: 'done',
+  createdAt: '2026-10-24T09:30:00.000Z',
+})
+const at = (minute: number) => `2026-10-24T10:${String(minute).padStart(2, '0')}:00.000Z`
+const say = (id: string, jobId: string, minute: number, text: string) =>
+  makeMessage({
+    id,
+    jobId,
+    createdAt: at(minute),
+    parts: [{ kind: 'text', text }],
+  })
+const topicPages = {
+  general: [
+    say('g-1', 'general', 1, 'Morning, team.'),
+    say('g-2', 'general', 6, 'Back to general.'),
   ],
+  'job-1': [
+    say('f-1', 'job-1', 2, 'Feed first.'),
+    say('f-2', 'job-1', 3, 'Feed second.'),
+    say('f-3', 'job-1', 7, 'Feed again.'),
+  ],
+  'job-2': [say('n-1', 'job-2', 4, 'Notes first.')],
 }
 
-function renderFinished() {
+function renderTopics(stream?: StreamClient, focusTopic: string | null = null) {
   return renderInRoom(
     <RoomMessageStream
       roomId="room-1"
-      jobs={[makeJob({ id: 'job-done', title: 'Queue research', state: 'done' })]}
+      jobs={[general, feed, notes]}
       agents={agents}
-      selectedJob="all"
-      filter="all"
       showDeleted={false}
       seek={null}
-      openedJobs={[]}
-      onRevealSeek={() => undefined}
       onSeeked={() => undefined}
+      focusTopic={focusTopic}
     />,
+    ['/b?room=room-1'],
+    stream,
   )
 }
 
-test('a finished job folds without any request of its own for its exchanges', async () => {
-  const fetchMock = stubStream({ pages: finishedPages })
-  renderFinished()
-  expect(await screen.findByRole('button', { name: 'Show Queue research' })).toBeTruthy()
-  const urls = fetchMock.mock.calls.map(([url]) => String(url))
-  expect(urls.some((url) => url.includes('/jobs/job-done/exchanges'))).toBe(false)
+test('the merged stream is in time order across topics, whatever order the pages arrive in', async () => {
+  stubStream({ pages: topicPages })
+  renderTopics()
+  await screen.findByText('Morning, team.')
+  const text = document.querySelector('.bold-stream')!.textContent ?? ''
+  const order = [
+    'Morning, team.',
+    'Feed first.',
+    'Feed second.',
+    'Notes first.',
+    'Back to general.',
+    'Feed again.',
+  ].map((line) => text.indexOf(line))
+  expect(order.every((index) => index >= 0)).toBe(true)
+  expect([...order].sort((a, b) => a - b)).toEqual(order)
 })
 
-test('nothing folds while the needs-you data failed to load', async () => {
-  stubStream({ pages: finishedPages, failApprovals: true })
-  renderFinished()
-  expect(await screen.findByText('Three queues compared.')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: 'Show Queue research' })).toBeNull()
+test('a divider opens each topic, none opens the general conversation, and a return is marked', async () => {
+  stubStream({ pages: topicPages })
+  renderTopics()
+  await screen.findByText('Morning, team.')
+  const dividers = screen.getAllByRole('separator').map((item) => item.getAttribute('aria-label'))
+  expect(dividers).toEqual([
+    'Topic: Activity feed, working',
+    'Topic: Release notes, done',
+    'General conversation',
+    'Topic: Activity feed, working',
+  ])
+  expect(document.querySelector('.bold-stream')!.firstElementChild?.getAttribute('role')).not.toBe(
+    'separator',
+  )
+  expect(screen.getByText(/Back to topic/)).toBeDefined()
+})
+
+test('the current topic’s divider scrolls into view when it is picked', async () => {
+  stubStream({ pages: topicPages })
+  const scroll = vi.fn()
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scroll,
+  })
+  try {
+    renderTopics(undefined, 'job-2')
+    await screen.findByText('Notes first.')
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+    expect(scroll.mock.contexts[0]).toBe(document.getElementById('topic-job-2'))
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  }
+})
+
+test('Load earlier pages the one chain back through every topic', async () => {
+  const fetchMock = stubStream({ pages: topicPages })
+  const base = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const parsed = new URL(String(input), 'http://x')
+    if (parsed.pathname === '/api/rooms/room-1/messages') {
+      const earlier = parsed.searchParams.get('before') === 'cursor-older'
+      return Promise.resolve(
+        jsonResponse({
+          asOfSeq: 1,
+          items: earlier
+            ? [say('n-0', 'job-2', 0, 'Notes before everything.')]
+            : Object.values(topicPages).flat(),
+          nextCursor: earlier ? null : 'cursor-older',
+          jobId: null,
+        }),
+      )
+    }
+    return base(input, init)
+  })
+  renderTopics()
+  await screen.findByText('Morning, team.')
+  fireEvent.click(screen.getByRole('button', { name: 'Load earlier' }))
+  expect(await screen.findByText('Notes before everything.')).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Load earlier' })).toBeNull()
+  // The earlier message came from the older page and sits first, under its own topic’s divider.
+  const first = document.querySelector('.bold-stream')!.textContent ?? ''
+  expect(first.indexOf('Notes before everything.')).toBeLessThan(first.indexOf('Morning, team.'))
+})
+
+test('a live message from another topic merges into the same conversation in time order', async () => {
+  const live = stubLiveStream({ pages: topicPages })
+  renderTopics(live.stream as unknown as StreamClient)
+  await screen.findByText('Morning, team.')
+  act(() =>
+    live.emit({
+      type: 'message.created',
+      data: say('n-2', 'job-2', 8, 'Notes arrived live.'),
+      seq: 2,
+      ts: at(8),
+    }),
+  )
+  expect(await screen.findByText('Notes arrived live.')).toBeDefined()
+  const text = document.querySelector('.bold-stream')!.textContent ?? ''
+  expect(text.indexOf('Notes arrived live.')).toBeGreaterThan(text.indexOf('Feed again.'))
+  // Returning to the notes topic after the feed topic gets its own marker.
+  expect(
+    screen
+      .getAllByRole('separator')
+      .map((item) => item.getAttribute('aria-label'))
+      .at(-1),
+  ).toBe('Topic: Release notes, done')
 })

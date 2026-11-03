@@ -166,8 +166,8 @@
   flex: none;
 }
 [data-ui='bold'] .bold-top-links .btn.sm {
-  padding-inline: 10px;
-  font-size: 13px;
+  padding-inline: 8px;
+  font-size: 12.5px;
 }
 
 [data-ui='bold'] .word {
@@ -752,9 +752,16 @@ body.fit [data-ui='bold'] .stream {
 }
 
 @media (max-width: 860px) {
+  /* Phone top bar: wordmark, three section pills, terminal button and avatar share one row at 360-390px. */
   [data-ui='bold'] .top {
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: 6px;
+    padding-inline: max(14px, env(safe-area-inset-left, 0px))
+      max(14px, env(safe-area-inset-right, 0px));
+  }
+
+  [data-ui='bold'] .top .word {
+    font-size: 21px;
   }
 
   [data-ui='bold'] .top .nav,

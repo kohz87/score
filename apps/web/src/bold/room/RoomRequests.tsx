@@ -23,14 +23,12 @@ import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { useFence } from '../../routes/orchestrations/orchestration-queries.ts'
 import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
 import { pairingProblem } from '../bold-errors.ts'
-import { ChevronIcon } from '../BoldIcons.tsx'
 import {
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeTurns,
   needsYou,
   optionLabel,
-  pinsMoreLabel,
   approvalInRoom,
   approvalNeedsYou,
   reportBackWaiting,
@@ -638,7 +636,6 @@ export function RoomRequests({
   teamRoom?: boolean
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const [expanded, setExpanded] = useState(false)
   const pins = usePinRegistry()
   const heading = useRef<HTMLHeadingElement>(null)
   const focusedKey = useRef<string | null>(null)
@@ -663,7 +660,6 @@ export function RoomRequests({
     questionsRead.status === 'success',
     agents,
   )
-  const moreLabel = pinsMoreLabel(total, expanded)
   const lastTotal = useRef<number | null>(null)
   const settled = useRef(false)
   const [announcement, setAnnouncement] = useState('')
@@ -682,12 +678,9 @@ export function RoomRequests({
     lastTotal.current = countedTotal
   }, [needs.ready, countedTotal, total])
 
-  // With one card or none left the strip folds, so the next burst of cards doesn't arrive already expanded.
-  if (expanded && total <= 1) setExpanded(false)
-
   // A card that goes takes the focus with it: the next card (or the strip's heading) gets it instead.
   useEffect(() => {
-    const visible = pins.cards.filter((_, index) => expanded || index === 0).map((card) => card.key)
+    const visible = pins.cards.map((card) => card.key)
     const lost = lastVisible.current.find((key) => !visible.includes(key))
     if (lost && focusedKey.current === lost) {
       const active = document.activeElement
@@ -708,7 +701,7 @@ export function RoomRequests({
     }
     lastCards.current = pins.cards
     lastVisible.current = visible
-  }, [expanded, pins.cards])
+  }, [pins.cards])
 
   return (
     <PinsProvider value={pins.value}>
@@ -724,7 +717,6 @@ export function RoomRequests({
         <div
           id="bold-pins"
           className="bold-pins"
-          data-expanded={expanded ? 'true' : 'false'}
           role="region"
           aria-label="Needs you"
           onFocusCapture={(event) => {
@@ -751,20 +743,6 @@ export function RoomRequests({
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />
           <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
         </div>
-      )}
-      {total > 0 && moreLabel && (
-        <button
-          type="button"
-          className="bold-pins-more"
-          data-protected="inline-flex"
-          aria-expanded={expanded}
-          aria-controls="bold-pins"
-          aria-live="polite"
-          onClick={() => setExpanded((open) => !open)}
-        >
-          {moreLabel}
-          <ChevronIcon />
-        </button>
       )}
     </PinsProvider>
   )

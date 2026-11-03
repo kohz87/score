@@ -679,3 +679,10 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
     fixtures['/api/workflows'] = original
   }
 })
+
+// The run links (`?run=`) now land on the Recipes page, so the page itself must show a run's list rather than the recipes.
+test('/b/recipes?run= shows the list of runs instead of the recipes', async () => {
+  mount('/b/recipes?run=')
+  expect(await screen.findByRole('list', { name: 'Runs' })).toBeDefined()
+  expect(screen.queryByRole('navigation', { name: 'Recipes' })).toBeNull()
+})

@@ -1,25 +1,6 @@
 import type { AgentSummary, Approval, Exchange, ExchangeOption, Job, Room } from '@score/contract'
 import { agentDisplayName } from '../bold-agents.ts'
 
-export type JobFilter = 'all' | 'needs' | 'working' | 'done' | 'closed'
-
-export const JOB_FILTERS: { id: JobFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'needs', label: 'Needs you' },
-  { id: 'working', label: 'Working' },
-  { id: 'done', label: 'Done' },
-  { id: 'closed', label: 'Closed jobs' },
-]
-
-export function jobMatchesFilter(job: Job, filter: JobFilter): boolean {
-  // A closed job leaves the room's tabs until the person asks for the Closed jobs list.
-  if (filter === 'all') return job.state !== 'closed'
-  if (filter === 'needs') return job.state === 'waiting_on_you'
-  if (filter === 'working') return job.state === 'open' || job.state === 'working'
-  if (filter === 'done') return job.state === 'done'
-  return job.state === 'closed'
-}
-
 export function jobStateLabel(job: Job): string {
   if (job.state === 'waiting_on_you') return 'Needs you'
   if (job.state === 'open') return 'Open'
@@ -164,13 +145,6 @@ export function approvalInRoom(approval: Pick<Approval, 'refs'>, roomId: string)
 
 export function approvalPointerSet(approvals: Approval[], roomId: string): Set<string> {
   return new Set(roomApprovals(approvals, roomId).map((approval) => approval.id))
-}
-
-/** The prototype's expand chip: the first card stays visible, the rest wait behind its count. */
-export function pinsMoreLabel(count: number, expanded: boolean): string | null {
-  if (count <= 1) return null
-  if (expanded) return 'Show fewer'
-  return `${count - 1} more need${count === 2 ? 's' : ''} you`
 }
 
 /** Jobs whose finished result waits on the person to send it back. A closed job asks nothing until it is reopened. */

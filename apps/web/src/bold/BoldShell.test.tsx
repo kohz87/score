@@ -1,6 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from '../App.tsx'
@@ -521,4 +522,209 @@ test('the shell mounts the notification bridge and the update banner', async () 
   open('/b')
   expect(await screen.findByTestId('notification-bridge')).toBeDefined()
   expect(screen.getByTestId('update-banner')).toBeDefined()
+})
+
+// 3.22.0 replacements for the shell tests the Library/Runs/Thread modes took with them. Each says what it replaces.
+
+// was: 'the side-panel dropdown is a disclosure that closes and restores focus'
+test('the side panel is Info | Results pill tabs, not a dropdown of modes', () => {
+  open('/b')
+  const tabs = screen.getByRole('tablist', { name: 'Panel' })
+  const info = within(tabs).getByRole('tab', { name: 'Info' })
+  const results = within(tabs).getByRole('tab', { name: 'Results' })
+  expect(within(tabs).getAllByRole('tab')).toHaveLength(2)
+  expect(info.getAttribute('aria-selected')).toBe('true')
+  expect(results.getAttribute('aria-selected')).toBe('false')
+  // Thread, Runs and Library are not modes of the panel any more.
+  for (const gone of ['Thread', 'Runs', 'Library'])
+    expect(within(tabs).queryByRole('tab', { name: gone })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Library/ })).toBeNull()
+
+  fireEvent.click(results)
+  expect(results.getAttribute('aria-selected')).toBe('true')
+  expect(info.getAttribute('aria-selected')).toBe('false')
+  expect(screen.getByTestId('bold-results').hasAttribute('hidden')).toBe(false)
+  expect(screen.getByRole('navigation', { name: 'How to see the work' })).toBeDefined()
+  fireEvent.click(info)
+  expect(info.getAttribute('aria-selected')).toBe('true')
+  expect(screen.getByTestId('bold-results').hasAttribute('hidden')).toBe(true)
+})
+
+// was: 'opening the same run again after the phone sheet was closed opens the sheet again'
+test('an old ?run= address lands on the Recipes page’s run every time, even the same one again', async () => {
+  phone = true
+  const router = open('/b?run=brief-x')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  expect(router.state.location.search).toBe('?run=brief-x')
+  await act(async () => {
+    await router.navigate('/b')
+  })
+  await act(async () => {
+    await router.navigate('/b?run=brief-x')
+  })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  expect(router.state.location.search).toBe('?run=brief-x')
+  // The side sheet is not what opens for a run any more.
+  expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
+})
+
+// was: 'an in-place edit of the address (a replace) does not reopen a run the person closed'
+test('an in-place edit of the address (a replace) does not reopen a sheet the person closed', async () => {
+  phone = true
+  const router = open('/b?open=1&work=results')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  await screen.findByRole('complementary', { name: 'Side panel' })
+  // Chat info opens the sheet on Info; the person picks Results, then closes the sheet.
+  fireEvent.click(screen.getByRole('tab', { name: 'Results' }))
+  expect(screen.getByRole('tab', { name: 'Results' }).getAttribute('aria-selected')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: 'Close side panel' }))
+  expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
+  await act(async () => {
+    await router.navigate('/b?open=1&work=results&ref=other', { replace: true })
+  })
+  expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
+})
+
+// was: 'Escape in a Library dialog closes the dialog, not the phone sheet'
+test('Escape inside a dialog in the phone sheet is the dialog’s, and Escape on the sheet itself closes it', async () => {
+  phone = true
+  open('/b?open=1')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  const panel = await screen.findByRole('complementary', { name: 'Side panel' })
+  const dialog = document.createElement('div')
+  dialog.setAttribute('role', 'dialog')
+  const field = document.createElement('input')
+  dialog.append(field)
+  panel.append(dialog)
+  try {
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeDefined()
+  } finally {
+    dialog.remove()
+  }
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Info' }), { key: 'Escape' })
+  await waitFor(() =>
+    expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull(),
+  )
+})
+
+// was: 'the Library keeps an upload and its state while the phone sheet closes and the mode changes'
+test('the Results view keeps its element while the phone sheet closes and the tab changes', async () => {
+  phone = true
+  open('/b?open=1&work=results')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  fireEvent.click(await screen.findByRole('tab', { name: 'Results' }))
+  const results = await screen.findByTestId('bold-results')
+  expect(results.hasAttribute('hidden')).toBe(false)
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Info' }))
+  expect(screen.getByTestId('bold-results')).toBe(results)
+  expect(results.hasAttribute('hidden')).toBe(true)
+  fireEvent.click(screen.getByRole('tab', { name: 'Results' }))
+  expect(screen.getByTestId('bold-results')).toBe(results)
+  expect(results.hasAttribute('hidden')).toBe(false)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close side panel' }))
+  expect(screen.getByTestId('bold-results')).toBe(results)
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  // Chat info opens the sheet on Info; the Results view behind it stays mounted.
+  expect(screen.getByTestId('bold-results')).toBe(results)
+})
+
+// was: 'a Library note request is consumed and can be repeated after another mode'
+test('?note= and ?library=1 open Knowledge instead, and can be repeated', async () => {
+  const router = open('/b?note=Decisions%2FSource.md')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/knowledge'))
+  expect(router.state.location.search).toBe('?note=Decisions%2FSource.md')
+  expect(await screen.findByLabelText('Contents of Decisions/Source.md')).toBeDefined()
+
+  await act(async () => {
+    await router.navigate('/b')
+  })
+  await act(async () => {
+    await router.navigate('/b?note=Decisions%2FSource.md')
+  })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/knowledge'))
+  expect(router.state.location.search).toBe('?note=Decisions%2FSource.md')
+
+  await act(async () => {
+    await router.navigate('/b')
+  })
+  await act(async () => {
+    await router.navigate('/b?library=1')
+  })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/knowledge'))
+  expect(router.state.location.search).toBe('')
+})
+
+test('/runs/:id opens the run on the Recipes page, keeping other parameters', async () => {
+  const router = open('/runs/brief-x?from=search')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-x')
+  expect(new URLSearchParams(router.state.location.search).get('from')).toBe('search')
+})
+
+// was: 'a removed agent leaves the dock and the side panel’s one-to-ones; one setting up stays in the dock only'
+test('a removed agent leaves the dock and the Direct list; one setting up stays in the dock only', async () => {
+  const base = agents[1]!
+  extraAgents = [
+    {
+      ...base,
+      id: 'gone',
+      name: 'gone',
+      lifecycle: {
+        state: 'removed',
+        incarnationId: '00000000-0000-4000-8000-000000000001',
+        operationId: null,
+      },
+    },
+    {
+      ...base,
+      id: 'fresh',
+      name: 'fresh',
+      lifecycle: {
+        state: 'setting_up',
+        incarnationId: '00000000-0000-4000-8000-000000000002',
+        operationId: '00000000-0000-4000-8000-000000000003',
+      },
+    },
+  ]
+  open('/b')
+  const dock = screen.getByRole('group', { name: /Your team/ })
+  await within(dock).findByRole('button', { name: /^One to one with fresh, / })
+  expect(within(dock).queryByRole('button', { name: /^One to one with gone, / })).toBeNull()
+  const chats = await screen.findByRole('complementary', { name: 'Chats' })
+  const direct = within(within(chats).getByRole('heading', { name: 'Direct' }).parentElement!)
+  await direct.findByRole('link', { name: /builder/ })
+  expect(direct.queryByRole('link', { name: /gone/ })).toBeNull()
+  expect(direct.queryByRole('link', { name: /fresh/ })).toBeNull()
+})
+
+// New (3.22.0 item 11): the phone top bar fits one row with the terminal button on.
+test('the phone top bar keeps wordmark, section pills, terminal button and avatar in one row', async () => {
+  phone = true
+  terminalFixture = { terminal: true, terminalUnavailable: null }
+  open('/b')
+  const terminal = await screen.findByRole('button', { name: 'Terminal' })
+  const bar = screen.getByRole('banner')
+  const mark = within(bar).getByRole('button', { name: 'Score, go to the team room' })
+  const avatar = within(bar).getByText('Y')
+  const links = bar.querySelector('.bold-top-links') as HTMLElement
+  for (const name of ['Recipes', 'Tasks', 'Screens'])
+    expect(within(links).getByRole('button', { name })).toBeDefined()
+  // All four parts are direct children of the one bar, in reading order, and nothing else is on a phone's bar.
+  const parts = [...bar.children]
+  expect(parts).toEqual([mark, links, terminal, avatar])
+  expect(terminal.classList.contains('sm')).toBe(true)
+
+  // jsdom has no layout, so the rules that keep it on one row are read from the stylesheet: the bar never wraps on a
+  // phone, the pills take only the room that is left and scroll, and the other three parts never shrink.
+  const css = readFileSync(`${__dirname}/bold.css`, 'utf8')
+  const phoneRules = css.slice(css.indexOf('@media (max-width: 860px)'))
+  expect(phoneRules).toMatch(/\.top \{[^}]*flex-wrap: nowrap/)
+  expect(css).toMatch(/\.bold-top-links \{[^}]*flex: 1 1 0;[^}]*overflow-x: auto/)
+  const chatsCss = readFileSync(`${__dirname}/chats/chats.css`, 'utf8')
+  expect(chatsCss).toMatch(
+    /\.top \.word,\s*\[data-ui='bold'\] \.bold-avatar,\s*\[data-ui='bold'\] \.bold-terminal-btn \{\s*flex-shrink: 0/,
+  )
 })
