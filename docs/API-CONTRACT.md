@@ -2167,6 +2167,11 @@ version_untested | level_unverified | reach_unverifiable | changed | paused | fr
   server re-runs the preflight; a failing check → `409 preflight_failed` `{ checks }`; capacity → `429 capacity`; storage
   quota → `409 quota_exhausted`; global fence → `409 fenced`. It creates the run's room and brief (owner: `orchestration`) and
   queues the first lead attempt.
+  **3.23.0 (chats stage 3): `topic?: RunTopicRequest`** `{ roomId, title, exchangeBudget?, jobTurnLimit?, spendCapUsd? }`
+  makes the run's topic in that chat (a job with `recipe: { kind: 'orchestration', ref: <run id> }`) **in the run's own
+  transaction**: a chat that doesn't exist (`404`) or doesn't route with exchanges (`409`) leaves neither the run nor the
+  topic; the answer adds `topicId`. `POST /api/workflow-runs` takes the same `topic` (recipe `kind: 'workflow'`) and answers
+  `topicId` too. This replaces the client's second call (`POST /api/rooms/:roomId/jobs` with `recipe`), which stays.
   **Coding workers (7.7b):** the body also carries `codingPolicies: { [agentId]: policyId }` (the id the person saw for each
   coding worker among `allowedAgents`; a different current id → `409 policy_changed`, a missing one → `400 bad_request`),
   `acknowledgeCodingReach?: { policyIds }` (required, covering every worker whose `reachBeyondWorkspace` is true, else
