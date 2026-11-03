@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.22.0] — 2026-11-03
+
+### Changed
+- **Chats, stage 2.** A chat is one conversation: its topics (what jobs were) appear in time order, each opened by a
+  divider, and your message goes to the current topic. The job tabs and filters are gone; nothing sits above the
+  conversation but the chat's header.
+- **Type `/`** for commands: `/new` a topic, `/rename`, `/done`, `/reopen`, `/lead`, `/add`, `/remove`, `/workspace`,
+  plus `/assign`, `/model`, `/usage`, `/compress`. Under the composer: who it goes to, which topic, the model and the
+  context.
+- **Direct chats** use the same chat view: one conversation with your earlier chats as topics, the privacy label in the
+  header, Share to the team room on any reply.
+- **The side panel is chat info**: Info and Results. Library is the Knowledge page; runs show in their chat (or Recipes).
+- The layout follows the mock-up: edge-to-edge columns, a centred conversation, a compact row of agent rings.
+
 ## [3.21.0] — 2026-11-03
 
 ### Changed
