@@ -16,9 +16,10 @@ function tag(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-const side = (page: Page) => page.locator('#bold-side-panel')
+// 3.22.0: a one-to-one is the chat view itself (no side panel), so the chat's own stream and cards are the scope.
+const side = (page: Page) => page
 
-/** A fresh one-to-one chat with builder, opened in the side panel; returns the composer. */
+/** A fresh one-to-one chat with builder, opened in the chat view; returns the composer. */
 async function openChat(page: Page) {
   const made = await page.request.post('/api/agents/builder/chats', {
     headers: web,
@@ -60,13 +61,19 @@ for (const { name, viewport } of sizes) {
       await answer.fill('Aurora')
       await answer.press('Enter')
       await expect(card).toHaveCount(0, { timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-thread')).toContainText(
+      await expect(side(page).locator('#bold-room-stream')).toContainText(
         'Thanks, going with Aurora.',
         { timeout: 30_000 },
       )
-      await expect(side(page).locator('.bold-question-note')).toContainText(
-        'builder asked: What should the release be called? — you answered: Aurora',
-      )
+      // The merged conversation lists every muted line of the agent's chats (earlier runs too), so find this one.
+      await expect(
+        side(page)
+          .locator('.bold-question-note')
+          .filter({
+            hasText: 'builder asked: What should the release be called? — you answered: Aurora',
+          })
+          .first(),
+      ).toBeVisible()
     })
 
     test('a single-select question is answered by tapping an option', async ({ page }) => {
@@ -76,7 +83,7 @@ for (const { name, viewport } of sizes) {
       await expect(card.getByRole('button', { name: 'develop' })).toBeVisible()
       await card.getByRole('button', { name: 'main' }).click()
       await expect(card).toHaveCount(0, { timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-thread')).toContainText(
+      await expect(side(page).locator('#bold-room-stream')).toContainText(
         'Thanks, going with main.',
         { timeout: 30_000 },
       )
@@ -94,7 +101,7 @@ for (const { name, viewport } of sizes) {
       await card.getByRole('button', { name: 'preview' }).click()
       await send.click()
       await expect(card).toHaveCount(0, { timeout: 30_000 })
-      await expect(side(page).locator('.bold-dm-thread')).toContainText(
+      await expect(side(page).locator('#bold-room-stream')).toContainText(
         'Thanks, going with staging and preview.',
         { timeout: 30_000 },
       )
@@ -116,11 +123,7 @@ for (const { name, viewport } of sizes) {
       expect(sent.status(), await sent.text()).toBeLessThan(300)
       const strip = page.getByRole('region', { name: 'Needs you' })
       const card = strip.getByRole('region', { name: 'reviewer asks' })
-      // The strip folds to its first card; the count button opens the rest.
-      await expect(page.getByRole('button', { name: /more need you/ })).toBeVisible({
-        timeout: 30_000,
-      })
-      await page.getByRole('button', { name: /more need you/ }).click()
+      // 3.22.0: no "N more need you" bar; every card of the strip is already in view.
       await expect(card).toBeVisible({ timeout: 30_000 })
       // The dock ring says the agent needs you while the question waits (a phone has no dock).
       const ring = page.getByRole('button', { name: /^One to one with reviewer,/ })

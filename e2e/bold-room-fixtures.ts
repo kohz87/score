@@ -416,6 +416,18 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
     if (method === 'GET' && path === '/api/rooms/team-room/jobs')
       return response(route, { asOfSeq: 12, items: visibleJobs })
     if (method === 'GET' && path === '/api/rooms/team-room/messages') {
+      // 3.22.0: a chat is one conversation; `?all=1` reads every job's messages in one list.
+      if (url.searchParams.get('all') === '1')
+        return response(route, {
+          asOfSeq: 12,
+          items: options.empty
+            ? []
+            : Object.values(roomMessages)
+                .flat()
+                .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
+          nextCursor: null,
+          jobId: 'job-default',
+        })
       const jobId = url.searchParams.get('jobId') ?? 'job-default'
       return response(route, {
         asOfSeq: 12,
@@ -578,8 +590,11 @@ export async function openBoldJob(page: Page, title: RegExp) {
     await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     return
   }
-  await page.getByRole('tab', { name: title }).click()
-  await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+  // 3.22.0: no job tabs; Info › Topics makes the topic current (the conversation scrolls to its divider).
+  await page
+    .getByRole('complementary', { name: 'Side panel' })
+    .getByRole('link', { name: title })
+    .click()
 }
 
 /**
@@ -589,5 +604,5 @@ export async function openBoldJob(page: Page, title: RegExp) {
 export async function showAllJobsOnPhone(page: Page) {
   if ((page.viewportSize()?.width ?? 1440) > 860) return
   await page.goto('/b?jobs=1')
-  await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'All topics' })).toBeVisible()
 }

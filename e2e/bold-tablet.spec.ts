@@ -22,7 +22,7 @@ const visible =
 
 const roomReady: Ready = async (page) => {
   await visible('.bold-room-composer')(page)
-  await visible('.bold-phone-job, .bold-job-tabs, .bold-empty-room')(page)
+  await visible('.bold-phone-job, .bold-topic-divider, .bold-empty-room')(page)
 }
 
 const usageReady: Ready = async (page) => {
@@ -34,7 +34,7 @@ const usageReady: Ready = async (page) => {
 
 const libraryReady: Ready = async (page) => {
   await visible('.bold-library-nav')(page)
-  await visible('.bold-library-item, .bold-library-empty-list')(page)
+  await visible('.bold-knowledge-row, .bold-library-empty-list')(page)
   await expect(page.getByText(/^Opening note/)).toHaveCount(0, { timeout: 15_000 })
 }
 
@@ -69,14 +69,14 @@ const roomPath = (width: number) => (width <= 860 ? '/b?jobs=1' : '/b?open=1')
 const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'room', path: '/b?open=1', ready: roomReady },
   { name: 'chat', path: '/b?open=1', ready: visible('.bold-room-composer') },
-  { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-head') },
+  { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-bar') },
   { name: 'team', path: '/b/agents', ready: visible('.bold-agentcard') },
   { name: 'agent', path: '/b/agents/builder', ready: visible('.bold-agent') },
   { name: 'recipes', path: '/b/recipes', ready: recipesReady },
   { name: 'settings', path: '/b/settings', ready: visible('.bold-settings-page') },
   { name: 'usage', path: '/b/settings/usage', ready: usageReady },
   { name: 'screen', path: '/b/screen/builder', ready: screenReady },
-  { name: 'library', path: '/b?library=1', ready: libraryReady },
+  { name: 'library', path: '/b/knowledge', ready: libraryReady },
 ]
 
 /** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
@@ -107,10 +107,10 @@ for (const size of sizes) {
 
     test('touch: message actions are visible and targets are 44px', async ({ page }) => {
       await pair(page)
-      await open(page, '/b?with=builder', visible('.bold-dm-head'))
+      await open(page, '/b?with=builder', visible('.bold-dm-bar'))
       expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
       await expect(
-        page.locator('.bold-dm-scroll').getByRole('button', { name: 'Copy' }).first(),
+        page.locator('#bold-room-stream').getByRole('button', { name: 'Copy' }).first(),
       ).toBeVisible()
       await open(page, roomPath(size.width), roomReady)
       // Landscape shows the room's messages: their actions must be there (no hover) to be measured.
@@ -175,21 +175,21 @@ for (const size of sizes) {
 
         // The one-to-one's messages and composer fill the sheet: the agent's glyph and the composer share a left edge,
         // the person's bubble, the composer and the header tools a right edge.
-        await open(page, '/b?with=builder', visible('.bold-dm-head'))
+        await open(page, '/b?with=builder', visible('.bold-dm-bar'))
         const dm = await page.evaluate(() => {
           const rect = (el: Element | null) => el!.getBoundingClientRect()
           const you = document.querySelector(
-            '.bold-dm-scroll .chat-message--you .chat-bubble, .bold-dm-scroll .chat-message--you',
+            '#bold-room-stream .chat-message--you .chat-bubble, #bold-room-stream .chat-message--you',
           )
           return {
-            glyphLeft: rect(document.querySelector('.bold-dm-scroll .agent-glyph')).left,
+            glyphLeft: rect(document.querySelector('#bold-room-stream .agent-glyph')).left,
             composerLeft: rect(document.querySelector('.bold-dm-composer .chat-composer-box--room'))
               .left,
             composerRight: rect(
               document.querySelector('.bold-dm-composer .chat-composer-box--room'),
             ).right,
             bubbleRight: rect(you).right,
-            toolsRight: rect(document.querySelector('.bold-dm-head > :last-child')).right,
+            toolsRight: rect(document.querySelector('.bold-dm-bar > :last-child')).right,
           }
         })
         expect(Math.abs(dm.glyphLeft - dm.composerLeft), 'glyph vs composer').toBeLessThanOrEqual(2)
