@@ -266,17 +266,31 @@ export function BoldStartJob({
     ? teamRoomsState.data?.find((item) => item.id === openRoomId && !isEveryoneRoom(item))
     : undefined
   // 3.23.0: a chat that asks (its button, `/run`) names its room: a team or a group chat. A direct chat holds no run.
-  const allRooms = useStreamQuery(roomsQuery).data
-  const askedRoom = options?.roomId
-    ? ([...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].find(
-        (item) => item.id === options.roomId && !item.archived,
-      ) ?? null)
-    : null
+  const allRoomsState = useStreamQuery(roomsQuery)
+  const allRooms = allRoomsState.data
+  const askedFound = options?.roomId
+    ? [...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].find(
+        (item) => item.id === options.roomId,
+      )
+    : undefined
+  const askedRoom = askedFound && !askedFound.archived ? askedFound : null
+  const askedArchived = Boolean(askedFound?.archived)
   const askedDirect =
     options?.roomId !== undefined &&
-    askedRoom === null &&
+    askedFound === undefined &&
     (allRooms?.directs ?? []).some((item) => item.id === options.roomId)
-  const startRoom = askedRoom ?? chosenTeam ?? teamRoomState.data?.room ?? null
+  // A named chat that is archived or unknown never falls back to the team room: the run would start in the wrong place.
+  const askedLoading =
+    options?.roomId !== undefined &&
+    askedFound === undefined &&
+    !askedDirect &&
+    (allRoomsState.status === 'pending' || teamRoomsState.status === 'pending')
+  const askedMissing =
+    options?.roomId !== undefined && askedFound === undefined && !askedDirect && !askedLoading
+  const askedBlocked = askedArchived || askedMissing || askedLoading
+  const startRoom = askedBlocked
+    ? null
+    : (askedRoom ?? chosenTeam ?? teamRoomState.data?.room ?? null)
   const teamRoom = {
     data: teamRoomState.data,
     isPending: teamRoomState.status === 'pending',
@@ -324,12 +338,19 @@ export function BoldStartJob({
   const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
-  const roomCheck: StartCheck = askedDirect
-    ? { key: 'team-room', status: 'fail', text: 'Runs start in a group chat.' }
-    : checkOf(teamRoom)
-  const roomProblem = askedDirect
+  const askedProblem = askedDirect
     ? 'Runs start in a group chat.'
-    : 'The team room is not ready yet.'
+    : askedArchived
+      ? 'This chat is archived; unarchive it to start a run here.'
+      : askedMissing
+        ? 'Couldn’t find that chat.'
+        : null
+  const roomCheck: StartCheck = askedProblem
+    ? { key: 'team-room', status: 'fail', text: askedProblem }
+    : askedLoading
+      ? { key: 'team-room', status: 'pending', text: 'Checking the chat' }
+      : checkOf(teamRoom)
+  const roomProblem = askedProblem ?? 'The team room is not ready yet.'
   const teamLead = startRoom?.leadAgentId ?? null
   // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
   const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
@@ -1044,10 +1065,12 @@ export function BoldStartJob({
         })
       } else if (isLead) {
         const made = await startOrchestration(runTopic(title))
+        if (!made.topicId)
+          throw new Error('The run started but Score didn’t get its topic; open it from Recipes.')
         setResult({
           kind: 'job',
           title,
-          jobId: made.topicId ?? '',
+          jobId: made.topicId,
           orchestrationId: made.orchestration.id,
         })
       } else {

@@ -194,6 +194,7 @@ let triggerBody: unknown
 /** 3.13: calls the oracle tests watch, in order, and what the orchestration POST answers. */
 let calls: string[] = []
 let orchestrationBodies: Record<string, unknown>[] = []
+let lastOrchestrationPreflight: unknown = null
 let preflightUrls: string[] = []
 let roomJobPosts: Record<string, unknown>[] = []
 let orchestrationReply: () => Response = () =>
@@ -278,6 +279,7 @@ beforeEach(() => {
         if (preflightRefusal)
           return Promise.resolve(Response.json({ error: preflightRefusal }, { status: 422 }))
         const check = orchestrationCheck(!preflightFails)
+        lastOrchestrationPreflight = check
         if (toolsListed)
           check.checks.push({
             id: 'tool_readiness',
@@ -1156,6 +1158,44 @@ test('3.23.0: a recipe run carries its topic in the one call too', async () => {
   expect(roomJobPosts).toEqual([])
 })
 
+test('3.23.0: a run answered without its topic shows an error, never a success card with an empty id', async () => {
+  orchestrationReply = () =>
+    Response.json(
+      {
+        orchestration: {
+          id: 'orch-1',
+          title: 'Fix the failing tests',
+          status: 'running',
+          pauseReason: null,
+          leadAgentId: 'lead',
+          roomId: 'team-room',
+          briefId: 'brief-1',
+          gatePolicy: 'lead-asks',
+          revision: 1,
+          ownership: 'owned',
+          steps: { total: 0, active: 0, succeeded: 0, failed: 0 },
+          leadTurnsUsed: 0,
+          maxLeadTurns: 8,
+          needsYou: [],
+          createdAt: iso,
+          updatedAt: iso,
+          endedAt: null,
+        },
+        preflight: lastOrchestrationPreflight,
+      },
+      { status: 201 },
+    )
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  expect(
+    await within(dialog).findByText(
+      'The run started but Score didn’t get its topic; open it from Recipes.',
+    ),
+  ).toBeDefined()
+  expect(within(dialog).queryByText(/Open the job|Open it/)).toBeNull()
+})
+
 test('3.23.0: a plain job (recipe None) still makes its job with the room call', async () => {
   open('/b?start=job')
   const dialog = await startDialog()
@@ -1239,6 +1279,42 @@ test('3.23.0: a run asked for in a direct chat is refused in the checklist', asy
   openWith({ roomId: 'direct-1' })
   const dialog = await startDialog()
   expect(await within(dialog).findByText('Runs start in a group chat.')).toBeDefined()
+  expect(
+    within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
+  ).toBe(true)
+})
+
+function chatsFetch(rooms: unknown[]) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x')
+      const body =
+        url.pathname === '/api/rooms'
+          ? { asOfSeq: 1, rooms, directs: [] }
+          : { asOfSeq: 0, items: [], rooms: [], directs: [], projects: [] }
+      return Promise.resolve(Response.json(body))
+    }),
+  )
+}
+
+test('3.23.0: a run asked for in an archived chat is refused, never moved to the team room', async () => {
+  chatsFetch([{ ...room, id: 'old-chat', name: 'Old chat', archived: true }])
+  openWith({ roomId: 'old-chat' })
+  const dialog = await startDialog()
+  expect(
+    await within(dialog).findByText('This chat is archived; unarchive it to start a run here.'),
+  ).toBeDefined()
+  expect(
+    within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
+  ).toBe(true)
+})
+
+test('3.23.0: a run asked for in a chat that does not exist is refused', async () => {
+  chatsFetch([])
+  openWith({ roomId: 'no-such-chat' })
+  const dialog = await startDialog()
+  expect(await within(dialog).findByText('Couldn’t find that chat.')).toBeDefined()
   expect(
     within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
   ).toBe(true)

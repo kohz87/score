@@ -566,10 +566,18 @@
     width: 300px;
   }
 
-  /* The Graph tab is a little wider than Info (the mock-up's 420px) so the run's nodes read; it is the flat Info panel. */
+  /* The Graph tab is a little wider than Info (the mock-up's 420px from 1280px, 340px below) so the run's nodes read; it is the flat Info panel. */
   [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
-    flex: 0 0 420px;
-    width: 420px;
+    flex: 0 0 340px;
+    width: 340px;
+  }
+
+  /* Up to 1279px the chat list folds to its rail while Graph is open (BoldRoom); from 1280px there is room for 420. */
+  @media (min-width: 1280px) {
+    [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
+      flex: 0 0 420px;
+      width: 420px;
+    }
   }
 
   /* Results and the Workbench widen the panel only while chosen. */

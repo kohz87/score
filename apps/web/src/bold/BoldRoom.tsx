@@ -32,6 +32,8 @@ import { useChatLists, useOpenGroup } from './chats/chat-queries.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
 
 const PHONE = '(max-width: 860px)'
+/** Below this the Graph tab is 340px wide and the chat list folds to its rail while it is open. */
+const NARROW_GRAPH = '(max-width: 1279px)'
 
 type SideMode = 'work' | 'info' | 'elsewhere' | 'graph'
 
@@ -40,6 +42,7 @@ export function BoldRoom() {
   const agentsState = useStreamQuery(agentsQuery)
   const agents = agentsState.data ?? []
   const phone = useMediaQuery(PHONE)
+  const narrow = useMediaQuery(NARROW_GRAPH)
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
   const navigate = useNavigate()
@@ -91,6 +94,12 @@ export function BoldRoom() {
   const graphJob =
     !directMode && currentJob?.recipe && !currentJob.isDefault ? currentJob : undefined
   const shownMode: SideMode = mode === 'graph' && !graphJob ? 'info' : mode
+  // Moving to a topic without a run puts the panel back on Info, so Graph never comes back by itself on a later topic.
+  const [seenTopic, setSeenTopic] = useState<string | undefined>(undefined)
+  if (currentJob?.id !== seenTopic) {
+    setSeenTopic(currentJob?.id)
+    if (currentJob && !graphJob && mode === 'graph') setMode('info')
+  }
   // On a phone `/b` is the chat list; a chat (or any view of one) is open when the address names it.
   // A one-shot parameter that the chat consumes (a replace) must not drop the person back to the list: the chat stays
   // open until a push or pop (Back, a tab) arrives without one.
@@ -252,6 +261,12 @@ export function BoldRoom() {
     if (phone) setSheetOpen(true)
   }
 
+  // A phone's `?work=graph` (a run's link, `?run=`) opens the side sheet on its Graph tab once the topic's run is known.
+  const graphJobId = graphJob?.id
+  useEffect(() => {
+    if (phone && workRequest === 'graph' && graphJobId) setSheetOpen(true)
+  }, [phone, workRequest, graphJobId, setSheetOpen])
+
   const closeSheet = () => {
     setSheetOpen(false)
     requestAnimationFrame(() => phoneOpenRef.current?.focus())
@@ -282,7 +297,8 @@ export function BoldRoom() {
       ready={chatLists.ready}
       selected={selectedChat}
       phone={phone}
-      folded={folded}
+      folded={folded || (graphShown && narrow && !phone)}
+      foldLocked={!folded && graphShown && narrow && !phone}
       onFold={(next) => {
         setFolded(next)
         saveFolded(next)

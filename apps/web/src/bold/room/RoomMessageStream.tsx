@@ -18,7 +18,11 @@ import {
 } from './topic-divider.tsx'
 import { groupKey, groupReplies, pickReplyVersion } from './reply-versions.ts'
 import { roomChatMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
+import { isRunOver } from '../../routes/orchestrations/orch-model.ts'
+import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { RunCard } from './RunCard.tsx'
+import { recipeRun } from './thread-model.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
@@ -116,9 +120,26 @@ export function RoomMessageStream({
   ) => { actions?: ReactNode; below?: ReactNode } | undefined
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
+  // Only the 3 newest cards of runs still going read their live detail; the rest (and every finished run) use summaries.
+  const orchestrations = useStreamQuery(orchestrationsQuery).data
+  const workflowRuns = useStreamQuery(workflowRunsQuery).data
+  const liveCards = useMemo(() => {
+    const going = jobs.filter((job) => {
+      const match = recipeRun(job.recipe ?? null, orchestrations ?? [], workflowRuns ?? [])
+      return match !== null && !isRunOver(match.summary.status)
+    })
+    going.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return new Set(going.slice(0, 3).map((job) => job.id))
+  }, [jobs, orchestrations, workflowRuns])
   const runCard = (job: Job) =>
     job.recipe && onShowGraph ? (
-      <RunCard job={job} recipe={job.recipe} agents={agents} onShowGraph={onShowGraph} />
+      <RunCard
+        job={job}
+        recipe={job.recipe}
+        agents={agents}
+        live={liveCards.has(job.id)}
+        onShowGraph={onShowGraph}
+      />
     ) : null
   const [older, setOlder] = useState<string[]>([])
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})

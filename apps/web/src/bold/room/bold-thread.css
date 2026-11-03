@@ -498,25 +498,13 @@
 }
 
 [data-ui='bold'] .bold-run-card-who {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
   font-size: 13px;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-[data-ui='bold'] .bold-run-card-agent {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
+[data-ui='bold'] .bold-run-card-agent.on {
   color: var(--ink);
-}
-
-[data-ui='bold'] .bold-run-card-agent > b {
-  font-weight: 700;
 }
 
 [data-ui='bold'] .bold-run-needs {
