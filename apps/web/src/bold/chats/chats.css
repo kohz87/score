@@ -472,6 +472,16 @@
     margin: 0;
   }
 
+  /* 3.22.0: the Info sheet keeps its section headings (Members, Workspace, This topic, Topics); only the list hides them. */
+  [data-ui='bold'] .bold-chat-info .bold-chat-kicker {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    margin: 14px 0 6px;
+  }
+
   [data-ui='bold'] .bold-chat-row,
   [data-ui='bold'] .bold-chat-row.direct {
     padding: 10px;
@@ -716,4 +726,45 @@
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-room-composer {
     padding-bottom: 16px;
   }
+}
+
+/* Info › This topic (3.22.0): the old thread panel's status, run, report-back and tasks, compact for a 300px column. */
+[data-ui='bold'] .bold-topic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-topic-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-d);
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-topic-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe,
+[data-ui='bold'] .bold-topic-info .bold-thread-tasks {
+  margin: 0;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head > b {
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-stop-confirm {
+  padding: 12px 14px;
 }

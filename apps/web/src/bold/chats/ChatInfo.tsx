@@ -1,11 +1,13 @@
 import type { AgentSummary, Job, Room } from '@score/contract'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { jobDot } from '../room/job-dot.ts'
 import { jobStateLabel } from '../room/room-model.ts'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
+import { currentTopic } from './chat-model.ts'
+import { TopicInfo } from './TopicInfo.tsx'
 
 function topicLink(room: Room, job: Job, everyone: boolean): string {
   const params = new URLSearchParams()
@@ -41,6 +43,7 @@ export function ChatInfo({
 }) {
   const workspaces = useSharedWorkspaces(Boolean(room?.workspaceId)).data
   const startJob = useStartJob()
+  const [params] = useSearchParams()
   if (!room)
     return (
       <div className="sidebody bold-chat-info">
@@ -51,6 +54,7 @@ export function ChatInfo({
     ? workspaces?.find((item) => item.id === room.workspaceId)
     : undefined
   const topics = jobs.filter((job) => !job.isDefault)
+  const current = currentTopic(jobs, params.get('job'))
   return (
     <div className="sidebody bold-chat-info" aria-label={`${room.name}, chat info`}>
       <section aria-labelledby="chat-info-members">
@@ -83,6 +87,9 @@ export function ChatInfo({
           <p className="bold-chat-note">None set.</p>
         )}
       </section>
+      {current && !current.isDefault && (
+        <TopicInfo roomId={room.id} job={current} agents={agents} />
+      )}
       <section aria-labelledby="chat-info-topics">
         <h2 id="chat-info-topics" className="bold-chat-kicker">
           Topics
