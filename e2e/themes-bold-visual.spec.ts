@@ -102,6 +102,12 @@ for (const id of boldThemeIds) {
             page.getByRole('separator', { name: /^Topic: Release notes 2\.4/ }),
           ).toBeVisible()
         await settle(page)
+        // 3.22.0: a chat opens at its first unread message, and where that lands moves by the needs-you cue's late
+        // layout (±37px). These baselines are about the theme's colours: shoot the conversation at its end.
+        await page.locator('#bold-room-stream').evaluate((el) => {
+          el.scrollTop = el.scrollHeight
+        })
+        await settle(page)
         await expect(page).toHaveScreenshot(`bold-${id}-room-${variant}.png`, {
           animations: 'disabled',
           maxDiffPixelRatio: 0.005,

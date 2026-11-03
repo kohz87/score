@@ -83,6 +83,10 @@ export function useFollowEnd(
       toEnd()
     })
     mutations.observe(element, { childList: true, subtree: true, characterData: true })
+    // The stream's own box getting shorter (the context bar filling in its meter, the needs-you cards arriving, a
+    // taller composer) leaves the end without any change inside it (3.22.0 gate): keep the end while following.
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => toEnd()) : null
+    resize?.observe(element)
     // An image or an embedded preview that finishes loading grows its message without a DOM change.
     element.addEventListener('load', toEnd, true)
     element.addEventListener('scroll', onScroll, { passive: true })
@@ -91,6 +95,7 @@ export function useFollowEnd(
     element.addEventListener('keydown', onKey)
     return () => {
       mutations.disconnect()
+      resize?.disconnect()
       element.removeEventListener('load', toEnd, true)
       element.removeEventListener('scroll', onScroll)
       element.removeEventListener('wheel', onWheel)
