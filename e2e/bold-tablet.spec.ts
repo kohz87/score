@@ -64,7 +64,7 @@ const recipesReady: Ready = async (page) => {
 }
 
 const pages: { name: string; path: string; ready: Ready }[] = [
-  { name: 'room', path: '/b', ready: roomReady },
+  { name: 'room', path: '/b?open=1', ready: roomReady },
   { name: 'dm', path: '/b?with=builder', ready: visible('.bold-dm-head') },
   { name: 'team', path: '/b/agents', ready: visible('.bold-agentcard') },
   { name: 'agent', path: '/b/agents/builder', ready: visible('.bold-agent') },
@@ -78,7 +78,7 @@ const pages: { name: string; path: string; ready: Ready }[] = [
 /** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
  * close it, so the room underneath is what gets measured. */
 async function closeSheet(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Open side panel' })
+  const toggle = page.getByRole('button', { name: 'Chat info' })
   if ((await toggle.getAttribute('aria-expanded')) === 'true') await page.keyboard.press('Escape')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 }
@@ -107,7 +107,7 @@ for (const size of sizes) {
       await expect(
         page.locator('.bold-dm-scroll').getByRole('button', { name: 'Copy' }).first(),
       ).toBeVisible()
-      await open(page, '/b', roomReady)
+      await open(page, '/b?open=1', roomReady)
       // Landscape shows the room's messages: their actions must be there (no hover) to be measured.
       if (size.width >= 861)
         await expect(
@@ -134,7 +134,7 @@ for (const size of sizes) {
     test('layout uses the width', async ({ page }) => {
       await pair(page)
       const portrait = size.width < 861
-      await open(page, '/b', roomReady)
+      await open(page, '/b?open=1', roomReady)
       if (portrait) {
         // The title's text, the first job card and the composer share a left edge; the header tools and the content
         // share a right edge.
@@ -252,7 +252,7 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
     }))
     await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
   })
-  await open(page, '/b', roomReady)
+  await open(page, '/b?open=1', roomReady)
   await closeSheet(page)
   await expect(page.locator('.bold-phone-job').first()).toBeVisible()
   // The four demo agents plus twelve (more when other specs added agents to the shared server).

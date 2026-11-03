@@ -48,7 +48,7 @@ for (const viewport of [
 test('no Terminal icon when the server reports the terminal unavailable', async ({ page }) => {
   await pair(page)
   await offerTerminal(page, true, 'The terminal needs HTTPS.')
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Terminal' })).toHaveCount(0)
 })

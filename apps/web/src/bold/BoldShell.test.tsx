@@ -394,7 +394,7 @@ test('/b draws the frame and the dock', async () => {
 
 test('the side-panel dropdown is a disclosure that closes and restores focus', () => {
   open('/b')
-  const toggle = screen.getByRole('button', { name: 'Work' })
+  const toggle = screen.getByRole('button', { name: 'Info' })
   fireEvent.click(toggle)
   expect(toggle.getAttribute('aria-expanded')).toBe('true')
   const menuId = toggle.getAttribute('aria-controls')
@@ -402,7 +402,7 @@ test('the side-panel dropdown is a disclosure that closes and restores focus', (
   const menu = document.getElementById(menuId!)!
   expect(menu).not.toBeNull()
   expect(menu.querySelector('[role="listbox"], [role="option"]')).toBeNull()
-  expect(within(menu).getByRole('button', { name: /^Work/ }).getAttribute('aria-current')).toBe(
+  expect(within(menu).getByRole('button', { name: /^Info/ }).getAttribute('aria-current')).toBe(
     'true',
   )
   expect(
@@ -426,15 +426,15 @@ test('the side-panel dropdown is a disclosure that closes and restores focus', (
 
 test('a phone keeps the wordmark and avatar, shows the tab bar and opens the side panel as a sheet', async () => {
   phone = true
-  open('/b')
+  open('/b?open=1')
   const nav = screen.getByRole('navigation', { name: 'Main' })
-  for (const label of ['Room', 'Agents', 'Knowledge', 'Search', 'Settings'])
+  for (const label of ['Chats', 'Agents', 'Knowledge', 'Search', 'Settings'])
     expect(within(nav).getByRole('button', { name: label })).toBeDefined()
   expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
   expect(screen.queryByRole('group', { name: /Your team/ })).toBeNull()
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
   expect(screen.getByText('Y')).toBeDefined()
-  const openPanel = screen.getByRole('button', { name: 'Open side panel' })
+  const openPanel = screen.getByRole('button', { name: 'Chat info' })
   expect(openPanel.getAttribute('aria-expanded')).toBe('false')
   fireEvent.click(openPanel)
   const panel = screen.getByRole('complementary', { name: 'Side panel' })
@@ -452,7 +452,7 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and opens the sid
   expect(screen.getByRole('banner').hasAttribute('inert')).toBe(false)
   expect(nav.hasAttribute('inert')).toBe(false)
   expect(document.querySelector('.roomcol')?.hasAttribute('inert')).toBe(false)
-  const openPanelAgain = screen.getByRole('button', { name: 'Open side panel' })
+  const openPanelAgain = screen.getByRole('button', { name: 'Chat info' })
   await waitFor(() => expect(document.activeElement).toBe(openPanelAgain))
 })
 
@@ -487,9 +487,9 @@ test('the phone Room badge waits for the team room and counts the job in the URL
     { id: 'job-notes', title: 'Release notes', state: 'waiting_on_you', isDefault: false },
   ])
   const nav = screen.getByRole('navigation', { name: 'Main' })
-  const room = within(nav).getByRole('button', { name: /^Room/ })
+  const room = within(nav).getByRole('button', { name: /^Chats/ })
   // The cached team-room read is already successful in this harness; the selected job has one approval to answer.
-  await waitFor(() => expect(room.getAttribute('aria-label')).toBe('Room, 1 need you'))
+  await waitFor(() => expect(room.getAttribute('aria-label')).toBe('Chats, 1 need you'))
   const badge = room.querySelector('.bold-tab-count')
   expect(badge?.textContent).toBe('1')
   expect(badge?.getAttribute('data-protected')).toBe('inline-flex')
@@ -503,16 +503,16 @@ test('the desktop Room button carries the needs-you count, protected, for window
     { id: 'job-notes', title: 'Release notes', state: 'waiting_on_you', isDefault: false },
   ])
   const nav = screen.getByRole('navigation', { name: 'Main' })
-  const room = within(nav).getByRole('button', { name: /^Room/ })
+  const room = within(nav).getByRole('button', { name: /^Chats/ })
   await waitFor(() => expect(room.querySelector('.bold-nav-count')?.textContent).toBe('1'))
   expect(room.querySelector('.bold-nav-count')?.getAttribute('data-protected')).toBe('inline-flex')
 })
 
 test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {
   phone = true
-  open('/b')
-  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  open('/b?open=1')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
   fireEvent.click(screen.getByRole('button', { name: 'New note' }))
   const dialog = screen.getByRole('dialog', { name: 'New note' })
@@ -525,9 +525,9 @@ test('Escape in a Library dialog closes the dialog, not the phone sheet', async 
 test('the Library keeps an upload and its state while the phone sheet closes and the mode changes', async () => {
   phone = true
   vi.stubGlobal('XMLHttpRequest', PendingUpload)
-  open('/b')
-  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  open('/b?open=1')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
   const library = screen.getByTestId('bold-library')
   fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'still here' } })
@@ -538,10 +538,10 @@ test('the Library keeps an upload and its state while the phone sheet closes and
   expect(PendingUpload.last.url).toBe('/api/knowledge/files/notes.pdf?onConflict=ask')
 
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   expect(screen.getByTestId('bold-library')).toBe(library)
   expect(library.hasAttribute('hidden')).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
   expect(library.hasAttribute('hidden')).toBe(false)
   expect(screen.getByPlaceholderText('Search')).toHaveProperty('value', 'still here')
@@ -549,7 +549,10 @@ test('the Library keeps an upload and its state while the phone sheet closes and
 
   fireEvent.click(screen.getByRole('button', { name: 'Close side panel' }))
   expect(screen.getByTestId('bold-library')).toBe(library)
-  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
+  // Chat info opens the sheet on Info; the Library behind it keeps its upload.
+  fireEvent.click(screen.getByRole('button', { name: 'Chat info' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
   expect(screen.getByTestId('bold-library')).toBe(library)
   expect(screen.getByRole('button', { name: /Uploading…/ })).toBeDefined()
 
@@ -569,10 +572,10 @@ test('a Library note request is consumed and can be repeated after another mode'
   await waitFor(() => expect(router.state.location.search).not.toContain('note='))
 
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   expect(screen.getByTestId('bold-library')).toBe(library)
   expect(library.hasAttribute('hidden')).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Info/ }))
   fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
   expect(screen.getByLabelText('Contents of Decisions/Source.md')).toBeDefined()
 })
@@ -697,7 +700,7 @@ test('a removed agent leaves the dock and the side panel’s one-to-ones; one se
   const dock = screen.getByRole('group', { name: /Your team/ })
   await within(dock).findByRole('button', { name: /^One to one with fresh, / })
   expect(within(dock).queryByRole('button', { name: /^One to one with gone, / })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Work' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Info' }))
   const menu = document.querySelector('.side-menu') as HTMLElement
   expect(within(menu).getByText('builder')).toBeDefined()
   expect(within(menu).queryByText('gone')).toBeNull()

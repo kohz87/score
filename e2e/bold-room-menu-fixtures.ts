@@ -371,7 +371,7 @@ export async function openMenuRoom(
   await pair(page)
   const base = await mockBoldRoom(page)
   const menu = await mockRoomMenus(page, options)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return { ...base, ...menu }
 }

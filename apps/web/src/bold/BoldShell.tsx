@@ -292,7 +292,7 @@ function BoldShellFrame() {
             </button>
             {!phone && (
               <nav className="nav" aria-label="Main">
-                {navButton('room', 'Room', '/b')}
+                {navButton('room', 'Chats', '/b')}
                 {navButton('agents', 'Agents', '/b/agents')}
                 {navButton('knowledge', 'Knowledge', '/b/knowledge')}
                 {navButton('tasks', 'Tasks', '/b/tasks')}
@@ -394,15 +394,15 @@ function BoldShellFrame() {
                 aria-current={view === 'room' ? 'page' : undefined}
                 aria-label={
                   roomNeedsYou > 0
-                    ? `Room, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
+                    ? `Chats, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
                     : roomNeedsShort
-                      ? 'Room, couldn’t check everything that needs you'
-                      : 'Room'
+                      ? 'Chats, couldn’t check everything that needs you'
+                      : 'Chats'
                 }
                 onClick={go('/b')}
               >
                 <RoomIcon />
-                <span>Room</span>
+                <span>Chats</span>
                 {roomBadge && (
                   <span className="bold-tab-count" data-protected="inline-flex">
                     {roomBadge}

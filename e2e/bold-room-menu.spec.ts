@@ -23,7 +23,7 @@ async function expectOlderRoomLabel(page: Page) {
   if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
   else {
     await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
-    await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
     await expect(label).toBeAttached()
   }
 }
@@ -197,7 +197,7 @@ for (const viewport of sizes) {
       await dialog.getByLabel(/Type #activity-feed to confirm/).fill('#activity-feed')
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
-      await expect(page).toHaveURL(/\/b$/)
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.locator('.roomtitle')).toHaveText('Team room')
       expect(
         state.requests.some(
@@ -226,7 +226,7 @@ for (const viewport of sizes) {
         .fill('#telegram-plan #imported')
       await dialog.getByRole('button', { name: 'Delete room' }).click()
 
-      await expect(page).toHaveURL(/\/b$/)
+      await expect(page).toHaveURL(/\/b(\?open=1)?$/)
       await expect(page.locator('.roomtitle')).toHaveText('Team room')
       expect(
         state.requests.some(
@@ -533,8 +533,8 @@ for (const viewport of sizes) {
       if (viewport.width > 860)
         await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
       else {
-        await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
-        await expect(page.locator('.bold-phone-chat-id')).toContainText('Plan the launch checklist')
+        await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible()
+        await expect(page.locator('.bold-chat-phone-id')).toContainText('Plan the launch checklist')
       }
 
       expect(

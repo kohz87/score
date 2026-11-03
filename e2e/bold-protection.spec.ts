@@ -29,7 +29,7 @@ test('a hostile theme can’t hide the dock’s needs-you ring or the agents’ 
   // An agent waiting on the person: an approval in a room.
   const room = await makeRoom(page, 'bold-protect')
   await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
-  await page.goto('/b')
+  await page.goto('/b?open=1')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const ring = page.locator('.bold-needs[data-protected]').first()
   await expect(ring).toBeVisible({ timeout: 20_000 })

@@ -26,12 +26,12 @@ async function activityFeedJob(page: Page) {
   return job!
 }
 
-async function openResults(page: Page, size: Size, path = '/b') {
+async function openResults(page: Page, size: Size, path = '/b?open=1') {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(path)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+  if (size.width < 861) await page.getByRole('button', { name: 'Chat info' }).click()
 
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   await expect(panel).toBeVisible()

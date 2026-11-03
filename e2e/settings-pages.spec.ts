@@ -111,7 +111,7 @@ test('on a phone the section list shows the current section and navigates', asyn
 test('the palette lists each Settings section', async ({ page }) => {
   await pair(page)
   for (const section of sections) {
-    await page.goto('/b')
+    await page.goto('/b?open=1')
     await expect(page.locator('[data-ui="bold"]')).toBeVisible()
     await page.getByRole('button', { name: 'Search', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Search and commands' })
