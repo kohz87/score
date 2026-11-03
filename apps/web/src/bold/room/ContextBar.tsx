@@ -2,7 +2,7 @@ import { AgentContextSchema, type AgentSummary, type Job } from '@score/contract
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { agentDisplayName } from '../bold-agents.ts'
-import { compact } from '../../routes/chat/context-meter.ts'
+import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { fetchSessionContext, roomSessionId } from '../../routes/chat/room-actions.ts'
 
 /** The session the next message goes to: the room's own for the general conversation, else the topic's own. */
@@ -28,6 +28,9 @@ export function ContextBar({
   agents,
   ownerId,
   topic,
+  finishedReplies = 0,
+  compactSignal,
+  compactSubject = null,
 }: {
   roomId: string
   to: string[]
@@ -35,6 +38,10 @@ export function ContextBar({
   agents: AgentSummary[]
   ownerId: string | null
   topic: Job | undefined
+  finishedReplies?: number
+  /** `/compress` (from the composer): the meter opens its compaction confirmation for `compactSubject`. */
+  compactSignal?: number
+  compactSubject?: string | null
 }) {
   const subject = agents.find((agent) => agent.id === subjectId)
   // The meter reads the session this message lands in (3.22.0 review): the agent's last session may be another chat's.
@@ -59,9 +66,6 @@ export function ContextBar({
   const names = to
     .map((id) => agents.find((agent) => agent.id === id))
     .filter((agent): agent is AgentSummary => Boolean(agent))
-  const used = session?.used ?? null
-  const windowSize = session?.window ?? null
-  const fraction = used !== null && windowSize ? Math.min(1, used / windowSize) : null
   const model = session?.model ?? agentModel ?? null
   const where = topic && !topic.isDefault ? topic.title : null
   return (
@@ -90,22 +94,20 @@ export function ContextBar({
           </>
         )}
       </span>
-      {fraction !== null && used !== null && (
-        <span className="bold-context-meter">
-          Context{' '}
-          <span
-            className="bold-context-track"
-            role="meter"
-            aria-label="Context used"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(fraction * 100)}
-            aria-valuetext={`${Math.round(fraction * 100)}% of ${compact(windowSize!)} tokens`}
-          >
-            <span style={{ width: `${Math.round(fraction * 100)}%` }} />
-          </span>
-          <span>{Math.round(fraction * 100)}%</span>
-        </span>
+      {subject && sessionId && (
+        // The meter is the one the old thread and one-to-one used (its popover holds the breakdown and Compact);
+        // the bar variant draws it as the mock-up's track.
+        <ContextMeter
+          variant="bar"
+          roomId={roomId}
+          agentId={subject.id}
+          name={agentDisplayName(subject)}
+          sessionId={sessionId}
+          finishedReplies={finishedReplies}
+          confirmSignal={
+            compactSubject === null || compactSubject === subject.id ? compactSignal : undefined
+          }
+        />
       )}
       {model && (
         <span>

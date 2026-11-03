@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   agents,
@@ -106,9 +107,8 @@ test('the meter reads the session the message lands in: the room session for the
       topic={undefined}
     />,
   )
-  const meter = await screen.findByRole('meter', { name: 'Context used' })
-  expect(meter.getAttribute('aria-valuenow')).toBe('40')
-  expect(meter.getAttribute('aria-valuetext')).toContain('40%')
+  const meter = await screen.findByRole('button', { name: /^lead context: 40 % of/ })
+  expect(meter.textContent).toContain('40%')
   expect(bar().textContent).toContain('Model demo-model')
   // Never the agent's last session (which may be another chat's): 90% must not show.
   expect(bar().textContent).not.toContain('90%')
@@ -137,8 +137,8 @@ test("a topic's meter reads that topic's own session", async () => {
       topic={makeJob({ id: 'job-7', title: 'Release notes' })}
     />,
   )
-  const meter = await screen.findByRole('meter', { name: 'Context used' })
-  expect(meter.getAttribute('aria-valuenow')).toBe('75')
+  const meter = await screen.findByRole('button', { name: /^lead context: 75 % of/ })
+  expect(meter.textContent).toContain('75%')
   // A session that has not run yet has no model: the agent's model is shown.
   expect(bar().textContent).toContain('Model agent-model')
 })
@@ -156,7 +156,7 @@ test('leaves out what the read does not give instead of inventing it', async () 
     />,
   )
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
-  expect(screen.queryByRole('meter')).toBeNull()
+  expect(screen.queryByRole('button', { name: /context:/ })).toBeNull()
   expect(bar().textContent).not.toContain('Model')
 })
 
@@ -173,4 +173,37 @@ test('with nobody to address it says so', () => {
     />,
   )
   expect(bar().textContent).toContain('To nobody yet')
+})
+
+function Harness() {
+  const [signal, setSignal] = useState(0)
+  return (
+    <>
+      <button type="button" onClick={() => setSignal((value) => value + 1)}>
+        bump
+      </button>
+      <ContextBar
+        roomId="room-1"
+        to={[]}
+        subjectId="lead"
+        agents={agents}
+        ownerId="lead"
+        topic={makeJob({ id: 'job-7' })}
+        compactSignal={signal}
+        compactSubject="lead"
+      />
+    </>
+  )
+}
+
+test('/compress (the signal) opens the meter on its compaction confirmation for the topic session', async () => {
+  stubContext(
+    { model: null, tokens: null, costUsd: null, contextLength: null },
+    { 'score-room-1-job-7-lead': { window: 100_000, used: 50_000 } },
+  )
+  renderInRoom(<Harness />)
+  await screen.findByRole('button', { name: /^lead context: 50 % of/ })
+  fireEvent.click(screen.getByRole('button', { name: 'bump' }))
+  expect(await screen.findByRole('dialog', { name: 'lead context details' })).toBeTruthy()
+  expect(screen.getAllByRole('button', { name: /Compact/ }).length).toBeGreaterThan(0)
 })

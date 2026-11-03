@@ -453,8 +453,11 @@ function LoadedDirect({
           references={referenceJobId ? [{ jobId: referenceJobId }] : []}
           resolveJob={aside ? resolveJob : undefined}
           topicCommands={topicCommands}
-          footer={({ to, subject }) => (
+          footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
+              finishedReplies={finishedReplies}
+              compactSignal={compactSignal}
+              compactSubject={compactSubject}
               roomId={room.id}
               to={to}
               subjectId={subject ?? agent.id}

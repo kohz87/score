@@ -175,7 +175,15 @@ export function Composer({
    */
   topicCommands?: { items: SlashCommand[]; run: (name: string, args: string) => Promise<void> }
   /** 3.22.0: replaces the hint line under the box (the chat's context bar) and the fixed "To" label. */
-  footer?: (state: { to: string[]; subject: string | null }) => ReactNode
+  footer?: (state: {
+    to: string[]
+    subject: string | null
+    /** Changes on every finished reply: a context reading in the footer refreshes. */
+    finishedReplies: number
+    /** Bumped by `/compress`: the footer's meter opens its compaction confirmation (for `compactSubject`). */
+    compactSignal: number
+    compactSubject: string | null
+  }) => ReactNode
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -521,7 +529,11 @@ export function Composer({
       if (command.kind === 'compress') {
         // The ring's details open on the compaction confirmation (PLAN 5.36).
         if (onCompress) onCompress()
-        else if (roomMode) {
+        else if (roomMode && footer) {
+          // The chat's footer carries the meter (3.22.0): it opens on the compaction confirmation.
+          setCompactSubject(subject)
+          setCompactSignal((value) => value + 1)
+        } else if (roomMode) {
           // The team room's composer has no ring: say where compaction is, instead of clearing the command silently.
           setText('/compress')
           setNotice({
@@ -1450,7 +1462,9 @@ export function Composer({
           </span>
         )}
       </form>
-      {roomMode && footer && footer({ to, subject })}
+      {roomMode &&
+        footer &&
+        footer({ to, subject, finishedReplies, compactSignal, compactSubject })}
     </div>
   )
 }
