@@ -535,8 +535,11 @@ for (const viewport of sizes) {
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
       // 3.22.0: the meter is in the context bar under the composer (the thread panel's ring is gone; /compress is its
       // Compact). It reads the session the message lands in: the room session for the general conversation.
-      const meter = page.locator('.bold-context-bar').getByRole('meter', { name: 'Context used' })
-      await expect(meter).toHaveAttribute('aria-valuenow', '10')
+      const meter = page
+        .locator('.bold-context-bar')
+        .getByRole('button', { name: /^lead context: 10 % of 100k/ })
+      await expect(meter).toBeVisible()
+      await expect(meter).toContainText('10%')
       expect(asked.length).toBeGreaterThan(0)
       expect(
         asked.every((path) => path === '/api/agents/lead/sessions/score-team-room-lead/context'),

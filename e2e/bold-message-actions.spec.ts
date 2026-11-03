@@ -105,9 +105,14 @@ for (const { name, viewport, agent } of sizes) {
       const tag = `retry-${Date.now().toString(36)}`
       const chat = await makeChat(page, agent, `Question ${tag}`)
       await openChat(page, agent, chat.id)
-      const replies = side(page).locator(
-        'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
-      )
+      // 3.22.0: the action row sits beside the article, inside the message's `.bold-message` row.
+      const replies = side(page)
+        .locator('.bold-message')
+        .filter({
+          has: page.locator(
+            'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
+          ),
+        })
       await settled(page, chat.roomId, chat.id)
       await replies.last().hover()
       await replies
@@ -124,7 +129,7 @@ for (const { name, viewport, agent } of sizes) {
       const rewind = page.getByRole('dialog', { name: 'Delete this message?' })
       await rewind.getByRole('button', { name: /^Rewind and delete/ }).click()
       await expect(side(page).getByText(`Question ${tag}`)).toHaveCount(0, { timeout: 20_000 })
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
       await expect(
         side(page).getByRole('region', { name: 'Deleted messages' }).first(),
@@ -136,7 +141,7 @@ for (const { name, viewport, agent } of sizes) {
       const chat = await makeChat(page, agent, `Bye ${tag}`)
       await openChat(page, agent, chat.id)
       await settled(page, chat.roomId, chat.id)
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await page.getByRole('menuitem', { name: 'Delete chat' }).click()
       const dialog = page.getByRole('dialog', { name: /^Delete this chat with/ })
       await expect(dialog).toHaveAttribute('data-protected', 'any')
@@ -170,7 +175,7 @@ for (const { name, viewport, agent } of sizes) {
       await openChat(page, agent, main!.id)
       await settled(page, other.roomId, main!.id)
       await expect(side(page).getByText(`Main ${tag}`)).toBeVisible()
-      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await page.getByRole('button', { name: 'Chat menu' }).click() // 3.22.0: in the chat header
       await expect(page.getByRole('menuitem', { name: 'Delete chat' })).toHaveCount(0)
       await page.getByRole('menuitem', { name: 'Clear chat' }).click()
       const dialog = page.getByRole('dialog', { name: /^Clear this chat with/ })

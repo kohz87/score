@@ -25,20 +25,19 @@ async function open(page: Page, agent: string, chatId: string) {
   await expect(side(page).locator('.bold-stream')).toBeVisible({ timeout: 30_000 })
 }
 
-const group = (page: Page) => side(page).locator('.bold-reply-group')
+// 3.22.0: a one-to-one shows every earlier chat with the agent too; this chat's reply is the newest one.
+const group = (page: Page) => side(page).locator('.bold-reply-group').last()
 
 async function tryAnother(page: Page) {
-  const reply = group(page)
-    .count()
-    .then(
-      (n) =>
-        n
-          ? group(page)
-          : side(page)
-              .locator('article[aria-label^="Message from "]:not([aria-label="Message from You"])')
-              .last(), // 3.22.0: Try another is on the latest reply
-    )
-  const row = await reply
+  // The newest reply (this chat's): its action row sits beside the article, inside the `.bold-message` row.
+  const row = side(page)
+    .locator('.bold-message')
+    .filter({
+      has: page.locator(
+        'article[aria-label^="Message from "]:not([aria-label="Message from You"])',
+      ),
+    })
+    .last()
   await row.hover()
   const button = row.getByRole('button', { name: /^Try another reply from/ })
   await expect(button).toBeEnabled({ timeout: 30_000 })
@@ -70,14 +69,15 @@ for (const size of sizes) {
       await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
       await expect(side(page).getByText('remembers its earlier answers')).toHaveCount(0)
 
+      const groupsBefore = await side(page).locator('.bold-reply-group').count()
       await tryAnother(page)
       await expect(group(page).getByText('2 / 2')).toBeVisible({ timeout: 30_000 })
       await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
       await tryAnother(page)
       await expect(group(page).getByText('3 / 3')).toBeVisible({ timeout: 30_000 })
       await expect(side(page).locator('.bold-typing')).toHaveCount(0, { timeout: 30_000 })
-      // One message, however many versions.
-      await expect(group(page)).toHaveCount(1)
+      // One message, however many versions: this chat added exactly one reply group.
+      await expect(side(page).locator('.bold-reply-group')).toHaveCount(groupsBefore + 1)
       await expect(side(page).getByText(/remembers its earlier answers/)).toBeVisible()
 
       await group(page).getByRole('button', { name: 'Previous version' }).click()

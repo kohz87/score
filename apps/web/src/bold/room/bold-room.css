@@ -2075,3 +2075,17 @@
   padding-bottom: 44px;
   scroll-padding-bottom: 44px;
 }
+
+/* 3.22.0 gate: on the phone's All topics screen the composer is hidden (a list screen) and the needs-you cards keep
+   about a third of the height (they still scroll, with their "more below" cue), so the list stays usable. */
+[data-ui='bold'] .bold-room-composer.is-list-screen {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] :has(> .bold-phone-jobs) > .bold-pins {
+    max-height: 34%;
+    /* Never squeezed away: one card's decision stays in view. */
+    min-height: min(8rem, 34%);
+  }
+}

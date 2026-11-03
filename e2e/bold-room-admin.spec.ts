@@ -9,7 +9,8 @@ import { pair, E2E_SECURITY_PASSWORD } from './pair.ts'
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
 const web = { 'x-score-client': 'web' }
-const side = (page: Page) => page.locator('#bold-side-panel')
+// 3.22.0: a one-to-one is the chat view; the context meter sits in the context bar under the composer.
+const side = (page: Page) => page.locator('[data-ui="bold"] .roomcol')
 
 test.beforeEach(async ({ page }) => {
   await pair(page)
@@ -23,7 +24,7 @@ async function makeChat(page: Page, agent: string) {
 
 async function openChat(page: Page, agent: string, chatId: string) {
   await page.goto(`/b?with=${agent}&chat=${chatId}`)
-  await expect(side(page).locator('.bold-dm-thread')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('#bold-room-stream')).toBeVisible({ timeout: 30_000 })
 }
 
 test('delete a room: the dialog says what goes, needs the typed name, then the team room', async ({
@@ -94,7 +95,12 @@ test('/compress asks for confirmation instead of sending a message, then compact
   await panel.getByRole('button', { name: 'Compact now' }).click()
   await expect(panel.getByText(/Compacted: 40 → 14 messages/)).toBeVisible({ timeout: 15_000 })
   // Nothing was posted to the chat.
-  await expect(side(page).locator('.bold-dm-message')).toHaveCount(0)
+  await expect(
+    page.locator('#bold-room-stream article').filter({ hasText: /^\s*\/compress\s*$/ }),
+  ).toHaveCount(0)
+  await expect(
+    page.locator('#bold-room-stream').getByText('/compress', { exact: true }),
+  ).toHaveCount(0)
 })
 
 test('compacting saves a memory note that the Library shows, with its monthly index', async ({
