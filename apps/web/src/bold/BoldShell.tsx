@@ -38,7 +38,7 @@ import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
 import { isTerminalShortcut } from './terminal-shortcut.ts'
 import { terminalBackTarget } from './BoldTerminal.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
-import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
+import { BoldStartJob, StartJobContext, type StartJobOptions } from './BoldStartJob.tsx'
 import { DeleteToast } from '../routes/chat/DeleteToast.tsx'
 import { JobUndoToast } from './room/JobUndoToast.tsx'
 import { AgentFacesContext } from '../components/agent-faces-context.ts'
@@ -190,9 +190,14 @@ function BoldShellFrame() {
   // Start a job is open while the address says `?start=job` (bold-links.ts) or the room's button opened it.
   const [startOpened, setStartOpened] = useState(false)
   const startOpen = startOpened || new URLSearchParams(location.search).get('start') === 'job'
-  const openStartJob = useCallback(() => setStartOpened(true), [])
+  const [startOptions, setStartOptions] = useState<StartJobOptions | undefined>()
+  const openStartJob = useCallback((options?: StartJobOptions) => {
+    setStartOptions(options)
+    setStartOpened(true)
+  }, [])
   const closeStartJob = useCallback(() => {
     setStartOpened(false)
+    setStartOptions(undefined)
     const params = new URLSearchParams(location.search)
     if (params.get('start') === 'job') {
       params.delete('start')
@@ -486,7 +491,7 @@ function BoldShellFrame() {
             onResetLook={() => setManualLight(null)}
           />
         )}
-        {startOpen && <BoldStartJob onClose={closeStartJob} />}
+        {startOpen && <BoldStartJob onClose={closeStartJob} options={startOptions} />}
         <JobUndoToast />
         {/* A message delete is undoable for a few seconds in every bold surface (room, one-to-one, thread). */}
         <DeleteToast className="bold-job-toasts bold-delete-toasts" />

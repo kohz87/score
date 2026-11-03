@@ -1,9 +1,10 @@
 import { ORCH_ACKNOWLEDGEMENT_TEXT, type AgentSummary } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createMemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from '../App.tsx'
+import { BoldStartJob, type StartJobOptions } from './BoldStartJob.tsx'
 import { createQueryClient, StreamContext } from '../data/query-client.ts'
 import { immediateFrameScheduler, createStreamQueryRegistry } from '../data/resync.ts'
 import { createStreamClient } from '../data/stream.ts'
@@ -194,6 +195,7 @@ let triggerBody: unknown
 let calls: string[] = []
 let orchestrationBodies: Record<string, unknown>[] = []
 let preflightUrls: string[] = []
+let roomJobPosts: Record<string, unknown>[] = []
 let orchestrationReply: () => Response = () =>
   Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let securityReply: () => Response = () => Response.json({ ok: true })
@@ -211,6 +213,7 @@ beforeEach(() => {
   calls = []
   orchestrationBodies = []
   preflightUrls = []
+  roomJobPosts = []
   extraWorkflows = []
   codingLead = null
   securityReply = () => Response.json({ ok: true })
@@ -302,6 +305,11 @@ beforeEach(() => {
       }
       if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/routines'))
         return json({ items: url.pathname.includes('/agents/lead/') ? [routine] : [] })
+      if (/^\/api\/rooms\/[^/]+\/jobs$/.test(url.pathname) && method === 'POST') {
+        calls.push('room-job')
+        roomJobPosts.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json({ error: { code: 'internal', message: 'no' } }, 500)
+      }
       if (url.pathname === '/api/triggers' && method === 'POST') {
         triggerBody = JSON.parse(String(init?.body))
         return json(triggerCreated, 201)
@@ -1117,4 +1125,121 @@ test('no coding agent means no launches field and no codingSteps (3.13.1)', asyn
   fireEvent.click(await fillLeadJob(dialog))
   await waitFor(() => expect(orchestrationBodies.length).toBe(1))
   expect(orchestrationBodies[0]).not.toHaveProperty('codingSteps')
+})
+
+test('3.23.0: a lead-decides run carries its topic in the one call and makes no second job call', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies).toHaveLength(1))
+  expect(orchestrationBodies[0]).toMatchObject({
+    topic: { roomId: 'team-room', title: 'Fix the failing tests' },
+  })
+  expect(orchestrationBodies[0]?.topic).toHaveProperty('exchangeBudget')
+  expect(calls).toEqual(['orchestrations'])
+  expect(roomJobPosts).toEqual([])
+  // The old "the orchestration exists, the job doesn't" card is gone: the failure stays a plain error.
+  expect(within(dialog).queryByText('Create the job again')).toBeNull()
+})
+
+test('3.23.0: a recipe run carries its topic in the one call too', async () => {
+  const dialog = await recipeDialog()
+  fireEvent.change(within(dialog).getByLabelText(/Topic|Release/i, { selector: 'textarea' }), {
+    target: { value: 'the 2.4 release' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(start)
+  await waitFor(() => expect(workflowRunBodies).toHaveLength(1))
+  expect(workflowRunBodies[0]).toMatchObject({ topic: { roomId: 'team-room' } })
+  expect(roomJobPosts).toEqual([])
+})
+
+test('3.23.0: a plain job (recipe None) still makes its job with the room call', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await within(dialog).findByRole('radio', { name: 'None' }))
+  fireEvent.change(within(dialog).getByLabelText('What should the team do?'), {
+    target: { value: 'Write the notes' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(start)
+  await waitFor(() => expect(roomJobPosts).toHaveLength(1))
+  expect(roomJobPosts[0]).not.toHaveProperty('recipe')
+  expect(orchestrationBodies).toEqual([])
+})
+
+function openWith(options: StartJobOptions) {
+  const queryClient = createQueryClient()
+  const client = createStreamClient({ EventSourceImpl: Source as never })
+  const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
+  const router = createMemoryRouter(
+    [{ path: '/', element: <BoldStartJob onClose={() => {}} options={options} /> }],
+    { initialEntries: ['/'] },
+  )
+  disposers.push(() => {
+    router.dispose()
+    queries.dispose()
+    client.close()
+    queryClient.clear()
+  })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <StreamContext value={{ client, queries }}>
+        <RouterProvider router={router} />
+      </StreamContext>
+    </QueryClientProvider>,
+  )
+}
+
+test('3.23.0: /run <name> preselects the saved recipe with that name, in any case', async () => {
+  openWith({ roomId: 'team-room', recipeName: 'RELEASE recipe' })
+  const dialog = await startDialog()
+  await waitFor(() =>
+    expect(
+      within(dialog).getByRole('radio', { name: 'Release recipe' }).getAttribute('aria-checked'),
+    ).toBe('true'),
+  )
+  expect(within(dialog).queryByText(/No saved recipe is called/)).toBeNull()
+})
+
+test('3.23.0: /run <name> with no such recipe opens on lead decides and says so', async () => {
+  openWith({ roomId: 'team-room', recipeName: 'Nothing like it' })
+  const dialog = await startDialog()
+  expect(
+    await within(dialog).findByText(/No saved recipe is called “Nothing like it”/),
+  ).toBeDefined()
+  expect(
+    within(dialog).getByRole('radio', { name: 'lead decides' }).getAttribute('aria-checked'),
+  ).toBe('true')
+})
+
+test('3.23.0: several recipes with the same name are not guessed at', async () => {
+  extraWorkflows = [{ ...workflow, id: 'wf_other' }]
+  openWith({ roomId: 'team-room', recipeName: 'release recipe' })
+  const dialog = await startDialog()
+  expect(await within(dialog).findByText(/More than one recipe is called/)).toBeDefined()
+})
+
+test('3.23.0: a run asked for in a direct chat is refused in the checklist', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x')
+      const body =
+        url.pathname === '/api/rooms'
+          ? { asOfSeq: 1, rooms: [], directs: [{ ...room, id: 'direct-1', kind: 'direct' }] }
+          : { asOfSeq: 0, items: [], rooms: [], directs: [], projects: [] }
+      return Promise.resolve(Response.json(body))
+    }),
+  )
+  openWith({ roomId: 'direct-1' })
+  const dialog = await startDialog()
+  expect(await within(dialog).findByText('Runs start in a group chat.')).toBeDefined()
+  expect(
+    within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
+  ).toBe(true)
 })

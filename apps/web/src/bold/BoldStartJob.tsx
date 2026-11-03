@@ -1,4 +1,3 @@
-import { boldRunLink } from './bold-links.ts'
 import {
   CodingAgentsResponseSchema,
   JobSchema,
@@ -14,6 +13,7 @@ import {
   type AgentSummary,
   type CostSource,
   type OrchestrationCheck,
+  type RunTopicRequest,
   type WorkflowRunCreate,
 } from '@score/contract'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -39,7 +39,7 @@ import { useStreamQuery } from '../data/query-client.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
 import { teamRoomQuery, teamRoomsQuery } from './room/room-queries.ts'
 import { pairingProblem } from './bold-errors.ts'
-import { agentsQuery } from '../routes/chat/queries.ts'
+import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
 import {
   usePreflight,
@@ -87,21 +87,21 @@ type JobLimits = {
   spendCapUsd?: number
 }
 
-/** What exists if the second step of a start fails: the run, the job yet to make, and the link to the run. */
-type PartialJob = {
-  kind: 'orchestration' | 'workflow'
-  ref: string
-  title: string
-  briefId: string
-  jobTitle: string
-  limits: JobLimits
-}
-
 const NO_AGENTS: AgentSummary[] = []
 /** The contract's default for a job's whole turn budget; a plain job's exchange slider is per back-and-forth. */
 const JOB_TURN_LIMIT = 40
 
-export const StartJobContext = createContext<{ openStartJob: () => void } | null>(null)
+/** 3.23.0: where Start a job starts, when the opener knows (a chat's own button, `/run`). */
+export type StartJobOptions = {
+  /** The chat the run starts in; without it, the team room the address names. */
+  roomId?: string
+  /** `/run <name>`: the saved recipe to preselect (case-insensitive). */
+  recipeName?: string
+}
+
+export const StartJobContext = createContext<{
+  openStartJob: (options?: StartJobOptions) => void
+} | null>(null)
 
 /** What the box takes for anything but a lead job (the earlier limit, kept). */
 const WHAT_CHARS = 4000
@@ -237,7 +237,13 @@ function AgentPick({
 }
 
 /** The Start a job dialog (PLAN 11.10c), rebuilt from the prototype's mStart and the trigger wizard. */
-export function BoldStartJob({ onClose }: { onClose: () => void }) {
+export function BoldStartJob({
+  onClose,
+  options,
+}: {
+  onClose: () => void
+  options?: StartJobOptions
+}) {
   const dialog = useRef<HTMLDivElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
   const titleId = useId()
@@ -259,7 +265,18 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const chosenTeam = openRoomId
     ? teamRoomsState.data?.find((item) => item.id === openRoomId && !isEveryoneRoom(item))
     : undefined
-  const startRoom = chosenTeam ?? teamRoomState.data?.room ?? null
+  // 3.23.0: a chat that asks (its button, `/run`) names its room: a team or a group chat. A direct chat holds no run.
+  const allRooms = useStreamQuery(roomsQuery).data
+  const askedRoom = options?.roomId
+    ? ([...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].find(
+        (item) => item.id === options.roomId && !item.archived,
+      ) ?? null)
+    : null
+  const askedDirect =
+    options?.roomId !== undefined &&
+    askedRoom === null &&
+    (allRooms?.directs ?? []).some((item) => item.id === options.roomId)
+  const startRoom = askedRoom ?? chosenTeam ?? teamRoomState.data?.room ?? null
   const teamRoom = {
     data: teamRoomState.data,
     isPending: teamRoomState.status === 'pending',
@@ -296,7 +313,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Result | null>(null)
-  const [partial, setPartial] = useState<PartialJob | null>(null)
   const [saveWarning, setSaveWarning] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
@@ -308,6 +324,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
+  const roomCheck: StartCheck = askedDirect
+    ? { key: 'team-room', status: 'fail', text: 'Runs start in a group chat.' }
+    : checkOf(teamRoom)
+  const roomProblem = askedDirect
+    ? 'Runs start in a group chat.'
+    : 'The team room is not ready yet.'
   const teamLead = startRoom?.leadAgentId ?? null
   // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
   const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
@@ -569,7 +591,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   if (isSavedRecipe) {
     const preflight = workflowPreflight.data
     checks = [
-      checkOf(teamRoom),
+      roomCheck,
       ...checksFromPreflight(
         workflow.isPending || workflowPreflight.isPending,
         workflow.isError || workflowPreflight.isError,
@@ -598,7 +620,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   } else if (isLead && nowOnce) {
     const preflight = orchestrationPreflight.data
     checks = [
-      checkOf(teamRoom),
+      roomCheck,
       ...checksFromPreflight(
         orchestrationPreflight.isPending,
         orchestrationPreflight.isError,
@@ -616,10 +638,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         : []),
     ]
   } else if (nowOnce) {
-    checks = [
-      checkOf(teamRoom),
-      { key: 'job', status: 'ok', text: 'The job opens in the team room' },
-    ]
+    checks = [roomCheck, { key: 'job', status: 'ok', text: 'The job opens in the team room' }]
   } else if (when === 'schedule') {
     checks.push(
       leadId
@@ -690,7 +709,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const canStart =
     !busy &&
     !result &&
-    !partial &&
     hasWhat &&
     whatProblem === null &&
     ack &&
@@ -706,9 +724,21 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   // `?recipe=<id>` (the Recipes page's Run) opens the dialog with that saved recipe already chosen, once.
   const wantedRecipe = new URLSearchParams(location.search).get('recipe')
   const appliedWanted = useRef(false)
+  // `/run <name>` preselects by name; several or none leave "lead decides" and say so (below).
+  const namedMatches = options?.recipeName
+    ? savedRecipes.filter((item) => item.name.toLowerCase() === options.recipeName?.toLowerCase())
+    : []
   const wantedItem = wantedRecipe
     ? savedRecipes.find((item) => item.id === wantedRecipe)
-    : undefined
+    : namedMatches.length === 1
+      ? namedMatches[0]
+      : undefined
+  const nameNotice =
+    options?.recipeName && !wantedRecipe && workflows.data && namedMatches.length !== 1
+      ? namedMatches.length > 1
+        ? `More than one recipe is called “${options.recipeName}”. Pick one below.`
+        : `No saved recipe is called “${options.recipeName}”. Pick one below.`
+      : null
   const wantedArchived =
     wantedRecipe !== null &&
     (workflows.data?.items ?? []).some((item) => item.id === wantedRecipe && item.archivedAt)
@@ -765,7 +795,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   }
 
   function requestClose() {
-    if ((result?.kind === 'trigger' && !confirmClose) || (!result && !partial && dirty)) {
+    if ((result?.kind === 'trigger' && !confirmClose) || (!result && dirty)) {
       setConfirmClose(true)
       return
     }
@@ -806,7 +836,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     setEstimate(null)
     setError(null)
     setResult(null)
-    setPartial(null)
     touch()
   }
 
@@ -819,22 +848,20 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function createJob(
-    title: string,
-    limits: JobLimits,
-    recipeLink?: { kind: 'orchestration' | 'workflow'; ref: string },
-  ) {
-    if (!startRoom) throw new Error('The team room is not ready yet.')
+  /** The topic a run makes in the chat, in the run's own request: its title and the limits a plain job takes. */
+  function runTopic(title: string): RunTopicRequest {
+    if (!startRoom) throw new Error(roomProblem)
+    return { roomId: startRoom.id, title, ...jobLimits() }
+  }
+
+  async function createJob(title: string, limits: JobLimits) {
+    if (!startRoom) throw new Error(roomProblem)
     return JobSchema.parse(
-      await attemptPost(`rooms/${encodeURIComponent(startRoom.id)}/jobs`, {
-        title,
-        ...limits,
-        ...(recipeLink ? { recipe: recipeLink } : {}),
-      }),
+      await attemptPost(`rooms/${encodeURIComponent(startRoom.id)}/jobs`, { title, ...limits }),
     )
   }
 
-  async function startOrchestration() {
+  async function startOrchestration(topic: RunTopicRequest) {
     const data = orchestrationPreflight.data
     if (!data) throw new Error('The checks are not ready yet.')
     const codingPolicies = Object.fromEntries(
@@ -844,6 +871,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     )
     const body: OrchestrationCreateBody = {
       title: orchestrationTitleOf(what),
+      topic,
       goal: what.trim(),
       leadAgentId: leadId,
       allowedAgents: allowedFor,
@@ -896,7 +924,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     return OrchestrationCreatedSchema.parse(await attemptPost('orchestrations', body))
   }
 
-  async function startWorkflow() {
+  async function startWorkflow(topic: RunTopicRequest) {
     if (recipe.kind !== 'workflow') throw new Error('The recipe is not ready yet.')
     if (!workflowDefinition || workflowVersion === undefined || !workflowPreflight.data)
       throw new Error('The recipe is not ready yet.')
@@ -909,6 +937,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     const body: WorkflowRunCreate = {
       workflowId: recipe.id,
       version: workflowVersion,
+      topic,
       inputs: Object.fromEntries(
         workflowDefinition.inputs.flatMap((input) => {
           const value = (inputs[input.name] ?? '').trim()
@@ -944,24 +973,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     return WorkflowRunCreatedSchema.parse(await attemptPost('workflow-runs', body))
   }
 
-  async function createLinkedJob(
-    kind: PartialJob['kind'],
-    ref: string,
-    briefId: string,
-    runTitle: string,
-    title: string,
-  ) {
-    const limits = jobLimits()
-    try {
-      const job = await createJob(title, limits, { kind, ref })
-      return { job, limits }
-    } catch (failure) {
-      setPartial({ kind, ref, briefId, title: runTitle, jobTitle: title, limits })
-      setError(startError(failure))
-      return null
-    }
-  }
-
   /** Saving a recipe happens after the work exists: a failed start must not leave a recipe behind. */
   async function saveRecipeAfterStart() {
     if (!saveRecipe || !showSaveRecipe || !leadId) return
@@ -990,7 +1001,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     starting.current = true
     setBusy(true)
     setError(null)
-    setPartial(null)
     setSaveWarning(null)
     try {
       const title = jobTitle
@@ -1024,35 +1034,20 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       }
 
       if (isSavedRecipe) {
-        const made = await startWorkflow()
-        const linked = await createLinkedJob(
-          'workflow',
-          made.run.id,
-          made.run.briefId,
-          made.run.title,
-          title,
-        )
-        if (!linked) return
+        // 3.23.0: the run and its topic in the chat are made by one call, so there is no half-made state to repair.
+        const made = await startWorkflow(runTopic(title))
         setResult({
           kind: 'workflow',
           title: made.run.title,
           runId: made.run.id,
-          jobId: linked.job.id,
+          jobId: made.topicId,
         })
       } else if (isLead) {
-        const made = await startOrchestration()
-        const linked = await createLinkedJob(
-          'orchestration',
-          made.orchestration.id,
-          made.orchestration.briefId,
-          made.orchestration.title,
-          title,
-        )
-        if (!linked) return
+        const made = await startOrchestration(runTopic(title))
         setResult({
           kind: 'job',
           title,
-          jobId: linked.job.id,
+          jobId: made.topicId ?? '',
           orchestrationId: made.orchestration.id,
         })
       } else {
@@ -1106,41 +1101,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     )
   }
 
-  async function createJobAgain() {
-    if (!partial || starting.current) return
-    const pending = partial
-    starting.current = true
-    setBusy(true)
-    setError(null)
-    try {
-      const job = await createJob(pending.jobTitle, pending.limits, {
-        kind: pending.kind,
-        ref: pending.ref,
-      })
-      setPartial(null)
-      if (pending.kind === 'orchestration')
-        setResult({
-          kind: 'job',
-          title: pending.jobTitle,
-          jobId: job.id,
-          orchestrationId: pending.ref,
-        })
-      else
-        setResult({
-          kind: 'workflow',
-          title: pending.title,
-          runId: pending.ref,
-          jobId: job.id,
-        })
-      await saveRecipeAfterStart()
-    } catch (failure) {
-      setError(startError(failure))
-    } finally {
-      starting.current = false
-      setBusy(false)
-    }
-  }
-
   return (
     <div
       className="bold-start-scrim"
@@ -1184,14 +1144,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
         {result ? (
           <ResultCard result={result} saveWarning={saveWarning} onClose={onClose} />
-        ) : partial ? (
-          <PartialCard
-            partial={partial}
-            busy={busy}
-            error={error}
-            onRetry={() => void createJobAgain()}
-            onClose={onClose}
-          />
         ) : (
           <>
             {showWhat && (
@@ -1231,6 +1183,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             {showRecipe && (
               <div>
                 <span className="lab">Recipe</span>
+                {nameNotice && (
+                  <p className="small muted" role="status">
+                    {nameNotice}
+                  </p>
+                )}
                 {wantedArchived && (
                   <p className="small muted" role="status">
                     That recipe is archived. Unarchive it in Recipes to use it.
@@ -1355,7 +1312,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                           setWhen(id)
                           setError(null)
                           setResult(null)
-                          setPartial(null)
                           touch()
                         }}
                       />
@@ -2346,49 +2302,6 @@ function ResultCard({
       <div className="row wrap start-actions">
         <button type="button" className="btn primary start-cancel" onClick={onClose}>
           Done
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function PartialCard({
-  partial,
-  busy,
-  error,
-  onRetry,
-  onClose,
-}: {
-  partial: PartialJob
-  busy: boolean
-  error: string | null
-  onRetry: () => void
-  onClose: () => void
-}) {
-  const what = partial.kind === 'orchestration' ? 'orchestration' : 'workflow run'
-  return (
-    <div className="start-result">
-      <h3>{partial.kind === 'orchestration' ? 'Orchestration created' : 'Recipe run started'}</h3>
-      <p>
-        <b>{partial.title}</b> exists. The job in the team room was not created.
-      </p>
-      <p className="muted">
-        The {what} is real and will not be started again. Create the job again to link it.
-      </p>
-      <Link to={boldRunLink(partial.briefId)} onClick={onClose}>
-        Open the {what}
-      </Link>
-      {error && (
-        <p className="start-error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="row wrap start-actions">
-        <button type="button" className="btn ghost start-cancel" onClick={onClose}>
-          Close
-        </button>
-        <button type="button" className="btn primary" disabled={busy} onClick={onRetry}>
-          {busy ? 'Creating…' : 'Create the job again'}
         </button>
       </div>
     </div>

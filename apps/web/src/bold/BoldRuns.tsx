@@ -78,7 +78,7 @@ const clock = (iso: string | null) =>
  * gives them that, in the shell's look (never a forced one: a failing theme's contrast fallback keys its colours to the
  * page's look); a decision is marked by the amber outline instead.
  */
-function ClassicPaper({
+export function ClassicPaper({
   children,
   tone = 'surface',
 }: {

@@ -25,15 +25,15 @@ import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 import { roomJobsQuery } from './room/room-queries.ts'
 import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
 import { ChatInfo } from './chats/ChatInfo.tsx'
+import { TopicGraph } from './chats/TopicGraph.tsx'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
-import { chatIsOpen } from './chats/chat-model.ts'
-import { chatForRun } from './chats/chat-model.ts'
+import { chatForRun, chatIsOpen, currentTopic } from './chats/chat-model.ts'
 import { useChatLists, useOpenGroup } from './chats/chat-queries.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
 
 const PHONE = '(max-width: 860px)'
 
-type SideMode = 'work' | 'info' | 'elsewhere'
+type SideMode = 'work' | 'info' | 'elsewhere' | 'graph'
 
 /** The room column and the switchable side panel (PLAN 11.3), with the one-to-one as its agent mode (11.7). */
 export function BoldRoom() {
@@ -60,7 +60,8 @@ export function BoldRoom() {
   if (workRequest !== seenWorkRequest) {
     setSeenWorkRequest(workRequest)
     if (workRequest) {
-      setMode('work')
+      // 3.23.0: `?work=graph` (a run's link, Show graph) opens the Graph tab; the rest ask for Results or the Workbench.
+      setMode(workRequest === 'graph' ? 'graph' : 'work')
       setPanelShut(false)
     }
   }
@@ -85,6 +86,11 @@ export function BoldRoom() {
     useMemo(() => roomJobsQuery(openGroup?.id ?? null), [openGroup?.id]),
   ).data
   const everyoneOpen = openGroup !== null && isEveryoneRoom(openGroup)
+  // 3.23.0: the Graph tab belongs to the current topic when it holds a run.
+  const currentJob = currentTopic(openGroupJobs ?? [], params.get('job'))
+  const graphJob =
+    !directMode && currentJob?.recipe && !currentJob.isDefault ? currentJob : undefined
+  const shownMode: SideMode = mode === 'graph' && !graphJob ? 'info' : mode
   // On a phone `/b` is the chat list; a chat (or any view of one) is open when the address names it.
   // A one-shot parameter that the chat consumes (a replace) must not drop the person back to the list: the chat stays
   // open until a push or pop (Back, a tab) arrives without one.
@@ -99,7 +105,8 @@ export function BoldRoom() {
   }, [showList, sheetOpen, setSheetOpen])
   const panelClosed = !phone && panelShut
   // A one-to-one is a chat: its side panel is the chat's Info.
-  const infoShown = !panelClosed && (mode === 'info' || directMode)
+  const infoShown = !panelClosed && (shownMode === 'info' || directMode)
+  const graphShown = !panelClosed && shownMode === 'graph'
   const toggleInfo = () => {
     if (infoShown) {
       setPanelShut(true)
@@ -114,7 +121,7 @@ export function BoldRoom() {
       ? `group:${openGroup.id}`
       : null
   const label =
-    mode === 'elsewhere'
+    shownMode === 'elsewhere'
       ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
       : 'Info'
   const elsewhereAgent = elsewhere
@@ -182,7 +189,15 @@ export function BoldRoom() {
       // Wait for the chats' jobs: a run that belongs to a chat opens there, otherwise on the Recipes page.
       if (!chatLists.ready || !chatLists.jobsSettled) return
       const chat = chatForRun(chatLists, chatLists.jobsByRoom, runId)
-      void navigate(chat ?? `/b/recipes?run=${encodeURIComponent(runId)}`, { replace: true })
+      // 3.23.0: a run that belongs to a chat lands on its topic with the Graph tab open (a one-to-one has no graph).
+      void navigate(
+        chat
+          ? chat.startsWith('/b?with=')
+            ? chat
+            : `${chat}&work=graph`
+          : `/b/recipes?run=${encodeURIComponent(runId)}`,
+        { replace: true },
+      )
     }
   }, [chatLists, libraryOpen, navigate, notePath, runId])
 
@@ -223,6 +238,18 @@ export function BoldRoom() {
     if (jobId) next.set('job', jobId)
     else next.delete('job')
     setParams(next, { replace: true })
+  }
+
+  const showGraph = (jobId: string) => {
+    const next = withoutDirect(new URLSearchParams(params))
+    next.set('job', jobId)
+    next.delete('message')
+    next.delete('jobs')
+    // Not `?work=graph`: the tab is state, and the same address keeps working when the person picks Info again.
+    setMode('graph')
+    setPanelShut(false)
+    setParams(next, { replace: true })
+    if (phone) setSheetOpen(true)
   }
 
   const closeSheet = () => {
@@ -266,7 +293,7 @@ export function BoldRoom() {
 
   return (
     <div
-      className={`roomgrid bold-chats${panelClosed ? ' bold-panel-shut' : ''}${infoShown ? ' bold-info-open' : ' bold-wide-panel'}`}
+      className={`roomgrid bold-chats${panelClosed ? ' bold-panel-shut' : ''}${infoShown || graphShown ? ' bold-info-open' : ' bold-wide-panel'}${graphShown ? ' bold-graph-open' : ''}`}
     >
       {!phone && chatList}
       {deletedNotice && (
@@ -313,6 +340,7 @@ export function BoldRoom() {
             phoneAction={phoneAction}
             onOpenElsewhere={openElsewhere}
             onOpenThread={openThread}
+            onShowGraph={showGraph}
             externalDeletedNotice
             chatMeta={(room) => <ChatMeta room={room} agents={agents} />}
             chatAction={() => <ChatInfoButton open={infoShown} onToggle={toggleInfo} />}
@@ -343,7 +371,7 @@ export function BoldRoom() {
           aria-modal={phone && sheetOpen ? true : undefined}
         >
           <div className="sidehead">
-            {mode === 'elsewhere' && !directMode && elsewhereAgent ? (
+            {shownMode === 'elsewhere' && !directMode && elsewhereAgent ? (
               <span className="bold-elsewhere-label">
                 <AgentGlyph
                   agent={elsewhereAgent}
@@ -359,8 +387,8 @@ export function BoldRoom() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={directMode || mode === 'info'}
-                  className={directMode || mode === 'info' ? 'on' : undefined}
+                  aria-selected={directMode || shownMode === 'info'}
+                  className={directMode || shownMode === 'info' ? 'on' : undefined}
                   onClick={() => (directMode ? undefined : choose('info'))}
                 >
                   Info
@@ -369,16 +397,27 @@ export function BoldRoom() {
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={mode === 'work'}
-                    className={mode === 'work' ? 'on' : undefined}
+                    aria-selected={shownMode === 'work'}
+                    className={shownMode === 'work' ? 'on' : undefined}
                     onClick={() => choose('work')}
                   >
                     Results
                   </button>
                 )}
+                {graphJob && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={shownMode === 'graph'}
+                    className={shownMode === 'graph' ? 'on' : undefined}
+                    onClick={() => choose('graph')}
+                  >
+                    Graph
+                  </button>
+                )}
               </div>
             )}
-            {mode === 'work' && !directMode && (
+            {shownMode === 'work' && !directMode && (
               <nav className="seg bold-work-tabs" aria-label="How to see the work">
                 <Link
                   className={workbenchVisible ? undefined : 'on'}
@@ -427,7 +466,9 @@ export function BoldRoom() {
                 onNavigate={() => setSheetOpen(false)}
               />
             )
-          ) : mode === 'info' ? (
+          ) : shownMode === 'graph' && graphJob ? (
+            <TopicGraph key={graphJob.id} job={graphJob} />
+          ) : shownMode === 'info' ? (
             <ChatInfo
               room={openGroup}
               agents={agents}
@@ -436,7 +477,7 @@ export function BoldRoom() {
               phone={phone}
               onNavigate={() => setSheetOpen(false)}
             />
-          ) : mode === 'elsewhere' && elsewhere ? (
+          ) : shownMode === 'elsewhere' && elsewhere ? (
             <BoldElsewhere
               key={`${elsewhere.agentId}:${elsewhere.id}`}
               session={elsewhere}
@@ -444,7 +485,10 @@ export function BoldRoom() {
               onBroughtIn={broughtIntoJob}
             />
           ) : null}
-          <BoldResults agents={agents} hidden={directMode || mode !== 'work' || workbenchVisible} />
+          <BoldResults
+            agents={agents}
+            hidden={directMode || shownMode !== 'work' || workbenchVisible}
+          />
           <BoldWorkbench agents={agents} hidden={directMode || !workbenchVisible} />
         </aside>
       </div>
