@@ -26,6 +26,7 @@ import { recipeRun } from './thread-model.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
+import { NeedsSlot, slotIds } from './needs-slots.tsx'
 
 type PageState = {
   data?: MessagePageData & { found?: boolean }
@@ -313,6 +314,9 @@ export function RoomMessageStream({
     requestAnimationFrame(() => reveal(found))
   }, [items, onSeeked, seek])
 
+  // The newest message of each topic: a card with no message of its own sits after it, at the topic's end.
+  const lastOfTopic = new Map<string, string>()
+  for (const message of items) if (message.jobId) lastOfTopic.set(message.jobId, message.id)
   let nodes: ReactNode[] = []
   if (status === 'success') {
     // Ended agent questions stay in the stream as muted lines where they were asked; each shows once per render.
@@ -354,6 +358,11 @@ export function RoomMessageStream({
               extraActions={extras?.actions}
             >
               {extras?.below}
+              {/* 3.24.0: a needs-you card for this message (or the end of its topic) is drawn right after it. */}
+              <NeedsSlot id={slotIds.message(message.id)} />
+              {message.jobId && lastOfTopic.get(message.jobId) === message.id && (
+                <NeedsSlot id={slotIds.topic(message.jobId)} />
+              )}
             </BoldMessage>
           )
         },
@@ -371,6 +380,7 @@ export function RoomMessageStream({
             <Fragment key={`topic-${job.id}`}>
               <TopicDivider job={job} menu={topicMenu?.(job)} />
               {runCard(job)}
+              <NeedsSlot id={slotIds.topic(job.id)} />
             </Fragment>
           ),
         })),
@@ -480,6 +490,7 @@ export function RoomMessageStream({
           <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
         )}
       {nodes}
+      <NeedsSlot id={slotIds.end} />
       {Object.entries(typing).map(([agentId, text]) => {
         const agent = agents.find((item) => item.id === agentId)
         if (!agent) return null
@@ -496,6 +507,8 @@ export function RoomMessageStream({
           </p>
         )
       })}
+      {/* Sticks above the composer: "2 need you ↑" when a card is out of view. */}
+      <NeedsSlot id={slotIds.chip} className="bold-needs-chip-slot" />
     </div>
   )
 }

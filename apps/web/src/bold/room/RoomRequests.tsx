@@ -8,9 +8,11 @@ import type {
   Job,
   Message,
 } from '@score/contract'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { cardsBelow } from './pins-overflow.ts'
+import { createPortal } from 'react-dom'
+import { CHIP_MIN_HEIGHT, chipClearance, jumpTarget, type Jump } from './needs-jump.ts'
+import { NeedsSlot, NeedsSlotsProvider, slotIds, useNeedsSlotsOuter } from './needs-slots.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -117,6 +119,7 @@ function ReportBackRequestCard({ job, refetch }: { job: Job; refetch: () => void
       pinKey={`report-back:${job.id}`}
       since={job.updatedAt}
       label={`Report back: ${job.title}`}
+      anchor={{ job: job.id }}
     >
       <div className="bold-request-head">
         <b>{job.title}</b>
@@ -250,6 +253,7 @@ export function ExchangeRequestCard({
       pinKey={`exchange:${exchange.id}`}
       since={exchange.updatedAt}
       label={exchangePauseTitle(exchange)}
+      anchor={{ job: job.id }}
     >
       <div className="bold-request-head">
         {from && <AgentGlyph agent={from} size="xs" decorative mood="needs" />}
@@ -425,10 +429,13 @@ function RoomExchanges({ jobs, agents }: { jobs: Job[]; agents: AgentSummary[] }
 function ApprovalRequestCard({
   approval,
   job,
+  message,
   agents,
 }: {
   approval: Approval
   job: Job | undefined
+  /** The message that carries the approval: the card sits right after it. */
+  message?: string
   agents: AgentSummary[]
 }) {
   const { posted, busy, error, decide: submit } = useApprovalDecision(approval.id)
@@ -475,6 +482,7 @@ function ApprovalRequestCard({
       since={current.createdAt}
       label={current.title}
       variant="approval"
+      anchor={{ message, job: job?.id }}
     >
       <div className="bold-request-head">
         {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
@@ -586,12 +594,18 @@ function RoomApprovals({
     if (known && selectedJob !== 'all' && known.id !== selectedJob) return []
     // The approvals read is complete; the message window is not. An approval whose message is older than the
     // loaded page still shows as a request card, but with no job chip: the selected/default job is not its job.
-    return [{ approval, job: known }]
+    return [{ approval, job: known, message: message?.id }]
   })
   return (
     <>
-      {cards.map(({ approval, job }) => (
-        <ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />
+      {cards.map(({ approval, job, message }) => (
+        <ApprovalRequestCard
+          key={approval.id}
+          approval={approval}
+          job={job}
+          message={message}
+          agents={agents}
+        />
       ))}
     </>
   )
@@ -620,8 +634,120 @@ function RoomQuestions({
   )
 }
 
-/** The "Needs you" pins: approvals, paused exchanges and run-safety cards above the stream. */
-export function RoomRequests({
+/**
+ * 3.24.0: the chip above the composer that says a card needs you out of view and takes you to the nearest one.
+ * It lives in the stream's `chip` slot (nothing is drawn where no conversation is, the cards are then in plain view).
+ */
+function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
+  const slots = useNeedsSlotsOuter()
+  const slot = slots?.elements.get(slotIds.chip) ?? null
+  const [jump, setJump] = useState<Jump | null>(null)
+  const chipRef = useRef<HTMLButtonElement | null>(null)
+  const clearance = useRef(chipClearance(CHIP_MIN_HEIGHT))
+  const chipHeight = useRef(0)
+  const measure = useCallback(() => {
+    const scroller = document.getElementById('bold-room-stream')
+    if (!scroller) return setJump(null)
+    const view = scroller.getBoundingClientRect()
+    // A card that takes no room (display: none, hidden) is neither counted nor a place to take the person to.
+    const cards = [...scroller.querySelectorAll<HTMLElement>('[data-pin-key]')].flatMap((card) => {
+      const rect = card.getBoundingClientRect()
+      if (rect.height === 0) return []
+      return [{ key: card.getAttribute('data-pin-key') ?? '', top: rect.top, bottom: rect.bottom }]
+    })
+    const next = jumpTarget({ top: view.top, bottom: view.bottom }, cards, clearance.current)
+    setJump((previous) =>
+      previous?.key === next?.key &&
+      previous?.count === next?.count &&
+      previous?.direction === next?.direction
+        ? previous
+        : next,
+    )
+  }, [])
+  useEffect(() => {
+    const scroller = document.getElementById('bold-room-stream')
+    if (!scroller) return
+    const first = requestAnimationFrame(measure)
+    scroller.addEventListener('scroll', measure, { passive: true })
+    window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(scroller)
+    const mutations =
+      typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => measure())
+    mutations?.observe(scroller, { childList: true, subtree: true })
+    return () => {
+      cancelAnimationFrame(first)
+      scroller.removeEventListener('scroll', measure)
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+      mutations?.disconnect()
+    }
+  }, [cardKeys.length, measure, slot])
+  const showing = jump !== null && slot !== null
+  // While any card waits, the stream keeps its bottom clear of the chip, so it never sits on a card's buttons. Keyed on
+  // a card waiting, not on the chip showing: the padding moves the cards, so tying it to the chip made the two switch
+  // each other on and off at the stream's end (3.24.0 review).
+  const pending = cardKeys.length > 0 && slot !== null
+  useLayoutEffect(() => {
+    const scroller = document.getElementById('bold-room-stream')
+    if (!scroller || !pending) return
+    // The last measured height is kept while the chip is hidden, so a taller (wrapped) chip doesn't shrink the room
+    // when it hides and grow it when it shows.
+    const measured = chipRef.current?.getBoundingClientRect().height ?? 0
+    if (measured > 0) chipHeight.current = measured
+    const height = chipHeight.current
+    const needed = chipClearance(height)
+    if (needed !== clearance.current) {
+      clearance.current = needed
+      measure()
+    }
+    scroller.style.paddingBottom = `${needed + 4}px`
+    scroller.style.scrollPaddingBottom = `${needed}px`
+    return () => {
+      scroller.style.paddingBottom = ''
+      scroller.style.scrollPaddingBottom = ''
+    }
+  }, [pending, showing, jump?.count, measure])
+  if (!jump || !slot) return null
+  const go = () => {
+    const card = document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(jump.key)}]`)
+    if (!card) return
+    card.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    card.focus({ preventScroll: true })
+  }
+  const arrow = jump.direction === 'up' ? '↑' : '↓'
+  return createPortal(
+    <button
+      ref={chipRef}
+      type="button"
+      className="bold-needs-jump"
+      data-protected="inline-flex"
+      aria-label={`${jump.count} ${jump.count === 1 ? 'card needs' : 'cards need'} you, ${jump.direction === 'up' ? 'above' : 'below'}. Go to the nearest.`}
+      onClick={go}
+    >
+      {jump.count} {jump.count === 1 ? 'needs' : 'need'} you {arrow}
+    </button>,
+    slot,
+  )
+}
+
+/**
+ * 3.24.0: the needs-you cards are drawn inside the conversation (see needs-slots.tsx), after the message that asked.
+ * This component owns the reads, the announcements and the focus hand-off, and renders the cards into their slots.
+ */
+export function RoomRequests(props: Parameters<typeof RoomRequestsInner>[0]) {
+  // Alone (no stream around it) the cards fall back to a plain list in place.
+  const outer = useNeedsSlotsOuter()
+  return outer ? (
+    <RoomRequestsInner {...props} />
+  ) : (
+    <NeedsSlotsProvider>
+      <RoomRequestsInner {...props} />
+    </NeedsSlotsProvider>
+  )
+}
+
+function RoomRequestsInner({
   roomId,
   jobs,
   agents,
@@ -638,12 +764,12 @@ export function RoomRequests({
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
   const pins = usePinRegistry()
-  const heading = useRef<HTMLHeadingElement>(null)
-  const box = useRef<HTMLDivElement>(null)
-  const [more, setMore] = useState<{ count: number; scrollTo: number } | null>(null)
   const focusedKey = useRef<string | null>(null)
   const lastCards = useRef<typeof pins.cards>([])
   const lastVisible = useRef<string[]>([])
+  const trackFocus = useCallback((key: string) => {
+    focusedKey.current = key
+  }, [])
   const selectedJobs = jobs.filter(
     (job) => job.state !== 'closed' && (selectedJob === 'all' || job.id === selectedJob),
   )
@@ -681,7 +807,7 @@ export function RoomRequests({
     lastTotal.current = countedTotal
   }, [needs.ready, countedTotal, total])
 
-  // A card that goes takes the focus with it: the next card (or the strip's heading) gets it instead.
+  // A card that goes takes the focus with it: the next card (or the composer) gets it instead.
   useEffect(() => {
     const visible = pins.cards.map((card) => card.key)
     const lost = lastVisible.current.find((key) => !visible.includes(key))
@@ -697,8 +823,8 @@ export function RoomRequests({
         const next = ordered[Math.min(Math.max(lostIndex, 0), ordered.length - 1)]
         const target = next
           ? document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(next.key)}]`)
-          : null
-        ;(target ?? heading.current)?.focus()
+          : document.querySelector<HTMLElement>('.bold-room-composer textarea')
+        target?.focus()
         focusedKey.current = null
       }
     }
@@ -706,61 +832,21 @@ export function RoomRequests({
     lastVisible.current = visible
   }, [pins.cards])
 
-  // The pinned box scrolls on a short screen: say so at its bottom edge when a card (and its buttons) is out of view.
-  useEffect(() => {
-    const element = box.current
-    if (!element) return
-    const measure = () => {
-      const top = element.getBoundingClientRect().top
-      const cards = [...element.querySelectorAll<HTMLElement>('[data-pin-key]')].map((card) => {
-        const rect = card.getBoundingClientRect()
-        return {
-          top: rect.top - top + element.scrollTop,
-          bottom: rect.bottom - top + element.scrollTop,
-        }
-      })
-      const next = cardsBelow(element, cards)
-      setMore((previous) =>
-        previous?.count === next?.count && previous?.scrollTo === next?.scrollTo ? previous : next,
-      )
-    }
-    measure()
-    element.addEventListener('scroll', measure, { passive: true })
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    observer?.observe(element)
-    for (const child of element.children) observer?.observe(child)
-    return () => {
-      element.removeEventListener('scroll', measure)
-      observer?.disconnect()
-    }
-  }, [total, pins.cards])
-
   return (
     <PinsProvider value={pins.value}>
       {/* The status node stays mounted at zero so its first 0 → 1 change is announced. */}
       <span className="bold-sr-only" role="status">
         {announcement}
       </span>
-      {/* Its own region, so a question never hides the strip's "N need you" (or the other way round). */}
+      {/* Its own region, so a question never hides the "N need you" (or the other way round). */}
       <span className="bold-sr-only" role="status">
         {questionAnnouncement}
       </span>
+      {/* Where no conversation is drawn (an empty room, still loading) the cards sit here, in plain view. */}
+      <NeedsSlot id={slotIds.fallback} className="bold-needs-fallback" />
+      <NeedsFocusTracker onFocusKey={trackFocus} />
       {total > 0 && (
-        <div
-          id="bold-pins"
-          ref={box}
-          className="bold-pins"
-          role="region"
-          aria-label="Needs you"
-          onFocusCapture={(event) => {
-            focusedKey.current =
-              (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
-              focusedKey.current
-          }}
-        >
-          <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
-            Needs you
-          </h2>
+        <>
           <RoomFence />
           <RoomApprovals
             roomId={roomId}
@@ -775,20 +861,25 @@ export function RoomRequests({
           <RoomReportBacks roomId={roomId} jobs={jobs} />
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />
           <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
-          {more && (
-            <div className="bold-pins-fade">
-              <button
-                type="button"
-                className="bold-pins-more"
-                data-protected="inline-flex"
-                onClick={() => box.current?.scrollTo({ top: more.scrollTo, behavior: 'smooth' })}
-              >
-                {more.count} more below ↓
-              </button>
-            </div>
-          )}
-        </div>
+          <NeedsJumpChip cardKeys={pins.cards.map((card) => card.key)} />
+        </>
       )}
     </PinsProvider>
   )
+}
+
+/** Cards live in the stream, outside this component's tree: focus inside any of them is tracked from the document. */
+function NeedsFocusTracker({ onFocusKey }: { onFocusKey: (key: string) => void }) {
+  useEffect(() => {
+    const onFocus = (event: FocusEvent) => {
+      const key =
+        event.target instanceof Element
+          ? event.target.closest('[data-pin-key]')?.getAttribute('data-pin-key')
+          : null
+      if (key) onFocusKey(key)
+    }
+    document.addEventListener('focusin', onFocus)
+    return () => document.removeEventListener('focusin', onFocus)
+  }, [onFocusKey])
+  return null
 }

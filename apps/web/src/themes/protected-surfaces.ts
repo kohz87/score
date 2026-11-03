@@ -29,8 +29,11 @@ export const protectedClasses = [
   // 3.21.0: the chat list's "needs you" pill and a folded-rail tile of a chat that needs you
   'bold-chat-needs',
   'bold-chat-rail-item',
-  // 3.22.0: the "N more below" cue of the scrolling needs-you box (a card's buttons may be out of view)
-  'bold-pins-more',
+  // 3.24.0: the jump chip ("2 need you ↑") above the composer; replaces the pinned box's "N more below" cue
+  'bold-needs-jump',
+  // 3.24.0: the slots a needs-you card is drawn into inside the conversation, and the host that wraps the card
+  'bold-needs-slot',
+  'bold-needs-host',
   // PLAN 11.12c: a replay cannot answer an approval, so it hands the person back to the live screen
   'bold-screen-needs-live',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes

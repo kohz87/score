@@ -380,7 +380,7 @@ test('every form that posts a consent is a data-decision and wears its protected
 
 test('the top bar’s Needs-you count and the chat list’s needs-you marks wear Score’s own colours (3.21.0)', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
-  for (const cls of ['bold-nav-count', 'bold-chat-needs', 'bold-pins-more', 'bold-run-needs'])
+  for (const cls of ['bold-nav-count', 'bold-chat-needs', 'bold-needs-jump', 'bold-run-needs'])
     expect(css, cls).toMatch(
       new RegExp(
         `html\\[data-look='custom'\\] \\.${cls}\\[data-protected\\] \\{[^}]*background-color: #ececf1 !important;[^}]*color: #12131a !important;`,
@@ -403,4 +403,13 @@ test('the needs-you card and its buttons wear Score’s own colours under a cust
   expect(css).toContain(`${card} .btn.ghost {`)
   expect(css).toContain(`${card} .btn {`)
   expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-request[data-protected]")
+})
+
+test('a slot holding a needs-you card stays drawn under a custom look (3.24.0)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toMatch(
+    /html\[data-look='custom'\] \[data-ui='bold'\] \.bold-needs-slot:not\(:empty\) \{[^}]*display: flex !important;[^}]*visibility: visible !important;/,
+  )
+  expect(protectedClasses).toContain('bold-needs-host')
+  expect(protectedClasses).toContain('bold-needs-slot')
 })

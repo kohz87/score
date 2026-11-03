@@ -391,12 +391,30 @@ test('on a phone an archived chat says so in its bar, with Unarchive right there
   expect(screen.getByRole('button', { name: 'Unarchive' })).toBeDefined()
 })
 
-test('on a phone, picking a room from the job list opens that room’s conversation, not its job list', async () => {
+// 3.24.0: was 'on a phone, picking a room from the job list opens that room’s conversation, not its job list'. The job list
+// and its title switcher are gone: the room ⋯ menu opens the older/imported/elsewhere list, and a pick opens that chat.
+test('on a phone, the room menu’s older-chats list opens that room’s conversation', async () => {
   phone = true
-  const router = open('/b?jobs=1')
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  const router = open('/b?job=j-feed')
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Open side panel' })).toBeNull()
+  fireEvent.click(await screen.findByRole('button', { name: 'Room menu' }))
+  fireEvent.click(
+    await screen.findByRole('menuitem', { name: /Older, imported and elsewhere chats/ }),
+  )
   fireEvent.click(await screen.findByRole('option', { name: /Feed crew/ }))
   await waitFor(() => expect(router.state.location.search).toBe('?room=feed'))
   expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   expect(screen.queryByRole('region', { name: 'Jobs' })).toBeNull()
+})
+
+test('on a phone, an old ?jobs=1 link lands on the chat with Info open at Topics', async () => {
+  phone = true
+  const router = open('/b?jobs=1')
+  expect(await screen.findByRole('heading', { name: 'Topics' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
+  await waitFor(() => expect(router.state.location.search).toBe(''))
+  expect(screen.queryByRole('region', { name: 'All topics' })).toBeNull()
+  expect(document.getElementById('bold-side-panel')?.hasAttribute('hidden')).toBe(false)
+  expect(screen.getByRole('button', { name: 'New topic' })).toBeDefined()
 })

@@ -363,6 +363,12 @@ function acknowledgement(dialog: HTMLElement) {
   return within(dialog).getByRole('checkbox', { name: /Score controls the work it starts/ })
 }
 
+/** 3.24.0: the chat header's + Job is gone; Start a job opens from the composer's + menu ("Start a run…"). */
+async function openStartFromComposer() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Attach, voice and commands' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Start a run…' }))
+}
+
 test('?start=job and the room button open the dialog, and the checklist protects Start', async () => {
   open('/b?start=job')
   const dialog = await startDialog()
@@ -384,7 +390,7 @@ test('?start=job and the room button open the dialog, and the checklist protects
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
   fireEvent.click(await within(dialog).findByRole('button', { name: 'Discard' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Start a job' })).toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: 'Start a job' }))
+  await openStartFromComposer()
   expect(await startDialog()).toBeDefined()
 })
 
@@ -535,7 +541,7 @@ test('a trigger created by the dialog shows its address and secret once, in a pr
   // The room behind the dialog has its own D10 "Done" filter; this is the result's Done.
   fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Start a job' })).toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: 'Start a job' }))
+  await openStartFromComposer()
   const reopened = await startDialog()
   expect(within(reopened).queryByText('whsec_unit_secret')).toBeNull()
 })
