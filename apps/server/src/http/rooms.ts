@@ -141,8 +141,13 @@ const QuerySchema = z
     before: z.string().min(1).max(2048).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
     jobId: z.string().min(1).max(64).optional(),
+    /** 3.22.0: `all=1` reads every non-deleted job of the room in one ordered, paged read (not with `jobId`). */
+    all: z.enum(['1']).optional(),
   })
   .strict()
+  .refine((query) => query.all === undefined || query.jobId === undefined, {
+    message: 'all and jobId can’t be combined',
+  })
 
 export function registerRoomRoutes(
   app: FastifyInstance,
@@ -471,20 +476,33 @@ export function registerRoomRoutes(
     const query = QuerySchema.parse(request.query)
     const before =
       query.before === undefined ? undefined : decodeMessageCursor(query.before, roomId)
+    const all = query.all === '1'
     const page = snapshot(db, (sqlite) =>
-      messagePage(sqlite, roomId, query.limit, before, query.jobId),
+      messagePage(sqlite, roomId, query.limit, before, query.jobId, all),
     )
     // Acknowledge only what this snapshot returned; later arrivals must remain unread. An empty streaming
     // placeholder has no content yet, so read state stops before the oldest one (its answer is still unseen).
     const items = page.data.items
-    const oldestEmpty = items.findLastIndex((item) => item.streaming && item.parts.length === 0)
-    const newest = items[oldestEmpty + 1]
+    const readTarget = (list: typeof items) => {
+      const oldestEmpty = list.findLastIndex((item) => item.streaming && item.parts.length === 0)
+      return list[oldestEmpty + 1]
+    }
+    // An all-jobs read acknowledges each job up to its newest settled message in the page (reading a chat reads its topics).
+    const newest = readTarget(items)
+    const newestPerJob = all
+      ? [...Map.groupBy(items, (item) => item.jobId ?? '').values()].flatMap((list) => {
+          const target = readTarget(list)
+          return target ? [target] : []
+        })
+      : []
     if (!before)
       await ingest.submit({
         source: 'rooms',
         identity: randomUUID(),
         apply({ sqlite, now }) {
-          return markRoomRead(sqlite, roomId, now, newest)
+          return all
+            ? newestPerJob.flatMap((item) => markRoomRead(sqlite, roomId, now, item))
+            : markRoomRead(sqlite, roomId, now, newest)
         },
       })
     return { asOfSeq: page.asOfSeq, ...page.data }

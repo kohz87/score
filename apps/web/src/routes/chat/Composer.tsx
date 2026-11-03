@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph, agentTint } from '../../components/AgentGlyph.tsx'
@@ -122,6 +123,8 @@ export function Composer({
   draftScope,
   resolveJob,
   onClosedJob,
+  topicCommands,
+  footer,
 }: {
   roomId: string
   roomName: string
@@ -163,6 +166,13 @@ export function Composer({
   resolveJob?: () => Promise<string>
   /** The bold room reopens a job the server refused as closed, then sends the same message into it. */
   onClosedJob?: (jobId: string) => Promise<void>
+  /**
+   * 3.22.0: the chat commands (/new, /rename, /done, …). Listed in the palette; `run` does the work and throws an Error
+   * with plain words when it can't, which this composer shows and then keeps the typed text.
+   */
+  topicCommands?: { items: SlashCommand[]; run: (name: string, args: string) => Promise<void> }
+  /** 3.22.0: replaces the hint line under the box (the chat's context bar) and the fixed "To" label. */
+  footer?: (state: { to: string[]; subject: string | null }) => ReactNode
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -348,9 +358,12 @@ export function Composer({
             ...LOCAL_COMMAND_MENU.filter(
               (local) => !commands.data?.some((item) => item.name === local.name),
             ),
+            ...(topicCommands?.items ?? []).filter(
+              (extra) => !commands.data?.some((item) => item.name === extra.name),
+            ),
             ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
           ].filter((item) => item.name.startsWith(slash)),
-    [slash, commands.data, orchestrate],
+    [slash, commands.data, orchestrate, topicCommands],
   )
   const mentionItems = useMemo(() => {
     if (!mention) return []
@@ -553,6 +566,39 @@ export function Composer({
     }
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
+    const typed = !editing && topicCommands ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
+    if (typed && topicCommands) {
+      const word = typed[1]!.toLowerCase()
+      if (topicCommands.items.some((item) => item.name === word)) {
+        setNotice(null)
+        setPending(true)
+        try {
+          await topicCommands.run(word, (typed[2] ?? '').trim())
+          setText('')
+          setCaret(0)
+        } catch (error) {
+          setNotice({
+            kind: 'error',
+            text: error instanceof Error ? error.message : 'That command failed. Try again.',
+          })
+        } finally {
+          setPending(false)
+        }
+        return
+      }
+      const known =
+        commands.data?.some((item) => item.name === word) ||
+        LOCAL_COMMAND_MENU.some((item) => item.name === word) ||
+        (orchestrate && word === 'orchestrate')
+      // Only once the server's list is here: before that an unknown word may just be one it has not told us about.
+      if (!known && commands.data) {
+        setNotice({
+          kind: 'error',
+          text: `I don’t know /${word}. Type / to see the commands.`,
+        })
+        return
+      }
+    }
     // Editing rewinds the room and the agents first (PLAN 5.33). When every agent can be rewound and nothing is still
     // running, Score does it on Send without asking (owner, 2.0.12); otherwise the dialog explains and offers the way
     // out (stop the work first, or hide in Score only).
@@ -995,7 +1041,7 @@ export function Composer({
         <label className="chat-sr-only" htmlFor={`${ids}-text`}>
           Message {roomName}
         </label>
-        {roomMode && (
+        {roomMode && !footer && (
           <span className="chat-composer-room-to" title={roomToLabel}>
             {roomToLabel}
           </span>
@@ -1005,7 +1051,7 @@ export function Composer({
           ref={textarea}
           rows={lines}
           value={text}
-          aria-describedby={roomMode ? `${ids}-hint` : undefined}
+          aria-describedby={roomMode && !footer ? `${ids}-hint` : undefined}
           placeholder={placeholder ?? (roomMode ? 'Message the team…' : 'Write a message…')}
           role="combobox"
           aria-expanded={menu !== null && count > 0}
@@ -1394,12 +1440,13 @@ export function Composer({
             {voice.error}
           </p>
         )}
-        {roomMode && (
+        {roomMode && !footer && (
           <span id={`${ids}-hint`} className="chat-composer-hint">
             @name for one agent, / for commands
           </span>
         )}
       </form>
+      {roomMode && footer && footer({ to, subject })}
     </div>
   )
 }

@@ -194,10 +194,10 @@ test('the old workflow addresses keep the query', async () => {
   }
 })
 
-test('a run’s old addresses open it in the Runs panel and keep the query', async () => {
+test('a run’s old addresses open it on the Recipes page and keep the query', async () => {
   for (const from of ['/runs/brief-1?x=y', '/b/runs/brief-1?x=y', '/now/flow/brief-1?x=y']) {
     const router = renderRoute(from)
-    await waitFor(() => expect(router.state.location.pathname).toBe('/b'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
     expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-1')
     expect(new URLSearchParams(router.state.location.search).get('x')).toBe('y')
     cleanup()

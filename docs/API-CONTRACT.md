@@ -750,7 +750,10 @@ job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, 
     this job), `lastMessageAt`, `messageCount` and `summary` (the job's summary, else its first line ≤ 160 chars,
     redacted); `job.upserted` follows every stored message, finished turn and read.
     `GET /api/rooms/:roomId/messages?jobId=` lists one job; **without `jobId` it lists the room's default job only** (what
-    the classic shell shows); its stream reducer drops other jobs' messages, `Room.unread` counts the default job only,
+    the classic shell shows); **3.22.0:** `?all=1` (not with `jobId`, else `400`) lists the messages of **every non-deleted
+    job** of the room in one time-ordered read, newest first, paged with the same `before` cursor and `limit`, each
+    message carrying its `jobId` (a chat is one conversation; the response `jobId` is `null`); the first page marks each
+    job read up to its newest settled message in the page; its stream reducer drops other jobs' messages, `Room.unread` counts the default job only,
     and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
 …/summary?jobId=`.
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.

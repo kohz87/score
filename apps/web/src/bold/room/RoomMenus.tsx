@@ -37,6 +37,7 @@ import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs
 import { useMenuPlacement } from './menu-placement.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { setShowDeleted, useShowDeleted } from '../../routes/chat/deleted-toggle.ts'
 import { setRoomWorkspace, useSharedWorkspaces, workspacesKey } from '../workspaces-queries.ts'
 
 function DotsIcon() {
@@ -1062,6 +1063,7 @@ export function RoomMenu({
   // `team` = any team room (the lead and members live here); `everyone` = the first one, which can't be changed.
   const team = room.role === 'team'
   const everyone = isEveryoneRoom(room)
+  const showDeleted = useShowDeleted(room.id)
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
   const workspaces = useSharedWorkspaces(open)
   const workspaceName =
@@ -1197,6 +1199,18 @@ export function RoomMenu({
           >
             Export as JSON
           </a>
+          <button
+            type="button"
+            className="mi"
+            role="menuitemcheckbox"
+            aria-checked={showDeleted}
+            onClick={() => {
+              close(false)
+              setShowDeleted(room.id, !showDeleted)
+            }}
+          >
+            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
+          </button>
           <button
             type="button"
             className="mi"

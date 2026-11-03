@@ -724,20 +724,25 @@ export function messagePage(
   before?: z.infer<typeof CursorSchema>,
   /** PLAN 11.2: one job's messages; the room's default job when omitted (what the classic shell shows). */
   jobId?: string,
+  /** 3.22.0: every non-deleted job of the room in one time-ordered read (a chat is one conversation). */
+  all = false,
 ) {
   roomRow(sqlite, roomId)
-  const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
+  const job = all ? '' : (jobId ?? defaultJobId(sqlite, roomId) ?? '')
+  // A deleted job's messages leave with it, so a message whose job is deleted is left out here too.
+  const scope = all
+    ? 'room_id = ? AND deleted_at IS NULL AND (job_id IS NULL OR job_id IN (SELECT id FROM jobs WHERE room_id = messages.room_id AND deleted_at IS NULL))'
+    : 'room_id = ? AND job_id = ? AND deleted_at IS NULL'
+  const scopeArgs = all ? [roomId] : [roomId, job]
   const rows = before
     ? sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
+          `SELECT * FROM messages WHERE ${scope} AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
         )
-        .all(roomId, job, before.createdAt, before.id, limit + 1)
+        .all(...scopeArgs, before.createdAt, before.id, limit + 1)
     : sqlite
-        .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ?',
-        )
-        .all(roomId, job, limit + 1)
+        .prepare(`SELECT * FROM messages WHERE ${scope} ORDER BY created_at DESC, id DESC LIMIT ?`)
+        .all(...scopeArgs, limit + 1)
   const items = rows.slice(0, limit).map(messageFromRow)
   const last = items.at(-1)
   const nextCursor =

@@ -115,7 +115,7 @@ export function ChatInfo({
         {phone && (
           <div className="bold-chat-jobs-actions">
             <Link className="btn sm" to={jobsLink(room, everyone)} onClick={onNavigate}>
-              All jobs
+              All topics
             </Link>
             {room.role === 'team' && (
               <button
@@ -132,6 +132,9 @@ export function ChatInfo({
           </div>
         )}
       </section>
+      <Link className="bold-chat-knowledge" to="/b/knowledge" onClick={onNavigate}>
+        Open Knowledge
+      </Link>
     </div>
   )
 }

@@ -1,13 +1,5 @@
 import type { AgentSummary, OutsideSession } from '@score/contract'
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Link,
   useLocation,
@@ -27,16 +19,13 @@ import {
   agentStateLabel,
   canTalkTo,
 } from './bold-agents.ts'
-import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
-import { BoldRuns } from './BoldRuns.tsx'
-import { BookIcon, ChevronIcon, CloseIcon, GridIcon, RunsIcon, ThreadIcon } from './BoldIcons.tsx'
+import { BookIcon, ChevronIcon, CloseIcon } from './BoldIcons.tsx'
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldOneToOneLink, boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldDirect, DirectHeaderActions, PrivacyNote } from './direct/BoldDirect.tsx'
 import { BoldElsewhere, forgetBroughtOutsideSessions } from './room/BoldElsewhere.tsx'
-import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 import { roomJobsQuery } from './room/room-queries.ts'
 import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
@@ -48,7 +37,7 @@ import { isEveryoneRoom } from './room/room-model.ts'
 
 const PHONE = '(max-width: 860px)'
 
-type SideMode = 'work' | 'info' | 'library' | 'runs' | 'thread' | 'elsewhere' | `agent:${string}`
+type SideMode = 'work' | 'info' | 'elsewhere' | `agent:${string}`
 
 function SideGlyph({ agent }: { agent: AgentSummary }) {
   return (
@@ -75,28 +64,10 @@ export function BoldRoom() {
   const [panelShut, setPanelShut] = useState(false)
   const chatLists = useChatLists()
   const [elsewhere, setElsewhere] = useState<OutsideSession | null>(null)
-  const [threadJob, setThreadJob] = useState<string | null>(null)
   const [deletedNotice, setDeletedNotice] = useState<string | null>(null)
-  // The thread follows the room's job tab: another tab opens that job's thread, All goes back to the picker.
-  const tabJob = new URLSearchParams(location.search).get('job')
-  const [seenTabJob, setSeenTabJob] = useState(tabJob)
-  if (tabJob !== seenTabJob) {
-    setSeenTabJob(tabJob)
-    setThreadJob(tabJob && tabJob !== 'all' ? tabJob : null)
-  }
-  // Search's Library result (`?note=`) and System's "Open Library" (`?library=1`) are one-shot requests: open the
-  // Library, then remove the parameter so a later visit cannot reopen it and the same note can be requested again.
+  // 3.22.0: the side panel is chat info only. The old Library, Runs and Thread addresses open their new homes.
   const notePath = params.get('note')
   const libraryOpen = params.get('library') === '1'
-  const libraryRequest = notePath ?? (libraryOpen ? 'library' : null)
-  const [seenLibraryRequest, setSeenLibraryRequest] = useState<string | null>(null)
-  if (libraryRequest !== seenLibraryRequest) {
-    setSeenLibraryRequest(libraryRequest)
-    if (libraryRequest) {
-      setMode('library')
-      setPanelShut(false)
-    }
-  }
   // 3.21.0 review: the panel opens on Info by default, so a Workbench or Results link (`?work=…`) asks for Work itself.
   const workRequest = params.get('work')
   const [seenWorkRequest, setSeenWorkRequest] = useState<string | null>(null)
@@ -107,25 +78,8 @@ export function BoldRoom() {
       setPanelShut(false)
     }
   }
-  // `?run=<brief id>` (a job's link, Search, a notification) opens the Runs view on that run, and stays while it is open.
   const runId = params.get('run')
-  // Keyed on the navigation, not only the id: opening the same run again after the sheet was closed opens it again.
-  // An in-place edit of the address (a replace: clearing a reference, deleting a job) keeps the run's key, so it never
-  // pulls a person who closed the sheet or switched views back to the run.
   const navigationType = useNavigationType()
-  const [seenRunNav, setSeenRunNav] = useState<string | null>(null)
-  const runNav = !runId
-    ? null
-    : navigationType === 'REPLACE' && seenRunNav?.endsWith(`:${runId}`)
-      ? seenRunNav
-      : `${location.key}:${runId}`
-  if (runNav !== seenRunNav) {
-    setSeenRunNav(runNav)
-    if (runId) {
-      setMode('runs')
-      setPanelShut(false)
-    }
-  }
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -183,16 +137,12 @@ export function BoldRoom() {
       ? agentDisplayName(directAgent)
       : directId
     : mode === 'work'
-      ? 'Work'
+      ? 'Results'
       : mode === 'info'
         ? 'Info'
-        : mode === 'library'
-          ? 'Library'
-          : mode === 'runs'
-            ? 'Runs'
-            : mode === 'elsewhere'
-              ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
-              : 'Thread'
+        : mode === 'elsewhere'
+          ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
+          : 'Info'
   const elsewhereAgent = elsewhere
     ? agents.find((item) => item.id === elsewhere.agentId)
     : undefined
@@ -255,7 +205,6 @@ export function BoldRoom() {
         next.delete('message')
         next.delete('work')
         next.delete('file')
-        setThreadJob(null)
         setMode('work')
         if (phone) setSheetOpen(false)
         // Same history state as the team room's own handler, so whichever runs last leaves the same entry.
@@ -276,22 +225,16 @@ export function BoldRoom() {
     if (phone && directMode) setSheetOpen(true)
   }, [directMode, phone, setSheetOpen])
 
-  // The Library can live behind the phone sheet, so a Library request also opens that layer.
+  // Old addresses redirect (3.22.0): a note or the Library opens on the Knowledge page, a run on the Recipes page.
   useEffect(() => {
-    if (phone && libraryRequest) setSheetOpen(true)
-  }, [libraryRequest, phone, setSheetOpen])
-
-  useEffect(() => {
-    if (phone && runNav) setSheetOpen(true)
-  }, [phone, runNav, setSheetOpen])
-
-  useEffect(() => {
-    if (!libraryRequest) return
-    const next = new URLSearchParams(params)
-    next.delete('note')
-    next.delete('library')
-    setParams(next, { replace: true })
-  }, [libraryRequest, params, setParams])
+    if (notePath !== null || libraryOpen) {
+      const target = new URLSearchParams()
+      if (notePath) target.set('note', notePath)
+      void navigate(`/b/knowledge${target.size ? `?${target}` : ''}`, { replace: true })
+    } else if (runId) {
+      void navigate(`/b/recipes?run=${encodeURIComponent(runId)}`, { replace: true })
+    }
+  }, [libraryOpen, navigate, notePath, runId])
 
   const withoutDirect = (next: URLSearchParams) => {
     next.delete('with')
@@ -302,10 +245,6 @@ export function BoldRoom() {
   }
 
   const choose = (next: SideMode) => {
-    if (next === 'thread') {
-      const current = new URLSearchParams(location.search).get('job')
-      if (current && current !== 'all') setThreadJob(current)
-    }
     setMode(next)
     setPanelShut(false)
     setMenuOpen(false)
@@ -333,14 +272,11 @@ export function BoldRoom() {
     if (phone) requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
   const openThread = (jobId: string | null) => {
-    setThreadJob(jobId)
-    setMode('thread')
-    setPanelShut(false)
-    setMenuOpen(false)
-    // A one-to-one is driven by `?with=`: opening a thread leaves it, as choosing a mode does.
-    setParams(withoutDirect(new URLSearchParams(params)), { replace: true })
-    if (phone) setSheetOpen(true)
-    toggleRef.current?.focus()
+    // The chat is the thread now: a thread link makes that topic current and scrolls to it.
+    const next = withoutDirect(new URLSearchParams(params))
+    if (jobId) next.set('job', jobId)
+    else next.delete('job')
+    setParams(next, { replace: true })
   }
 
   const chooseAgent = (agentId: string) => {
@@ -365,38 +301,11 @@ export function BoldRoom() {
     }
   }
 
-  // Edit in the thread loads the message into the team-room composer, which is inert behind the phone sheet: close the
-  // sheet and put the cursor in the composer once the room is live again.
-  const editFromSheet = () => {
-    setSheetOpen(false)
-    setMenuOpen(false)
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')?.focus(),
-      ),
-    )
-  }
-
   // The sheet's Escape closes it the same way its own close button does (a one-to-one drops `?with=`).
   useEffect(() => {
     closeSheetRef.current = closeSheet
   })
 
-  const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
-    <button
-      key={target}
-      type="button"
-      aria-current={activeMode === target ? 'true' : undefined}
-      className={`mi ${activeMode === target ? 'sel' : ''}`}
-      onClick={() => choose(target)}
-    >
-      {icon}
-      <span className="menu-copy">
-        <b>{name}</b>
-        <span className="small muted">{hint}</span>
-      </span>
-    </button>
-  )
   const agentOption = (item: AgentSummary) => (
     <button
       key={`agent:${item.id}`}
@@ -557,28 +466,32 @@ export function BoldRoom() {
               )
             ) : (
               <>
-                <button
-                  ref={toggleRef}
-                  type="button"
-                  className="btn sm side-toggle"
-                  aria-expanded={menuOpen}
-                  aria-controls={menuId}
-                  onClick={() => setMenuOpen((open) => !open)}
-                >
-                  {mode === 'work' || mode === 'info' ? (
-                    <GridIcon />
-                  ) : mode === 'library' ? (
-                    <BookIcon />
-                  ) : mode === 'runs' ? (
-                    <RunsIcon />
-                  ) : mode === 'elsewhere' && elsewhereAgent ? (
-                    <SideGlyph agent={elsewhereAgent} />
-                  ) : (
-                    <ThreadIcon />
-                  )}
-                  {label}
-                  <ChevronIcon />
-                </button>
+                {mode === 'elsewhere' && elsewhereAgent ? (
+                  <span className="bold-elsewhere-label">
+                    <SideGlyph agent={elsewhereAgent} /> {label}
+                  </span>
+                ) : (
+                  <div className="bold-side-tabs" role="tablist" aria-label="Panel">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === 'info'}
+                      className={mode === 'info' ? 'on' : undefined}
+                      onClick={() => choose('info')}
+                    >
+                      Info
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === 'work'}
+                      className={mode === 'work' ? 'on' : undefined}
+                      onClick={() => choose('work')}
+                    >
+                      Results
+                    </button>
+                  </div>
+                )}
                 {mode === 'work' && (
                   <nav className="seg bold-work-tabs" aria-label="How to see the work">
                     <Link
@@ -613,11 +526,6 @@ export function BoldRoom() {
 
             {menuOpen && (
               <div className="menu side-menu" id={menuId}>
-                {option('work', <GridIcon />, 'Work', 'What the team is making')}
-                {option('info', <GridIcon />, 'Info', 'Members, workspace and topics')}
-                {option('library', <BookIcon />, 'Library', 'Notes and files')}
-                {option('runs', <RunsIcon />, 'Runs', 'Recipe and lead-decides runs')}
-                {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
                 {talkable.length > 0 && <div className="sec">One to one</div>}
                 {talkable.map(agentOption)}
               </div>
@@ -648,20 +556,6 @@ export function BoldRoom() {
                 </p>
               )}
             </div>
-          ) : mode === 'runs' ? (
-            <BoldRuns
-              briefId={runId}
-              onOpen={(briefId) => {
-                const next = new URLSearchParams(params)
-                next.set('run', briefId)
-                setParams(next)
-              }}
-              onBack={() => {
-                const next = new URLSearchParams(params)
-                next.delete('run')
-                setParams(next)
-              }}
-            />
           ) : mode === 'info' ? (
             <ChatInfo
               room={openGroup}
@@ -670,12 +564,6 @@ export function BoldRoom() {
               everyone={everyoneOpen}
               phone={phone}
               onNavigate={() => setSheetOpen(false)}
-            />
-          ) : mode === 'thread' ? (
-            <BoldThread
-              jobId={threadJob}
-              onSelectJob={(jobId) => setThreadJob(jobId)}
-              onEdit={phone ? editFromSheet : undefined}
             />
           ) : mode === 'elsewhere' && elsewhere ? (
             <BoldElsewhere
@@ -687,11 +575,6 @@ export function BoldRoom() {
           ) : null}
           <BoldResults agents={agents} hidden={directMode || mode !== 'work' || workbenchVisible} />
           <BoldWorkbench agents={agents} hidden={directMode || !workbenchVisible} />
-          <BoldLibrary
-            agents={agents}
-            hidden={directMode || mode !== 'library'}
-            openPath={notePath}
-          />
         </aside>
       </div>
     </div>

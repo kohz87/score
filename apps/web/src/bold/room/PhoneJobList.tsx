@@ -56,28 +56,28 @@ export function PhoneJobList({
   const rows = !closedOnly && defaultJob ? [defaultJob, ...named] : named
 
   return (
-    <section className="bold-phone-jobs" aria-label="Jobs">
+    <section className="bold-phone-jobs" aria-label="All topics">
       <div className="bold-phone-jobs-head">
-        <h2>{closedOnly ? 'Closed jobs' : 'Jobs'}</h2>
+        <h2>{closedOnly ? 'Closed topics' : 'All topics'}</h2>
         {closedOnly && onShowClosed && (
           <button type="button" className="link" onClick={onShowClosed}>
-            Back to jobs
+            Back to topics
           </button>
         )}
       </div>
       {!closedOnly && closed.length > 0 && onShowClosed && (
         <button type="button" className="link bold-phone-closed-jobs" onClick={onShowClosed}>
-          Closed jobs ({closed.length})
+          Closed topics ({closed.length})
         </button>
       )}
       <div className="bold-phone-job-list">
-        {rows.length === 0 && <p className="small muted">No closed jobs.</p>}
+        {rows.length === 0 && <p className="small muted">No closed topics.</p>}
         {rows.map((job) => {
           const holder = job.holderAgentId
             ? agents.find((agent) => agent.id === job.holderAgentId)
             : undefined
           const state = jobStateLine(job, agents)
-          const title = job.isDefault ? 'Team room' : job.title
+          const title = job.isDefault ? 'General conversation' : job.title
           return (
             <button
               key={job.id}

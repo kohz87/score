@@ -148,6 +148,8 @@
   gap: calc(14px * var(--bold-d, 1));
   padding: 14px max(20px, env(safe-area-inset-right, 0px)) 14px
     max(20px, env(safe-area-inset-left, 0px));
+  /* Board 18: a full-width hairline under the top bar. */
+  border-bottom: 1px solid var(--line);
 }
 
 /* 3.18.0: three section links on a phone's top bar (Recipes, Tasks, Screens) stay on one line beside the avatar. */
@@ -155,6 +157,13 @@
   display: flex;
   gap: 4px;
   min-width: 0;
+  /* One row in every configuration (the terminal button on or off): the pills scroll if the room runs out. */
+  flex: 1 1 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+[data-ui='bold'] .bold-top-links .btn.sm {
+  flex: none;
 }
 [data-ui='bold'] .bold-top-links .btn.sm {
   padding-inline: 10px;
@@ -743,6 +752,11 @@ body.fit [data-ui='bold'] .stream {
 }
 
 @media (max-width: 860px) {
+  [data-ui='bold'] .top {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
   [data-ui='bold'] .top .nav,
   [data-ui='bold'] .top .dock,
   [data-ui='bold'] .top .searchbtn,

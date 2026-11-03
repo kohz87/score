@@ -17,8 +17,15 @@ import {
 } from './BoldMessage.tsx'
 import { foldedJobIds, isFinishedJob, readExpandedJobs, writeExpandedJobs } from './job-fold.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
+import {
+  emptyTopics,
+  SystemLineRow,
+  TopicDivider,
+  topicDividers,
+  type SystemLine,
+} from './topic-divider.tsx'
 import { groupKey, groupReplies, pickReplyVersion } from './reply-versions.ts'
-import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { roomChatMessagesQuery, roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { useRoomNeedsYouState } from './use-needs-you.ts'
 import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
@@ -29,6 +36,9 @@ type PageState = {
   status: 'pending' | 'success' | 'error'
   error?: unknown
 }
+
+/** The merged conversation's one chain of pages (a chat reads every topic together). */
+const ALL_JOBS = '*'
 
 function pageKey(jobId: string | null, before: string | null) {
   return `${jobId ?? 'default'}::${before ?? 'latest'}`
@@ -51,13 +61,17 @@ function MessagePageCollector({
   onPage,
 }: {
   roomId: string
+  /** `ALL_JOBS` reads every topic of the chat in one chain. */
   jobId: string | null
   before: string | null
   defaultJobId: string | null
   onPage: (key: string, state: PageState) => void
 }) {
   const definition = useMemo(
-    () => roomMessagesQuery(roomId, jobId, before, defaultJobId),
+    () =>
+      jobId === ALL_JOBS
+        ? roomChatMessagesQuery(roomId, before, defaultJobId)
+        : roomMessagesQuery(roomId, jobId, before, defaultJobId),
     [before, defaultJobId, jobId, roomId],
   )
   const { data, status, error } = useStreamQuery(definition)
@@ -79,7 +93,10 @@ function MessageSeekCollector({
   seek: string
   onPage: (key: string, state: PageState) => void
 }) {
-  const definition = useMemo(() => roomSeekQuery(roomId, jobId, seek), [jobId, roomId, seek])
+  const definition = useMemo(
+    () => roomSeekQuery(roomId, jobId === ALL_JOBS ? null : jobId, seek, jobId === ALL_JOBS),
+    [jobId, roomId, seek],
+  )
   const { data, status, error } = useStreamQuery(definition)
   useEffect(() => {
     onPage(pageKey(jobId, seekMarker(seek)), { data, status, error })
@@ -143,6 +160,10 @@ export function RoomMessageStream({
   openedJobs,
   onRevealSeek,
   onSeeked,
+  merged = false,
+  focusTopic = null,
+  topicMenu,
+  systemLines = [],
 }: {
   roomId: string
   jobs: Job[]
@@ -155,6 +176,17 @@ export function RoomMessageStream({
   openedJobs: string[]
   onRevealSeek: (jobId: string | null) => void
   onSeeked: () => void
+  /**
+   * 3.22.0: the chat as one conversation. One time-ordered read of every topic, a divider where each topic starts, no
+   * folding of finished topics (their divider says how they ended). `selectedJob` is 'all' in this mode.
+   */
+  merged?: boolean
+  /** The topic the person picked (Info, a divider or a link): the stream scrolls to its divider when it changes. */
+  focusTopic?: string | null
+  /** The per-topic menu drawn in each divider. */
+  topicMenu?: (job: Job) => ReactNode
+  /** Small local lines for what a command changed ("You made builder the owner"). */
+  systemLines?: SystemLine[]
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
   const [older, setOlder] = useState<Record<string, string[]>>({})
@@ -191,13 +223,14 @@ export function RoomMessageStream({
   // All shows the room thread plus the jobs that are read or have been opened. An unread job's page is not read
   // until its tab is selected, so its badge means "not opened yet".
   const visibleJobIds = useMemo(() => {
+    if (merged) return [ALL_JOBS]
     if (selectedJob !== 'all') return [selectedJob]
     const ids = jobs
       .filter((job) => job.isDefault || job.unread === 0 || openedJobs.includes(job.id))
       .map((job) => job.id)
     const unique = [...new Set(ids)]
     return unique.length ? unique : [null]
-  }, [jobs, openedJobs, selectedJob])
+  }, [jobs, merged, openedJobs, selectedJob])
 
   const pageRefs = useMemo(
     () =>
@@ -207,7 +240,7 @@ export function RoomMessageStream({
     [older, visibleJobIds],
   )
 
-  const seekJobId = selectedJob === 'all' ? defaultJob : selectedJob
+  const seekJobId = merged ? ALL_JOBS : selectedJob === 'all' ? defaultJob : selectedJob
   const allRefs = useMemo(
     () => (seek ? [...pageRefs, { jobId: seekJobId, before: seekMarker(seek) }] : pageRefs),
     [pageRefs, seek, seekJobId],
@@ -250,13 +283,15 @@ export function RoomMessageStream({
     )
     return allItems.filter((message) => {
       if (hidden.has(message.id)) return false
+      // The merged conversation shows every topic, closed ones too: their divider says how they ended.
+      if (merged) return true
       if (selectedJob === 'all') {
         if (!message.jobId) return true
         return shownJobs.has(message.jobId)
       }
       return message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
     })
-  }, [allItems, defaultJob, filter, hidden, jobs, selectedJob])
+  }, [allItems, defaultJob, filter, hidden, jobs, merged, selectedJob])
 
   useEffect(() => {
     if (status !== 'success') return
@@ -296,7 +331,7 @@ export function RoomMessageStream({
   }, [])
 
   // "Load earlier" walks backwards through the job on show (the room thread when All is selected).
-  const historyJob = selectedJob === 'all' ? defaultJob : selectedJob
+  const historyJob = merged ? ALL_JOBS : selectedJob === 'all' ? defaultJob : selectedJob
   const historyCursors = [null, ...(older[jobKey(historyJob)] ?? [])]
   const historyLast = pageStates[pageKey(historyJob, historyCursors.at(-1) ?? null)]
   const historyCursor =
@@ -374,7 +409,7 @@ export function RoomMessageStream({
   if (status === 'success') {
     // Finished jobs fold into one row in All; a branch view or the deleted-message markers need the whole stream.
     const folded =
-      selectedJob === 'all' && !branch && !showDeleted
+      !merged && selectedJob === 'all' && !branch && !showDeleted
         ? foldedJobIds({
             jobs,
             messages: items,
@@ -430,13 +465,56 @@ export function RoomMessageStream({
       })
     let built: { nodes: ReactNode[]; branched: boolean }
     const hideable = new Set(
-      selectedJob === 'all' && !branch && !showDeleted
+      !merged && selectedJob === 'all' && !branch && !showDeleted
         ? jobs
             .filter((item) => isFinishedJob(item) && expandedJobs.has(item.id))
             .map((item) => item.id)
         : [],
     )
-    if (folded.size === 0 && hideable.size === 0) built = build(items)
+    if (merged && !branch) {
+      // One conversation: runs of one topic's messages, each opened by its divider, plus small system lines.
+      built = { nodes: [], branched: false }
+      const dividers = topicDividers(jobs, items)
+      const quiet = emptyTopics(jobs, items)
+      const marks: { at: string; node: ReactNode }[] = [
+        ...quiet.map((job) => ({
+          at: job.createdAt,
+          node: <TopicDivider key={`topic-${job.id}`} job={job} menu={topicMenu?.(job)} />,
+        })),
+        ...systemLines.map((line) => ({
+          at: line.at,
+          node: <SystemLineRow key={`system-${line.id}`} line={line} />,
+        })),
+      ].sort((a, b) => a.at.localeCompare(b.at))
+      let run: Message[] = []
+      let next = 0
+      const flush = (tail: boolean) => {
+        // The final run is always built: it also places the ended-question notes that came after the last message.
+        if (run.length || tail) built.nodes.push(...build(run, tail).nodes)
+        run = []
+      }
+      for (const message of items) {
+        while (next < marks.length && marks[next]!.at <= message.createdAt) {
+          flush(false)
+          built.nodes.push(marks[next++]!.node)
+        }
+        const divider = dividers.get(message.id)
+        if (divider) {
+          flush(false)
+          built.nodes.push(
+            <TopicDivider
+              key={`divider-${message.id}`}
+              job={divider.job}
+              again={divider.again}
+              menu={divider.job ? topicMenu?.(divider.job) : undefined}
+            />,
+          )
+        }
+        run.push(message)
+      }
+      flush(true)
+      for (; next < marks.length; next += 1) built.nodes.push(marks[next]!.node)
+    } else if (folded.size === 0 && hideable.size === 0) built = build(items)
     else {
       built = { nodes: [], branched: false }
       let run: Message[] = []
@@ -483,7 +561,7 @@ export function RoomMessageStream({
     }
     nodes = built.nodes
     const effectiveView = built.branched
-    if (!effectiveView)
+    if (!effectiveView && !merged)
       for (const job of jobs.filter(
         (item) =>
           item.state === 'done' &&
@@ -523,6 +601,20 @@ export function RoomMessageStream({
         )
       }
   }
+
+  // A topic picked in Info, on a divider or through a link: bring its divider into view once it is drawn.
+  const focused = useRef<string | null>(null)
+  useEffect(() => {
+    if (!merged || !focusTopic || status !== 'success' || seek) return
+    if (focused.current === focusTopic) return
+    const divider = document.getElementById(`topic-${focusTopic}`)
+    if (!divider) return
+    focused.current = focusTopic
+    divider.scrollIntoView?.({ block: 'start' })
+  }, [focusTopic, merged, nodes.length, seek, status])
+  useEffect(() => {
+    if (!focusTopic) focused.current = null
+  }, [focusTopic])
 
   const typing: Record<string, string> = Object.assign(
     {},

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Approval, OutsideSession, Room } from '@score/contract'
 import {
@@ -164,15 +164,6 @@ function ParamsProbe() {
   return <span data-testid="params">{params.toString()}</span>
 }
 
-function HistoryBack() {
-  const navigate = useNavigate()
-  return (
-    <button type="button" onClick={() => void navigate(-1)}>
-      History back
-    </button>
-  )
-}
-
 test('a slash command handed over in the URL is loaded into the room composer and removed from the URL', async () => {
   stubRoom()
   renderInRoom(
@@ -222,18 +213,6 @@ test('@ in the room offers only agents that can take a message, not removed ones
   expect(offered.some((text) => text.includes('gone'))).toBe(false)
 })
 
-test('the room shows job tabs, the To chip and the seeded unread count', async () => {
-  stubRoom([
-    makeJob({ id: 'job-1', title: 'Activity feed', unread: 2 }),
-    makeJob({ id: 'job-2', title: 'Release notes', unread: 3 }),
-  ])
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-  await screen.findByRole('tab', { name: /Activity feed/ })
-  expect(screen.getByRole('tab', { name: /^All/ }).textContent).toContain('5')
-  expect(screen.getByText('To: team room (lead)')).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Needs you' })).toBeDefined()
-})
-
 const phoneApproval: Approval = {
   id: 'approval-phone',
   origin: 'score-run',
@@ -254,169 +233,6 @@ const phoneApproval: Approval = {
   blocking: null,
   refs: [],
 }
-
-test('a phone opens on board 18 with the pinned request first, then jobs and their unread counts', async () => {
-  stubRoom(
-    [
-      makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 9 }),
-      makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-      makeJob({ id: 'job-queue', title: 'Queue research', state: 'done', unread: 0 }),
-      makeJob({
-        id: 'job-notes',
-        title: 'Release notes 2.4',
-        state: 'waiting_on_you',
-        holderAgentId: 'lead',
-        unread: 3,
-      }),
-    ],
-    { approvals: [phoneApproval] },
-  )
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
-
-  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.queryByRole('tablist', { name: 'Jobs' })).toBeNull()
-  const teamRow = screen.getByRole('button', { name: /^Team room\..*9 unread/ })
-  expect(teamRow.textContent).toContain('builder is working')
-  expect(
-    screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
-  ).toBe('Start a job or message the team')
-  const activity = screen.getByRole('button', { name: /^Activity feed\..*2 unread/ })
-  const notes = screen.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
-  expect(activity.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(teamRow.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(activity.textContent).toContain('builder is working')
-  expect(notes.textContent).toContain('lead needs you')
-  expect(screen.getByRole('img', { name: 'Done' })).toBeDefined()
-
-  const pin = await screen.findByRole('article', {
-    name: /Needs you: May I install a package/,
-  })
-  expect(pin.getAttribute('data-protected')).toBe('flex')
-  const jobs = screen.getByRole('region', { name: 'Jobs' })
-  expect(pin.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-})
-
-test('a phone opens a job full screen and Back returns to the job list', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-      <HistoryBack />
-    </>,
-    ['/b?jobs=1&message=old'],
-  )
-
-  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
-  expect(await screen.findByText('To: Activity feed')).toBeDefined()
-  await waitFor(() =>
-    expect(document.querySelector('[data-phone-chat-title]')).toBe(document.activeElement),
-  )
-  expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
-  expect(screen.getByTestId('params').textContent).not.toContain('message')
-  expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
-  expect(
-    screen.getByText(/^Activity feed · /, { selector: '.bold-chat-phone-id span' }),
-  ).toBeDefined()
-  expect(
-    screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
-  ).toBe('Message the team')
-  const described = screen
-    .getByRole('combobox', { name: /^Message Team room/ })
-    .getAttribute('aria-describedby')!
-  expect(document.getElementById(described)?.textContent).toContain('@name for one agent')
-  expect(screen.getByRole('button', { name: /Open thread for Activity feed/ })).toBeDefined()
-
-  // Back (the browser's) returns to the job list the job was opened from, on the row it left.
-  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
-  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.getByTestId('params').textContent).not.toContain('job=')
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: /^Activity feed\./ })).toBe(document.activeElement),
-  )
-})
-
-test('moving to another job drops its file and keeps the other parameters', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} />
-      <ParamsProbe />
-    </>,
-    ['/b?job=job-activity&file=api%2Fevents.py&work=code'],
-  )
-
-  fireEvent.click(await screen.findByRole('tab', { name: /Release notes 2\.4/ }))
-  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-notes'))
-  expect(screen.getByTestId('params').textContent).toContain('work=code')
-  expect(screen.getByTestId('params').textContent).not.toContain('file=')
-})
-
-test('the phone list puts the default Team room row first and opens its chat', async () => {
-  stubRoom([
-    makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 4 }),
-    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-    </>,
-    ['/b?jobs=1'],
-  )
-
-  const teamRow = await screen.findByRole('button', { name: /^Team room\..*4 unread/ })
-  expect(teamRow.textContent).toContain('builder is working')
-  const activity = screen.getByRole('button', { name: /^Activity feed\./ })
-  expect(teamRow.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-  fireEvent.click(teamRow)
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-  expect(screen.getByTestId('params').textContent).toContain('job=job-default')
-  expect(screen.getByRole('combobox', { name: /^Message Team room/ })).toBeDefined()
-})
-
-test('opening a phone job pushes history, so Back returns to the list instead of leaving /b', async () => {
-  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <HistoryBack />
-    </>,
-    ['/b?jobs=1'],
-  )
-
-  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
-  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Back to chats' })).toBeNull()
-})
-
-test('a missing phone job shows the list with a short note, never a Back header', async () => {
-  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
-
-  expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
-  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
-})
-
-test('a missing phone job in a fresh room still shows the job list, not the starter', async () => {
-  stubRoom([])
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
-
-  expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Jobs' })).toBeDefined()
-  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
-})
 
 test('an older phone room with no messages still opens its chat, not the starter', async () => {
   stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
@@ -449,50 +265,6 @@ test('an older room opens straight into its phone chat and Back goes to the chat
   expect(back).toHaveBeenCalledTimes(1)
 })
 
-test('selecting a job changes the composer destination and hides the message param', async () => {
-  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })])
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-1&message=old'])
-  expect(await screen.findByText('To: Activity feed')).toBeDefined()
-  fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
-  expect(await screen.findByText('To: team room (lead)')).toBeDefined()
-})
-
-test('opening the room reads only the jobs on screen, and a second job waits for its tab', async () => {
-  const activity = makeJob({ id: 'job-activity', title: 'Activity feed', unread: 4 })
-  const defaultJob = makeJob({
-    id: 'job-default',
-    title: 'Team room',
-    isDefault: true,
-    unread: 0,
-  })
-  const fetchMock = stubRoom([defaultJob, activity])
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-
-  const activityTab = await screen.findByRole('tab', { name: /Activity feed/ })
-  expect(activityTab.textContent).toContain('4')
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls.some(
-        ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-default'),
-      ),
-    ).toBe(true),
-  )
-  expect(
-    fetchMock.mock.calls.some(
-      ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-activity'),
-    ),
-  ).toBe(false)
-
-  fireEvent.click(screen.getByRole('tab', { name: /Activity feed/ }))
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls.some(
-        ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-activity'),
-      ),
-    ).toBe(true),
-  )
-})
-
 test('a fresh team room shows board 09 and a starter fills the composer', async () => {
   stubRoom([])
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
@@ -519,34 +291,6 @@ test('a fresh team room still shows an approval that names no job', async () => 
   expect(
     await screen.findByRole('article', { name: /Needs you: May I install a package/ }),
   ).toBeDefined()
-})
-
-test('the room dropdown opens an older room read-write with today’s @mention routing', async () => {
-  const fetchMock = stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-
-  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
-  const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
-  await screen.findByRole('option', { name: /#activity-feed/ })
-  expect(picker.textContent).toContain('Always on · 1 job')
-  expect(picker.textContent).toContain('Older room · read-write with @mentions')
-  fireEvent.click(screen.getByRole('option', { name: /#activity-feed/ }))
-
-  expect(await screen.findByText('Older room · @name')).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Start a job' })).toBeNull()
-  const composer = await screen.findByRole('combobox', { name: /^Message #activity-feed/ })
-  fireEvent.change(composer, { target: { value: '@builder Where is the feed?' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-
-  await waitFor(() => {
-    const sent = fetchMock.mock.calls.find(
-      ([url, init]) => String(url) === '/api/rooms/room-old/messages' && init?.method === 'POST',
-    )
-    expect(sent).toBeDefined()
-    expect(JSON.parse(String(sent?.[1]?.body))).toMatchObject({
-      text: '@builder Where is the feed?',
-    })
-  })
 })
 
 test('an imported room is listed under Imported chats, not as an older room', async () => {
@@ -682,35 +426,6 @@ test('the selected job’s menu offers rename, close, share, export and delete, 
   expect(dialog.textContent).toContain('the job’s messages')
 })
 
-test('rename sends PATCH with the trimmed title', async () => {
-  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/jobs/job-activity' && init?.method === 'PATCH')
-      return jsonResponse(makeJob({ id: 'job-activity', title: 'Activity feed v2' }))
-    return fallback(input, init)
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
-  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename…' }))
-  const input = screen.getByRole('textbox', { name: 'Name' })
-  fireEvent.change(input, { target: { value: '  Activity feed v2  ' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls.find(
-        ([url, init]) => String(url) === '/api/jobs/job-activity' && init?.method === 'PATCH',
-      ),
-    ).toBeDefined(),
-  )
-  const call = fetchMock.mock.calls.find(
-    ([url, init]) => String(url) === '/api/jobs/job-activity' && init?.method === 'PATCH',
-  )!
-  expect(JSON.parse(String(call[1]!.body))).toEqual({ title: 'Activity feed v2' })
-  expect(await screen.findByText('Renamed “Activity feed v2”.')).toBeDefined()
-  expect(screen.getByRole('tab', { name: /Activity feed v2/ })).toBeDefined()
-})
-
 test('a close while work is running explains the 409 and offers Stop', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   const fallback = fetchMock.getMockImplementation()!
@@ -743,43 +458,6 @@ test('a close while work is running explains the 409 and offers Stop', async () 
     ).toBe(true),
   )
   expect(await screen.findByText(/Stop sent\. Close or delete the job again/)).toBeDefined()
-})
-
-test('delete asks for the typed title, then offers a 10-second undo that restores', async () => {
-  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    const url = String(input)
-    if (url === '/api/jobs/job-activity' && init?.method === 'DELETE')
-      return new Response(null, { status: 204 })
-    if (url === '/api/jobs/job-activity/restore' && init?.method === 'POST')
-      return jsonResponse(makeJob({ id: 'job-activity', title: 'Activity feed' }))
-    return fallback(input, init)
-  })
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} />
-      <JobUndoToast />
-    </>,
-    ['/b?job=job-activity'],
-  )
-  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete job' }))
-  const confirm = screen.getByRole('button', { name: 'Delete job' })
-  expect((confirm as HTMLButtonElement).disabled).toBe(true)
-  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Activity feed' } })
-  expect((confirm as HTMLButtonElement).disabled).toBe(false)
-  fireEvent.click(confirm)
-  expect(await screen.findByText(/Job deleted/)).toBeDefined()
-  expect(screen.queryByRole('tab', { name: /Activity feed/ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls.some(([url]) => String(url) === '/api/jobs/job-activity/restore'),
-    ).toBe(true),
-  )
-  expect(await screen.findByText('Restored “Activity feed”.')).toBeDefined()
-  expect(await screen.findByRole('tab', { name: /Activity feed/ })).toBeDefined()
 })
 
 test('a restore failure clears the undo toast and names the reason', async () => {
@@ -817,32 +495,6 @@ test('the default job offers neither rename nor delete', async () => {
   // The conversation itself has no job tools on a phone: nothing to rename or delete (named jobs keep their menu).
   expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Job menu' })).toBeNull()
-})
-
-test('closing a job posts close and tells the person where to find it', async () => {
-  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/jobs/job-activity/close' && init?.method === 'POST')
-      return jsonResponse(makeJob({ id: 'job-activity', state: 'closed' }))
-    return fallback(input, init)
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
-
-  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Close' }))
-
-  expect(
-    await screen.findByText('Closed “Activity feed”. Find it under Closed jobs to reopen it.'),
-  ).toBeDefined()
-  expect(screen.queryByRole('tab', { name: /Activity feed/ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Closed jobs' }))
-  expect(await screen.findByRole('tab', { name: /Activity feed/ })).toBeDefined()
-  const call = fetchMock.mock.calls.find(
-    ([url, init]) => String(url) === '/api/jobs/job-activity/close' && init?.method === 'POST',
-  )
-  expect(call).toBeDefined()
-  expect(new Headers(call?.[1]?.headers).get('Idempotency-Key')).toBeTruthy()
 })
 
 test('a message into a closed job explains the 409, and Reopen resends into that job', async () => {
@@ -893,56 +545,6 @@ test('a message into a closed job explains the 409, and Reopen resends into that
   )
 })
 
-test('a closed job is listed under Closed jobs and its menu reopens it', async () => {
-  const fetchMock = stubRoom([
-    makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' }),
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-  ])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
-      return jsonResponse(makeJob({ id: 'job-closed', title: 'Old import', state: 'open' }))
-    return fallback(input, init)
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
-
-  expect(screen.queryByRole('tab', { name: /Old import/ })).toBeNull()
-  fireEvent.click(await screen.findByRole('button', { name: 'Closed jobs' }))
-  fireEvent.click(await screen.findByRole('tab', { name: /Old import/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
-
-  expect(await screen.findByText('Reopened “Old import”.')).toBeDefined()
-  expect(
-    (await screen.findByRole('tab', { name: /Old import/ })).getAttribute('aria-selected'),
-  ).toBe('true')
-  expect(
-    fetchMock.mock.calls.some(
-      ([url, init]) => String(url) === '/api/jobs/job-closed/reopen' && init?.method === 'POST',
-    ),
-  ).toBe(true)
-})
-
-test('a closed job from the server snapshot is under Closed jobs after a reload', async () => {
-  const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
-  const fetchMock = stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
-      return jsonResponse({ ...closed, state: 'open' })
-    return fallback(input, init)
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-
-  expect(await screen.findByRole('button', { name: 'Closed jobs' })).toBeDefined()
-  expect(screen.queryByRole('tab', { name: /Old import/ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Closed jobs' }))
-  fireEvent.click(await screen.findByRole('tab', { name: /Old import/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
-  expect(await screen.findByText('Reopened “Old import”.')).toBeDefined()
-})
-
 test('delete explains a still-working 409 and offers Stop', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   const fallback = fetchMock.getMockImplementation()!
@@ -976,75 +578,6 @@ test('delete explains a still-working 409 and offers Stop', async () => {
   )
 })
 
-test('a job.deleted event returns the open job to All with a note', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-    makeJob({ id: 'job-notes', title: 'Release notes' }),
-  ])
-  const view = renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} />
-      <ParamsProbe />
-    </>,
-    ['/b?job=job-activity'],
-  )
-  await screen.findByRole('tab', { name: /Activity feed/ })
-
-  view.emit({
-    seq: 2,
-    ts: '2026-10-24T10:00:00.000Z',
-    type: 'job.deleted',
-    data: { id: 'job-activity', roomId: room.id },
-  })
-
-  expect(await screen.findByText('That job was deleted.')).toBeDefined()
-  await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('job='))
-  expect(screen.getByRole('tab', { name: /^All/ }).getAttribute('aria-selected')).toBe('true')
-  expect(screen.queryByRole('tab', { name: /Activity feed/ })).toBeNull()
-})
-
-test('a job.deleted event returns an open phone job to the list with a note', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-    makeJob({ id: 'job-notes', title: 'Release notes' }),
-  ])
-  const view = renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-    </>,
-    ['/b?job=job-activity'],
-  )
-  await screen.findByRole('button', { name: 'Back to chats' })
-
-  view.emit({
-    seq: 2,
-    ts: '2026-10-24T10:00:00.000Z',
-    type: 'job.deleted',
-    data: { id: 'job-activity', roomId: room.id },
-  })
-
-  expect(await screen.findByText('That job was deleted.')).toBeDefined()
-  await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('job='))
-  // Back in the chat's own conversation (the default job), with the note.
-  expect(screen.getByRole('button', { name: 'Back to chats' })).toBeDefined()
-})
-
-test('the phone job list keeps closed jobs behind a Closed jobs entry', async () => {
-  stubRoom([
-    makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' }),
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-  ])
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
-
-  expect(await screen.findByRole('button', { name: /^Activity feed\./ })).toBeDefined()
-  expect(screen.queryByRole('button', { name: /^Old import\./ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Closed jobs (1)' }))
-  expect(await screen.findByRole('heading', { name: 'Closed jobs' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: /^Old import\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-})
-
 test('the team room’s share uses the selected job thread and says what All shares', async () => {
   stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
@@ -1074,36 +607,6 @@ test('the room menu gives export, share and delete the prototype’s menu rows',
     [...menu.querySelectorAll('[role="menuitem"]')].every((item) => item.classList.contains('mi')),
   ).toBe(true)
   expect(menu.getAttribute('data-protected')).toBe('flex')
-})
-
-test('a room whose messages were all deleted offers the real toggle on the starter board', async () => {
-  stubRoom([], {
-    versions: [
-      {
-        id: 'v1',
-        roomId: 'room-1',
-        anchorId: 'm1',
-        anchorCreatedAt: '2026-10-24T10:00:00.000Z',
-        mode: 'delete',
-        replacedBy: null,
-        number: 1,
-        count: 1,
-        hiddenCount: 1,
-        rewound: [],
-        skipped: [],
-        createdAt: '2026-10-24T10:01:00.000Z',
-      },
-    ],
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-  fireEvent.click(await screen.findByRole('button', { name: 'Show deleted messages' }))
-  const toggle = await screen.findByRole('button', { name: 'Hide deleted messages' })
-  expect(toggle.getAttribute('aria-pressed')).toBe('true')
-  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
-  fireEvent.click(toggle)
-  expect(
-    await screen.findByRole('heading', { name: 'Your team is ready. What first?' }),
-  ).toBeDefined()
 })
 
 test('Team lead… opens from the team room menu and Cancel gives focus back to the menu button', async () => {

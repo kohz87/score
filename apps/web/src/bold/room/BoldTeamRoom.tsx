@@ -22,8 +22,8 @@ import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
-import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
-import { roomsQuery, versionsQuery } from '../../routes/chat/queries.ts'
+import { useShowDeleted } from '../../routes/chat/deleted-toggle.ts'
+import { roomsQuery } from '../../routes/chat/queries.ts'
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
@@ -31,7 +31,6 @@ import { RoomCapsules } from './RoomCapsules.tsx'
 import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
-import { RoomTabs } from './RoomTabs.tsx'
 import { ReportBackLine } from './ReportBack.tsx'
 import {
   DeleteJobDialog,
@@ -43,11 +42,14 @@ import {
 import { PhoneJobList } from './PhoneJobList.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
-import { isEveryoneRoom, jobMatchesFilter, type JobFilter } from './room-model.ts'
+import { isEveryoneRoom, type JobFilter } from './room-model.ts'
+import { ContextBar } from './ContextBar.tsx'
+import { useTopicCommands } from './topic-commands.ts'
+import type { SystemLine } from './topic-divider.tsx'
 import {
   changeCachedJob,
+  roomChatMessagesQuery,
   roomJobsQuery,
-  roomMessagesQuery,
   teamRoomQuery,
   teamRoomsQuery,
 } from './room-queries.ts'
@@ -144,9 +146,10 @@ function LoadedTeamRoom({
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
-  const [filter, setFilter] = useState<JobFilter>('all')
+  // 3.22.0: the chat is one conversation, so no filter hides a topic; the value stays for the pinned cards' props.
+  const filter: JobFilter = 'all'
+  const [systemLines, setSystemLines] = useState<SystemLine[]>([])
   const [composerKey, setComposerKey] = useState(0)
-  const [openedJobs, setOpenedJobs] = useState<string[]>([])
   const [phoneClosedList, setPhoneClosedList] = useState(false)
   const [sharingJob, setSharingJob] = useState<Job | null>(null)
   const [renamingJob, setRenamingJob] = useState<Job | null>(null)
@@ -162,30 +165,33 @@ function LoadedTeamRoom({
   const allJobsRef = useRef(allJobs)
   const showDeleted = useShowDeleted(room.id)
   const requestedJob = params.get('job') ?? 'all'
-  // A tab that no longer exists, or that the D10 filter hides, falls back to All during render: an effect that called
-  // selectJob would set state synchronously in an effect (and cascade a second render for the same event).
-  const requested =
-    requestedJob === 'all' ? undefined : allJobs.find((job) => job.id === requestedJob)
-  const selectedJob = phone
-    ? (phoneJob?.id ?? 'all')
-    : requestedJob === 'all'
+  // The topic the person picked (Info, a divider, a link). A topic that no longer exists falls back to none during
+  // render: an effect that cleared the address would set state synchronously in an effect.
+  const picked = requestedJob === 'all' ? undefined : allJobs.find((job) => job.id === requestedJob)
+  const selectedJob =
+    phone && !phoneJob
       ? 'all'
-      : jobsStatus !== 'success'
-        ? requestedJob
-        : requested && jobMatchesFilter(requested, filter)
+      : picked
+        ? picked.id
+        : jobsStatus !== 'success'
           ? requestedJob
           : 'all'
+  // The current topic: the one picked, else the newest open one, else the chat's general conversation.
+  const openTopic = [...allJobs]
+    .filter((job) => !job.isDefault && job.state !== 'done' && job.state !== 'closed')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  const currentJob = picked ?? openTopic ?? allJobs.find((job) => job.isDefault)
   const seek = params.get('message')
   const command = params.get('command')
   const stream = useStream()
-  const streamRef = useFollowEnd(`${room.id}:${selectedJob}`, seek !== null)
+  const streamRef = useFollowEnd(`${room.id}:chat`, seek !== null)
 
   // The message page the composer writes into: the selected job, or the room's default job from All. Its query key
   // does not depend on the room's job list, so a new job never refetches it or drops an optimistic message.
-  const composerJobId = selectedJob === 'all' ? defaultJobId : selectedJob
+  const composerJobId = currentJob && !currentJob.isDefault ? currentJob.id : null
   const baseMessagesDefinition = useMemo(
-    () => roomMessagesQuery(room.id, composerJobId, null, defaultJobId),
-    [composerJobId, defaultJobId, room.id],
+    () => roomChatMessagesQuery(room.id, null, defaultJobId),
+    [defaultJobId, room.id],
   )
   const baseMessages = useStreamQuery(baseMessagesDefinition)
 
@@ -207,8 +213,6 @@ function LoadedTeamRoom({
   const selectJob = useCallback(
     (jobId: string) => {
       const leaving = params.get('job')
-      if (leaving)
-        setOpenedJobs((current) => (current.includes(leaving) ? current : [...current, leaving]))
       const next = new URLSearchParams(params)
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
@@ -224,15 +228,6 @@ function LoadedTeamRoom({
       } else setParams(next, { replace: true, state: location.state })
     },
     [location.state, params, phone, setParams],
-  )
-
-  const selectFilter = useCallback(
-    (next: JobFilter) => {
-      setFilter(next)
-      // Leaving a tab it hides is a user action, so the URL is updated here rather than from an effect.
-      if (requested && !jobMatchesFilter(requested, next)) selectJob('all')
-    },
-    [requested, selectJob],
   )
 
   useEffect(() => {
@@ -296,7 +291,6 @@ function LoadedTeamRoom({
       )
       changeCachedJob(queryClient, changed, 'upsert')
       if (action === 'close') {
-        setFilter('all')
         if (selectedJob === job.id) selectJob('all')
         setLifecycleNotice({
           job: changed,
@@ -304,7 +298,6 @@ function LoadedTeamRoom({
           stillWorking: false,
         })
       } else {
-        setFilter('all')
         setPhoneClosedList(false)
         selectJob(changed.id)
         setLifecycleNotice({
@@ -353,7 +346,6 @@ function LoadedTeamRoom({
     changeCachedJob(queryClient, reopened, 'upsert')
     // The composer retries the message after this resolves. Leave the Closed jobs view and keep this job selected so
     // the retry still goes into it instead of falling back to the room's default thread.
-    setFilter('all')
     setPhoneClosedList(false)
     if (selectedJob !== jobId) selectJob(jobId)
   }
@@ -361,24 +353,11 @@ function LoadedTeamRoom({
   function jobDeleted(job: Job) {
     setDeletingJob(null)
     changeCachedJob(queryClient, job, 'delete')
-    setFilter('all')
     if (selectedJob === job.id) selectJob('all')
     beginJobUndo(queryClient, job)
   }
 
-  // Opening a job is what reads it: the job on show counts as opened, and leaving it keeps it in the list (recorded in
-  // selectJob), so All keeps showing its pages after a move and no other job's first page is read on mount (that would
-  // clear every badge at once).
-  const shownJob =
-    selectedJob !== 'all' && allJobs.some((job) => job.id === selectedJob) ? selectedJob : null
-  const opened = shownJob && !openedJobs.includes(shownJob) ? [...openedJobs, shownJob] : openedJobs
-
   const namedJobs = allJobs.filter((job) => !job.isDefault)
-  // Only a room that had messages deleted offers the toggle on its starter board (a fresh board has nothing to show).
-  const versionsDefinition = useMemo(() => versionsQuery(room.id), [room.id])
-  const hasDeletes = (useStreamQuery(versionsDefinition).data ?? []).some(
-    (version) => version.mode === 'delete',
-  )
   const empty =
     jobsStatus === 'success' &&
     namedJobs.length === 0 &&
@@ -388,18 +367,12 @@ function LoadedTeamRoom({
     !showDeleted &&
     // An older or imported phone room is still a chat: its one job must be reachable even before any message.
     !(phone && room.role !== 'team')
-  const job = allJobs.find((item) => item.id === selectedJob)
+  const job = picked
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   // Removed agents stay in `agents` for the history's names; @ and To offer only agents that can take a message (3.7.10).
   const talkable = useMemo(() => agents.filter(canTalkTo), [agents])
   const olderRoom = room.role !== 'team' && room.routing === 'mentions'
-  const allLabel = olderRoom
-    ? 'Older room · @name'
-    : lead
-      ? `To: team room (${agentDisplayName(lead)})`
-      : 'No lead yet — use @name'
-  // An older room's one job is an implementation detail on a phone; it stays "Older room · @name" there too.
-  const toLabel = job && !olderRoom ? `To: ${job.title}` : allLabel
+  const toLabel = lead ? `To: ${agentDisplayName(lead)}` : 'No lead yet — use @name'
 
   const clearSeek = useCallback(() => {
     const next = new URLSearchParams(params)
@@ -410,11 +383,27 @@ function LoadedTeamRoom({
 
   const revealSeek = useCallback(
     (jobId: string | null) => {
-      setFilter('all')
       if (jobId && selectedJob !== 'all' && jobId !== selectedJob) selectJob(jobId)
     },
     [selectJob, selectedJob],
   )
+
+  const topicCommands = useTopicCommands({
+    room,
+    agents,
+    jobs: allJobs,
+    current: currentJob,
+    pick: (jobId) => {
+      const next = new URLSearchParams(params)
+      if (jobId) next.set('job', jobId)
+      else next.delete('job')
+      next.delete('message')
+      next.delete('jobs')
+      setParams(next, { replace: true, state: location.state })
+    },
+    say: (text) =>
+      setSystemLines((lines) => [...lines, { id: newId(), at: new Date().toISOString(), text }]),
+  })
 
   function startWith(text: string) {
     saveDraft(room.id, text)
@@ -448,74 +437,6 @@ function LoadedTeamRoom({
         <p className="bold-stream-note" role="status">
           That job isn’t here any more.
         </p>
-      )}
-      {phone && phoneJob && (
-        <div className="bold-phone-chat-tools" aria-label="Job tools">
-          {/* A chat's main conversation (the default job) keeps the deleted-messages toggle; Thread and the job menu are
-              for named jobs. */}
-          {!phoneJob.isDefault && (
-            <>
-              <button
-                type="button"
-                className="bold-job-thread"
-                aria-label={`Open thread for ${phoneJob.title}`}
-                onClick={() => onOpenThread(phoneJob.id)}
-              >
-                Thread
-              </button>
-              <JobMenu
-                room={room}
-                job={phoneJob}
-                onShare={setSharingJob}
-                onRename={setRenamingJob}
-                onCloseJob={(job) => void changeJobState(job, 'close')}
-                onReopen={(job) => void changeJobState(job, 'reopen')}
-                onDelete={setDeletingJob}
-              />
-            </>
-          )}
-          <button
-            type="button"
-            className="bold-filter bold-deleted-toggle"
-            aria-pressed={showDeleted}
-            onClick={() => setShowDeleted(room.id, !showDeleted)}
-          >
-            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
-          </button>
-        </div>
-      )}
-      {!phone && jobsStatus === 'success' && !empty && (
-        <RoomTabs
-          jobs={allJobs}
-          selectedJob={selectedJob}
-          filter={filter}
-          onSelectJob={selectJob}
-          onSelectFilter={selectFilter}
-          trailing={
-            <JobMenu
-              room={room}
-              job={job}
-              onShare={setSharingJob}
-              onRename={setRenamingJob}
-              onCloseJob={(target) => void changeJobState(target, 'close')}
-              onReopen={(target) => void changeJobState(target, 'reopen')}
-              onDelete={setDeletingJob}
-            />
-          }
-          onOpenThread={onOpenThread}
-        />
-      )}
-      {!phone && jobsStatus === 'success' && !empty && (
-        <div className="bold-room-tools">
-          <button
-            type="button"
-            className="bold-filter bold-deleted-toggle"
-            aria-pressed={showDeleted}
-            onClick={() => setShowDeleted(room.id, !showDeleted)}
-          >
-            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
-          </button>
-        </div>
       )}
       {lifecycleNotice && (
         <div
@@ -562,18 +483,6 @@ function LoadedTeamRoom({
         />
       ) : empty ? (
         <>
-          {hasDeletes && (
-            <div className="bold-room-tools">
-              <button
-                type="button"
-                className="bold-filter bold-deleted-toggle"
-                aria-pressed={false}
-                onClick={() => setShowDeleted(room.id, true)}
-              >
-                Show deleted messages
-              </button>
-            </div>
-          )}
           <RoomEmpty agents={agents} onStart={startWith} />
         </>
       ) : phone && room.role === 'team' && !phoneJob ? (
@@ -609,7 +518,21 @@ function LoadedTeamRoom({
             filter={filter}
             showDeleted={showDeleted}
             seek={seek}
-            openedJobs={opened}
+            merged
+            focusTopic={picked?.id ?? null}
+            systemLines={systemLines}
+            topicMenu={(topic) => (
+              <JobMenu
+                room={room}
+                job={topic}
+                onShare={setSharingJob}
+                onRename={setRenamingJob}
+                onCloseJob={(target) => void changeJobState(target, 'close')}
+                onReopen={(target) => void changeJobState(target, 'reopen')}
+                onDelete={setDeletingJob}
+              />
+            )}
+            openedJobs={[]}
             onRevealSeek={revealSeek}
             onSeeked={clearSeek}
           />
@@ -623,20 +546,26 @@ function LoadedTeamRoom({
           agents={agents}
           offered={talkable}
           leadAgentId={room.leadAgentId}
-          jobId={selectedJob === 'all' || (phone && !phoneJob) ? null : selectedJob}
+          jobId={composerJobId}
           roomMode
           toLabel={toLabel}
           placeholder={
             empty
               ? 'Describe the work'
-              : phone
-                ? phoneJob
-                  ? 'Message the team'
-                  : 'Start a job or message the team'
-                : olderRoom
-                  ? 'Message this room'
-                  : 'Message the team'
+              : olderRoom
+                ? 'Message this room'
+                : 'Message the chat · @ someone · / for commands'
           }
+          topicCommands={olderRoom ? undefined : topicCommands}
+          footer={({ to, subject }) => (
+            <ContextBar
+              to={to}
+              subjectId={subject}
+              agents={agents}
+              ownerId={room.leadAgentId}
+              topic={currentJob}
+            />
+          )}
           messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}
           onClosedJob={reopenForComposer}
