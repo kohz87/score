@@ -404,3 +404,12 @@ test('the needs-you card and its buttons wear Score’s own colours under a cust
   expect(css).toContain(`${card} .btn {`)
   expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-request[data-protected]")
 })
+
+test('a slot holding a needs-you card stays drawn under a custom look (3.24.0)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toMatch(
+    /html\[data-look='custom'\] \[data-ui='bold'\] \.bold-needs-slot:not\(:empty\) \{[^}]*display: flex !important;[^}]*visibility: visible !important;/,
+  )
+  expect(protectedClasses).toContain('bold-needs-host')
+  expect(protectedClasses).toContain('bold-needs-slot')
+})

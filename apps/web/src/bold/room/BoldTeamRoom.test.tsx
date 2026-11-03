@@ -1162,3 +1162,76 @@ test('with ?job= set and the topics still loading, the composer is held rather t
   release()
   await waitFor(() => expect(held.disabled).toBe(false), { timeout: 4000 })
 })
+
+// Replaces 'moving to another topic drops its file and keeps the other parameters' (the phone list it used is gone):
+// the lifecycle path (Reopen moving to another topic) goes through the same selectJob.
+test('reopening another topic drops the open file but keeps the other parameters', async () => {
+  const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
+  const fetchMock = stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
+      return jsonResponse({ ...closed, state: 'open' })
+    return fallback(input, init)
+  })
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <ParamsProbe />
+    </>,
+    ['/b?job=job-activity&file=notes.md&keep=1'],
+  )
+  await screen.findByRole('separator', { name: 'Topic: Old import, closed' })
+  expect(screen.getByTestId('params').textContent).toContain('file=notes.md')
+  fireEvent.click(within(topicDivider('Old import')).getByRole('button', { name: 'Job menu' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
+  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-closed'))
+  const params = new URLSearchParams(screen.getByTestId('params').textContent ?? '')
+  expect(params.has('file')).toBe(false)
+  expect(params.get('keep')).toBe('1')
+})
+
+test('a ?message= seek is cleared from the address once the message is found', async () => {
+  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    const parsed = new URL(String(input), 'http://x')
+    if (parsed.pathname === '/api/rooms/room-1/messages' && (init?.method ?? 'GET') === 'GET')
+      return jsonResponse({
+        asOfSeq: 1,
+        items: [
+          makeMessage({
+            id: 'message-seek',
+            jobId: 'job-activity',
+            parts: [{ kind: 'text', text: 'Find me.' }],
+          }),
+        ],
+        nextCursor: null,
+        jobId: parsed.searchParams.get('jobId'),
+      })
+    return fallback(input, init)
+  })
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <ParamsProbe />
+    </>,
+    ['/b?job=job-activity&message=message-seek'],
+  )
+  expect(await screen.findByText('Find me.')).toBeDefined()
+  await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('message='))
+  expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
+})
+
+test('on a phone, opening a chat moves focus to the chat title', async () => {
+  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
+  renderInRoom(<BoldTeamRoom agents={agents} phone onBackToChats={() => undefined} />, [
+    '/b?room=room-old',
+  ])
+  await screen.findByRole('button', { name: 'Back to chats' })
+  await waitFor(() => {
+    const title = document.querySelector('[data-phone-chat-title]')
+    expect(title).not.toBeNull()
+    expect(document.activeElement).toBe(title)
+  })
+})

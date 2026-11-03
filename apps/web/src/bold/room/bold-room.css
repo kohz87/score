@@ -128,7 +128,7 @@
 }
 
 [data-ui='bold'] .bold-needs-host {
-  display: contents;
+  display: block;
 }
 
 [data-ui='bold'] .bold-needs-slot .bold-request {

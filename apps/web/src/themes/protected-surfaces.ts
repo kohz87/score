@@ -31,6 +31,9 @@ export const protectedClasses = [
   'bold-chat-rail-item',
   // 3.24.0: the jump chip ("2 need you ↑") above the composer; replaces the pinned box's "N more below" cue
   'bold-needs-jump',
+  // 3.24.0: the slots a needs-you card is drawn into inside the conversation, and the host that wraps the card
+  'bold-needs-slot',
+  'bold-needs-host',
   // PLAN 11.12c: a replay cannot answer an approval, so it hands the person back to the live screen
   'bold-screen-needs-live',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes

@@ -13,7 +13,30 @@ export type PinAnchor = { message?: string | null; job?: string | null }
 
 type Slots = {
   elements: ReadonlyMap<string, HTMLElement>
-  register: (id: string, element: HTMLElement | null) => void
+  register: (id: string, element: HTMLElement) => void
+  /** Removes the entry only when it still holds this element (a second slot with the same id may have replaced it). */
+  unregister: (id: string, element: HTMLElement) => void
+}
+
+/** The registry's two moves as pure functions, so the "only the owner removes its entry" rule can be tested. */
+export function withSlot(
+  current: ReadonlyMap<string, HTMLElement>,
+  id: string,
+  element: HTMLElement,
+): ReadonlyMap<string, HTMLElement> {
+  if (current.get(id) === element) return current
+  return new Map(current).set(id, element)
+}
+
+export function withoutSlot(
+  current: ReadonlyMap<string, HTMLElement>,
+  id: string,
+  element: HTMLElement,
+): ReadonlyMap<string, HTMLElement> {
+  if (current.get(id) !== element) return current
+  const next = new Map(current)
+  next.delete(id)
+  return next
 }
 
 const SlotsContext = createContext<Slots | null>(null)
@@ -29,16 +52,19 @@ export function useNeedsSlotsOuter(): Slots | null {
  */
 export function NeedsSlotsProvider({ children }: { children: ReactNode }) {
   const [elements, setElements] = useState<ReadonlyMap<string, HTMLElement>>(new Map())
-  const register = useCallback((id: string, element: HTMLElement | null) => {
-    setElements((current) => {
-      if ((current.get(id) ?? null) === element) return current
-      const next = new Map(current)
-      if (element) next.set(id, element)
-      else next.delete(id)
-      return next
-    })
-  }, [])
-  const value = useMemo(() => ({ elements, register }), [elements, register])
+  const register = useCallback(
+    (id: string, element: HTMLElement) => setElements((current) => withSlot(current, id, element)),
+    [],
+  )
+  const unregister = useCallback(
+    (id: string, element: HTMLElement) =>
+      setElements((current) => withoutSlot(current, id, element)),
+    [],
+  )
+  const value = useMemo(
+    () => ({ elements, register, unregister }),
+    [elements, register, unregister],
+  )
   return <SlotsContext value={value}>{children}</SlotsContext>
 }
 
@@ -46,12 +72,13 @@ export function NeedsSlotsProvider({ children }: { children: ReactNode }) {
 export function NeedsSlot({ id, className }: { id: string; className?: string }) {
   const slots = useContext(SlotsContext)
   const register = slots?.register
+  const unregister = slots?.unregister
   const [element, setElement] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
-    if (!register || !element) return
+    if (!register || !unregister || !element) return
     register(id, element)
-    return () => register(id, null)
-  }, [element, id, register])
+    return () => unregister(id, element)
+  }, [element, id, register, unregister])
   return (
     <div
       ref={setElement}

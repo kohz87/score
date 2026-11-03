@@ -97,6 +97,43 @@ function NewTopic({
   )
 }
 
+function TopicRow({
+  room,
+  job,
+  everyone,
+  onNavigate,
+}: {
+  room: Room
+  job: Job
+  everyone: boolean
+  onNavigate?: () => void
+}) {
+  return (
+    <li>
+      <Link to={topicLink(room, job, everyone)} onClick={onNavigate}>
+        {job.state === 'done' || job.state === 'closed' ? (
+          <span className="bold-chat-check" role="img" aria-label={jobStateLabel(job)}>
+            ✓
+          </span>
+        ) : (
+          <span
+            className="bold-job-dot"
+            role="img"
+            aria-label={jobStateLabel(job)}
+            style={{ background: jobDot(job.state) }}
+          />
+        )}
+        <span className="bold-chat-topic-title">{job.title}</span>
+        {job.unread > 0 && (
+          <span className="bold-unread" aria-label={`${job.unread} unread`}>
+            {job.unread > 99 ? '99+' : job.unread}
+          </span>
+        )}
+      </Link>
+    </li>
+  )
+}
+
 /** The side panel's Info tab (3.21.0): members, the chat's workspace and its jobs as Topics. */
 export function ChatInfo({
   room,
@@ -128,6 +165,8 @@ export function ChatInfo({
     ? workspaces?.find((item) => item.id === room.workspaceId)
     : undefined
   const topics = jobs.filter((job) => !job.isDefault)
+  const closedTopics = topics.filter((job) => job.state === 'closed')
+  const openTopics = topics.filter((job) => job.state !== 'closed')
   const current = currentTopic(jobs, params.get('job'))
   return (
     <div className="sidebody bold-chat-info" aria-label={`${room.name}, chat info`}>
@@ -171,27 +210,48 @@ export function ChatInfo({
         {topics.length === 0 ? (
           <p className="bold-chat-note">Nothing yet.</p>
         ) : (
-          <ul className="bold-chat-topics">
-            {topics.map((job) => (
-              <li key={job.id}>
-                <Link to={topicLink(room, job, everyone)} onClick={onNavigate}>
-                  {job.state === 'done' || job.state === 'closed' ? (
-                    <span className="bold-chat-check" role="img" aria-label={jobStateLabel(job)}>
-                      ✓
-                    </span>
-                  ) : (
-                    <span
-                      className="bold-job-dot"
-                      role="img"
-                      aria-label={jobStateLabel(job)}
-                      style={{ background: jobDot(job.state) }}
+          <>
+            <ul className="bold-chat-topics">
+              {openTopics.map((job) => (
+                <TopicRow
+                  key={job.id}
+                  room={room}
+                  job={job}
+                  everyone={everyone}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </ul>
+            {closedTopics.length > 0 &&
+              (closedTopics.length > 3 ? (
+                <details className="bold-chat-closed">
+                  <summary>Closed topics ({closedTopics.length})</summary>
+                  <ul className="bold-chat-topics">
+                    {closedTopics.map((job) => (
+                      <TopicRow
+                        key={job.id}
+                        room={room}
+                        job={job}
+                        everyone={everyone}
+                        onNavigate={onNavigate}
+                      />
+                    ))}
+                  </ul>
+                </details>
+              ) : (
+                <ul className="bold-chat-topics">
+                  {closedTopics.map((job) => (
+                    <TopicRow
+                      key={job.id}
+                      room={room}
+                      job={job}
+                      everyone={everyone}
+                      onNavigate={onNavigate}
                     />
-                  )}
-                  <span className="bold-chat-topic-title">{job.title}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  ))}
+                </ul>
+              ))}
+          </>
         )}
         <NewTopic
           room={room}

@@ -82,3 +82,46 @@ test('a failed New topic says why and keeps the title', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('That title is taken.')
   expect((screen.getByLabelText('Topic title') as HTMLInputElement).value).toBe('Fix login')
 })
+
+test('each topic row shows its unread count; closed topics stay listed with a check', () => {
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[
+        makeJob({ id: 'job-1', title: 'Activity feed', unread: 3 }),
+        makeJob({ id: 'job-2', title: 'Quiet one', unread: 0 }),
+        makeJob({ id: 'job-3', title: 'Old news', state: 'closed', unread: 120 }),
+      ]}
+      everyone
+    />,
+  )
+  const feed = screen.getByRole('link', { name: /Activity feed/ })
+  expect(feed.querySelector('.bold-unread')?.textContent).toBe('3')
+  expect(screen.getByLabelText('3 unread')).toBeDefined()
+  expect(screen.getByRole('link', { name: /Quiet one/ }).querySelector('.bold-unread')).toBeNull()
+  const closed = screen.getByRole('link', { name: /Old news/ })
+  expect(closed.textContent).toContain('✓')
+  expect(closed.querySelector('.bold-unread')?.textContent).toBe('99+')
+  expect(document.querySelector('details.bold-chat-closed')).toBeNull()
+})
+
+test('more than three closed topics fold under a Closed topics (N) disclosure', () => {
+  const closed = [1, 2, 3, 4].map((n) =>
+    makeJob({ id: `job-c${n}`, title: `Closed ${n}`, state: 'closed' }),
+  )
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[makeJob({ id: 'job-1', title: 'Activity feed' }), ...closed]}
+      everyone
+    />,
+  )
+  const disclosure = document.querySelector('details.bold-chat-closed') as HTMLDetailsElement
+  expect(disclosure.querySelector('summary')?.textContent).toBe('Closed topics (4)')
+  expect(disclosure.open).toBe(false)
+  expect(disclosure.querySelectorAll('a').length).toBe(4)
+  // The open topic stays outside it.
+  expect(disclosure.contains(screen.getByRole('link', { name: /Activity feed/ }))).toBe(false)
+})

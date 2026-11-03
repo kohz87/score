@@ -261,3 +261,49 @@ test('with two cards out of view the chip counts both and leads to the nearest',
   fireEvent.click(chip)
   expect(document.activeElement).toBe(fence)
 })
+
+test('a card with no size (hidden) is neither counted nor a place to jump to', async () => {
+  stub({ approvals: [approval], fenced: true })
+  renderChat()
+  const approvalCard = await screen.findByRole('article', { name: /Needs you: May I install/ })
+  const fence = await screen.findByRole('article', { name: /Starting work is blocked/ })
+  cardBoxes[approvalCard.getAttribute('data-pin-key')!] = { top: 900, bottom: 1000 }
+  cardBoxes[fence.getAttribute('data-pin-key')!] = { top: 450, bottom: 450 }
+  await scrolled()
+  const chip = await screen.findByRole('button', { name: /1 card needs you, below/ })
+  expect(chip.textContent).toBe('1 needs you ↓')
+  fireEvent.click(chip)
+  expect(document.activeElement).toBe(approvalCard)
+})
+
+test('while the chip shows the stream keeps its bottom clear of it, and a card under the chip counts as below', async () => {
+  stub({ approvals: [approval] })
+  renderChat()
+  const card = await screen.findByRole('article', { name: /Needs you: May I install a package/ })
+  const key = card.getAttribute('data-pin-key')!
+  const stream = document.getElementById('bold-room-stream')!
+  await scrolled()
+  expect(stream.style.paddingBottom).toBe('')
+
+  // Inside the view (bottom 380 < 400) but under the chip's strip (400 - 52 = 348).
+  cardBoxes[key] = { top: 300, bottom: 380 }
+  await scrolled()
+  await screen.findByRole('button', { name: /1 card needs you, below/ })
+  expect(stream.style.paddingBottom).toBe('56px')
+  expect(stream.style.scrollPaddingBottom).toBe('52px')
+
+  // Above the strip: no chip, and the padding goes with it.
+  cardBoxes[key] = { top: 200, bottom: 300 }
+  await scrolled()
+  await waitFor(() => expect(screen.queryByRole('button', { name: /need.* you/i })).toBeNull())
+  expect(stream.style.paddingBottom).toBe('')
+  expect(stream.style.scrollPaddingBottom).toBe('')
+})
+
+test('the card’s wrapper is protected so no look can hide it', async () => {
+  stub({ approvals: [approval] })
+  renderChat()
+  const card = await screen.findByRole('article', { name: /Needs you: May I install a package/ })
+  const host = card.closest<HTMLElement>('.bold-needs-host')!
+  expect(host.getAttribute('data-protected')).toBe('block')
+})

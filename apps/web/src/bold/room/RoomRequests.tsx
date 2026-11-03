@@ -8,10 +8,10 @@ import type {
   Job,
   Message,
 } from '@score/contract'
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { createPortal } from 'react-dom'
-import { jumpTarget, type Jump } from './needs-jump.ts'
+import { CHIP_MIN_HEIGHT, chipClearance, jumpTarget, type Jump } from './needs-jump.ts'
 import { NeedsSlot, NeedsSlotsProvider, slotIds, useNeedsSlotsOuter } from './needs-slots.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
@@ -642,15 +642,19 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
   const slots = useNeedsSlotsOuter()
   const slot = slots?.elements.get(slotIds.chip) ?? null
   const [jump, setJump] = useState<Jump | null>(null)
+  const chipRef = useRef<HTMLButtonElement | null>(null)
+  const clearance = useRef(chipClearance(CHIP_MIN_HEIGHT))
   const measure = useCallback(() => {
     const scroller = document.getElementById('bold-room-stream')
     if (!scroller) return setJump(null)
     const view = scroller.getBoundingClientRect()
-    const cards = [...scroller.querySelectorAll<HTMLElement>('[data-pin-key]')].map((card) => {
+    // A card that takes no room (display: none, hidden) is neither counted nor a place to take the person to.
+    const cards = [...scroller.querySelectorAll<HTMLElement>('[data-pin-key]')].flatMap((card) => {
       const rect = card.getBoundingClientRect()
-      return { key: card.getAttribute('data-pin-key') ?? '', top: rect.top, bottom: rect.bottom }
+      if (rect.height === 0) return []
+      return [{ key: card.getAttribute('data-pin-key') ?? '', top: rect.top, bottom: rect.bottom }]
     })
-    const next = jumpTarget({ top: view.top, bottom: view.bottom }, cards)
+    const next = jumpTarget({ top: view.top, bottom: view.bottom }, cards, clearance.current)
     setJump((previous) =>
       previous?.key === next?.key &&
       previous?.count === next?.count &&
@@ -678,6 +682,24 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
       mutations?.disconnect()
     }
   }, [cardKeys.length, measure, slot])
+  const showing = jump !== null && slot !== null
+  // While the chip shows, the stream keeps its bottom clear of it, so it never sits on a card's buttons.
+  useLayoutEffect(() => {
+    const scroller = document.getElementById('bold-room-stream')
+    if (!scroller || !showing) return
+    const height = chipRef.current?.getBoundingClientRect().height ?? 0
+    const needed = chipClearance(height)
+    if (needed !== clearance.current) {
+      clearance.current = needed
+      measure()
+    }
+    scroller.style.paddingBottom = `${needed + 4}px`
+    scroller.style.scrollPaddingBottom = `${needed}px`
+    return () => {
+      scroller.style.paddingBottom = ''
+      scroller.style.scrollPaddingBottom = ''
+    }
+  }, [showing, jump?.count, measure])
   if (!jump || !slot) return null
   const go = () => {
     const card = document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(jump.key)}]`)
@@ -688,6 +710,7 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
   const arrow = jump.direction === 'up' ? '↑' : '↓'
   return createPortal(
     <button
+      ref={chipRef}
       type="button"
       className="bold-needs-jump"
       data-protected="inline-flex"

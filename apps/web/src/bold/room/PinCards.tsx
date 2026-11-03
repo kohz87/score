@@ -104,6 +104,8 @@ export function PinCard({
   const [host] = useState(() => {
     const element = document.createElement('div')
     element.className = 'bold-needs-host'
+    // Built in code, not JSX: marked here so a custom look can't hide the card's wrapper.
+    element.setAttribute('data-protected', 'block')
     return element
   })
   useEffect(() => {

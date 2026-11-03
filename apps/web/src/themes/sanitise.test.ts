@@ -36,6 +36,10 @@ describe('sanitiseCss', () => {
     ])
     expect(reasons('.watch-approval button { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-ack { display: none }')).toEqual(['protected_selector'])
+    // 3.24.0: the slots and wrappers a needs-you card is drawn in.
+    expect(reasons('.bold-needs-slot { display: none !important }')).toContain('protected_selector')
+    expect(reasons('.bold-needs-host { display: none }')).toEqual(['protected_selector'])
+    expect(sanitiseCss('.bold-needs-slot { display: none }').css).not.toContain('bold-needs-slot')
     // Gate #8: the way back.
     expect(reasons('.command-run, .command-palette { display: none }')).toEqual([
       'protected_selector',
