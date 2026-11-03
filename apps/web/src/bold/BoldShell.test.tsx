@@ -495,6 +495,19 @@ test('the phone Room badge waits for the team room and counts the job in the URL
   expect(badge?.getAttribute('data-protected')).toBe('inline-flex')
 })
 
+// 3.19.1 review: below 1100px the team rings hide, so the top bar's Room button carries the needs-you count (CSS shows it).
+test('the desktop Room button carries the needs-you count, protected, for windows too narrow for the rings', async () => {
+  approvalFixture = true
+  open('/b?job=job-notes', [
+    { id: 'job-default', title: 'Team room', state: 'working', isDefault: true },
+    { id: 'job-notes', title: 'Release notes', state: 'waiting_on_you', isDefault: false },
+  ])
+  const nav = screen.getByRole('navigation', { name: 'Main' })
+  const room = within(nav).getByRole('button', { name: /^Room/ })
+  await waitFor(() => expect(room.querySelector('.bold-nav-count')?.textContent).toBe('1'))
+  expect(room.querySelector('.bold-nav-count')?.getAttribute('data-protected')).toBe('inline-flex')
+})
+
 test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {
   phone = true
   open('/b')

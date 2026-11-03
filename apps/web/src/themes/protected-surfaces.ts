@@ -25,6 +25,7 @@ export const protectedClasses = [
   'bold-needs',
   // PLAN 11.12c: the phone tab bar's count of everything waiting in the room
   'bold-tab-count',
+  'bold-nav-count',
   // PLAN 11.12c: a replay cannot answer an approval, so it hands the person back to the live screen
   'bold-screen-needs-live',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
