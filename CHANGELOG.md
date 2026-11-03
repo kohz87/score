@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.22.1] — 2026-11-04
+
+### Fixed
+- On a phone the context bar under the message box is one line (who and which topic, and the context meter); the model
+  and Compact are in the meter's details, which open inside the screen.
+- Info › This topic: a long topic or run title wraps instead of running past the panel.
+
 ## [3.22.0] — 2026-11-03
 
 ### Changed
