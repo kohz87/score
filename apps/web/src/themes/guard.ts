@@ -108,7 +108,7 @@ export const KNOWN_OVERLAYS = [
   '.chat-doc-table',
   '.chat-toast',
   '.bold-tabbar',
-  '.bold-pins-fade',
+  '.bold-needs-chip-slot',
   '.bold-sidecol',
   '.bold-job-toasts',
   '.bold-start-scrim',

@@ -28,9 +28,7 @@ import { agentsQuery, roomsQuery } from '../../routes/chat/queries.ts'
 import { roomNameProblem } from '../../routes/chat/room-actions.ts'
 import { groupRooms } from '../../routes/chat/room-groups.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
-import { useStartJob } from '../BoldStartJob.tsx'
 import { agentDisplayName } from '../bold-agents.ts'
-import { PhonePresence } from './PhoneJobList.tsx'
 import { isEveryoneRoom } from './room-model.ts'
 import { teamRoomsQuery } from './room-queries.ts'
 import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs.tsx'
@@ -1479,12 +1477,8 @@ export function RoomTitle({
   teamJobCount,
   rooms,
   agents,
-  phoneAction,
   phone = false,
   phoneJob,
-  phoneBackLabel = 'Back to jobs',
-  onBackToJobs,
-  phoneList = false,
   onBackToChats,
   onChatInfo,
   infoRef,
@@ -1501,15 +1495,10 @@ export function RoomTitle({
   teamJobCount: number | null
   rooms: Room[]
   agents: AgentSummary[]
-  phoneAction?: ReactNode
   /** The phone room's board 18/03 head, instead of the desktop title. */
   phone?: boolean
   /** The job whose full-screen chat is open; absent means the job list. */
   phoneJob?: Job
-  phoneBackLabel?: string
-  onBackToJobs?: () => void
-  /** 3.21.0 phone: true while the job list (not the chat's conversation) is the screen. */
-  phoneList?: boolean
   /** 3.21.0 phone: the chat bar's Back (to the chat list), its Info button and that button's ref. */
   onBackToChats?: () => void
   onChatInfo?: () => void
@@ -1523,10 +1512,9 @@ export function RoomTitle({
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
 }) {
-  const startJob = useStartJob()
   const [otherRooms, setOtherRooms] = useState(false)
   const roomMenuButton = useRef<HTMLButtonElement>(null)
-  if (phone && current && !phoneList) {
+  if (phone && current) {
     return (
       <ChatPhoneBar
         room={current}
@@ -1536,51 +1524,30 @@ export function RoomTitle({
         infoExpanded={infoExpanded}
         onBack={() => onBackToChats?.()}
         onInfo={() => onChatInfo?.()}
-        menu={<RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
+        menu={
+          <span className="bold-chat-phone-menu">
+            <RoomMenu
+              room={current}
+              onShare={onShare}
+              onDelete={onDelete}
+              onOtherRooms={() => setOtherRooms(true)}
+              triggerRef={roomMenuButton}
+            />
+            {/* No title caret on a phone either: the ⋯ menu's "Older, imported and elsewhere chats…" opens this list. */}
+            <RoomSwitcher
+              current={current}
+              teamRoom={teamRoom}
+              teamJobCount={teamJobCount}
+              rooms={rooms}
+              agents={agents}
+              onSelectRoom={onSelectRoom}
+              onOpenElsewhere={onOpenElsewhere}
+              controlled={{ open: otherRooms, setOpen: setOtherRooms, returnTo: roomMenuButton }}
+            />
+          </span>
+        }
         badge={<ArchivedBadge room={current} />}
       />
-    )
-  }
-  if (phone) {
-    return (
-      <div className="roomhead bold-phone-list-head">
-        <div className="bold-phone-list-title">
-          <button
-            type="button"
-            className="bold-chat-round small"
-            aria-label={phoneBackLabel}
-            onClick={onBackToJobs}
-          >
-            ‹
-          </button>
-          <RoomSwitcher
-            current={current}
-            teamRoom={teamRoom}
-            teamJobCount={teamJobCount}
-            rooms={rooms}
-            agents={agents}
-            onSelectRoom={onSelectRoom}
-            onOpenElsewhere={onOpenElsewhere}
-          />
-          <ArchivedBadge room={current} />
-          <PhonePresence agents={agents} />
-        </div>
-        <div className="bold-phone-list-actions">
-          {current && <RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
-          {current?.role === 'team' && (
-            <button
-              type="button"
-              className="chip room-start"
-              aria-label="Start a job"
-              onClick={() => startJob?.openStartJob({ roomId: current.id })}
-            >
-              <PlusIcon />
-              Job
-            </button>
-          )}
-          {phoneAction}
-        </div>
-      </div>
     )
   }
   return (
@@ -1615,18 +1582,6 @@ export function RoomTitle({
           triggerRef={roomMenuButton}
         />
       )}
-      {current?.role === 'team' && (
-        <button
-          type="button"
-          className="chip room-start"
-          aria-label="Start a job"
-          onClick={() => startJob?.openStartJob({ roomId: current.id })}
-        >
-          <PlusIcon />
-          Job
-        </button>
-      )}
-      {phoneAction}
       {current && chatAction?.(current)}
     </div>
   )

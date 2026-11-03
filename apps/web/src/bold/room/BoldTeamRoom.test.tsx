@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Approval, OutsideSession, Room } from '@score/contract'
 import {
@@ -163,15 +163,6 @@ function stubRoom(
 function ParamsProbe() {
   const [params] = useSearchParams()
   return <span data-testid="params">{params.toString()}</span>
-}
-
-function HistoryBack() {
-  const navigate = useNavigate()
-  return (
-    <button type="button" onClick={() => void navigate(-1)}>
-      History back
-    </button>
-  )
 }
 
 /** The divider that opens a topic, found by the title it carries. */
@@ -677,162 +668,46 @@ test('the room shows one divider per topic (no tabs or filter chips) and the con
   expect(bar.textContent).toContain('in Release notes')
 })
 
-// was: 'a phone opens on board 18 with the pinned request first, then jobs and their unread counts'
-test('a phone’s All topics list puts the pinned request first, then the general conversation and the topics with their unread counts', async () => {
+// 3.24.0: the All topics screen is gone. Was: 'a phone’s All topics list puts the pinned request first, then the general
+// conversation and the topics with their unread counts'. The request now sits in the conversation.
+test('a phone opens straight into the conversation, with the needs-you card inside it and no All topics screen', async () => {
   stubRoom(
     [
       makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 9 }),
       makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-      makeJob({ id: 'job-queue', title: 'Queue research', state: 'done', unread: 0 }),
-      makeJob({
-        id: 'job-notes',
-        title: 'Release notes 2.4',
-        state: 'waiting_on_you',
-        holderAgentId: 'lead',
-        unread: 3,
-      }),
     ],
     { approvals: [phoneApproval] },
   )
   renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
 
-  expect(await screen.findByRole('heading', { name: 'All topics' })).toBeDefined()
-  const general = screen.getByRole('button', { name: /^General conversation\..*9 unread/ })
-  expect(general.textContent).toContain('builder is working')
-  const activity = screen.getByRole('button', { name: /^Activity feed\..*2 unread/ })
-  const notes = screen.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
-  expect(activity.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(general.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(activity.textContent).toContain('builder is working')
-  expect(notes.textContent).toContain('lead needs you')
-  expect(screen.getByRole('img', { name: 'Done' })).toBeDefined()
-
   const pin = await screen.findByRole('article', {
     name: /Needs you: May I install a package/,
   })
   expect(pin.getAttribute('data-protected')).toBe('flex')
-  const topics = screen.getByRole('region', { name: 'All topics' })
-  expect(pin.compareDocumentPosition(topics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-})
-
-// was: 'a phone opens a job full screen and Back returns to the job list'
-test('a phone opens a topic from All topics and the browser’s Back returns to the list on the row it left', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-      <HistoryBack />
-    </>,
-    ['/b?jobs=1&message=old'],
-  )
-
-  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
-  await screen.findByRole('separator', { name: 'Topic: Activity feed, working' })
-  await waitFor(() =>
-    expect(document.querySelector('[data-phone-chat-title]')).toBe(document.activeElement),
-  )
-  expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
-  expect(screen.getByTestId('params').textContent).not.toContain('message')
+  expect(pin.closest('.bold-stream')).not.toBeNull()
   expect(screen.queryByRole('heading', { name: 'All topics' })).toBeNull()
-  expect(
-    screen.getByText(/^Activity feed · /, { selector: '.bold-chat-phone-id span' }),
-  ).toBeDefined()
-  expect((await screen.findByLabelText('Where this message goes')).textContent).toContain(
-    'in Activity feed',
-  )
-
-  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
-  expect(await screen.findByRole('heading', { name: 'All topics' })).toBeDefined()
-  expect(screen.getByTestId('params').textContent).not.toContain('job=')
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: /^Activity feed\./ })).toBe(document.activeElement),
-  )
+  expect(screen.queryByRole('region', { name: 'All topics' })).toBeNull()
+  expect(await screen.findByRole('combobox', { name: /^Message Team room/ })).toBeDefined()
 })
 
-// was: 'moving to another job drops its file and keeps the other parameters'
-test('moving to another topic drops its file and keeps the other parameters', async () => {
-  stubRoom([
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-    </>,
-    ['/b?jobs=1&job=job-activity&file=api%2Fevents.py&work=code'],
-  )
-  fireEvent.click(await screen.findByRole('button', { name: /^Release notes 2\.4\./ }))
-  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-notes'))
-  expect(screen.getByTestId('params').textContent).toContain('work=code')
-  expect(screen.getByTestId('params').textContent).not.toContain('file=')
-})
-
-// was: 'the phone list puts the default Team room row first and opens its chat'
-test('the phone list puts the general conversation first and opens it', async () => {
-  stubRoom([
-    makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 4 }),
-    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
-  ])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <ParamsProbe />
-    </>,
-    ['/b?jobs=1'],
-  )
-
-  const general = await screen.findByRole('button', { name: /^General conversation\..*4 unread/ })
-  expect(general.textContent).toContain('builder is working')
-  const activity = screen.getByRole('button', { name: /^Activity feed\./ })
-  expect(general.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-  fireEvent.click(general)
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-  expect(screen.getByTestId('params').textContent).toContain('job=job-default')
-  expect(screen.getByRole('combobox', { name: /^Message Team room/ })).toBeDefined()
-})
-
-// was: 'opening a phone job pushes history, so Back returns to the list instead of leaving /b'
-test('opening a phone topic pushes history, so Back returns to All topics instead of leaving /b', async () => {
-  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} phone />
-      <HistoryBack />
-    </>,
-    ['/b?jobs=1'],
-  )
-
-  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
-  expect(await screen.findByRole('heading', { name: 'All topics' })).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Back to chats' })).toBeNull()
-})
-
-// was: 'a missing phone job shows the list with a short note, never a Back header'
-test('a missing phone topic shows All topics with a short note, never a Back header', async () => {
+// 3.24.0: was 'a missing phone topic shows All topics with a short note, never a Back header' and '…in a fresh room
+// still shows All topics, not the starter': the note stays, the conversation shows instead of a list.
+test('a missing phone topic says so and shows the conversation, never a list or a Back header', async () => {
   stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
 
   expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
-  expect(await screen.findByRole('heading', { name: 'All topics' })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'All topics' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+  expect(await screen.findByRole('combobox', { name: /^Message / })).toBeDefined()
 })
 
-// was: 'a missing phone job in a fresh room still shows the job list, not the starter'
-test('a missing phone topic in a fresh room still shows All topics, not the starter', async () => {
+test('a missing phone topic in a fresh room says so, with no list', async () => {
   stubRoom([])
   renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
 
   expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'All topics' })).toBeDefined()
-  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
+  expect(screen.queryByRole('heading', { name: 'All topics' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
 })
 
@@ -888,6 +763,17 @@ test('opening the room reads the whole chat in one chain, not one read per topic
   await waitFor(() => expect(reads().some((url) => url.includes('all=1'))).toBe(true))
   expect(reads().every((url) => url.includes('all=1'))).toBe(true)
   expect(reads().some((url) => url.includes('jobId='))).toBe(false)
+})
+
+// 3.24.0: the chat header has Chat info and no "+ Job"; Start a run lives in the composer's + menu.
+test('the team room header has no + Job button; the composer’s + menu offers Start a run', async () => {
+  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  await screen.findByRole('combobox', { name: /^Message Team room/ })
+  expect(screen.queryByRole('button', { name: 'Start a job' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Attach, voice and commands' }))
+  expect(await screen.findByRole('button', { name: 'Start a run…' })).toBeDefined()
 })
 
 // was: 'the room dropdown opens an older room read-write with today’s @mention routing'
@@ -1104,22 +990,6 @@ test('a job.deleted event returns an open phone topic to the chat with a note', 
   expect(screen.getByRole('button', { name: 'Back to chats' })).toBeDefined()
 })
 
-// was: 'the phone job list keeps closed jobs behind a Closed jobs entry'
-test('the phone All topics list keeps closed topics behind a Closed topics entry', async () => {
-  stubRoom([
-    makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' }),
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-  ])
-  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?jobs=1'])
-
-  expect(await screen.findByRole('button', { name: /^Activity feed\./ })).toBeDefined()
-  expect(screen.queryByRole('button', { name: /^Old import\./ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Closed topics (1)' }))
-  expect(await screen.findByRole('heading', { name: 'Closed topics' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: /^Old import\./ }))
-  expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
-})
-
 // was: 'a room whose messages were all deleted offers the real toggle on the starter board'
 test('a room whose messages were all deleted offers Show deleted messages in the room ⋯ menu, which hides the starter board', async () => {
   stubRoom([], {
@@ -1247,7 +1117,7 @@ test('/new makes a topic, selects it, says so in the stream and clears the compo
   fireEvent.change(composer, { target: { value: '/new Fix login' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect(await screen.findByText('You started the topic “Fix login”')).toBeDefined()
-  expect(screen.getByTestId('params').textContent).toContain('job=job-new')
+  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-new'))
   await waitFor(() => expect(composer.value).toBe(''))
   expect(lastRequest(fetchMock, '/api/rooms/room-1/jobs', 'POST')).toBeDefined()
   // Nothing was posted as a chat message.

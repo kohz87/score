@@ -74,6 +74,7 @@ export function QuestionCard({
       label={`${name} asks`}
       variant="question"
       region
+      anchor={{ job: question.jobId }}
     >
       <div className="bold-request-head">
         {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}

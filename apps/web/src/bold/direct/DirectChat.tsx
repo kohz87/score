@@ -26,6 +26,7 @@ import { useFollowEnd } from '../room/follow-end.ts'
 import { beginJobUndo } from '../room/job-undo.ts'
 import { ChatMenu, ClearChatDialog, DeleteChatDialog } from '../room/RoomMenus.tsx'
 import { RoomMessageStream } from '../room/RoomMessageStream.tsx'
+import { NeedsSlotsProvider } from '../room/needs-slots.tsx'
 import { RoomRequests } from '../room/RoomRequests.tsx'
 import { changeCachedJob, roomChatMessagesQuery } from '../room/room-queries.ts'
 import type { SystemLine } from '../room/topic-divider.tsx'
@@ -343,7 +344,7 @@ function LoadedDirect({
   )
 
   return (
-    <>
+    <NeedsSlotsProvider>
       {phone ? (
         <DirectPhoneBar
           agent={agent}
@@ -502,6 +503,6 @@ function LoadedDirect({
           }}
         />
       )}
-    </>
+    </NeedsSlotsProvider>
   )
 }

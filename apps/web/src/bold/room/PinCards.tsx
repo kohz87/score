@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { useNeedsTarget, type PinAnchor } from './needs-slots.tsx'
 import {
   createContext,
   useCallback,
@@ -52,7 +54,7 @@ export function PinsProvider({ value, children }: { value: PinRegistration; chil
   return <PinsContext value={value}>{children}</PinsContext>
 }
 
-/** One card in the strip: a protected article that registers its place in the order. */
+/** One needs-you card: a protected article that registers its place in the order. */
 export function PinCard({
   pinKey,
   since,
@@ -60,6 +62,7 @@ export function PinCard({
   label,
   variant,
   region = false,
+  anchor,
   children,
 }: {
   pinKey: string
@@ -70,6 +73,8 @@ export function PinCard({
   variant?: 'approval' | 'run-request' | 'question'
   /** The card is its own labelled region and `label` is the whole name (an agent's question: "builder asks"). */
   region?: boolean
+  /** 3.24.0: where in the conversation the card sits (its message, else its topic's end, else the end). */
+  anchor?: PinAnchor
   children: ReactNode
 }) {
   const context = useContext(PinsContext)
@@ -79,7 +84,8 @@ export function PinCard({
     return register({ key: pinKey, since, notice })
   }, [notice, pinKey, register, since])
   const rank = context?.ranks.get(pinKey)
-  return (
+  const { inSlots, target } = useNeedsTarget(anchor)
+  const card = (
     <article
       className={variant ? `bold-request bold-${variant}` : 'bold-request'}
       data-protected="flex"
@@ -93,4 +99,25 @@ export function PinCard({
       {children}
     </article>
   )
+  // Inside a conversation the card lives in one host element that is moved between slots (a new message can change where
+  // the card belongs), so the card's own state (a half-typed answer) and focus survive the move.
+  const [host] = useState(() => {
+    const element = document.createElement('div')
+    element.className = 'bold-needs-host'
+    return element
+  })
+  useEffect(() => {
+    if (!inSlots || !target) {
+      host.remove()
+      return
+    }
+    if (host.parentElement === target) return
+    const active = document.activeElement
+    const hadFocus = active instanceof HTMLElement && host.contains(active) ? active : null
+    target.appendChild(host)
+    hadFocus?.focus({ preventScroll: true })
+  }, [host, inSlots, target])
+  useEffect(() => () => host.remove(), [host])
+  if (!inSlots) return card
+  return createPortal(card, host)
 }

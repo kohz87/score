@@ -15,7 +15,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
@@ -31,6 +31,7 @@ import { RoomCapsules } from './RoomCapsules.tsx'
 import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { currentTopic } from '../chats/chat-model.ts'
+import { NeedsSlotsProvider } from './needs-slots.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { ReportBackLine } from './ReportBack.tsx'
 import {
@@ -40,7 +41,6 @@ import {
   RoomTitle,
   jobLifecycleError,
 } from './RoomMenus.tsx'
-import { PhoneJobList } from './PhoneJobList.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
 import { isEveryoneRoom } from './room-model.ts'
@@ -151,7 +151,6 @@ function LoadedTeamRoom({
   const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
   const [systemLines, setSystemLines] = useState<SystemLine[]>([])
   const [composerKey, setComposerKey] = useState(0)
-  const [phoneClosedList, setPhoneClosedList] = useState(false)
   const [sharingJob, setSharingJob] = useState<Job | null>(null)
   const [renamingJob, setRenamingJob] = useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
@@ -221,14 +220,9 @@ function LoadedTeamRoom({
       next.delete('jobs')
       // A file belongs to the job it was opened from; another job must not inherit it.
       if (jobId !== leaving) next.delete('file')
-      // On a phone, opening a job from the list is a step Back undoes; moving from one job to another replaces it and
-      // keeps that entry's mark, so Back still lands on the list.
-      if (phone && !leaving) {
-        const previous = (location.state as Record<string, unknown> | null) ?? {}
-        setParams(next, { state: { ...previous, phoneJobFromList: true } })
-      } else setParams(next, { replace: true, state: location.state })
+      setParams(next, { replace: true, state: location.state })
     },
-    [location.state, params, phone, setParams],
+    [location.state, params, setParams],
   )
 
   useEffect(() => {
@@ -299,7 +293,6 @@ function LoadedTeamRoom({
           stillWorking: false,
         })
       } else {
-        setPhoneClosedList(false)
         selectJob(changed.id)
         setLifecycleNotice({
           job: changed,
@@ -347,7 +340,6 @@ function LoadedTeamRoom({
     changeCachedJob(queryClient, reopened, 'upsert')
     // The composer retries the message after this resolves. Keep this job selected so
     // the retry still goes into it instead of falling back to the room's default thread.
-    setPhoneClosedList(false)
     if (selectedJob !== jobId) selectJob(jobId)
   }
 
@@ -416,7 +408,7 @@ function LoadedTeamRoom({
   }, [command, focusComposer, location.state, params, room.id, setParams])
 
   return (
-    <>
+    <NeedsSlotsProvider>
       {jobsStatus === 'pending' && (
         <p className="bold-stream-note" role="status">
           Loading jobs…
@@ -467,27 +459,11 @@ function LoadedTeamRoom({
         teamRoom={isEveryoneRoom(room)}
         messages={baseMessages.data?.items ?? []}
       />
-      {phone && room.role === 'team' && phoneJobMissing ? (
-        <PhoneJobList
-          jobs={allJobs}
-          agents={agents}
-          onOpen={selectJob}
-          closedOnly={phoneClosedList}
-          onShowClosed={() => setPhoneClosedList((shown) => !shown)}
-        />
-      ) : empty ? (
+      {empty ? (
         <>
           <RoomEmpty agents={agents} onStart={startWith} />
         </>
-      ) : phone && room.role === 'team' && !phoneJob ? (
-        <PhoneJobList
-          jobs={allJobs}
-          agents={agents}
-          onOpen={selectJob}
-          closedOnly={phoneClosedList}
-          onShowClosed={() => setPhoneClosedList((shown) => !shown)}
-        />
-      ) : phone && room.role !== 'team' && !phoneJob && jobsStatus !== 'success' ? (
+      ) : phone && !phoneJob && jobsStatus !== 'success' ? (
         <p className="bold-stream-note" role="status">
           Opening the room…
         </p>
@@ -593,7 +569,7 @@ function LoadedTeamRoom({
           }}
         />
       )}
-    </>
+    </NeedsSlotsProvider>
   )
 }
 
@@ -601,7 +577,6 @@ function LoadedTeamRoom({
 export function BoldTeamRoom({
   agents,
   phone = false,
-  phoneAction,
   onOpenElsewhere,
   onOpenThread = () => undefined,
   onShowGraph = () => undefined,
@@ -624,7 +599,6 @@ export function BoldTeamRoom({
   onBackToChats?: () => void
   /** The bold shell's phone breakpoint: board 18's job list and board 03's full-screen chat. */
   phone?: boolean
-  phoneAction?: ReactNode
   onOpenElsewhere?: (session: OutsideSession) => void
   onOpenThread?: (jobId: string) => void
   /** 3.23.0: the run card's Show graph; the side panel opens its Graph tab for that topic. */
@@ -633,8 +607,6 @@ export function BoldTeamRoom({
   externalDeletedNotice?: boolean
 }) {
   const [params, setParams] = useSearchParams()
-  const location = useLocation()
-  const navigate = useNavigate()
   const override = params.get('room')
   const definition = useMemo(() => teamRoomQuery(override), [override])
   const { data: roomRead, status } = useStreamQuery(definition)
@@ -666,16 +638,9 @@ export function BoldTeamRoom({
       ? allJobs.find((job) => job.id === requestedPhoneJobId)
       : undefined
   const phoneDefaultJob = allJobs.find((job) => job.isDefault) ?? allJobs[0]
-  // 3.21.0: a phone chat opens straight into its conversation (the default job); the job list is one step away
-  // (`?jobs=1`, from the Info sheet) and a named job is `?job=`.
-  const jobsView = params.get('jobs') === '1'
-  const phoneJob = phoneRoom
-    ? jobsView
-      ? undefined
-      : current?.role === 'team' && requestedPhoneJobId !== null && requestedPhoneJobId !== 'all'
-        ? requestedPhoneJob
-        : (requestedPhoneJob ?? phoneDefaultJob)
-    : undefined
+  // 3.21.0: a phone chat opens straight into its conversation (the default job); a named job is `?job=`. 3.24.0: the
+  // job list screen is gone, `?jobs=1` (an old link) opens the Info sheet on Topics (BoldRoom).
+  const phoneJob = phoneRoom ? (requestedPhoneJob ?? phoneDefaultJob) : undefined
   const phoneJobId = phoneJob?.id ?? null
   const phoneJobMissing =
     phoneRoom &&
@@ -711,31 +676,6 @@ export function BoldTeamRoom({
     return () => cancelAnimationFrame(frame)
   }, [phone, phoneJobId])
 
-  const backToJobs = () => {
-    if (jobsView) {
-      const next = new URLSearchParams(params)
-      next.delete('jobs')
-      setParams(next, { replace: true })
-      return
-    }
-    if (current?.role !== 'team') {
-      const next = new URLSearchParams(params)
-      next.delete('room')
-      next.delete('job')
-      next.delete('message')
-      setParams(next)
-      return
-    }
-    if ((location.state as { phoneJobFromList?: boolean } | null)?.phoneJobFromList) {
-      navigate(-1)
-      return
-    }
-    const next = new URLSearchParams(params)
-    next.delete('job')
-    next.delete('message')
-    setParams(next, { replace: true })
-  }
-
   const selectRoom = (target: Room) => {
     const next = new URLSearchParams(params)
     if (isEveryoneRoom(target)) next.delete('room')
@@ -767,12 +707,8 @@ export function BoldTeamRoom({
         teamJobCount={teamJobCount}
         rooms={rooms}
         agents={agents}
-        phoneAction={phoneAction}
         phone={phoneRoom}
         phoneJob={phoneJob}
-        phoneBackLabel="Back to chat"
-        onBackToJobs={backToJobs}
-        phoneList={jobsView || phoneJobMissing}
         onBackToChats={onBackToChats}
         onChatInfo={onChatInfo}
         infoRef={infoRef}

@@ -1,5 +1,7 @@
 import type { AgentSummary, Job, Room } from '@score/contract'
-import { Link, useSearchParams } from 'react-router'
+import { useId, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { jobDot } from '../room/job-dot.ts'
@@ -7,20 +9,92 @@ import { jobStateLabel } from '../room/room-model.ts'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
+import { runTopicCommand } from '../room/topic-commands.ts'
 import { TopicInfo } from './TopicInfo.tsx'
 
-function topicLink(room: Room, job: Job, everyone: boolean): string {
+function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string {
   const params = new URLSearchParams()
   if (!everyone) params.set('room', room.id)
   params.set('job', job.id)
   return `/b?${params}`
 }
 
-function jobsLink(room: Room, everyone: boolean): string {
-  const params = new URLSearchParams()
-  if (!everyone) params.set('room', room.id)
-  params.set('jobs', '1')
-  return `/b?${params}`
+/** 3.24.0: "New topic" in Info, the same as `/new <title>` in the composer (the old All topics screen is gone). */
+function NewTopic({
+  room,
+  agents,
+  jobs,
+  everyone,
+  onNavigate,
+}: {
+  room: Room
+  agents: AgentSummary[]
+  jobs: Job[]
+  everyone: boolean
+  onNavigate?: () => void
+}) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const inputId = useId()
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function submit() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await runTopicCommand('new', title, {
+        room,
+        agents,
+        jobs,
+        current: undefined,
+        workspaces: [],
+        queryClient,
+        pick: (jobId) => {
+          if (jobId) void navigate(topicLink(room, { id: jobId }, everyone), { replace: true })
+        },
+        say: () => undefined,
+      })
+      setTitle('')
+      onNavigate?.()
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Couldn’t start the topic. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form
+      className="bold-chat-new-topic"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void submit()
+      }}
+    >
+      <label className="bold-chat-note" htmlFor={inputId}>
+        Topic title
+      </label>
+      <div className="bold-chat-new-topic-row">
+        <input
+          id={inputId}
+          type="text"
+          maxLength={200}
+          value={title}
+          placeholder="What is it about?"
+          onChange={(event) => setTitle(event.target.value)}
+        />
+        <button type="submit" className="btn sm" disabled={busy || title.trim() === ''}>
+          {busy ? 'Starting…' : 'New topic'}
+        </button>
+      </div>
+      {error && (
+        <p className="bold-chat-note" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  )
 }
 
 /** The side panel's Info tab (3.21.0): members, the chat's workspace and its jobs as Topics. */
@@ -36,7 +110,7 @@ export function ChatInfo({
   agents: AgentSummary[]
   jobs: Job[]
   everyone: boolean
-  /** On a phone the Info sheet is also the way to the job list and to Start a job (stage 2 turns jobs into topics). */
+  /** On a phone the Info sheet is also the way to Start a job (the composer's + menu has it on a desktop too). */
   phone?: boolean
   /** A link or button here leaves the sheet (the phone closes it). */
   onNavigate?: () => void
@@ -91,7 +165,7 @@ export function ChatInfo({
         <TopicInfo roomId={room.id} job={current} agents={agents} />
       )}
       <section aria-labelledby="chat-info-topics">
-        <h2 id="chat-info-topics" className="bold-chat-kicker">
+        <h2 id="chat-info-topics" className="bold-chat-kicker" tabIndex={-1}>
           Topics
         </h2>
         {topics.length === 0 ? (
@@ -119,23 +193,25 @@ export function ChatInfo({
             ))}
           </ul>
         )}
-        {phone && (
+        <NewTopic
+          room={room}
+          agents={agents}
+          jobs={jobs}
+          everyone={everyone}
+          onNavigate={onNavigate}
+        />
+        {phone && room.role === 'team' && (
           <div className="bold-chat-jobs-actions">
-            <Link className="btn sm" to={jobsLink(room, everyone)} onClick={onNavigate}>
-              All topics
-            </Link>
-            {room.role === 'team' && (
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => {
-                  onNavigate?.()
-                  startJob?.openStartJob({ roomId: room.id })
-                }}
-              >
-                Start a job
-              </button>
-            )}
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => {
+                onNavigate?.()
+                startJob?.openStartJob({ roomId: room.id })
+              }}
+            >
+              Start a job
+            </button>
           </div>
         )}
       </section>

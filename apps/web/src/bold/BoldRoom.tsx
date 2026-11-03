@@ -12,7 +12,7 @@ import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { BoldResults } from './BoldResults.tsx'
-import { BookIcon, CloseIcon } from './BoldIcons.tsx'
+import { CloseIcon } from './BoldIcons.tsx'
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
@@ -267,6 +267,26 @@ export function BoldRoom() {
     if (phone && workRequest === 'graph' && graphJobId) setSheetOpen(true)
   }, [phone, workRequest, graphJobId, setSheetOpen])
 
+  // 3.24.0: the All topics screen is gone. An old `?jobs=1` link opens the chat with Info on its Topics.
+  const jobsLink = params.get('jobs') === '1'
+  useEffect(() => {
+    if (!jobsLink || directMode) return
+    // Not cancelled by the cleanup: the replace below re-runs this effect, and the focus is still wanted.
+    requestAnimationFrame(() => {
+      const next = new URLSearchParams(params)
+      next.delete('jobs')
+      setMode('info')
+      setPanelShut(false)
+      setSheetOpen(true)
+      setParams(next, { replace: true, state: location.state })
+      requestAnimationFrame(() => {
+        const heading = document.getElementById('chat-info-topics')
+        heading?.scrollIntoView?.({ block: 'start' })
+        heading?.focus()
+      })
+    })
+  }, [directMode, jobsLink, location.state, params, setParams, setSheetOpen])
+
   const closeSheet = () => {
     setSheetOpen(false)
     requestAnimationFrame(() => phoneOpenRef.current?.focus())
@@ -276,20 +296,6 @@ export function BoldRoom() {
   useEffect(() => {
     closeSheetRef.current = closeSheet
   })
-
-  const phoneAction = phone ? (
-    <button
-      ref={phoneOpenRef}
-      type="button"
-      className="btn sm phone-side-open"
-      aria-label="Open side panel"
-      aria-expanded={sheetOpen}
-      aria-controls="bold-side-panel"
-      onClick={() => setSheetOpen(true)}
-    >
-      <BookIcon /> <span className="phone-side-label">Open side panel</span>
-    </button>
-  ) : undefined
 
   const chatList = (
     <ChatList
@@ -353,7 +359,6 @@ export function BoldRoom() {
           <BoldTeamRoom
             agents={agents}
             phone={phone}
-            phoneAction={phoneAction}
             onOpenElsewhere={openElsewhere}
             onOpenThread={openThread}
             onShowGraph={showGraph}

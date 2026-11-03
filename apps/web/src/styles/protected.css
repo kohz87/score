@@ -153,8 +153,8 @@
     color: #ffffff !important;
     box-shadow: inset 0 0 0 1.5px #ffffff !important;
   }
-  /* 3.22.0: the "N more below" cue at the bottom of the scrolling needs-you box is a light object of Score's own. */
-  html[data-look='custom'] .bold-pins-more[data-protected] {
+  /* 3.24.0: the jump chip above the composer is a light object of Score's own. */
+  html[data-look='custom'] .bold-needs-jump[data-protected] {
     background-color: #ececf1 !important;
     color: #12131a !important;
   }
