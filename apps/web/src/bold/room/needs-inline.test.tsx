@@ -276,14 +276,16 @@ test('a card with no size (hidden) is neither counted nor a place to jump to', a
   expect(document.activeElement).toBe(approvalCard)
 })
 
-test('while the chip shows the stream keeps its bottom clear of it, and a card under the chip counts as below', async () => {
+test('while a card waits the stream keeps its bottom clear of the chip, and a card under the chip counts as below', async () => {
   stub({ approvals: [approval] })
   renderChat()
   const card = await screen.findByRole('article', { name: /Needs you: May I install a package/ })
   const key = card.getAttribute('data-pin-key')!
   const stream = document.getElementById('bold-room-stream')!
   await scrolled()
-  expect(stream.style.paddingBottom).toBe('')
+  // 3.24.0 review: the room is kept while a card waits, chip or not, so the padding can't switch the chip on and off.
+  await waitFor(() => expect(stream.style.paddingBottom).toBe('56px'))
+  expect(stream.style.scrollPaddingBottom).toBe('52px')
 
   // Inside the view (bottom 380 < 400) but under the chip's strip (400 - 52 = 348).
   cardBoxes[key] = { top: 300, bottom: 380 }
@@ -292,10 +294,23 @@ test('while the chip shows the stream keeps its bottom clear of it, and a card u
   expect(stream.style.paddingBottom).toBe('56px')
   expect(stream.style.scrollPaddingBottom).toBe('52px')
 
-  // Above the strip: no chip, and the padding goes with it.
+  // Above the strip: no chip, and the room stays (the card still waits), so nothing moves under the reader.
   cardBoxes[key] = { top: 200, bottom: 300 }
   await scrolled()
   await waitFor(() => expect(screen.queryByRole('button', { name: /need.* you/i })).toBeNull())
+  expect(stream.style.paddingBottom).toBe('56px')
+  expect(stream.style.scrollPaddingBottom).toBe('52px')
+})
+
+test('the stream gives its bottom room back once no card waits', async () => {
+  stub({ approvals: [] })
+  renderChat()
+  const stream = await waitFor(() => {
+    const element = document.getElementById('bold-room-stream')
+    expect(element).not.toBeNull()
+    return element!
+  })
+  await scrolled()
   expect(stream.style.paddingBottom).toBe('')
   expect(stream.style.scrollPaddingBottom).toBe('')
 })

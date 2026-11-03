@@ -683,10 +683,13 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
     }
   }, [cardKeys.length, measure, slot])
   const showing = jump !== null && slot !== null
-  // While the chip shows, the stream keeps its bottom clear of it, so it never sits on a card's buttons.
+  // While any card waits, the stream keeps its bottom clear of the chip, so it never sits on a card's buttons. Keyed on
+  // a card waiting, not on the chip showing: the padding moves the cards, so tying it to the chip made the two switch
+  // each other on and off at the stream's end (3.24.0 review).
+  const pending = cardKeys.length > 0 && slot !== null
   useLayoutEffect(() => {
     const scroller = document.getElementById('bold-room-stream')
-    if (!scroller || !showing) return
+    if (!scroller || !pending) return
     const height = chipRef.current?.getBoundingClientRect().height ?? 0
     const needed = chipClearance(height)
     if (needed !== clearance.current) {
@@ -699,7 +702,7 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
       scroller.style.paddingBottom = ''
       scroller.style.scrollPaddingBottom = ''
     }
-  }, [showing, jump?.count, measure])
+  }, [pending, showing, jump?.count, measure])
   if (!jump || !slot) return null
   const go = () => {
     const card = document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(jump.key)}]`)
