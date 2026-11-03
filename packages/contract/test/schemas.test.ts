@@ -2362,6 +2362,11 @@ const cases = [
   ],
   ['RunControlSchema', { orchestrationRevision: 2 }, { orchestrationRevision: 0 }],
   [
+    'RunTopicRequestSchema',
+    { roomId: 'room-1', title: 'Release notes', exchangeBudget: 6 },
+    { roomId: 'room-1', title: '   ', extra: true },
+  ],
+  [
     'RemapDecisionSchema',
     {
       agentId: 'builder',
