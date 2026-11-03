@@ -108,25 +108,23 @@ function respond(input: string, init: RequestInit = {}): Response {
       ? json({ deleted: 2, leftBehind: [] })
       : new Response(null, { status: 204 })
   if (path === '/api/agents') return json({ asOfSeq: 0, items: [reviewer] })
-  if (path === '/api/rooms')
+  if (path === '/api/team-room')
     return json({
       asOfSeq: 0,
-      rooms: [
-        {
-          id: 'team-1',
-          name: 'Team room',
-          role: 'team',
-          kind: 'room',
-          leadAgentId: null,
-          members: ['reviewer'],
-          unread: 0,
-          activeAgents: [],
-          channels: [],
-        },
-      ],
-      directs: [],
-      projects: [],
+      room: {
+        id: 'team-1',
+        name: 'Team room',
+        role: 'team',
+        kind: 'room',
+        leadAgentId: null,
+        members: ['reviewer'],
+        unread: 0,
+        activeAgents: [],
+        channels: [],
+      },
+      jobs: [],
     })
+  if (path === '/api/rooms/team-1/jobs') return json({ asOfSeq: 0, items: [], nextCursor: null })
   if (path === '/api/agents/reviewer/knowledge') return json({ enabled: true })
   return json({ error: { code: 'not_found', message: 'no' } }, 404)
 }

@@ -27,20 +27,16 @@ for (const size of sizes) {
     await expect(first).toBeVisible()
     await first.click()
     await expect(page).toHaveURL(/\/b\/knowledge\?note=/)
-    await expect(page.getByRole('button', { name: 'Share to a chat' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Share to a chat' })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
     if (phone) {
       await page.getByRole('button', { name: /Back to the notes/ }).click()
       await expect(folders).toBeVisible()
     }
 
-    // Opening a note rewrites ?note=, which clears the search box once; retype until the results show.
-    await expect(async () => {
-      await page.getByPlaceholder('Search').fill('a')
-      await expect(page.getByRole('region', { name: 'Search results' })).toBeVisible({
-        timeout: 1500,
-      })
-    }).toPass({ timeout: 10_000 })
+    // Typing right after opening a note keeps the text (review: ?note= no longer clears the search box).
+    await page.getByPlaceholder('Search').fill('a')
+    await expect(page.getByRole('region', { name: 'Search results' })).toBeVisible()
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

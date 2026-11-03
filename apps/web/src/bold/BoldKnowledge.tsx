@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { loadDraft, saveDraft } from '../routes/chat/composer-model.ts'
-import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
+import { agentsQuery } from '../routes/chat/queries.ts'
+import { teamRoomQuery } from './room/room-queries.ts'
 import { isNotePath } from '../routes/knowledge/knowledge-files.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import './bold-knowledge.css'
@@ -13,7 +14,8 @@ import './bold-knowledge.css'
 export function BoldKnowledgePage() {
   const agents = useStreamQuery(agentsQuery).data ?? []
   const navigate = useNavigate()
-  const teamRoom = useStreamQuery(roomsQuery).data?.rooms.find((room) => room.role === 'team')
+  // The rooms list leaves team rooms out: the team room comes from its own query, as the rest of the shell reads it.
+  const teamRoom = useStreamQuery(teamRoomQuery(null)).data?.room
   const [params, setParams] = useSearchParams()
   const note = params.get('note')
   const onOpened = useCallback(

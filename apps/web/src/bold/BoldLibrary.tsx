@@ -288,7 +288,7 @@ export function BoldLibrary({
     revealPath(openPath)
     setSelected(openPath)
     setSection('notes')
-    setQuery('')
+    if (selected !== openPath) setQuery('')
   }
   // Search's `?note=` is removed once consumed: forget it with the parameter, so the same note can be requested again.
   if (!openPath && openedPath !== null) setOpenedPath(null)
