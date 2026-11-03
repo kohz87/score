@@ -1126,6 +1126,24 @@ const cases = [
   ],
   ['AgentChannelsResponseSchema', { items: [] }, { items: [{ platform: 'x' }] }],
   ['JobRecipeSchema', { kind: 'workflow', ref: 'run_1' }, { kind: 'routine', ref: 'r' }],
+  [
+    'SharedWorkspaceSchema',
+    { id: 'w1', name: 'feed', path: '/work/feed', agentIds: ['lead'], roomIds: [] },
+    { id: 'w1' },
+  ],
+  [
+    'SharedWorkspaceListSchema',
+    {
+      workspaces: [{ id: 'w1', name: 'feed', path: '/work/feed', agentIds: ['lead'], roomIds: [] }],
+    },
+    { workspaces: [{}] },
+  ],
+  ['SharedWorkspaceCreateRequestSchema', { name: 'feed', path: '/x' }, { name: '', path: '/x' }],
+  ['SharedWorkspaceUpdateRequestSchema', { name: 'feed' }, {}],
+  ['RoomWorkspaceRequestSchema', { workspaceId: null }, { workspaceId: '' }],
+  ['UseAsFolderRequestSchema', { agentId: 'builder' }, { agentId: '' }],
+  ['WorkspaceIdSchema', 'w1', ''],
+  ['WorkspaceNameSchema', 'feed', ' '],
   ['WorkspaceInfoSchema', { root: '/w', available: true, reason: null }, { root: '/w' }],
   [
     'LineCommentSchema',
@@ -2730,4 +2748,34 @@ test('PLAN 11.11: an old style that still carries look or pack parses and the fi
   expect(old).toEqual({ color: '#6B4EFF', shape: 'circle-dot' })
   const patch = contract.AgentStylePatchSchema.parse({ look: 'ring', pack: { rev: 'x' } })
   expect(patch).toEqual({})
+})
+
+describe('shared workspaces (3.20.0)', () => {
+  test('a workspace, its requests, and the optional room field', () => {
+    const w = {
+      id: 'w1',
+      name: 'activity-feed',
+      path: '/work/activity-feed',
+      agentIds: ['lead', 'builder'],
+      roomIds: ['r1'],
+    }
+    expect(contract.SharedWorkspaceSchema.parse(w)).toEqual(w)
+    expect(contract.SharedWorkspaceListSchema.parse({ workspaces: [w] }).workspaces).toHaveLength(1)
+    expect(
+      contract.SharedWorkspaceCreateRequestSchema.parse({ name: ' a ', path: '/x', create: true }),
+    ).toEqual({ name: 'a', path: '/x', create: true })
+    expect(() =>
+      contract.SharedWorkspaceCreateRequestSchema.parse({ name: '', path: '/x' }),
+    ).toThrow()
+    expect(() => contract.SharedWorkspaceUpdateRequestSchema.parse({})).toThrow()
+    expect(contract.RoomWorkspaceRequestSchema.parse({ workspaceId: null })).toEqual({
+      workspaceId: null,
+    })
+    expect(contract.UseAsFolderRequestSchema.parse({ agentId: 'builder' })).toEqual({
+      agentId: 'builder',
+    })
+    const room = contract.RoomSchema.parse({ ...f.room, workspaceId: 'w1' })
+    expect(room.workspaceId).toBe('w1')
+    expect(contract.RoomSchema.parse(f.room).workspaceId).toBeUndefined()
+  })
 })

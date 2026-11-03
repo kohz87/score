@@ -19,9 +19,12 @@ export function WorkspaceTab({
   agentId,
   agentName,
   initialPath = null,
+  canSetFolder = true,
 }: {
   agentId: string
   agentName: string
+  /** 3.20.0: the bold agent page no longer changes an agent's folder (Settings › Workspaces does). */
+  canSetFolder?: boolean
   /** A file to open straight away (a workspace:// link); a bad path shows the normal error. */
   initialPath?: string | null
 }) {
@@ -93,7 +96,7 @@ export function WorkspaceTab({
         <p role="status" className="ws-unavailable">
           {info.data.reason ?? 'The workspace is unavailable.'}
         </p>
-        {folderForm}
+        {canSetFolder && folderForm}
       </section>
     )
   return (
@@ -110,6 +113,7 @@ export function WorkspaceTab({
           setSettingFolder(true)
         }}
         folderForm={folderForm}
+        canSetFolder={canSetFolder}
       />
     </WorkspaceRootContext.Provider>
   )
@@ -123,6 +127,7 @@ function Browser({
   settingFolder,
   onSetFolder,
   folderForm,
+  canSetFolder,
 }: {
   agentId: string
   agentName: string
@@ -131,6 +136,7 @@ function Browser({
   settingFolder: boolean
   onSetFolder: () => void
   folderForm: React.ReactNode
+  canSetFolder: boolean
 }) {
   const actions = useWorkspaceActions(agentId)
   const git = useGitStatus(agentId).data
@@ -280,9 +286,11 @@ function Browser({
     <section className="team-card ws" aria-labelledby="ws-heading">
       <div className="team-card-heading">
         <h2 id="ws-heading">Workspace</h2>
-        <button type="button" className="team-pill-button" onClick={onSetFolder}>
-          Set folder
-        </button>
+        {canSetFolder && (
+          <button type="button" className="team-pill-button" onClick={onSetFolder}>
+            Set folder
+          </button>
+        )}
       </div>
       <p className="ws-root">
         <span className="team-muted">{agentName} works in</span> <code>{root}</code>
@@ -301,7 +309,7 @@ function Browser({
           </span>
         )}
       </p>
-      {settingFolder && folderForm}
+      {canSetFolder && settingFolder && folderForm}
       <div
         ref={grid}
         className={`ws-grid ws-screen-${screen}`}

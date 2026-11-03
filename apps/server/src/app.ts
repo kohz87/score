@@ -20,6 +20,7 @@ import { registerAttemptRoutes } from './http/attempts.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerRunsOnRoutes } from './http/agent-runs-on.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
+import { registerWorkspacesRoutes } from './http/workspaces.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
 import { ZipStaging } from './knowledge/staging.ts'
 import { registerKnowledgeRoutes } from './http/knowledge.ts'
@@ -352,6 +353,7 @@ export function buildApp({
       workspaces,
       knowledge,
     )
+    registerWorkspacesRoutes(app, { port, db, ingest, config, ...(clock ? { clock } : {}) })
     // PLAN 11.1d: webhook triggers. Their signing secrets are sealed with a key in Score's home, so only a server that
     // owns its home (never a test against a borrowed database) serves them.
     if (ownsHome) {

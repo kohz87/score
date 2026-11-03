@@ -34,6 +34,9 @@ import { isEveryoneRoom, jobStateLine } from './room-model.ts'
 import { teamRoomsQuery } from './room-queries.ts'
 import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs.tsx'
 import { useMenuPlacement } from './menu-placement.ts'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
+import { setRoomWorkspace, useSharedWorkspaces, workspacesKey } from '../workspaces-queries.ts'
 
 function DotsIcon() {
   return (
@@ -953,6 +956,93 @@ export function RoomProjectDialog({
   )
 }
 
+/** 3.20.0: the workspace this room's agents work in (Settings › Workspaces makes them). */
+export function RoomWorkspaceDialog({ room, onClose }: { room: Room; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const queryClient = useQueryClient()
+  const workspaces = useSharedWorkspaces()
+  const [choice, setChoice] = useState<string | null>(room.workspaceId ?? null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  async function save() {
+    if (busy) return
+    if (choice === (room.workspaceId ?? null)) return onClose()
+    setBusy(true)
+    setError(null)
+    try {
+      // The room arrives on the stream as room.upserted; the Settings list counts rooms, so it is refetched.
+      await setRoomWorkspace(room.id, choice)
+      await queryClient.invalidateQueries({ queryKey: workspacesKey })
+      onClose()
+    } catch {
+      setBusy(false)
+      setError('Couldn’t set the workspace. Try again.')
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-room-project-dialog"
+      data-protected="any"
+      aria-labelledby="room-workspace-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="room-workspace-title">Workspace for {room.name}</h2>
+      <p className="small muted">
+        Coding agents ticked for the workspace work in its folder here; everyone else keeps their
+        own.
+      </p>
+      <div role="radiogroup" aria-label="Workspace" className="bold-room-project-list">
+        {[{ id: null, name: 'No workspace' }, ...(workspaces.data ?? [])].map((workspace) => (
+          <label key={workspace.id ?? 'none'} className="bold-room-project-option">
+            <input
+              type="radio"
+              name="room-workspace"
+              checked={choice === workspace.id}
+              disabled={busy}
+              onChange={() => setChoice(workspace.id)}
+            />
+            <span>{workspace.name}</span>
+          </label>
+        ))}
+      </div>
+      {workspaces.isPending && <p role="status">Loading workspaces…</p>}
+      {workspaces.isError && <p role="alert">Couldn’t load the workspaces.</p>}
+      {workspaces.isSuccess && workspaces.data.length === 0 && (
+        <p className="small muted">
+          No workspaces yet.{' '}
+          <Link to="/b/settings/workspaces">Add one in Settings › Workspaces</Link>.
+        </p>
+      )}
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
 export function RoomMenu({
   room,
   onShare,
@@ -972,7 +1062,12 @@ export function RoomMenu({
   const team = room.role === 'team'
   const everyone = isEveryoneRoom(room)
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
-  const [dialog, setDialog] = useState<'rename' | 'project' | 'lead' | 'members' | null>(null)
+  const workspaces = useSharedWorkspaces(open)
+  const workspaceName =
+    workspaces.data?.find((workspace) => workspace.id === room.workspaceId)?.name ?? null
+  const [dialog, setDialog] = useState<
+    'rename' | 'project' | 'lead' | 'members' | 'workspace' | null
+  >(null)
   const [failure, setFailure] = useState<string | null>(null)
   async function organise(body: { pinned: boolean } | { archived: boolean }, what: string) {
     setFailure(null)
@@ -1067,6 +1162,17 @@ export function RoomMenu({
               )}
             </>
           )}
+          <button
+            type="button"
+            className="mi"
+            role="menuitem"
+            onClick={() => {
+              close(false)
+              setDialog('workspace')
+            }}
+          >
+            Workspace: {workspaceName ?? (room.workspaceId ? '…' : 'none')}
+          </button>
           <a
             className="mi"
             role="menuitem"
@@ -1172,6 +1278,15 @@ export function RoomMenu({
       )}
       {dialog === 'rename' && (
         <RenameRoomDialog
+          room={room}
+          onClose={() => {
+            setDialog(null)
+            trigger.current?.focus()
+          }}
+        />
+      )}
+      {dialog === 'workspace' && (
+        <RoomWorkspaceDialog
           room={room}
           onClose={() => {
             setDialog(null)

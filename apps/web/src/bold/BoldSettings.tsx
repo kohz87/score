@@ -6,12 +6,14 @@ import { NotificationsSection } from '../routes/settings/NotificationsSection.ts
 import { RulesSection } from '../routes/settings/RulesSection.tsx'
 import { HermesVersionBanner } from '../routes/settings/HermesVersionBanner.tsx'
 import { agentsQuery } from '../routes/team/team-queries.ts'
+import { roomsQuery } from '../routes/chat/queries.ts'
 import { BoldSecurity } from './BoldSecurity.tsx'
 import { BoldConnections } from './BoldConnections.tsx'
 import { BoldLook } from './BoldLook.tsx'
 import { BoldSystem } from './BoldSystem.tsx'
 import { BoldTools } from './BoldTools.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
+import { BoldWorkspaces } from './BoldWorkspaces.tsx'
 import '../routes/settings/settings.css'
 import './bold-settings.css'
 
@@ -22,6 +24,7 @@ const Customizer = lazy(async () => ({
 
 type SettingsSection =
   | 'connections'
+  | 'workspaces'
   | 'tools'
   | 'rules'
   | 'notifications'
@@ -45,6 +48,11 @@ export const SETTINGS_SECTIONS: readonly SettingsItem[] = [
     title: 'Connections',
     description: 'Hermes, models, channels',
     phase: '11.9a',
+  },
+  {
+    id: 'workspaces',
+    title: 'Workspaces',
+    description: 'Folders agents share',
   },
   {
     id: 'tools',
@@ -82,9 +90,12 @@ function Section({
   section: SettingsSection
   agents: ReturnType<typeof useAgents>
 }) {
+  const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
   switch (section) {
     case 'connections':
       return <BoldConnections agents={agents} />
+    case 'workspaces':
+      return <BoldWorkspaces agents={agents} rooms={rooms} />
     case 'tools':
       return <BoldTools agents={agents} />
     case 'look':
