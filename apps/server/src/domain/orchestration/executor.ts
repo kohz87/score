@@ -907,6 +907,13 @@ export class Orchestrator {
         }),
       }
     }
+    // 3.27.0: a run that goes on until the person stops it keeps the largest caps only to size its storage reserve; the
+    // checks skip them (until_stopped), and its spend cap is required (the contract refuses one without).
+    if (body.untilStopped) {
+      if (body.budgetUsd === undefined)
+        throw new HttpError(400, 'bad_request', 'A run that goes on until you stop it needs a spend cap.')
+      body = { ...body, maxSteps: ORCH_LIMITS.maxSteps, maxLeadTurns: ORCH_LIMITS.maxLeadTurns }
+    }
     // 3.14–3.15: the advisor and helpers are checked (served, coding consent) like the agents the lead may assign to.
     const advisor = body.advisorAgentId
     if (advisor !== undefined && advisor === body.leadAgentId)
@@ -1005,6 +1012,8 @@ export class Orchestrator {
     let topicId: string | undefined
     await this.mutate((ctx) => {
       this.insert(ctx, id, body, preflight, reports)
+      if (body.untilStopped)
+        ctx.sqlite.prepare('UPDATE orchestrations SET until_stopped = 1 WHERE id = ?').run(id)
       // 3.23.0: the chat topic is made in this transaction, so a failure leaves neither the run nor the topic.
       if (body.topic) topicId = this.insertTopic(ctx, body.topic, 'orchestration', id)
       if (helpers) {
@@ -2380,7 +2389,8 @@ export class Orchestrator {
       const incarnation = life?.incarnation_id ?? 'untracked'
       if (incarnation !== lead.incarnation || !agentAdmits(sqlite, lead.agentId))
         return this.pauseFor(ctx, o, 'agent_unavailable')
-      if (o.lead_turns_used >= o.max_lead_turns) return this.pauseFor(ctx, o, 'turns_exhausted')
+      if (o.until_stopped !== 1 && o.lead_turns_used >= o.max_lead_turns)
+        return this.pauseFor(ctx, o, 'turns_exhausted')
       if (o.consecutive_lead_failures >= 2) return this.pauseFor(ctx, o, 'lead_failing')
       if (!canReserve(view, o.lead_turn_estimate_usd)) return this.pauseFor(ctx, o, 'budget')
       if (agentPausedAt(sqlite, lead.agentId) === null) {

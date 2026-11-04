@@ -2362,6 +2362,12 @@ const cases = [
   ],
   ['RunControlSchema', { orchestrationRevision: 2 }, { orchestrationRevision: 0 }],
   [
+    'TaskCreateRequestSchema',
+    { title: 'Write the changelog', assignee: 'builder', start: 'now' },
+    { title: '  ', start: 'soon' },
+  ],
+  ['TaskPatchRequestSchema', { title: 'New title' }, {}],
+  [
     'RunTopicRequestSchema',
     { roomId: 'room-1', title: 'Release notes', exchangeBudget: 6 },
     { roomId: 'room-1', title: '   ', extra: true },

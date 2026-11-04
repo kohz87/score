@@ -1117,15 +1117,21 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
   release skips and reports them. An unqualified denial never authorizes task actions.
 - **S** `GET /api/attempts/:attemptId` → `AttemptDetail` (5.17a-1; `404 not_found` when attempts are off or the id is unknown). Also for
   an attempt of an earlier copy of the board (read-only, "from an earlier copy of the board").
-- ~~`POST /api/tasks`~~ (removed in 11.11b)
+- **H** `POST /api/tasks` `TaskCreateRequest` `{ title; body?; assignee?; roomId?; start?: 'now'|'later' }` → `201 TaskDetail`
+  (**restored in 3.27.0**, DECISIONS 162: the Tasks page's New task; the same as `/assign`). The `Idempotency-Key` goes to
+  Hermes too, so a retried create never makes a second task. `start: 'now'` promotes it (`start`) and answers the task
+  after that. An agent that can't take work (removed, setting up) → the lifecycle error; a `roomId` that doesn't exist →
+  `400`. Removed in 11.11b (historical:)
   `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
-- ~~`PATCH /api/tasks/:taskId`~~ (removed in 11.11b)
+- **H** `PATCH /api/tasks/:taskId` `TaskPatchRequest` `{ title?; body?; assignee? }` (at least one) → `TaskDetail`
+  (**restored in 3.27.0**: the task sheet's Edit; Hermes' `kanban edit` and `kanban assign`). Removed in 11.11b (historical).
 - **H** `POST /api/tasks/:taskId/actions` (kept, decision 121: unblock and comment from the new shell)
   `{ action: 'start' | 'block' | 'unblock' | 'request_review' | 'request_changes' | 'complete' | 'archive' | 'comment'; text?: string }`
   → `200 { taskId; action; hermesStatus: string }` after the Hermes CLI accepted it; the task's new state arrives on the
   stream (`task.upserted`). `409 conflict` when the Hermes state machine rejects the transition (e.g. `unblock` on a
-  task that isn't blocked). `501 not_implemented` for actions not built yet (only `comment` and `unblock` exist after
-  1.13c; the rest arrive with Phase 2 Tasks).
+  task that isn't blocked). `501 not_implemented` for an unknown action. 3.27.0: the Tasks page uses `start`,
+  `block`, `request_review`, `complete` and `archive` (Archive is how a task is removed: Hermes keeps no hard delete,
+  an archived task leaves the board).
 
 ## 8. Team
 
@@ -2167,6 +2173,10 @@ version_untested | level_unverified | reach_unverifiable | changed | paused | fr
   server re-runs the preflight; a failing check → `409 preflight_failed` `{ checks }`; capacity → `429 capacity`; storage
   quota → `409 quota_exhausted`; global fence → `409 fenced`. It creates the run's room and brief (owner: `orchestration`) and
   queues the first lead attempt.
+  **3.27.0 (DECISIONS 162): `untilStopped?: true`** — no step or lead-turn cap: the run goes on until the lead finishes or
+  the person stops it. It **requires `budgetUsd`** (else `400`); `maxSteps`/`maxLeadTurns` are ignored (stored at their
+  largest values, which only size the storage reserve). `OrchestrationSummary.untilStopped` says so; the lead's input
+  says there is no limit.
   **3.23.0 (chats stage 3): `topic?: RunTopicRequest`** `{ roomId, title, exchangeBudget?, jobTurnLimit?, spendCapUsd? }`
   makes the run's topic in that chat (a job with `recipe: { kind: 'orchestration', ref: <run id> }`) **in the run's own
   transaction**: a chat that doesn't exist (`404`) or doesn't route with exchanges (`409`) leaves neither the run nor the
