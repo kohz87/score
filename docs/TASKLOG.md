@@ -2281,3 +2281,22 @@ One entry per completed task: what landed, review results, and any **rejected re
   stale image under the 1% threshold), a real 3.25.0 bug (phone: the viewer's focus return to its row raced the
   unmount; now retried per frame up to 30 frames, vitest), 9 load flakes passing alone (remote-access fails ~1 in 6 on
   its own https port: a known flake).
+
+## 3.27.0 — Tasks editing, Recipes in Settings, runs until stopped (2026-11-04)
+- Owner: "i cannot create, edit or remove tasks?" → mock-up (https://claude.ai/artifact/7o64m6UBWW1oN2ZaaE3Ec5; the
+  owner had the create button moved next to the heading, made smaller and its label centred) → approved; "move recipes
+  into settings"; "it should run continuously unless we stop it?" → "Until I stop it, spend cap required"
+  (DECISIONS 162).
+- Lead (server, contract): `POST /api/tasks` and `PATCH /api/tasks/:taskId` restored over the adapter's create/patch
+  (Hermes idempotency key; `start: 'now'`), `untilStopped` on orchestrations (migration 0106: no step or turn cap,
+  spend cap required server-side, the lead told there is no limit; found the fake lead parsed the old prompt wording).
+  Two Sonnet coders in parallel: the Tasks page (New task, Edit, moves per column, Archive with a protected confirm) and
+  Recipes in Settings + "Keep going until I stop it" in Start a run.
+- Review: P1 a recipe's own address opened Settings › Usage (lead fix); P2s fixed by the lead: a failed create couldn't
+  be retried with its key (`rerunUncertain`), a failed start-now could duplicate a task on retry (201 + `startFailed`,
+  said on the page), the classic run pages showed "of 40" for an until-stopped run. Re-review: none.
+- Gate: format of a lead-edited file (fixed); check green (contract 1613, web 3337, server 4981); e2e 70 failed: triage
+  coder moved 7 specs to Settings › Recipes / the 5-item nav, 50 baselines (viewed), the Recipes heading h1 → h2 inside
+  Settings; it also found an older keyboard bug (focus return after the Share menu hit the message's hidden action row)
+  → the lead made the dialog hand focus to the message row when its opener can't take it; 14 load flakes passing alone.
+- Accepted P3s: the New task dialog has no focus trap; the phone task sheet is full screen (the mock-up's bottom sheet).

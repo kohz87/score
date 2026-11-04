@@ -575,20 +575,22 @@ test('leaving a dirty recipe asks first, and the old addresses land on the page'
   let accept = false
   page.on('dialog', (prompt) => void (accept ? prompt.accept() : prompt.dismiss()))
   await page.getByRole('button', { name: /lead decides/ }).click()
-  await expect(page).toHaveURL(/\/b\/recipes\/new$/)
+  await expect(page).toHaveURL(/\/b\/settings\/recipes\/new$/)
   await expect(inspector(page).getByLabel('Title')).toHaveValue('Changed, not saved')
 
   accept = true
   await page.getByRole('button', { name: /lead decides/ }).click()
-  await expect(page).toHaveURL(/\/b\/recipes\/lead-decides$/)
+  await expect(page).toHaveURL(/\/b\/settings\/recipes\/lead-decides$/)
   await expect(page.getByRole('heading', { name: 'lead decides' })).toBeVisible()
 
   for (const [from, to] of [
-    ['/b?recipes=1', /\/b\/recipes$/],
-    ['/b/workflows?x=1', /\/b\/recipes\?x=1$/],
-    ['/workflows', /\/b\/recipes$/],
-    ['/workflows#step', /\/b\/recipes#step$/],
-    ['/b?recipes=1&job=j1#step', /\/b\/recipes\?job=j1#step$/],
+    ['/b?recipes=1', /\/b\/settings\/recipes$/],
+    ['/b/workflows?x=1', /\/b\/settings\/recipes\?x=1$/],
+    ['/workflows', /\/b\/settings\/recipes$/],
+    ['/workflows#step', /\/b\/settings\/recipes#step$/],
+    ['/b?recipes=1&job=j1#step', /\/b\/settings\/recipes\?job=j1#step$/],
+    ['/b/recipes?x=1', /\/b\/settings\/recipes\?x=1$/],
+    ['/b/recipes/lead-decides?x=1', /\/b\/settings\/recipes\/lead-decides\?x=1$/],
   ] as const) {
     await page.goto(from)
     await expect(page).toHaveURL(to)

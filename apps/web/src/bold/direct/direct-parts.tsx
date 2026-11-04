@@ -38,7 +38,11 @@ export function useDialogDismiss(
     return () => {
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('pointerdown', onPointerDown)
-      if (opener?.isConnected) opener.focus()
+      if (!opener?.isConnected) return
+      opener.focus()
+      // 3.27.0 gate: a message's action row is hidden unless the message is hovered or focused, so the button that
+      // opened the dialog may not take focus back: the message row (focusable, it shows the row again) takes it.
+      if (document.activeElement !== opener) opener.closest<HTMLElement>('[tabindex]')?.focus()
     }
   }, [focusRef, ref])
 }

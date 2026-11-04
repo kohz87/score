@@ -135,11 +135,12 @@ test.describe('bold Settings', () => {
       await page.goto('/b/settings')
 
       const nav = page.getByRole('navigation', { name: 'Settings' })
-      // 3.19.0: Workspaces joined the sections.
-      await expect(nav.getByRole('button')).toHaveCount(10)
+      // 3.19.0: Workspaces joined the sections. 3.27.0: Recipes moved in from the top bar.
+      await expect(nav.getByRole('button')).toHaveCount(11)
       for (const label of [
         'Connections',
         'Tools and triggers',
+        'Recipes',
         'Rules',
         'Notifications',
         'Look',

@@ -614,7 +614,7 @@ test('Recipes is a Settings section: its list and editor sit inside the frame', 
       .getByRole('button', { name: /^Recipes/ })
       .getAttribute('aria-current'),
   ).toBe('page')
-  expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Recipes', level: 2 })).toBeDefined()
   // The top bar no longer carries a Recipes button.
   expect(
     within(screen.getByRole('navigation', { name: 'Main' })).queryByRole('button', {

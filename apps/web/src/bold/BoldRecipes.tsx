@@ -303,7 +303,7 @@ function RecipeList({
   const showLead = 'lead decides'.includes(needle)
   return (
     <nav className="bold-rp-list" aria-label="Recipes">
-      <h1 className="bold-rp-h1">Recipes</h1>
+      <h2 className="bold-rp-h1">Recipes</h2>
       <div className="row">
         <label htmlFor={searchId} className="wf-visually-hidden">
           Find a recipe

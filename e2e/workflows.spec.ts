@@ -51,12 +51,12 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   const unique = uniqueRecipeName('Release notes')
   // Other specs leave their gates pending on the shared server: a gate title of its own (not containing another's, names match as substrings) keeps this run's card unambiguous.
   const gateTitle = `Sign off ${unique.slice(-6)}`
-  await page.goto('/b/recipes')
-  await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
+  await page.goto('/b/settings/recipes')
+  await expect(page.getByRole('heading', { name: 'Recipes', level: 2 })).toBeVisible()
   await page.getByRole('button', { name: 'New recipe' }).click()
   // The editor of the recipe that was open is swapped for the new one a render after the address changes: type only into
   // the new one. Only the new recipe offers "version 1" (the old one is at 1 or later and offers the next).
-  await expect(page).toHaveURL(/\/b\/recipes\/new$/)
+  await expect(page).toHaveURL(/\/b\/settings\/recipes\/new$/)
   await expect(page.getByRole('button', { name: /^Save as version 1$/ })).toBeVisible()
 
   // The editor starts with one step and an end, already connected.
@@ -319,7 +319,7 @@ test('saved positions survive an edit in the layered view, and the run view draw
     edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'finish' }],
     layout,
   })
-  await page.goto(`/b/recipes/${id}`)
+  await page.goto(`/b/settings/recipes/${id}`)
   // The editor is the layered view: cards are buttons, never placed by the saved positions.
   await expect(node(page, 'one')).toBeVisible()
   await expect(page.locator('.wf-node')).toHaveCount(0)
