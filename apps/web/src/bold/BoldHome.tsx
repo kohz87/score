@@ -24,7 +24,7 @@ export function BoldHome() {
     return (
       <Navigate
         to={{
-          pathname: '/b/recipes',
+          pathname: '/b/settings/recipes',
           search: params.size ? `?${params}` : '',
           hash: location.hash,
         }}

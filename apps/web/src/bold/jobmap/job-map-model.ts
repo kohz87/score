@@ -86,6 +86,8 @@ export interface JobMapModel {
     name: string
     turn: number
     maxTurns: number
+    /** 3.27.0: no turn cap; the layer says "until you stop it" instead of "of N". */
+    untilStopped: boolean
     progress: string
     doing: string
     working: boolean
@@ -181,6 +183,7 @@ export function buildJobMap(
     name: nameOf(run.leadAgentId),
     turn: run.leadTurnsUsed,
     maxTurns: run.maxLeadTurns,
+    untilStopped: run.untilStopped,
     progress: `${run.plan.length} plan ${run.plan.length === 1 ? 'line' : 'lines'} · ${done} of ${workerSteps.length} steps done`,
     doing: over
       ? 'finished'

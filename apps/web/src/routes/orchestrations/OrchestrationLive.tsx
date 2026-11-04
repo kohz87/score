@@ -252,8 +252,10 @@ export function OrchestrationLive({
             <>
               <h3>Lead</h3>
               <p>
-                Lead turn {detail.leadTurnsUsed} of {detail.maxLeadTurns}. The lead decides the
-                steps; it can only act through calls that Score checks (see the log).
+                Lead turn {detail.leadTurnsUsed}
+                {detail.untilStopped ? ', until you stop it' : ` of ${detail.maxLeadTurns}`}. The
+                lead decides the steps; it can only act through calls that Score checks (see the
+                log).
               </p>
               <PlanList run={detail} />
             </>

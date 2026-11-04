@@ -118,6 +118,8 @@ export const protectedClasses = [
   'bold-tb-pill',
   'bold-tb-need',
   'bold-tb-needs-block',
+  // 3.27.0: the Tasks page's Archive confirm
+  'bold-tb-confirm',
   // 3.18.0: the Screens page's "Someone has control" control badge and row line
   'bold-sc-control',
   // Permission, sandbox and password screens

@@ -342,8 +342,17 @@ export const OrchestrationCreateSchema = z
     helpers: OrchestrationHelpersSchema.optional(),
     /** 3.23.0: the chat topic this run becomes, created with the run in one transaction. */
     topic: RunTopicRequestSchema.optional(),
+    /**
+     * 3.27.0: no step or lead-turn cap: the run goes on until the lead finishes or the person stops it. It needs a
+     * spend cap (`budgetUsd`); `maxSteps` / `maxLeadTurns` are then ignored.
+     */
+    untilStopped: z.boolean().optional(),
   })
   .strict()
+  .refine((body) => !body.untilStopped || body.budgetUsd !== undefined, {
+    message: 'A run that goes on until you stop it needs a spend cap.',
+    path: ['budgetUsd'],
+  })
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
 
 export const PreflightCheckSchema = z.object({
@@ -576,6 +585,8 @@ export const OrchestrationSummarySchema = z.object({
   }),
   leadTurnsUsed: z.int().nonnegative(),
   maxLeadTurns: z.int().positive(),
+  /** 3.27.0: no step or lead-turn cap (the spend cap and Stop end it). */
+  untilStopped: z.boolean().default(false),
   needsYou: z.array(NeedsYouSchema),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

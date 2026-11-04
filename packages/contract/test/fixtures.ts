@@ -440,6 +440,7 @@ export const orchestrationSummary = {
   steps: { total: 2, active: 1, succeeded: 1, failed: 0 },
   leadTurnsUsed: 1,
   maxLeadTurns: 20,
+  untilStopped: false,
   needsYou: [{ kind: 'gate', gateId: 'g2', stepId: 's2' }],
   createdAt: at,
   updatedAt: later,

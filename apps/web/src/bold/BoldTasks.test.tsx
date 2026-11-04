@@ -80,6 +80,7 @@ let tasks: ReturnType<typeof task>[]
 let details: Record<string, unknown>
 let rooms: ReturnType<typeof room>[]
 let narrow = false
+let createFails = 0
 let phone = false
 let requests: { url: string; init?: RequestInit }[]
 const disposers: (() => void)[] = []
@@ -102,6 +103,7 @@ beforeEach(() => {
   rooms = [room('room-a', 'Feed team')]
   phone = false
   narrow = false
+  createFails = 0
   requests = []
   vi.stubGlobal(
     'matchMedia',
@@ -118,6 +120,15 @@ beforeEach(() => {
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       requests.push({ url, ...(init ? { init } : {}) })
+      if (url === '/api/tasks' && init?.method === 'POST') {
+        if (createFails > 0) {
+          createFails -= 1
+          return Promise.resolve(
+            json({ error: { code: 'bad_request', message: 'No such chat.' } }, 400),
+          )
+        }
+        return Promise.resolve(json(detailOf(task('t-new', { title: 'Brand new' })), 201))
+      }
       if (url === '/api/tasks') return Promise.resolve(json({ asOfSeq: 1, columns: columnsOf() }))
       if (url === '/api/agents') return Promise.resolve(json({ asOfSeq: 1, items: agents }))
       if (url === '/api/rooms')
@@ -413,4 +424,165 @@ test('on a phone a task waiting on an approval offers Review and decide, never U
   fireEvent.click(within(needs).getByRole('button', { name: 'Review and decide' }))
   const sheet = await screen.findByRole('dialog', { name: 'Task details' })
   expect(await within(sheet).findByRole('button', { name: 'Allow' })).toBeTruthy()
+})
+
+const openTask = async (id = 't1', patch: Record<string, unknown> = {}, detail = {}) => {
+  tasks = [task(id, patch)]
+  details[id] = detailOf(tasks[0]!, { body: 'Page the feed.', ...detail })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: `${id.toUpperCase()} Task ${id}` }))
+  const panel = screen.getByRole('complementary', { name: 'Task details' })
+  await within(panel).findByText('Reproduce it')
+  return panel
+}
+
+test('+ New task opens the dialog; Create task posts once with an Idempotency-Key, and the task opens selected', async () => {
+  tasks = [task('t-new', { title: 'Brand new' })]
+  details['t-new'] = detailOf(tasks[0]!)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'New task' }))
+  const dialog = screen.getByRole('dialog', { name: 'New task' })
+  expect(within(dialog).getByText(/\/assign @builder/)).toBeTruthy()
+  fireEvent.change(within(dialog).getByLabelText('What needs doing'), {
+    target: { value: '  Brand new  ' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('Details (optional)'), {
+    target: { value: 'With details' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('In which chat'), { target: { value: 'room-a' } })
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Plan it for later' }))
+  const create = within(dialog).getByRole('button', { name: 'Create task' })
+  fireEvent.click(create)
+  fireEvent.click(create)
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New task' })).toBeNull())
+  const sent = posts().filter((item) => item.url === '/api/tasks')
+  expect(sent).toHaveLength(1)
+  expect(JSON.parse(String(sent[0]!.init!.body))).toEqual({
+    title: 'Brand new',
+    body: 'With details',
+    assignee: 'builder',
+    roomId: 'room-a',
+    start: 'later',
+  })
+  expect(new Headers(sent[0]!.init!.headers).get('Idempotency-Key')).toBeTruthy()
+  const panel = screen.getByRole('complementary', { name: 'Task details' })
+  expect(await within(panel).findByRole('heading', { name: 'Brand new' })).toBeTruthy()
+})
+
+test('New task needs a title, shows a refused create in plain words, and renews its key after a 4xx', async () => {
+  tasks = [task('t1')]
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'New task' }))
+  const dialog = screen.getByRole('dialog', { name: 'New task' })
+  const submit = () => fireEvent.submit(dialog.querySelector('form')!)
+  submit()
+  expect((await within(dialog).findByRole('alert')).textContent).toBe('Say what needs doing first.')
+  expect(posts()).toHaveLength(0)
+  fireEvent.change(within(dialog).getByLabelText('What needs doing'), { target: { value: 'X' } })
+  createFails = 1
+  submit()
+  await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toBe('No such chat.'))
+  submit()
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New task' })).toBeNull())
+  const keys = posts().map((item) => new Headers(item.init!.headers).get('Idempotency-Key'))
+  expect(keys).toHaveLength(2)
+  expect(keys[0]).not.toBe(keys[1])
+})
+
+test('New task closes with Escape and Cancel without posting', async () => {
+  tasks = [task('t1')]
+  mount()
+  const opener = await screen.findByRole('button', { name: 'New task' })
+  fireEvent.click(opener)
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('dialog', { name: 'New task' })).toBeNull()
+  fireEvent.click(opener)
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'New task' })).getByRole('button', {
+      name: 'Cancel',
+    }),
+  )
+  expect(screen.queryByRole('dialog', { name: 'New task' })).toBeNull()
+  expect(posts()).toHaveLength(0)
+})
+
+test('Edit sends only what changed, and Cancel leaves the task alone', async () => {
+  const panel = await openTask()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Edit' }))
+  fireEvent.change(within(panel).getByLabelText('Title'), { target: { value: 'A better title' } })
+  fireEvent.change(within(panel).getByLabelText('Doing it'), { target: { value: 'lead' } })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() =>
+    expect(requests.filter((item) => item.init?.method === 'PATCH')).toHaveLength(1),
+  )
+  const patch = requests.find((item) => item.init?.method === 'PATCH')!
+  expect(patch.url).toBe('/api/tasks/t1')
+  expect(JSON.parse(String(patch.init!.body))).toEqual({
+    title: 'A better title',
+    assignee: 'lead',
+  })
+  await waitFor(() =>
+    expect(within(panel).queryByRole('button', { name: 'Save changes' })).toBeNull(),
+  )
+  fireEvent.click(within(panel).getByRole('button', { name: 'Edit' }))
+  fireEvent.change(within(panel).getByLabelText('Description'), { target: { value: 'changed' } })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }))
+  expect(within(panel).queryByLabelText('Description')).toBeNull()
+  expect(requests.filter((item) => item.init?.method === 'PATCH')).toHaveLength(1)
+})
+
+test('Save changes without a change sends nothing; an empty title is refused', async () => {
+  const panel = await openTask()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Edit' }))
+  fireEvent.change(within(panel).getByLabelText('Title'), { target: { value: '  ' } })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Save changes' }))
+  expect((await within(panel).findByRole('alert')).textContent).toBe('A task needs a title.')
+  fireEvent.change(within(panel).getByLabelText('Title'), { target: { value: 'Task t1' } })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(within(panel).queryByLabelText('Title')).toBeNull())
+  expect(requests.filter((item) => item.init?.method === 'PATCH')).toHaveLength(0)
+})
+
+test('only the moves that fit the column are offered, and each posts its action', async () => {
+  const panel = await openTask()
+  const moves = within(panel).getByRole('region', { name: 'Move it' })
+  expect(
+    within(moves)
+      .getAllByRole('button')
+      .map((b) => b.textContent),
+  ).toEqual(['Ask for review', 'Block', 'Mark done'])
+  fireEvent.click(within(moves).getByRole('button', { name: 'Ask for review' }))
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(posts()[0]!.url).toBe('/api/tasks/t1/actions')
+  expect(JSON.parse(String(posts()[0]!.init!.body))).toEqual({ action: 'request_review' })
+  fireEvent.click(within(moves).getByRole('button', { name: 'Mark done' }))
+  await waitFor(() => expect(posts()).toHaveLength(2))
+  expect(JSON.parse(String(posts()[1]!.init!.body))).toEqual({ action: 'complete' })
+})
+
+test('a planned task offers Start, a done one offers no moves', async () => {
+  const panel = await openTask('t1', { column: 'planned', hermesStatus: 'todo' })
+  const moves = within(panel).getByRole('region', { name: 'Move it' })
+  fireEvent.click(within(moves).getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(JSON.parse(String(posts()[0]!.init!.body))).toEqual({ action: 'start' })
+  cleanup()
+  const done = await openTask('t2', { column: 'done', hermesStatus: 'done' })
+  expect(within(done).queryByRole('region', { name: 'Move it' })).toBeNull()
+})
+
+test('Archive asks first, in a protected confirm, then archives and the task leaves the board', async () => {
+  const panel = await openTask()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Archive…' }))
+  const confirm = within(panel).getByRole('alertdialog', { name: 'Archive this task?' })
+  expect(confirm.getAttribute('data-protected')).toBe('flex')
+  expect(posts()).toHaveLength(0)
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Keep it' }))
+  expect(within(panel).queryByRole('alertdialog')).toBeNull()
+  expect(posts()).toHaveLength(0)
+  fireEvent.click(within(panel).getByRole('button', { name: 'Archive…' }))
+  fireEvent.click(within(panel).getByRole('button', { name: 'Archive task' }))
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(JSON.parse(String(posts()[0]!.init!.body))).toEqual({ action: 'archive' })
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'T1 Task t1' })).toBeNull())
 })

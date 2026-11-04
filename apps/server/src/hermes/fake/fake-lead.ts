@@ -155,9 +155,10 @@ export function attachFakeLead(
   }
 }
 
-/** The lead turn number written in the input ("This is lead turn N of at most M"). */
+/** The lead turn number written in the input ("This is lead turn N of at most M", or "This is lead turn N;" for a run
+ * that goes on until stopped, 3.27.0). */
 export const turnNumber = (input: string): number =>
-  Number(/This is lead turn (\d+) of at most/.exec(input)?.[1] ?? 0)
+  Number(/This is lead turn (\d+)(?: of at most|;)/.exec(input)?.[1] ?? 0)
 
 /** Picks a script by lead turn; turns without one just reply. */
 export const byTurn =

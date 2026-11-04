@@ -25,12 +25,16 @@ function crew(steps: ThreadStep[]): ThreadStep[] {
 const clipTitle = (text: string) => (text.length > 32 ? `${text.slice(0, 31)}…` : text)
 
 /** "step N of M" while the run goes on; nothing once it is over (the status says it then). */
-function stepOf(
+export function stepOf(
   status: Parameters<typeof isRunOver>[0],
   done: number,
   total: number,
+  untilStopped = false,
 ): string | null {
-  if (total === 0 || isRunOver(status)) return null
+  if (isRunOver(status)) return null
+  // 3.27.0: a run with no step cap has no "of M" to count against.
+  if (untilStopped) return 'until you stop it'
+  if (total === 0) return null
   return `step ${Math.min(done + 1, total)} of ${total}`
 }
 
@@ -97,8 +101,12 @@ export function RunCard({
         <strong>Run · {match?.summary.title ?? job.title}</strong>
         {match && (
           <span className="bold-run-card-state">
-            {stepOf(match.summary.status, done, total) ??
-              (total > 0 ? recipeSummaryLine(match) : status)}
+            {stepOf(
+              match.summary.status,
+              done,
+              total,
+              match.kind === 'orchestration' && match.summary.untilStopped,
+            ) ?? (total > 0 ? recipeSummaryLine(match) : status)}
           </span>
         )}
       </div>

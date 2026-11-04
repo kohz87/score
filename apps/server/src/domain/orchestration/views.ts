@@ -191,6 +191,7 @@ export function summaryOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationSummar
     },
     leadTurnsUsed: o.lead_turns_used,
     maxLeadTurns: o.max_lead_turns,
+    untilStopped: o.until_stopped === 1,
     needsYou: needsYouOf(sqlite, o, gates, attempts, inquiries),
     createdAt: o.created_at,
     updatedAt: o.updated_at,

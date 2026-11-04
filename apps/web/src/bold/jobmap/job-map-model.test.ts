@@ -22,6 +22,11 @@ test('the lead shows its turn, plan progress and the latest thing it did', () =>
   expect(lead.progress).toBe('4 plan lines · 2 of 5 steps done')
 })
 
+test('a run with no turn cap says so instead of counting against a maximum', () => {
+  const { lead } = buildJobMap({ ...fullRun, untilStopped: true }, events, agents)
+  expect(lead).toMatchObject({ turn: 9, untilStopped: true })
+})
+
 test('helper steps are the swarm, one node per helper agent, never the workers', () => {
   const model = buildJobMap(fullRun, events, agents)
   expect(model.swarm?.map((node) => [node.name, node.role, node.tone])).toEqual([

@@ -1,11 +1,17 @@
-// Hermes tasks after the board went (decision 121): the new shell reads them and acts on a blocked one (unblock,
-// comment); creating and editing tasks happen in Hermes or through jobs.
+// Hermes tasks after the board went (decision 121): the new shell reads them and acts on them. 3.27.0 (DECISIONS 162):
+// the Tasks page creates and edits them again (POST, PATCH) and moves or archives them through the actions route.
 import { randomUUID } from 'node:crypto'
 import { closeKanbanDenialIds, openKanbanDenialIds } from '../domain/kanban-denials.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { TaskColumnSchema, type TaskColumn, type TaskSummary } from '@score/contract'
+import {
+  TaskColumnSchema,
+  TaskCreateRequestSchema,
+  TaskPatchRequestSchema,
+  type TaskColumn,
+  type TaskSummary,
+} from '@score/contract'
 import {
   projectedTasks,
   readProjectedTask,
@@ -18,6 +24,7 @@ import type { ScoreDb } from '../db/index.ts'
 import { requestIdempotency } from './idempotency.ts'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
+import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
 import { TaskActionRequestSchema, matchesTask, type HermesPort } from '../hermes/index.ts'
 
 const BodySchema = z.object({
@@ -40,6 +47,13 @@ export function registerTaskRoutes(
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
+  }
+  // 3.27.0 review: a create reconciles with Hermes' own idempotency key (command intents), so a retry after a server
+  // error or a crash may run again instead of replaying the failure for a day.
+  const createReceipts = requestIdempotency(db, clock, 512 * 1024, { rerunUncertain: true })
+  const creates = {
+    preHandler: [humanGuard(app.pairing), createReceipts.preHandler],
+    onSend: createReceipts.onSend,
   }
   const ParamsSchema = z.object({ taskId: z.string().min(1).max(256) })
   app.get('/api/tasks', async (request) => {
@@ -95,6 +109,46 @@ export function registerTaskRoutes(
           return brief ? { ...linked, briefId: brief.brief_id } : linked
         })
       : task
+  })
+  // Creating a task: the idempotency key is passed to Hermes too, so a retried create never makes a second task.
+  app.post('/api/tasks', creates, async (request, reply) => {
+    const req = TaskCreateRequestSchema.parse(request.body)
+    if (db && req.assignee) assertAgentAdmits(db.sqlite, req.assignee)
+    if (db && req.roomId) {
+      const room = db.read((sqlite) =>
+        sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(req.roomId!),
+      )
+      if (!room)
+        throw new HttpError(400, 'bad_request', 'That chat doesn’t exist any more. Pick another.')
+    }
+    const key = z
+      .string()
+      .regex(/^[\x21-\x7e]{1,256}$/)
+      .parse(request.headers['idempotency-key'] ?? randomUUID())
+    const { start, ...fields } = req
+    let created = await port.createTask(fields, key)
+    // The task exists once Hermes made it: a failed start leaves it Planned (with its Start button) and the answer is
+    // still 201, so a retry never makes a second task.
+    let startFailed = false
+    if (start === 'now') {
+      try {
+        await port.taskAction(
+          TaskActionRequestSchema.parse({ taskId: created.id, action: 'start' }),
+        )
+        created = await port.getTask(created.id)
+      } catch {
+        startFailed = true
+      }
+    }
+    const body = db ? db.read((sqlite) => withRunLinks(sqlite, created)) : created
+    return reply.code(201).send(startFailed ? { ...body, startFailed: true } : body)
+  })
+  app.patch('/api/tasks/:taskId', mutation, async (request) => {
+    const { taskId } = ParamsSchema.parse(request.params)
+    const req = TaskPatchRequestSchema.parse(request.body)
+    if (db && req.assignee) assertAgentAdmits(db.sqlite, req.assignee)
+    const patched = await port.patchTask(taskId, req)
+    return db ? db.read((sqlite) => withRunLinks(sqlite, patched)) : patched
   })
   app.post('/api/tasks/:taskId/actions', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)

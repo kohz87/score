@@ -23,6 +23,7 @@ export const OrchRowSchema = z.object({
   deadline_at: z.string().nullable(),
   max_steps: z.int(),
   max_lead_turns: z.int(),
+  until_stopped: z.int().default(0),
   max_concurrent_steps: z.int(),
   lead_turn_estimate_usd: z.number(),
   step_estimate_usd: z.number(),
