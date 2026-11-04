@@ -63,6 +63,8 @@ test('approving at the gate asks which branch outcome to follow, the first rule 
   // “Otherwise” leads to the repair step; the published end is passed over.
   expect(node(/Agent step Repair the draft.*succeeded/)).toBeTruthy()
   expect(screen.getByText('Preview finished. Nothing ran.')).toBeTruthy()
+  // The branch card says which path the preview took, replacing the dropped edge animation.
+  expect(within(node(/Branch Passed review\?/)).getByText(/^took: otherwise → /)).toBeTruthy()
 })
 
 test('rejecting a gate that stops the run ends the preview', async () => {

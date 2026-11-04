@@ -107,7 +107,7 @@ test('a send-back to an earlier step is a marker, not a rank: the layers stay to
   expect(ids(draft)).toEqual([['a'], ['g'], ['c'], ['z']])
   const routes = layout.layers[1]!.nodes[0]!.routes
   expect(routes.find((route) => route.port === 'rejected')!.targets).toEqual([
-    { id: 'a', label: 'A', back: true, step: 1 },
+    { id: 'a', edgeId: 'g-rejected-a', label: 'A', back: true, step: 1 },
   ])
   expect(routes.find((route) => route.port === 'ok')!.targets[0]!.back).toBe(false)
   // The send-back does not count as something that runs before the step.
@@ -153,8 +153,24 @@ test('the saved positions are never read: the same graph lays out the same way',
 test('an empty recipe has no layers, and a lone first step can take a step before it', () => {
   expect(layoutRecipe(draftOf([], [])).layers).toEqual([])
   expect(layoutRecipe(releaseDefinition).insertBeforeFirst).toBe('draft')
-  const two = draftOf([agent('a'), agent('b')], [])
+  const two = draftOf([agent('a'), agent('b'), agent('c')], [edge('a', 'c'), edge('b', 'c')])
   expect(layoutRecipe(two).insertBeforeFirst).toBeNull()
+})
+
+test('a step with no connection is an orphan, not a first step; layer 0 stays the real first step', () => {
+  const draft = draftOf(
+    [agent('a'), agent('b'), agent('loose'), end('z')],
+    [edge('a', 'b'), edge('b', 'z')],
+  )
+  const layout = layoutRecipe(draft)
+  expect(ids(draft)).toEqual([['a'], ['b'], ['z']])
+  expect(layout.orphans.map((entry) => entry.node.id)).toEqual(['loose'])
+  expect(layout.insertBeforeFirst).toBe('a')
+  expect(layout.stepOf.get('loose')).toBe(3)
+  // Nothing connected at all: the first step stands for the flow, the rest wait aside.
+  const none = layoutRecipe(draftOf([agent('a'), agent('b')], []))
+  expect(none.layers.map((layer) => layer.nodes.map((n) => n.node.id))).toEqual([['a']])
+  expect(none.orphans.map((entry) => entry.node.id)).toEqual(['b'])
 })
 
 test('uses reads inputs by label and earlier steps by number; meta says retries and what a failure does', () => {

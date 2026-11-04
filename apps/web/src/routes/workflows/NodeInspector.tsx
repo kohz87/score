@@ -519,14 +519,7 @@ export function NodeInspector({
       <Connections draft={draft} node={node} commit={commit} announce={announce} />
 
       <div className="orch-actions wf-danger-zone">
-        <button
-          type="button"
-          className="orch-danger"
-          onClick={() => {
-            onDelete()
-            announce(`Deleted ${node.label}.`)
-          }}
-        >
+        <button type="button" className="orch-danger" onClick={onDelete}>
           Delete {node.label || 'this step'}
         </button>
       </div>

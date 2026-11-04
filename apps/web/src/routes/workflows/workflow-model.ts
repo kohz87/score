@@ -95,7 +95,7 @@ export function nextNodeId(draft: Draft, kind: WorkflowNodeKind): string {
   }
 }
 
-export function nextEdgeId(draft: Draft): string {
+export function nextEdgeId(draft: Pick<Draft, 'edges'>): string {
   const taken = new Set(draft.edges.map((edge) => edge.id))
   for (let n = 1; ; n++) {
     const id = `e${n}`
@@ -196,6 +196,48 @@ export function removeNode(draft: Draft, id: string): Draft {
     },
     relayout(draft, id, null),
   )
+}
+
+/**
+ * Deletes a step. A step with exactly one way in and one way out (the way on, not a failure or rejection route) joins the
+ * step before it to the step after it, on the same ports, so the recipe stays in one piece; any other shape just loses
+ * the step and its connections, as removeNode does.
+ */
+export function removeNodeJoining(draft: Draft, id: string): { draft: Draft; note: string | null } {
+  const node = draft.nodes.find((item) => item.id === id)
+  const into = draft.edges.filter((edge) => edge.to === id)
+  const out = draft.edges.filter((edge) => edge.from === id)
+  const plain = removeNode(draft, id)
+  const [before] = into
+  const [after] = out
+  if (
+    !node ||
+    into.length !== 1 ||
+    out.length !== 1 ||
+    !before ||
+    !after ||
+    before.from === id ||
+    after.to === id ||
+    before.from === after.to ||
+    after.port !== forwardPort(node) ||
+    draft.edges.some(
+      (edge) => edge.from === before.from && edge.port === before.port && edge.to === after.to,
+    )
+  )
+    return { draft: plain, note: null }
+  const from = draft.nodes.find((item) => item.id === before.from)
+  const to = draft.nodes.find((item) => item.id === after.to)
+  if (!from || !to) return { draft: plain, note: null }
+  return {
+    draft: {
+      ...plain,
+      edges: [
+        ...plain.edges,
+        { id: nextEdgeId(plain), from: before.from, port: before.port, to: after.to },
+      ],
+    },
+    note: `Joined ${from.label || from.id} to ${to.label || to.id}.`,
+  }
 }
 
 export function updateNode(draft: Draft, id: string, patch: Partial<WorkflowNode>): Draft {
@@ -333,6 +375,22 @@ export function addStepAfter(
     const used = draft.edges.filter((edge) => edge.from === from.id && edge.port === ways[0]?.id)
     if (ways.length === 1 && used.length === 1)
       return insertStepOnEdge(draft, used[0]!.id, kind, agentId, agentName)
+    // A way on that already fans out to several steps gets one more path, when the connection limit allows.
+    if (ways.length === 1 && used.length >= 2) {
+      const made = newStep(draft, kind, agentId, agentName)
+      if ('error' in made) return made
+      const joined = connect(made.draft, from.id, ways[0]!.id, made.id)
+      if ('draft' in joined) {
+        let next = joined.draft
+        if (kind === 'branch' && from.kind === 'agent')
+          next = updateNode(next, made.id, { subject: from.id })
+        return {
+          draft: next,
+          id: made.id,
+          note: `Added ${made.said} as one more path after ${from.label}.`,
+        }
+      }
+    }
   }
   const made = newStep(draft, kind, agentId, agentName)
   if ('error' in made) return made
@@ -353,6 +411,8 @@ export function addStepAfter(
         note = `${note} Connected after ${source.label}.`
       }
     }
+    if (!next.edges.some((edge) => edge.to === made.id))
+      note = `Added ${made.said}, not connected yet: connect it in its settings.`
     if (kind === 'branch' && source.kind === 'agent')
       next = updateNode(next, made.id, { subject: source.id })
   }
@@ -378,11 +438,23 @@ export function insertStepOnEdge(
   if (made.draft.edges.length >= WORKFLOW_LIMITS.maxEdges)
     return { error: `A workflow can have at most ${WORKFLOW_LIMITS.maxEdges} connections.` }
   const from = made.draft.nodes.find((node) => node.id === edge.from)
+  // A branch leads on from its first rule and from "otherwise", so a new branch doesn't leave a way out dangling.
+  const wayOn = created.kind === 'branch' ? [port, 'default'] : [port]
+  if (made.draft.edges.length + wayOn.length > WORKFLOW_LIMITS.maxEdges)
+    return { error: `A workflow can have at most ${WORKFLOW_LIMITS.maxEdges} connections.` }
+  const along: Draft['edges'] = []
+  for (const way of wayOn)
+    along.push({
+      id: nextEdgeId({ edges: [...made.draft.edges, ...along] }),
+      from: made.id,
+      port: way,
+      to: edge.to,
+    })
   let next: Draft = {
     ...made.draft,
     edges: [
       ...made.draft.edges.map((item) => (item.id === edge.id ? { ...item, to: made.id } : item)),
-      { id: nextEdgeId(made.draft), from: made.id, port, to: edge.to },
+      ...along,
     ],
   }
   if (kind === 'branch' && from?.kind === 'agent')
@@ -407,8 +479,12 @@ export function insertStepBefore(
   const created = made.draft.nodes.find((node) => node.id === made.id)!
   const port = forwardPort(created)
   if (!port) return { error: 'That step has no way on.' }
-  const joined = connect(made.draft, made.id, port, before)
+  let joined = connect(made.draft, made.id, port, before)
   if ('error' in joined) return joined
+  if (created.kind === 'branch') {
+    joined = connect(joined.draft, made.id, 'default', before)
+    if ('error' in joined) return joined
+  }
   return {
     draft: joined.draft,
     id: made.id,

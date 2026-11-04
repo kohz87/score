@@ -42,11 +42,12 @@ import { WorkflowPreview } from '../routes/workflows/PreviewRun.tsx'
 import { useDraftHistory } from '../routes/workflows/use-draft-history.ts'
 import { useLiveOverlay } from '../routes/workflows/use-live-overlay.ts'
 import { placeNewNode } from '../routes/workflows/workflow-layout.ts'
+import { RecipeSheet } from './RecipeSheet.tsx'
 import {
   addStepAfter,
   insertStepBefore,
   insertStepOnEdge,
-  removeNode,
+  removeNodeJoining,
   sameDraft,
   starterDraft,
   updateNode,
@@ -166,7 +167,6 @@ function BoldRecipesList() {
     )
     return { ...starter, name: 'Untitled recipe' }
     // A new recipe is made once per press of "New recipe"; the agent list only seeds its first step.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newKey])
 
   const choose = useCallback(
@@ -584,6 +584,7 @@ function BoldRecipeEditor({
     0
   const root = useRef<HTMLElement>(null)
   const allowLeave = useRef(false)
+  const skipSheetFocus = useRef(false)
   const nameId = useId()
   const viewed = useWorkflowVersion(saved.workflowId ?? undefined, viewVersion ?? undefined)
   const viewing = viewVersion !== null
@@ -736,13 +737,25 @@ function BoldRecipeEditor({
     commit(placeNewNode(result.draft, result.id, new Map(), near))
     setSel({ kind: 'node', id: result.id })
     setAnnouncement(result.note)
+    // The new card takes focus; on a phone the sheet that opens for it must not take it back.
+    skipSheetFocus.current = true
+    focusCard(result.id)
   }
 
   function deleteNode(id: string) {
     const label = draft.nodes.find((node) => node.id === id)?.label ?? id
-    commit(removeNode(draft, id))
+    const shown = layoutRecipe(draft)
+    const order = [...shown.layers.flatMap((layer) => layer.nodes), ...shown.orphans].map(
+      (entry) => entry.node.id,
+    )
+    const at = order.indexOf(id)
+    const joined = removeNodeJoining(draft, id)
+    commit(joined.draft)
     setSel(null)
-    setAnnouncement(`Removed ${label}.`)
+    setAnnouncement(joined.note ? `Removed ${label}. ${joined.note}` : `Removed ${label}.`)
+    // Focus goes to the card the recipe now joins on to, else the next card, else the previous one.
+    const after = joined.note ? draft.edges.find((edge) => edge.from === id)?.to : undefined
+    focusCard(after ?? order[at + 1] ?? order[at - 1] ?? null)
   }
 
   function removeStep(id: string) {
@@ -932,6 +945,17 @@ function BoldRecipeEditor({
     })
   }
 
+  function focusCard(id: string | null) {
+    requestAnimationFrame(() => {
+      skipSheetFocus.current = false
+      if (id === null) {
+        root.current?.focus()
+        return
+      }
+      root.current?.querySelector<HTMLElement>(`.rl-card[data-node="${CSS.escape(id)}"]`)?.focus()
+    })
+  }
+
   // A problem on a connection selects the step it leaves: the layered view has no connection to select.
   const selectIssue = (selection: Selection) => {
     if (selection?.kind === 'edge') {
@@ -943,6 +967,42 @@ function BoldRecipeEditor({
   // On a phone the step's settings are a sheet from the bottom, as in the mock-up; only while a step is selected.
   const sheet = graph && phone && previewing === null
   const recipeLayout = useMemo(() => layoutRecipe(graphDraft), [graphDraft])
+  const sheetOpen = sheet && graphNode !== undefined
+  const graphId = graphNode?.id ?? null
+  const aside = useRef<HTMLElement>(null)
+  const sheetCard = useRef<string | null>(null)
+  useEffect(() => {
+    if (sheetOpen) sheetCard.current = graphId
+  }, [sheetOpen, graphId])
+  // The sheet takes focus when it opens and gives it back to the card when it closes; the selected card is scrolled into
+  // view above it (the cards keep a bottom margin the height of the sheet).
+  useEffect(() => {
+    if (sheetOpen) {
+      if (!skipSheetFocus.current) aside.current?.focus()
+    } else if (sheetCard.current) {
+      focusCard(sheetCard.current)
+      sheetCard.current = null
+    }
+    // focusCard only reads refs.
+  }, [sheetOpen])
+  useEffect(() => {
+    if (!sheetOpen || graphId === null) return
+    const frame = requestAnimationFrame(() => {
+      root.current
+        ?.querySelector<HTMLElement>(`.rl-card[data-node="${CSS.escape(graphId)}"]`)
+        ?.scrollIntoView?.({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [sheetOpen, graphId])
+  // Escape closes the sheet wherever focus is, unless something inside (a menu, a field's suggestions) used it.
+  useEffect(() => {
+    if (!sheetOpen) return
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) selectNode(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [sheetOpen, selectNode])
   const where = graphNode ? placement(graphDraft, recipeLayout, graphNode.id) : null
 
   const inspector = graph ? (
@@ -1389,6 +1449,7 @@ function BoldRecipeEditor({
               <RecipeLayers
                 readOnly={viewing}
                 states={viewing ? null : overlay?.nodes}
+                edges={viewing ? null : overlay?.edges}
                 draft={graphDraft}
                 agents={agents}
                 issues={index}
@@ -1508,14 +1569,10 @@ function BoldRecipeEditor({
 
       {(!sheet || graphNode) && (
         <aside
+          ref={aside}
           className={`bold-inner bold-rp-aside bold-recipes-inspector wf-editor${sheet ? ' bold-rp-sheet' : ''}`}
           aria-label="Selected step"
-          onKeyDown={(event) => {
-            if (sheet && event.key === 'Escape') {
-              event.stopPropagation()
-              selectNode(null)
-            }
-          }}
+          tabIndex={sheet ? -1 : undefined}
         >
           {sheet && (
             <div className="bold-rp-sheet-head">
@@ -1530,7 +1587,21 @@ function BoldRecipeEditor({
               </button>
             </div>
           )}
-          {inspector}
+          {sheet && graphNode ? (
+            <RecipeSheet
+              key={graphNode.id}
+              draft={graphDraft}
+              node={graphNode}
+              step={recipeLayout.stepOf.get(graphNode.id) ?? null}
+              agents={agents}
+              commit={commit}
+              onDelete={() => deleteNode(graphNode.id)}
+              readOnly={viewing}
+              more={inspector}
+            />
+          ) : (
+            inspector
+          )}
         </aside>
       )}
 

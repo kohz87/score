@@ -8,6 +8,8 @@ import { describeCondition, portsOf, type Draft } from './workflow-model.ts'
 
 export interface RouteTarget {
   id: string
+  /** The connection itself, so a preview or a live run can say whether it was taken. */
+  edgeId: string
   label: string
   /** The connection returns to a step that is above (or is) this one. */
   back: boolean
@@ -42,6 +44,8 @@ export interface RecipeLayer {
 
 export interface RecipeLayout {
   layers: RecipeLayer[]
+  /** Steps with no connection at all: they never run, so they are not drawn as part of the flow. */
+  orphans: LayerNode[]
   stepOf: ReadonlyMap<string, number>
   /** A "+" under the input card, before the first step, when there is exactly one first step. */
   insertBeforeFirst: string | null
@@ -103,9 +107,16 @@ function ranks(draft: Draft) {
 export function layoutRecipe(draft: Draft): RecipeLayout {
   const { rank, forward, back, edges } = ranks(draft)
   const order = new Map(draft.nodes.map((node, index) => [node.id, index]))
-  const depth = Math.max(-1, ...rank.values())
+  // A step nothing connects to, and that leads nowhere, is not part of the flow (it would otherwise read as a first step
+  // that runs "at the same time"). When nothing at all is connected, the first step stands for the flow.
+  const linked = new Set(edges.flatMap((edge) => [edge.from, edge.to]))
+  const lone = draft.nodes.filter((node) => !linked.has(node.id))
+  const orphanNodes = linked.size > 0 ? lone : lone.slice(1)
+  const orphanIds = new Set(orphanNodes.map((node) => node.id))
+  const flow = draft.nodes.filter((node) => !orphanIds.has(node.id))
+  const depth = Math.max(-1, ...flow.map((node) => rank.get(node.id)!))
   const buckets: WorkflowNode[][] = Array.from({ length: depth + 1 }, () => [])
-  for (const node of draft.nodes) buckets[rank.get(node.id)!]!.push(node)
+  for (const node of flow) buckets[rank.get(node.id)!]!.push(node)
 
   // Inside a layer, steps sit under the first of their predecessors, then in the order they were added.
   const place = new Map<string, number>()
@@ -127,6 +138,7 @@ export function layoutRecipe(draft: Draft): RecipeLayout {
   let step = 0
   for (const layer of layersOfNodes)
     for (const node of layer) if (node.kind === 'agent') stepOf.set(node.id, ++step)
+  for (const node of orphanNodes) if (node.kind === 'agent') stepOf.set(node.id, ++step)
 
   const byId = new Map(draft.nodes.map((node) => [node.id, node]))
   const incoming = new Map<string, number>()
@@ -161,6 +173,12 @@ export function layoutRecipe(draft: Draft): RecipeLayout {
 
   return {
     layers,
+    orphans: orphanNodes.map((node) => ({
+      node,
+      step: stepOf.get(node.id) ?? null,
+      incoming: 0,
+      routes: routesOf(node, edges, back, byId, stepOf),
+    })),
     stepOf,
     insertBeforeFirst: layers[0]?.nodes.length === 1 ? layers[0].nodes[0]!.node.id : null,
   }
@@ -190,6 +208,7 @@ function routesOf(
       .filter((edge) => edge.from === node.id && edge.port === port.id)
       .map((edge) => ({
         id: edge.to,
+        edgeId: edge.id,
         label: byId.get(edge.to)?.label || edge.to,
         back: back.has(edge.id),
         step: stepOf.get(edge.to) ?? null,

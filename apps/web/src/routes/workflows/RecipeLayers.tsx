@@ -1,5 +1,5 @@
 import type { AgentSummary, WorkflowNode, WorkflowNodeKind } from '@score/contract'
-import { Fragment, useMemo, useState, type KeyboardEvent } from 'react'
+import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { shapedWord } from '../orchestrations/LiveDiagram.tsx'
@@ -96,10 +96,36 @@ export function AddMenu({
   small?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
   const hermes = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
+  const items = () =>
+    Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])
   const pick = (kind: WorkflowNodeKind, agent?: AgentSummary) => {
     setOpen(false)
     onInsert(at, kind, agent?.id ?? '', agent?.name ?? '')
+  }
+  const close = () => {
+    setOpen(false)
+    trigger.current?.focus()
+  }
+  // A menu: the first item takes focus on open, the arrows, Home and End move between items, Escape returns to the +.
+  function onMenuKey(event: KeyboardEvent<HTMLDivElement>) {
+    const list = items()
+    const at = list.indexOf(document.activeElement as HTMLButtonElement)
+    const go = (index: number) => {
+      event.preventDefault()
+      list[(index + list.length) % list.length]?.focus()
+    }
+    if (event.key === 'ArrowDown') go(at + 1)
+    else if (event.key === 'ArrowUp') go(at < 0 ? -1 : at - 1)
+    else if (event.key === 'Home') go(0)
+    else if (event.key === 'End') go(-1)
+    else if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      close()
+    } else if (event.key === 'Tab') setOpen(false)
   }
   const kinds: [WorkflowNodeKind, string][] = [
     ['gate', 'An approval: you decide'],
@@ -110,33 +136,38 @@ export function AddMenu({
   return (
     <span className="rl-add" data-small={small ? '' : undefined}>
       <button
+        ref={trigger}
         type="button"
         className={text ? 'rl-plus rl-plus--text' : 'rl-plus'}
         aria-label={label}
+        aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const next = !open
+          setOpen(next)
+          if (next) requestAnimationFrame(() => items()[0]?.focus())
+        }}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') setOpen(false)
+          if (event.key === 'Escape' && open) {
+            event.stopPropagation()
+            setOpen(false)
+          } else if (event.key === 'ArrowDown' && !open) {
+            event.preventDefault()
+            setOpen(true)
+            requestAnimationFrame(() => items()[0]?.focus())
+          }
         }}
       >
         {text ? text : <span aria-hidden="true">+</span>}
       </button>
       {open && (
-        <div
-          className="rl-menu"
-          role="group"
-          aria-label={label}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.stopPropagation()
-              setOpen(false)
-            }
-          }}
-        >
+        <div ref={menu} className="rl-menu" role="menu" aria-label={label} onKeyDown={onMenuKey}>
           {hermes.map((agent) => (
             <button
               key={agent.id}
               type="button"
+              role="menuitem"
+              tabIndex={-1}
               aria-label={`Add an agent step for ${agent.name}`}
               onClick={() => pick('agent', agent)}
             >
@@ -148,6 +179,8 @@ export function AddMenu({
             <button
               key={kind}
               type="button"
+              role="menuitem"
+              tabIndex={-1}
               aria-label={`Add ${kind === 'end' ? 'an' : 'a'} ${KIND_LABEL[kind].toLowerCase()}`}
               onClick={() => pick(kind)}
             >
@@ -169,6 +202,7 @@ export function RecipeLayers({
   onInsert,
   onDeleteNode,
   states,
+  edges,
   readOnly = false,
   ariaLabel = 'Recipe graph',
 }: {
@@ -182,6 +216,8 @@ export function RecipeLayers({
   onDeleteNode?: (id: string) => void
   /** The states of a run going now, or of a preview: drawn on each card; the draft is not touched. */
   states?: ReadonlyMap<string, CardState> | null
+  /** Which connections a run or a preview took: a branch says which path it took, a loop says "again". */
+  edges?: ReadonlyMap<string, 'taken' | 'skipped'> | null
   readOnly?: boolean
   ariaLabel?: string
 }) {
@@ -215,6 +251,31 @@ export function RecipeLayers({
     const backs = routes.flatMap((route) =>
       route.targets.filter((target) => target.back).map((target) => ({ route, target })),
     )
+    const took = edges
+      ? routes.flatMap((route) =>
+          route.targets.some((target) => edges.get(target.edgeId) === 'taken')
+            ? [
+                `${route.label} → ${route.targets
+                  .filter((target) => edges.get(target.edgeId) === 'taken')
+                  .map((target) => target.label)
+                  .join(', ')}`,
+              ]
+            : [],
+        )
+      : []
+    const again =
+      edges !== undefined &&
+      edges !== null &&
+      layout.layers.some((layer) =>
+        layer.nodes.some((entry) =>
+          entry.routes.some((route) =>
+            route.targets.some(
+              (target) =>
+                target.back && target.id === node.id && edges.get(target.edgeId) === 'taken',
+            ),
+          ),
+        ),
+      )
     const failedTo = routes.find((route) => route.port === 'failed')?.targets ?? []
     const stateWord = live
       ? (live.status ??
@@ -275,6 +336,10 @@ export function RecipeLayers({
               {route.port === 'ok' ? '' : ` (${route.label})`}
             </span>
           ))}
+        {node.kind === 'branch' && took.length > 0 && (
+          <span className="rl-took">took: {took.join(' · ')}</span>
+        )}
+        {again && <span className="rl-again">↩ again</span>}
         {live && (
           <span className="rl-state" data-state={live.visual}>
             {stateWord}
@@ -315,7 +380,6 @@ export function RecipeLayers({
 
   const line = <span className="rl-line" aria-hidden="true" />
   const inputs = draft.inputs
-  const first = layout.layers[0]
 
   return (
     <section className="rl" aria-label={ariaLabel} data-readonly={readOnly ? '' : undefined}>
@@ -384,8 +448,17 @@ export function RecipeLayers({
           </Fragment>
         )
       })}
-      {first === undefined && <span className="rl-sub">This recipe has no steps yet.</span>}
-      {editable && first === undefined && (
+      {layout.orphans.length > 0 && (
+        <section className="rl-orphans" aria-label="Not connected">
+          <Kicker>Not connected</Kicker>
+          <span className="rl-sub">Connect it in its settings</span>
+          <div className="rl-row" data-count={layout.orphans.length}>
+            {layout.orphans.map((item) => card(item))}
+          </div>
+        </section>
+      )}
+      {draft.nodes.length === 0 && <span className="rl-sub">This recipe has no steps yet.</span>}
+      {editable && draft.nodes.length === 0 && (
         <AddMenu
           label="Add a step"
           at={{ after: '' }}

@@ -170,6 +170,7 @@ export function WorkflowPreview({
         selected={null}
         onSelect={() => {}}
         states={cards}
+        edges={state.edges}
         readOnly
         ariaLabel="Preview of the recipe. Nothing runs."
       />
