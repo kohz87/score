@@ -118,20 +118,12 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   await composer.fill('/')
   const commands = page.getByRole('listbox', { name: 'Commands' })
   // /remember and /skill are not offered (501); /compress and /usage are the composer's own (PLAN 5.25).
-  // 3.22.0: the palette also lists the topic and chat commands (/new, /rename, /done, /reopen, /lead, /add, /remove,
-  // /workspace); the five existing ones are all still there.
+  // 3.22.0: the palette also lists the topic and chat commands (/rename, /done, /reopen, /lead, /add, /remove,
+  // /workspace); the five existing ones are all still there. 3.28.0: /new is gone from a group chat (one job per chat).
   for (const name of ['/assign', '/model', '/usage', '/compress'])
     await expect(commands.getByRole('option', { name: new RegExp(`^${name}\\b`) })).toHaveCount(1)
-  for (const name of [
-    '/new',
-    '/rename',
-    '/done',
-    '/reopen',
-    '/lead',
-    '/add',
-    '/remove',
-    '/workspace',
-  ])
+  await expect(commands.getByRole('option', { name: /^\/new\b/ })).toHaveCount(0)
+  for (const name of ['/rename', '/done', '/reopen', '/lead', '/add', '/remove', '/workspace'])
     await expect(commands.getByRole('option', { name: new RegExp(`^${name}\\b`) })).toHaveCount(1)
   await expect(commands.getByRole('option', { name: /^\/(remember|skill)\b/ })).toHaveCount(0)
   // 3.7.8 (owner): every option is inside the list's box, not cut off after the first row.
@@ -139,7 +131,7 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   const lastOption = commands.getByRole('option').last()
   const last = (await lastOption.boundingBox())!
   expect(box.height).toBeGreaterThan(4 * last.height)
-  // 3.22.0: with thirteen commands the list scrolls; the last one is inside the box once scrolled to.
+  // 3.22.0: with twelve commands the list scrolls; the last one is inside the box once scrolled to.
   await lastOption.scrollIntoViewIfNeeded()
   const scrolled = (await lastOption.boundingBox())!
   const view = (await commands.boundingBox())!

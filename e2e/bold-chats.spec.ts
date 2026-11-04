@@ -46,7 +46,7 @@ test('the list folds into a rail, unfolds again and is remembered', async ({ pag
   await expect(page.getByRole('complementary', { name: 'Chats', exact: true })).toBeVisible()
 })
 
-test('Chat info opens the Info tab with members and topics, and closing it gives the chat the width', async ({
+test('Chat info opens the Info tab with members and past jobs, and closing it gives the chat the width', async ({
   page,
 }) => {
   await pair(page)
@@ -64,7 +64,7 @@ test('Chat info opens the Info tab with members and topics, and closing it gives
   await expect(panel.getByRole('heading', { name: 'Members' })).toBeVisible()
   await openInfoSection(panel, 'Members')
   await expect(panel.getByText('owner', { exact: true })).toBeVisible()
-  await expect(panel.getByRole('heading', { name: 'Topics' })).toBeVisible()
+  await expect(panel.getByRole('heading', { name: 'Past jobs' })).toBeVisible()
 
   const wide = (await page.locator('.roomcol').boundingBox())!.width
   await info.click()

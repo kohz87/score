@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { makeTeam, roomJobs } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.10c: every kind of start on the fake adapter, at both review sizes. The seeded demo moves on over time, so
@@ -15,11 +16,12 @@ function tag(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-async function openStart(page: Page, from: 'link' | 'room') {
-  if (from === 'link') await page.goto('/b?start=job')
+// 3.28.0: each test starts in a team room of its own (the seeded one holds two jobs, so it refuses a third).
+async function openStart(page: Page, from: 'link' | 'room', roomId: string) {
+  if (from === 'link') await page.goto(`/b?room=${roomId}&start=job`)
   else {
     // 3.24.0: the header's "+ Job" and the phone job list are gone; the composer's + menu starts a run for this chat.
-    await page.goto('/b?open=1')
+    await page.goto(`/b?room=${roomId}`)
     await page.getByRole('button', { name: 'Attach, voice and commands' }).click()
     await page.getByRole('button', { name: 'Start a run…' }).click()
   }
@@ -75,24 +77,15 @@ async function createWorkflow(page: Page, name: string): Promise<string> {
   return ((await response.json()) as { workflowId: string }).workflowId
 }
 
-async function teamJobs(page: Page) {
-  const response = await page.request.get('/api/team-room')
-  expect(response.ok()).toBe(true)
-  return (
-    (await response.json()) as {
-      jobs: { id: string; title: string; recipe: { kind: string; ref: string } | null }[]
-    }
-  ).jobs
-}
-
 for (const size of sizes) {
   test.describe(`Start a job at ${size.name}`, () => {
     test.use({ viewport: size.viewport })
 
     test('lead decides starts a job in the team room with an orchestration', async ({ page }) => {
       await pair(page)
+      const team = await makeTeam(page, 'Crew')
       const title = tag('Lead job')
-      const dialog = await openStart(page, 'link')
+      const dialog = await openStart(page, 'link', team.id)
       expect(await dialog.getAttribute('data-protected')).toBe('block')
       const { start } = await fillAndAcknowledge(page, title)
       await start.click()
@@ -101,7 +94,7 @@ for (const size of sizes) {
       await expect(dialog).toContainText(title)
       await expect(dialog).toContainText('The lead is planning it in an orchestration.')
       await expect
-        .poll(async () => (await teamJobs(page)).some((job) => job.title === title))
+        .poll(async () => (await roomJobs(page, team.id)).some((job) => job.title === title))
         .toBe(true)
       const runs = await page.request.get('/api/orchestrations')
       expect(runs.ok()).toBe(true)
@@ -109,14 +102,15 @@ for (const size of sizes) {
       const run = body.items.find((item) => item.title === title)
       expect(run).toBeDefined()
       // The team-room job is linked to the orchestration it started (11.10c contract).
-      const job = (await teamJobs(page)).find((item) => item.title === title)
+      const job = (await roomJobs(page, team.id)).find((item) => item.title === title)
       expect(job?.recipe).toEqual({ kind: 'orchestration', ref: run!.id })
     })
 
     test('None starts a plain job in the team room from the composer + menu', async ({ page }) => {
       await pair(page)
+      const team = await makeTeam(page, 'Crew')
       const title = tag('Plain job')
-      const dialog = await openStart(page, 'room')
+      const dialog = await openStart(page, 'room', team.id)
       await dialog.getByRole('radio', { name: 'None' }).click()
       const { start } = await fillAndAcknowledge(page, title)
       await start.click()
@@ -124,15 +118,16 @@ for (const size of sizes) {
       await expect(dialog.getByRole('heading', { name: 'Started' })).toBeVisible()
       await expect(dialog).toContainText('It is waiting in the team room for you.')
       await expect
-        .poll(async () => (await teamJobs(page)).some((job) => job.title === title))
+        .poll(async () => (await roomJobs(page, team.id)).some((job) => job.title === title))
         .toBe(true)
     })
 
     test('a saved recipe starts a workflow run', async ({ page }) => {
       await pair(page)
+      const team = await makeTeam(page, 'Crew')
       const name = tag('Recipe')
       const workflowId = await createWorkflow(page, name)
-      const dialog = await openStart(page, 'link')
+      const dialog = await openStart(page, 'link', team.id)
       await dialog.getByRole('radio', { name }).click()
       await expect(dialog).toContainText('version 1')
       const { start } = await fillAndAcknowledge(page, `${name} run`)
@@ -148,8 +143,9 @@ for (const size of sizes) {
 
     test('a schedule creates a routine that appears as a scheduled job', async ({ page }) => {
       await pair(page)
+      const team = await makeTeam(page, 'Crew')
       const title = tag('Scheduled job')
-      const dialog = await openStart(page, 'link')
+      const dialog = await openStart(page, 'link', team.id)
       await dialog.getByRole('radio', { name: 'On a schedule' }).click()
       // People pick the label; the routine gets the value Hermes' scheduler takes (asserted below).
       await expect(dialog.getByRole('combobox', { name: 'Schedule' })).toHaveValue(
@@ -166,7 +162,7 @@ for (const size of sizes) {
       expect(body.items.find((routine) => routine.title === title)?.schedule).toBe('0 9 * * 1-5')
 
       await dialog.getByRole('button', { name: 'Done' }).click()
-      const reopened = await openStart(page, 'room')
+      const reopened = await openStart(page, 'room', team.id)
       const scheduled = reopened.getByRole('region', { name: 'Scheduled' })
       await expect(scheduled).toContainText(title, { timeout: 30_000 })
       await expect(scheduled).toContainText('lead · Every weekday at 9:00')
@@ -174,9 +170,10 @@ for (const size of sizes) {
 
     test('a webhook creates a trigger and shows its address and secret once', async ({ page }) => {
       await pair(page)
+      const team = await makeTeam(page, 'Crew')
       const title = tag('Webhook job')
       const triggerName = tag('New ticket')
-      const dialog = await openStart(page, 'link')
+      const dialog = await openStart(page, 'link', team.id)
       await dialog.getByRole('radio', { name: 'When another app calls' }).click()
       await dialog.getByLabel('Trigger name').fill(triggerName)
       await dialog.getByLabel('The app it comes from').fill('Tickets app')
@@ -201,7 +198,7 @@ for (const size of sizes) {
       expect(made!.url).toBe(address)
 
       await dialog.getByRole('button', { name: 'Done' }).click()
-      const reopened = await openStart(page, 'room')
+      const reopened = await openStart(page, 'room', team.id)
       await expect(reopened.getByText(secret!, { exact: true })).toHaveCount(0)
     })
   })

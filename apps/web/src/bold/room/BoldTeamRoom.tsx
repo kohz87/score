@@ -397,8 +397,8 @@ function LoadedTeamRoom({
       onDelete={setDeletingJob}
     />
   )
-  // On a phone the chat head already carries the menu of the job it shows.
-  const barMenu = (topic: Job) => (phone && phoneJob?.id === topic.id ? undefined : jobMenu(topic))
+  // The bar carries the job's menu on every width: the phone's chat head holds only the chat's own menu (3.28.0 gate).
+  const barMenu = (topic: Job) => jobMenu(topic)
   // A finished job opened from Past jobs shows its own bar (the menu to reopen, rename or delete it lives there).
   const pastPicked = picked && !picked.isDefault && !isActiveJob(picked) ? picked : null
 

@@ -71,9 +71,8 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   await expect.poll(() => jobTitles(page, roomId)).toContain(jobTitle)
   expect(await jobTitles(page, first.room.id)).not.toContain(jobTitle)
   await start.getByRole('button', { name: 'Done' }).click()
-  await expect(
-    page.getByRole('separator', { name: new RegExp(`^Topic: ${jobTitle}`) }),
-  ).toBeVisible() // 3.22.0: no job tabs; the topic is a divider
+  // 3.28.0: a chat holds one job, shown in the job bar under its header (it was a topic divider in the stream).
+  await expect(page.getByRole('region', { name: 'Current job' })).toContainText(jobTitle)
 
   // Rename it.
   await page.getByRole('button', { name: 'Room menu' }).click()

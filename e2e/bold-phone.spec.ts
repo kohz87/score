@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openInfoSection } from './bold-chat-helpers.ts'
 import { openBoldJob, openBoldRoom, openRoomPicker } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 import { holdLockPerTest } from './locks.ts'
@@ -82,7 +83,10 @@ for (const size of sizes) {
 
       await page.goto('/b?jobs=1')
       const topics = page.getByRole('complementary', { name: 'Side panel' })
-      await expect(topics.getByRole('heading', { name: 'Topics' })).toBeVisible()
+      // 3.28.0: the done job is under Past jobs; the two active ones (a legacy room) under Open jobs.
+      await expect(topics.getByRole('heading', { name: 'Past jobs' })).toBeVisible()
+      await openInfoSection(topics, 'Open jobs')
+      await openInfoSection(topics, 'Past jobs')
       const done = topics.getByRole('link', { name: /Queue research/ })
       await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
       await expectAtLeast44(topics.getByRole('link', { name: /Activity feed/ }))

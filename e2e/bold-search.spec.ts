@@ -29,22 +29,21 @@ async function openSearch(page: Page) {
   return dialog
 }
 
-async function teamRoom(page: Page) {
+/**
+ * 3.28.0: a chat holds one active job and the fake team room already has two (a second start is 409 job_running), so
+ * these specs search the team room's seeded jobs instead of making new ones. Search lists the team room's jobs only.
+ */
+async function seededJob(page: Page, title: string) {
   await expect
     .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
     .toBe(200)
-  const response = await page.request.get('/api/team-room')
-  return (await response.json()) as { room: { id: string; name: string } }
-}
-
-async function makeJob(page: Page, title: string) {
-  const team = await teamRoom(page)
-  const response = await page.request.post(`/api/rooms/${team.room.id}/jobs`, {
-    headers: web,
-    data: { title },
-  })
-  expect(response.status()).toBe(201)
-  return (await response.json()) as { id: string; title: string }
+  const team = (await (await page.request.get('/api/team-room')).json()) as {
+    room: { id: string }
+    jobs: { id: string; title: string }[]
+  }
+  const job = team.jobs.find((item) => item.title === title)
+  expect(job).toBeTruthy()
+  return { id: job!.id, title, roomId: team.room.id }
 }
 
 async function makeChat(page: Page, title: string, text: string) {
@@ -63,9 +62,8 @@ async function makeChat(page: Page, title: string, text: string) {
   return { chat, messageId: message.message.id }
 }
 
-async function makeJobMessage(page: Page, jobId: string, text: string) {
-  const team = await teamRoom(page)
-  const sent = await page.request.post(`/api/rooms/${team.room.id}/messages`, {
+async function makeJobMessage(page: Page, roomId: string, jobId: string, text: string) {
+  const sent = await page.request.post(`/api/rooms/${roomId}/messages`, {
     headers: web,
     data: { text, jobId },
   })
@@ -80,8 +78,8 @@ for (const size of sizes) {
     test('a team-room job opens with its job link', async ({ page }) => {
       await pair(page)
       await openBold(page)
-      const title = tag('Job search')
-      const job = await makeJob(page, title)
+      const job = await seededJob(page, 'Queue research')
+      const title = job.title
       await openSearch(page)
       await page.getByRole('combobox', { name: 'Search or run a command' }).fill(title)
       await page.getByRole('option', { name: new RegExp(title) }).click()
@@ -150,8 +148,8 @@ for (const size of sizes) {
       await pair(page)
       await openBold(page)
       const text = tag('Message search')
-      const job = await makeJob(page, `${text} job`)
-      const messageId = await makeJobMessage(page, job.id, text)
+      const job = await seededJob(page, 'Activity feed')
+      const messageId = await makeJobMessage(page, job.roomId, job.id, text)
       await openSearch(page)
       await page.getByRole('combobox', { name: 'Search or run a command' }).fill(text)
       await page
@@ -270,8 +268,9 @@ for (const size of sizes) {
       await pair(page)
       await openBold(page)
       const prefix = tag('Keyboard search')
-      const first = await makeJob(page, `${prefix} alpha`)
-      await makeJob(page, `${prefix} beta`)
+      // Two one-to-one chats whose titles share the prefix (their messages do not, so only two chat rows match).
+      const alpha = (await makeChat(page, `${prefix} alpha`, 'first note')).chat
+      const beta = (await makeChat(page, `${prefix} beta`, 'second note')).chat
 
       const trigger = page.getByRole('button', { name: 'Search', exact: true })
       await trigger.focus()
@@ -288,12 +287,16 @@ for (const size of sizes) {
       await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true')
       await page.keyboard.press('ArrowUp')
       await expect(options.first()).toHaveAttribute('aria-selected', 'true')
+      const firstRow = await options.first().textContent()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('dialog', { name: 'Search and commands' })).toHaveCount(0)
-      expect(new URL(page.url()).searchParams.get('job')).toBe(first.id)
-      // A phone moves focus to the opened job's chat title a frame later; let that land, then invoke from the trigger.
+      // Chats list newest first, so the first row is whichever the list shows first: Enter opens exactly that one.
+      expect(new URL(page.url()).searchParams.get('chat')).toBe(
+        firstRow?.includes('alpha') ? alpha.id : beta.id,
+      )
+      // A phone opens the chat (a one-to-one here, which leaves focus where it is); wait for it before invoking from the trigger.
       if (size.viewport.width <= 860)
-        await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
+        await expect(page.locator('[data-phone-chat-title]')).toHaveText('builder')
       await trigger.focus()
 
       await page.keyboard.press('Control+K')

@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
+import { makeTeam } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.9a: Connections, Tools and triggers, and Look under the bold tokens at both review sizes.
@@ -119,7 +120,9 @@ async function callHook(page: Page, id: string, secret: string, body: string, we
   })
 }
 
+// 3.28.0: the trigger starts its jobs in a team room of its own: the seeded one holds two, so its calls would only queue.
 async function addTriggerThroughFourSteps(page: Page) {
+  const team = await makeTeam(page, 'Tickets')
   const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`
   const name = `Support ticket ${tag}`
   const app = 'Tickets app'
@@ -128,6 +131,7 @@ async function addTriggerThroughFourSteps(page: Page) {
   const dialog = page.getByRole('dialog', { name: 'New trigger' })
   await dialog.getByLabel('Name').fill(name)
   await dialog.getByLabel('App it comes from').fill(app)
+  await dialog.getByLabel('Starts jobs in').selectOption({ value: team.id })
   await dialog.getByRole('button', { name: 'Create the address' }).click()
 
   const secretCode = dialog.locator('[data-trigger-secret]')
@@ -177,18 +181,19 @@ async function addTriggerThroughFourSteps(page: Page) {
   await expect
     .poll(
       async () => {
-        const response = await page.request.get('/api/team-room')
+        const response = await page.request.get(`/api/rooms/${team.id}/jobs`)
         if (!response.ok()) return null
         const body = (await response.json()) as {
-          jobs: { id: string; source: { ref: string; triggerId: string } | null }[]
+          items: { id: string; source: { ref: string; triggerId: string } | null }[]
         }
-        return body.jobs.find((job) => job.source?.ref === ref)?.id ?? null
+        return body.items.find((job) => job.source?.ref === ref)?.id ?? null
       },
       { timeout: 20_000 },
     )
     .toBeTruthy()
 
-  // The saved mapping, not the test call's placeholder: a new call's job carries the mapped title.
+  // The saved mapping, not the test call's placeholder: a new call carries the mapped title. The team's first job is
+  // still running, so this call waits in the chat's queue (202) instead of starting a second job.
   const savedRef = `${ref}-2`
   const savedTitle = `Saved mapping works ${tag}`
   const second = await callHook(
@@ -203,16 +208,16 @@ async function addTriggerThroughFourSteps(page: Page) {
     }),
     `msg-${tag}-2`,
   )
-  expect(second.status()).toBe(200)
+  expect(second.status()).toBe(202)
   await expect
     .poll(
       async () => {
-        const response = await page.request.get('/api/team-room')
+        const response = await page.request.get(`/api/rooms/${team.id}/queue`)
         if (!response.ok()) return null
         const body = (await response.json()) as {
-          jobs: { title: string; source: { ref: string } | null }[]
+          items: { title: string; source: { ref: string } }[]
         }
-        return body.jobs.find((job) => job.source?.ref === savedRef)?.title ?? null
+        return body.items.find((item) => item.source.ref === savedRef)?.title ?? null
       },
       { timeout: 20_000 },
     )
@@ -252,7 +257,7 @@ async function rotateTrigger(
     JSON.stringify({ id: `${trigger.ref}-NEW` }),
     `msg-new-${trigger.ref}`,
   )
-  expect(newCall.status()).toBe(200)
+  expect(newCall.status()).toBe(202) // the trigger's team still has its first job running: the call waits
 }
 
 async function mockSharedLook(page: Page) {

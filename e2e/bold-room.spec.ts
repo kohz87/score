@@ -5,6 +5,7 @@ import {
   openTopicsOnPhone,
   showAllJobsOnPhone,
 } from './bold-room-fixtures.ts'
+import { makeRoom, openInfoSection } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.4a: the bold team room. The robot room moves over time, so these specs pin the contract-shaped reads to a
@@ -29,26 +30,28 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
     .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
     .toBe(200)
   const web = { 'x-score-client': 'web' }
-  const room = (await (await page.request.get('/api/team-room')).json()) as { room: { id: string } }
-  // The seeded Release notes job keeps its unread count only until some other spec opens it (the Results and Workbench
-  // specs do, on this same server), so the second job is one of this spec's own: a person's message into it, and the
-  // lead's reply is the unread message nobody has opened.
+  // 3.28.0: the seeded team room holds two active jobs, so a new job there is refused (409 job_running). The spec's job
+  // lives in a chat of its own, where it is the one active job.
+  const room = await makeRoom(page, 'unread')
+  // The lead's reply to a person's message into the job is the unread message nobody has opened.
   const title = `Release notes ${Date.now().toString(36)}`
-  const made = await page.request.post(`/api/rooms/${room.room.id}/jobs`, {
+  const made = await page.request.post(`/api/rooms/${room.id}/jobs`, {
     headers: web,
     data: { title },
   })
   expect(made.status()).toBe(201)
   const jobId = ((await made.json()) as { id: string }).id
-  const sent = await page.request.post(`/api/rooms/${room.room.id}/messages`, {
+  const sent = await page.request.post(`/api/rooms/${room.id}/messages`, {
     headers: web,
     data: { text: 'Draft the release notes.', to: ['lead'], jobId },
   })
   expect(sent.ok()).toBe(true)
-  type TeamJob = { id: string; unread: number; activeAgents: string[] }
+  type RoomJob = { id: string; unread: number; activeAgents: string[] }
   const read = async () => {
-    const team = (await (await page.request.get('/api/team-room')).json()) as { jobs: TeamJob[] }
-    return team.jobs.find((job) => job.id === jobId)
+    const jobs = (await (await page.request.get(`/api/rooms/${room.id}/jobs`)).json()) as {
+      items: RoomJob[]
+    }
+    return jobs.items.find((job) => job.id === jobId)
   }
   // The reply has landed and the agents are done, so the count no longer moves.
   await expect
@@ -63,16 +66,10 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   const notes = await read()
   expect(notes?.unread ?? 0).toBeGreaterThan(0)
 
-  await page.goto('/b?open=1')
-  // 3.22.0: no job tabs and no per-topic badge on desktop; the topic is current once picked in Info › Topics, and the
-  // context bar says where a message goes. Every topic's messages are in the one conversation, so they count as read
-  // once it is shown (the old "kept until its own tab is opened" no longer applies).
-  const side = page.getByRole('complementary', { name: 'Side panel' })
-  await side.getByRole('link', { name: /Activity feed/ }).click()
-  await expectDestination(page, 'Activity feed')
-
-  await side.getByRole('link', { name: new RegExp(title) }).click()
-  await expectDestination(page, title)
+  // One active job is the chat's current job as soon as it opens (no list to pick from, no divider, no "in <job>" pill),
+  // and every message in the conversation counts as read once it is shown.
+  await page.goto(`/b?room=${room.id}`)
+  await expect(page.locator('.bold-job-bar')).toContainText(title)
   await expect.poll(async () => (await read())?.unread ?? 0, { timeout: 30_000 }).toBe(0)
 })
 
@@ -130,7 +127,10 @@ for (const viewport of sizes) {
       if (viewport.width <= 860) {
         // 3.24.0: the All topics screen is gone; Info › Topics (the sheet, or an old `?jobs=1` link) lists the topics.
         await openTopicsOnPhone(page)
-        await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
+        // 3.28.0: the seeded team room is a legacy room: its two active jobs list under Open jobs, the done one under Past jobs.
+        await expect(page.getByRole('heading', { name: 'Past jobs' })).toBeVisible()
+        await openInfoSection(page, 'Open jobs')
+        await openInfoSection(page, 'Past jobs')
         const row = (title: string) =>
           page
             .locator('.bold-chat-topics a')
@@ -159,6 +159,8 @@ for (const viewport of sizes) {
       }
 
       const side = page.getByRole('complementary', { name: 'Side panel' })
+      await openInfoSection(side, 'Open jobs')
+      await openInfoSection(side, 'Past jobs')
       const activity = side.getByRole('link', { name: /Activity feed/ })
       await expect(side.getByRole('link', { name: /Release notes 2\.4/ })).toBeVisible()
       await expect(side.getByRole('link', { name: /Queue research/ })).toBeVisible()
