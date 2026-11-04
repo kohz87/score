@@ -99,7 +99,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mount(path = '/b/recipes/wf-release') {
+function mount(path = '/b/settings/recipes/wf-release') {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client)
@@ -110,8 +110,8 @@ function mount(path = '/b/recipes/wf-release') {
   })
   const router = createMemoryRouter(
     [
-      { path: '/b/recipes', Component: BoldRecipesPage },
-      { path: '/b/recipes/:workflowId', Component: BoldRecipesPage },
+      { path: '/b/settings/recipes', Component: BoldRecipesPage },
+      { path: '/b/settings/recipes/:workflowId', Component: BoldRecipesPage },
       { path: '*', element: <p>elsewhere</p> },
     ],
     { initialEntries: [path] },
@@ -143,7 +143,7 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   const status = await within(dialog).findByLabelText('Runs of this recipe')
   expect(status.textContent).toContain('1 run going')
   expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
-    /^\/b\/recipes\?run=brief-/,
+    /^\/b\/settings\/recipes\?run=brief-/,
   )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() =>
@@ -177,11 +177,13 @@ test('a dirty draft asks before leaving for another recipe', async () => {
   await waitFor(() =>
     expect(confirm).toHaveBeenCalledWith('You have unsaved changes. Leave without saving?'),
   )
-  expect(router.state.location.pathname).toBe('/b/recipes/wf-release')
+  expect(router.state.location.pathname).toBe('/b/settings/recipes/wf-release')
 
   confirm.mockReturnValue(true)
   fireEvent.click(screen.getByRole('button', { name: /lead decides/ }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes/lead-decides'))
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe('/b/settings/recipes/lead-decides'),
+  )
 })
 
 test('a failed validation check says so and keeps Save disabled', async () => {
@@ -265,7 +267,7 @@ test('a conflict offers both classic choices and keeps the draft', async () => {
 })
 
 test('the page lists the built-in recipe and the saved ones, and opens on the graph', async () => {
-  mount('/b/recipes')
+  mount('/b/settings/recipes')
   const list = await screen.findByRole('navigation', { name: 'Recipes' })
   expect(within(list).getByRole('button', { name: /lead decides/ })).toBeTruthy()
   expect(within(list).getByText('Built in')).toBeTruthy()
@@ -279,7 +281,7 @@ test('the page lists the built-in recipe and the saved ones, and opens on the gr
 })
 
 test('the list is searchable and lead decides is a page with a way to start a job', async () => {
-  const router = mount('/b/recipes/lead-decides')
+  const router = mount('/b/settings/recipes/lead-decides')
   expect(await screen.findByRole('heading', { name: 'lead decides' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'Start a job' }).getAttribute('href')).toBe(
     '/b?start=job',
@@ -288,7 +290,7 @@ test('the list is searchable and lead decides is a page with a way to start a jo
     target: { value: 'zzz' },
   })
   expect(await screen.findByText('No recipe matches “zzz”.')).toBeTruthy()
-  expect(router.state.location.pathname).toBe('/b/recipes/lead-decides')
+  expect(router.state.location.pathname).toBe('/b/settings/recipes/lead-decides')
 })
 
 test('a + between two layers adds a step on that connection, and the draft is saved with it', async () => {
@@ -352,7 +354,7 @@ test('Run opens Start a job with this recipe, and a saved version can be viewed 
 // ---- The graph editor (ported from the classic workflow editor's tests)
 
 test('the editor shows every server problem on the node it is about, with words for what to do', async () => {
-  mount('/b/recipes/wf-draft')
+  mount('/b/settings/recipes/wf-draft')
   const problems = await screen.findByRole('region', { name: 'Problems' })
   await within(problems).findAllByText(/nothing is connected to "when it fails"/)
   expect(within(problems).getByText(/The workflow has no end/)).toBeTruthy()
@@ -377,7 +379,7 @@ test('the editor shows every server problem on the node it is about, with words 
 })
 
 test('typing {{ in an instruction offers the inputs and the earlier steps, and Enter inserts the choice', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const canvasNode = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   fireEvent.click(canvasNode)
   const field = (await screen.findByRole('combobox', {
@@ -401,7 +403,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const name = (await screen.findByRole('textbox', { name: 'Recipe name' })) as HTMLInputElement
   fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
@@ -418,7 +420,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
 })
 
 test('the outline is the graph as text, and the inspector connects with a select (the keyboard way)', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const outline = await screen.findByRole('region', { name: 'Outline' })
   expect(within(outline).getByText('when done goes to Review the draft')).toBeTruthy()
   expect(within(outline).getByText('otherwise goes to Repair the draft')).toBeTruthy()
@@ -455,7 +457,7 @@ const withStoredLayout = () => {
 
 test('the cards read top to bottom by rank, whatever positions were saved; parallel steps sit side by side', async () => {
   withStoredLayout()
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   await screen.findByRole('button', { name: /Agent step Draft the notes/ })
   const order = [...document.querySelectorAll<HTMLElement>('.rl-card[data-node]')].map(
     (card) => card.dataset.node,
@@ -478,7 +480,7 @@ test('saving keeps the stored positions as they were', async () => {
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const name = (await screen.findByRole('textbox', { name: 'Recipe name' })) as HTMLInputElement
   fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
@@ -500,7 +502,7 @@ test('saving keeps the stored positions as they were', async () => {
 
 test('Delete on a selected card asks first; a no keeps the step, a yes removes it and its saved position', async () => {
   withStoredLayout()
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
   fireEvent.keyDown(card, { key: 'Delete' })
@@ -519,7 +521,7 @@ test('Delete on a selected card asks first; a no keeps the step, a yes removes i
 })
 
 test('a card is a button: Enter or a click selects it, and the settings open beside it', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Gate Approve the draft/ })
   expect(card.getAttribute('aria-pressed')).toBe('false')
   fireEvent.click(card)
@@ -542,7 +544,7 @@ test('on a phone the step settings are a sheet that closes with its button', asy
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   // Nothing selected: no panel, the graph has the page.
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
@@ -554,13 +556,13 @@ test('on a phone the step settings are a sheet that closes with its button', asy
 })
 
 test('the editor draws a run of the version on screen over the cards, and links to it', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const live = await screen.findByText(/Live: run started/)
   expect(
     within(live.closest('p')!)
       .getByRole('link', { name: /Open the run/ })
       .getAttribute('href'),
-  ).toBe('/b/recipes?run=brief-wfrun-1')
+  ).toBe('/b/settings/recipes?run=brief-wfrun-1')
   // The gate of the running run waits for you; the steps before it are done. The draft is untouched.
   expect(
     await screen.findByRole('button', { name: /Gate Approve the draft.*needs you/ }),
@@ -570,7 +572,7 @@ test('the editor draws a run of the version on screen over the cards, and links 
 })
 
 test('Preview plays the drawn workflow, says nothing runs, and Stop returns to the cards', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
   })) as HTMLButtonElement
@@ -587,7 +589,7 @@ test('Preview plays the drawn workflow, says nothing runs, and Stop returns to t
 })
 
 test('Preview is disabled while the draft has problems, and says why', async () => {
-  mount('/b/recipes/wf-draft')
+  mount('/b/settings/recipes/wf-draft')
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
   })) as HTMLButtonElement
@@ -617,7 +619,7 @@ test('a recipe with runs can be archived, and an archived one is hidden until Ar
     return undefined
   }
   try {
-    mount('/b/recipes/wf-release')
+    mount('/b/settings/recipes/wf-release')
     fireEvent.click(await screen.findByRole('button', { name: 'More' }))
     // Delete recipe is for a recipe nothing has run; this one has runs.
     expect(screen.queryByRole('button', { name: 'Delete recipe' })).toBeNull()
@@ -644,7 +646,7 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     return json({ deletedRuns: 2 })
   }
   try {
-    const router = mount('/b/recipes/wf-release')
+    const router = mount('/b/settings/recipes/wf-release')
     fireEvent.click(await screen.findByRole('button', { name: 'More' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete with runs…' }))
     const dialog = await screen.findByRole('alertdialog', { name: 'Delete recipe with its runs' })
@@ -660,7 +662,7 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     expect(confirm.disabled).toBe(false)
     fireEvent.click(confirm)
     await waitFor(() => expect(body).toEqual({ confirm: releaseDetail.name }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
   } finally {
     fixtures['/api/workflows'] = original
   }
@@ -674,7 +676,7 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
     items: [{ ...releaseDetail, used: true, archivedAt: null }],
   }
   try {
-    mount('/b/recipes/wf-release')
+    mount('/b/settings/recipes/wf-release')
     const more = await screen.findByRole('button', { name: 'More' })
     fireEvent.click(more)
     fireEvent.click(screen.getByRole('button', { name: 'Delete with runs…' }))
@@ -690,8 +692,8 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
 })
 
 // The run links (`?run=`) now land on the Recipes page, so the page itself must show a run's list rather than the recipes.
-test('/b/recipes?run= shows the list of runs instead of the recipes', async () => {
-  mount('/b/recipes?run=')
+test('/b/settings/recipes?run= shows the list of runs instead of the recipes', async () => {
+  mount('/b/settings/recipes?run=')
   expect(await screen.findByRole('list', { name: 'Runs' })).toBeDefined()
   expect(screen.queryByRole('navigation', { name: 'Recipes' })).toBeNull()
 })
@@ -709,7 +711,7 @@ const phoneMedia = () =>
   )
 
 test('deleting a middle step joins the step before to the step after, says so, and focuses the joined card', async () => {
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   fireEvent.keyDown(card, { key: 'Delete' })
@@ -735,7 +737,7 @@ test('after an insert, focus goes to the new card', async () => {
 
 test('phone sheet: compact with the instruction, focus moves in and back, Escape closes it from anywhere, More settings expands it', async () => {
   phoneMedia()
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   fireEvent.click(card)
   const sheet = screen.getByRole('complementary', { name: 'Selected step' })
@@ -762,7 +764,7 @@ test('phone sheet: compact with the instruction, focus moves in and back, Escape
 
 test('phone sheet: Delete step removes the step with its join, and an insert keeps focus on the new card', async () => {
   phoneMedia()
-  mount('/b/recipes/wf-release')
+  mount('/b/settings/recipes/wf-release')
   fireEvent.click(await screen.findByRole('button', { name: /Agent step Review the draft/ }))
   const sheet = screen.getByRole('complementary', { name: 'Selected step' })
   fireEvent.click(within(sheet).getByRole('button', { name: 'Delete step' }))

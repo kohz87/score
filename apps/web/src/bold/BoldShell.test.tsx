@@ -591,7 +591,7 @@ test('the side panel is a lone Info tab (Graph joins it on a run), not a dropdow
 test('an old ?run= address lands on the Recipes page’s run every time, even the same one again', async () => {
   phone = true
   const router = open('/b?run=brief-x')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
   expect(router.state.location.search).toBe('?run=brief-x')
   await act(async () => {
     await router.navigate('/b')
@@ -599,7 +599,7 @@ test('an old ?run= address lands on the Recipes page’s run every time, even th
   await act(async () => {
     await router.navigate('/b?run=brief-x')
   })
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
   expect(router.state.location.search).toBe('?run=brief-x')
   // The side sheet is not what opens for a run any more.
   expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
@@ -685,7 +685,7 @@ test('?note= and ?library=1 open Knowledge instead, and can be repeated', async 
 
 test('/runs/:id opens the run on the Recipes page, keeping other parameters', async () => {
   const router = open('/runs/brief-x?from=search')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
   expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-x')
   expect(new URLSearchParams(router.state.location.search).get('from')).toBe('search')
 })
@@ -736,8 +736,10 @@ test('the phone top bar keeps wordmark, section pills, terminal button and avata
   const mark = within(bar).getByRole('button', { name: 'Score, go to the team room' })
   const avatar = within(bar).getByText('Y')
   const links = bar.querySelector('.bold-top-links') as HTMLElement
-  for (const name of ['Recipes', 'Tasks', 'Screens'])
+  for (const name of ['Tasks', 'Screens'])
     expect(within(links).getByRole('button', { name })).toBeDefined()
+  // 3.27.0: Recipes moved into Settings.
+  expect(within(links).queryByRole('button', { name: 'Recipes' })).toBeNull()
   // All four parts are direct children of the one bar, in reading order, and nothing else is on a phone's bar.
   const parts = [...bar.children]
   expect(parts).toEqual([mark, links, terminal, avatar])

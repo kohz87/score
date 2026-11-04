@@ -125,7 +125,7 @@ function describeError(error: unknown): string {
   return error.message
 }
 
-/** The route: `/b/recipes`, `/b/recipes/new`, `/b/recipes/lead-decides` or `/b/recipes/:workflowId`. */
+/** The route: `/b/settings/recipes`, `/b/settings/recipes/new`, `/b/settings/recipes/lead-decides` or `/b/settings/recipes/:workflowId`. */
 export function BoldRecipesPage() {
   const [query, setQuery] = useSearchParams()
   const runBrief = query.get('run')

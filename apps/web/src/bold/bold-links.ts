@@ -1,7 +1,7 @@
 /**
  * Every destination inside the bold shell. The query parameters are read by later tasks:
  * `job`/`message` by the room (11.4), `with`/`chat` by one-to-ones (11.7), `note` by Library (11.10e),
- * `start` by Start a job (11.10c), `/b/recipes[/:id]` is the Recipes page (2.8.0), `first` by first run (11.10b),
+ * `start` by Start a job (11.10c), `/b/settings/recipes[/:id]` is the Recipes page (2.8.0), `first` by first run (11.10b),
  * `add` by Add an agent (11.8c), and `command` by the composer's slash-command hand-off (11.4a).
  */
 
@@ -56,7 +56,7 @@ export function boldNoteLink(path: string): string {
 /** 2.5.0 Runs: open a run (by its brief id) in the side panel's Runs view. */
 export function boldRunLink(briefId: string): string {
   // 3.22.0: a run opens on the Recipes page (the side panel is chat info only).
-  return `/b/recipes?run=${encodeURIComponent(briefId)}`
+  return `/b/settings/recipes?run=${encodeURIComponent(briefId)}`
 }
 
 /** 11.10c Start a job: open its dialog, optionally with a saved recipe already chosen (2.8.0). */
@@ -66,7 +66,7 @@ export function boldStartJobLink(recipeId?: string): string {
 
 /** 2.8.0 Recipes: the page, or one recipe (`new` starts a new one). */
 export function boldRecipesLink(recipeId?: string): string {
-  return recipeId ? `/b/recipes/${encodeURIComponent(recipeId)}` : '/b/recipes'
+  return recipeId ? `/b/settings/recipes/${encodeURIComponent(recipeId)}` : '/b/settings/recipes'
 }
 
 /** 11.10b First run: replay it. */

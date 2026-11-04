@@ -853,6 +853,50 @@ test('an advisor is optional, checked in the preflight, sent by id, and cleared 
   }
 })
 
+test('3.27.0: lead decides keeps going until stopped by default, sends untilStopped and needs the spend cap', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const keep = within(dialog).getByRole('checkbox', {
+    name: 'Keep going until I stop it',
+  }) as HTMLInputElement
+  expect(keep.checked).toBe(true)
+  // No turn slider while there is no turn limit.
+  expect(within(dialog).queryByText('Turns per back-and-forth')).toBeNull()
+  const cap = within(dialog).getByLabelText(/Spend cap/) as HTMLInputElement
+  expect(cap.required).toBe(true)
+  fireEvent.change(cap, { target: { value: '0' } })
+  fireEvent.change(within(dialog).getByLabelText('What should the team do?'), {
+    target: { value: 'Fix the failing tests' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+  expect(
+    within(dialog)
+      .getByText(/Set a spend cap/)
+      .getAttribute('role'),
+  ).toBe('alert')
+  fireEvent.change(cap, { target: { value: '7' } })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(start)
+  await waitFor(() => expect(orchestrationBodies).toHaveLength(1))
+  expect(orchestrationBodies[0]).toMatchObject({ untilStopped: true, budgetUsd: 7 })
+})
+
+test('3.27.0: turning "Keep going until I stop it" off restores the turn limit and sends no untilStopped', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Keep going until I stop it' }))
+  expect(within(dialog).getByText('Turns per back-and-forth')).toBeDefined()
+  const cap = within(dialog).getByLabelText(/Spend cap/) as HTMLInputElement
+  expect(cap.required).toBe(false)
+  fireEvent.change(cap, { target: { value: '0' } })
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies).toHaveLength(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('untilStopped')
+  expect(orchestrationBodies[0]).toMatchObject({ maxLeadTurns: 8 })
+})
+
 test('no advisor means no advisorAgentId in the body (3.14)', async () => {
   open('/b?start=job')
   const dialog = await startDialog()

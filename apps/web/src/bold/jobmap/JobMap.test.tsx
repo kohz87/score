@@ -49,6 +49,15 @@ test('every layer is a focusable button with its state in the label', () => {
     expect(screen.getAllByRole('button', { name })[0]).toBeTruthy()
 })
 
+test('3.27.0: the Graph tab says "until you stop it" for a run with no turn cap', () => {
+  view({ ...fullRun, untilStopped: true } as typeof fullRun)
+  expect(
+    screen.getAllByRole('button', { name: /^Lead layer: lead, turn 9, until you stop it, / })[0],
+  ).toBeTruthy()
+  expect(screen.queryByText(/Turn 9 of 30/)).toBeNull()
+  expect(screen.getByText(/until you stop it · /)).toBeTruthy()
+})
+
 test('a worker that asked its own advisor says so and the stuck step keeps its protected Stop', () => {
   view()
   expect(screen.getByText('asked its advisor 2×')).toBeTruthy()

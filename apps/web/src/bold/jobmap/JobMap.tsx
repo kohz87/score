@@ -229,7 +229,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
           onPick={pick}
           tone="lead"
           pulse={lead.working && !still}
-          label={`Lead layer: ${lead.name}, turn ${lead.turn} of ${lead.maxTurns}, ${lead.working ? 'working' : lead.doing}`}
+          label={`Lead layer: ${lead.name}, turn ${lead.turn}${lead.untilStopped ? ', until you stop it' : ` of ${lead.maxTurns}`}, ${lead.working ? 'working' : lead.doing}`}
           className="jobmap-lead"
         >
           <span className="jobmap-kicker">
@@ -237,7 +237,8 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
             Lead · {lead.name}
           </span>
           <strong>
-            Turn {lead.turn} of {lead.maxTurns} · {lead.doing}
+            Turn {lead.turn}
+            {lead.untilStopped ? ' · until you stop it' : ` of ${lead.maxTurns}`} · {lead.doing}
           </strong>
           <span className="jobmap-sub">{lead.progress}</span>
           {phone && advisor && (

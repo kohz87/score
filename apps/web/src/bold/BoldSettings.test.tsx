@@ -327,6 +327,7 @@ beforeEach(() => {
               ]
             : [],
         })
+      if (url.pathname === '/api/workflows') return jsonResponse({ items: [] })
       if (url.pathname === '/api/reports') return jsonResponse(reportFixture('7d'))
       return jsonResponse({ error: { code: 'not_found', message: 'No' } }, 404)
     }),
@@ -603,4 +604,21 @@ test('Remote access and security lists open terminals and closes one', async () 
   } finally {
     terminalOn = false
   }
+})
+
+test('Recipes is a Settings section: its list and editor sit inside the frame', async () => {
+  open('/b/settings/recipes')
+  const nav = screen.getByRole('navigation', { name: 'Settings' })
+  expect(
+    within(nav)
+      .getByRole('button', { name: /^Recipes/ })
+      .getAttribute('aria-current'),
+  ).toBe('page')
+  expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeDefined()
+  // The top bar no longer carries a Recipes button.
+  expect(
+    within(screen.getByRole('navigation', { name: 'Main' })).queryByRole('button', {
+      name: 'Recipes',
+    }),
+  ).toBeNull()
 })
