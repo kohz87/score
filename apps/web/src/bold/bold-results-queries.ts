@@ -1,6 +1,6 @@
 import { JobResultsSchema, type JobResults, type StreamEvent } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { apiFetch } from '../data/api.ts'
 import { useStream } from '../data/query-client.ts'
 
@@ -33,6 +33,8 @@ function eventJobId(event: StreamEvent): string | undefined {
 export function useJobResults(
   jobId: string | null,
   visible = true,
+  /** Agents of the topic besides those with a screen in it (the holder, who is busy): their frames count too. */
+  agentIds: readonly string[] = [],
 ): {
   results: JobResults | undefined
   pending: boolean
@@ -48,6 +50,17 @@ export function useJobResults(
     enabled: visible && jobId !== null,
   })
 
+  // A watch frame is one agent's; only the topic's own agents' frames can change what this topic shows. Read through a
+  // ref so a new screen doesn't re-subscribe.
+  const screenAgents = new Set([
+    ...(query.data?.screens.map((screen) => screen.agentId) ?? []),
+    ...agentIds,
+  ])
+  const watched = useRef(screenAgents)
+  useEffect(() => {
+    watched.current = screenAgents
+  })
+
   useEffect(() => {
     if (!visible || !jobId) return
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -58,7 +71,12 @@ export function useJobResults(
       }, REFRESH_MS)
     }
     const offEvents = stream.subscribe((event) => {
-      if (RESULT_EVENTS.has(event.type) && (eventJobId(event) ?? jobId) === jobId) refresh()
+      if (!RESULT_EVENTS.has(event.type)) return
+      if (event.type === 'watch.frame') {
+        if (watched.current.has(event.data.agentId)) refresh()
+        return
+      }
+      if ((eventJobId(event) ?? jobId) === jobId) refresh()
     })
     const offControl = stream.onControl(({ resync }) => {
       if (resync) refresh()

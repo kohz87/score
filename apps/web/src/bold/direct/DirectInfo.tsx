@@ -24,11 +24,14 @@ export function DirectInfo({
   agent,
   agents,
   chatId,
+  visible = true,
   onNavigate,
 }: {
   agent: AgentSummary
   agents: AgentSummary[]
   chatId: string | null
+  /** False while the panel is out of sight (a closed phone sheet or panel): Files and results reads nothing then. */
+  visible?: boolean
   /** A link or button here leaves the sheet (the phone closes it). */
   onNavigate?: (() => void) | undefined
 }) {
@@ -109,7 +112,12 @@ export function DirectInfo({
           Open {name}’s workspace files
         </Link>
       </section>
-      <FilesAndResults jobId={current?.id ?? null} agents={agents} />
+      <FilesAndResults
+        jobId={current?.id ?? null}
+        agents={agents}
+        visible={visible}
+        agentIds={[agent.id]}
+      />
       <section aria-labelledby="dm-info-chats">
         <h2 id="dm-info-chats" className="bold-chat-kicker">
           Chats

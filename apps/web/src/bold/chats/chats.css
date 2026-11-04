@@ -1076,6 +1076,31 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Not .bold-chat-kicker: a phone hides those visually (the chat list's headings), and this title must show. */
+[data-ui='bold'] .bold-viewer-title {
+  margin: 0;
+  margin-inline-end: auto;
+  font-family: var(--font-b);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* A light object of Score's own: a decision is waiting under the sheet. */
+[data-ui='bold'] .bold-viewer-needs {
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #ececf1;
+  color: #12131a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 [data-ui='bold'] .bold-viewer-body {
   flex: 1;
   min-height: 0;

@@ -112,6 +112,8 @@ export function BoldRoom() {
   // A one-to-one is a chat: its side panel is the chat's Info.
   const infoShown = !panelClosed && (shownMode === 'info' || directMode)
   const graphShown = !panelClosed && shownMode === 'graph'
+  // Info's Files and results reads only while it can be seen (not a closed phone sheet or a shut panel).
+  const filesVisible = !panelClosed && (!phone || sheetOpen)
   const toggleInfo = () => {
     if (infoShown) {
       setPanelShut(true)
@@ -458,6 +460,7 @@ export function BoldRoom() {
                 agent={directAgent}
                 agents={agents}
                 chatId={chatId}
+                visible={filesVisible}
                 onNavigate={() => setSheetOpen(false)}
               />
             ) : (
@@ -479,6 +482,7 @@ export function BoldRoom() {
               jobs={openGroupJobs ?? []}
               everyone={everyoneOpen}
               phone={phone}
+              visible={filesVisible}
               onNavigate={() => setSheetOpen(false)}
             />
           ) : shownMode === 'elsewhere' && elsewhere ? (

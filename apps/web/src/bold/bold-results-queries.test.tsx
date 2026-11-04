@@ -30,7 +30,20 @@ function Probe({ jobId, visible = true }: { jobId: string | null; visible?: bool
   )
 }
 
-function mount(props: { jobId: string | null; visible?: boolean }, fail = () => false) {
+const screen1 = {
+  agentId: 'builder',
+  seq: 3,
+  surface: 'terminal' as const,
+  caption: 'tests',
+  live: true,
+  at: '2026-10-24T10:00:00.000Z',
+}
+
+function mount(
+  props: { jobId: string | null; visible?: boolean },
+  fail = () => false,
+  withScreen = false,
+) {
   const listeners = new Set<(event: StreamEvent) => void>()
   const stream = {
     subscribe(listener: (event: StreamEvent) => void) {
@@ -47,7 +60,11 @@ function mount(props: { jobId: string | null; visible?: boolean }, fail = () => 
       calls.push(path)
       if (fail())
         return Response.json({ error: { code: 'unavailable', message: 'x' } }, { status: 503 })
-      return Response.json({ ...empty, asOfSeq: calls.length })
+      return Response.json({
+        ...empty,
+        screens: withScreen ? [screen1] : [],
+        asOfSeq: calls.length,
+      })
     }),
   )
   const queryClient = createQueryClient()
@@ -60,14 +77,16 @@ function mount(props: { jobId: string | null; visible?: boolean }, fail = () => 
     queries.dispose()
     queryClient.clear()
   })
-  render(
+  const tree = (next: { jobId: string | null; visible?: boolean }) => (
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client: stream as unknown as StreamClient, queries }}>
-        <Probe {...props} />
+        <Probe {...next} />
       </StreamContext>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree(props))
   return {
+    rerender: (next: { jobId: string | null; visible?: boolean }) => view.rerender(tree(next)),
     calls,
     emit(event: StreamEvent) {
       for (const listener of listeners) listener(event)
@@ -112,4 +131,61 @@ test('no topic, or a hidden panel, reads nothing', async () => {
   act(() => hidden.emit(event('job.upserted', { id: 'job-a' })))
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(hidden.calls).toEqual([])
+})
+
+const frame = (agentId: string) => event('watch.frame', { agentId, seq: 9 })
+
+test('a watch frame refreshes, coalesced, only from an agent with a screen in this topic', async () => {
+  const mounted = mount({ jobId: 'job-a' }, () => false, true)
+  await waitFor(() => expect(screen.getByTestId('seq').textContent).toBe('1'))
+  act(() => {
+    mounted.emit(frame('someone-else'))
+    mounted.emit(frame('other-screen'))
+  })
+  await new Promise((resolve) => setTimeout(resolve, 1100))
+  expect(mounted.calls).toHaveLength(1)
+  act(() => {
+    mounted.emit(frame('builder'))
+    mounted.emit(frame('builder'))
+    mounted.emit(frame('builder'))
+  })
+  await new Promise((resolve) => setTimeout(resolve, 1100))
+  await waitFor(() => expect(mounted.calls).toHaveLength(2))
+  expect(screen.getByTestId('seq').textContent).toBe('2')
+})
+
+test('a watch frame refreshes and a later success clears an error', async () => {
+  let down = false
+  const mounted = mount({ jobId: 'job-a' }, () => down, true)
+  await waitFor(() => expect(screen.getByTestId('seq').textContent).toBe('1'))
+  down = true
+  act(() => mounted.emit(frame('builder')))
+  await waitFor(() => expect(screen.getByTestId('failed').textContent).toBe('true'), {
+    timeout: 3000,
+  })
+  down = false
+  act(() => mounted.emit(frame('builder')))
+  await waitFor(() => expect(screen.getByTestId('failed').textContent).toBe('false'), {
+    timeout: 3000,
+  })
+})
+
+test('a hidden section reads nothing and reads once when it shows again', async () => {
+  const mounted = mount({ jobId: 'job-a', visible: false }, () => false, true)
+  act(() => {
+    mounted.emit(frame('builder'))
+    mounted.emit(event('job.upserted', { id: 'job-a' }))
+  })
+  await new Promise((resolve) => setTimeout(resolve, 1100))
+  expect(mounted.calls).toEqual([])
+  mounted.rerender({ jobId: 'job-a', visible: true })
+  await waitFor(() => expect(mounted.calls).toHaveLength(1))
+  mounted.rerender({ jobId: 'job-a', visible: false })
+  act(() => mounted.emit(frame('builder')))
+  await new Promise((resolve) => setTimeout(resolve, 1100))
+  expect(mounted.calls).toHaveLength(1)
+  mounted.rerender({ jobId: 'job-a', visible: true })
+  await waitFor(() => expect(mounted.calls).toHaveLength(2))
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  expect(mounted.calls).toHaveLength(2)
 })

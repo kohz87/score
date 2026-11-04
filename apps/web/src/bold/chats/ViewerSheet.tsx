@@ -1,9 +1,10 @@
 import type { AgentSummary } from '@score/contract'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { CloseIcon } from '../BoldIcons.tsx'
 import { BoldWorkbench, type JobFace } from '../BoldWorkbench.tsx'
+import { goToNearestCard, waitingCards } from '../room/needs-jump-dom.ts'
 import { directChatsQuery } from '../direct/direct-queries.ts'
 import { focusOpenedRow } from './FilesResults.tsx'
 import { viewerClosedSearch } from './files-model.ts'
@@ -36,6 +37,13 @@ export function ViewerSheet({
       if (!focusOpenedRow()) document.getElementById('chat-info-files')?.focus()
     })
   }
+  // A needs-you card that waits in this chat is under the sheet: the bar says so and takes the person back to it.
+  const [needing, setNeeding] = useState(0)
+  const backToCards = () => {
+    setParams(viewerClosedSearch(paramsRef.current), { replace: true })
+    // Two frames: the sheet unmounts (and the conversation stops being inert) before focus goes to the card.
+    requestAnimationFrame(() => requestAnimationFrame(() => void goToNearestCard()))
+  }
   const closeRefFn = useRef(close)
   useEffect(() => {
     paramsRef.current = params
@@ -44,6 +52,43 @@ export function ViewerSheet({
 
   useEffect(() => {
     closeRef.current?.focus()
+  }, [])
+
+  // The conversation under the sheet is inert while it is open, so focus can't reach controls nobody can see.
+  useEffect(() => {
+    const sheet = sheetRef.current
+    const parent = sheet?.parentElement
+    if (!sheet || !parent) return
+    const made: Element[] = []
+    for (const sibling of parent.children) {
+      if (sibling === sheet || sibling.hasAttribute('inert')) continue
+      sibling.setAttribute('inert', '')
+      made.push(sibling)
+    }
+    return () => made.forEach((sibling) => sibling.removeAttribute('inert'))
+  }, [])
+
+  useEffect(() => {
+    const sheet = sheetRef.current
+    const root = sheet?.parentElement
+    if (!root) return
+    let frame = 0
+    const count = () => {
+      frame = 0
+      setNeeding(waitingCards(document.getElementById('bold-room-stream')).length)
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(count)
+    }
+    count()
+    const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(schedule)
+    observer?.observe(root, { childList: true, subtree: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', schedule)
+    }
   }, [])
 
   useEffect(() => {
@@ -91,7 +136,17 @@ export function ViewerSheet({
       data-testid="bold-viewer-sheet"
     >
       <div className="bold-viewer-bar">
-        <h2 className="bold-chat-kicker">Files and results</h2>
+        <h2 className="bold-viewer-title">Files and results</h2>
+        {needing > 0 && (
+          <button
+            type="button"
+            className="bold-viewer-needs"
+            data-protected="inline-flex"
+            onClick={backToCards}
+          >
+            {needing} {needing === 1 ? 'needs' : 'need'} you · Back to the chat
+          </button>
+        )}
         <button
           ref={closeRef}
           type="button"

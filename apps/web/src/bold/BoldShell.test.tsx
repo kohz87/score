@@ -1067,6 +1067,38 @@ test('more than six rows fold behind Show all (N)', async () => {
   expect(within(section).getAllByRole('link')).toHaveLength(6)
 })
 
+test('the conversation under the viewer sheet is inert, and a waiting card is cued on the sheet', async () => {
+  const router = openWithFiles('/b?job=job-plain')
+  const section = await screen.findByTestId('files-results')
+  fireEvent.click(await within(section).findByRole('link', { name: /Release notes/ }))
+  const sheet = await screen.findByRole('dialog', { name: 'Workbench viewer' })
+  const column = sheet.closest('.roomcol')!
+  const under = [...column.children].filter((child) => child !== sheet)
+  expect(under.length).toBeGreaterThan(0)
+  for (const child of under) expect(child.hasAttribute('inert')).toBe(true)
+  expect(sheet.hasAttribute('inert')).toBe(false)
+  // The title is not a .bold-chat-kicker, which a phone hides visually.
+  const title = within(sheet).getByRole('heading', { name: 'Files and results' })
+  expect(title.className).toBe('bold-viewer-title')
+  // No card waits: no cue.
+  expect(within(sheet).queryByText(/need.* you/)).toBeNull()
+
+  // A needs-you card appears in the conversation under the sheet.
+  const stream = document.getElementById('bold-room-stream')!
+  const card = document.createElement('div')
+  card.setAttribute('data-pin-key', 'approval:a1')
+  card.tabIndex = -1
+  card.getBoundingClientRect = () => ({ top: 10, bottom: 60, height: 50 }) as DOMRect
+  stream.appendChild(card)
+  const cue = await within(sheet).findByRole('button', { name: '1 needs you · Back to the chat' })
+  expect(cue.getAttribute('data-protected')).not.toBeNull()
+  fireEvent.click(cue)
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Workbench viewer' })).toBeNull())
+  expect(router.state.location.search).not.toContain('work=')
+  for (const child of under) expect(child.hasAttribute('inert')).toBe(false)
+  await waitFor(() => expect(document.activeElement).toBe(card))
+})
+
 test('a row opens the viewer sheet over the conversation; Escape and the close button return focus to the row', async () => {
   const router = openWithFiles('/b?job=job-plain')
   const section = await screen.findByTestId('files-results')

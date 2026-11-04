@@ -55,13 +55,19 @@ function RowIcon({ kind }: { kind: FileRow['kind'] }) {
 export function FilesAndResults({
   jobId,
   agents,
+  visible = true,
+  agentIds = [],
 }: {
   jobId: string | null
   agents: AgentSummary[]
+  /** False while the panel is out of sight (a closed phone sheet): nothing is read until it shows. */
+  visible?: boolean
+  /** The topic's own agents (its holder and who is busy in it), whose screens' frames refresh the section. */
+  agentIds?: readonly string[]
 }) {
   const location = useLocation()
   const [params] = useSearchParams()
-  const { results, pending, failed, retry } = useJobResults(jobId)
+  const { results, pending, failed, retry } = useJobResults(jobId, visible, agentIds)
   const [all, setAll] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const names = new Map(agents.map((agent) => [agent.id, agentDisplayName(agent)]))
