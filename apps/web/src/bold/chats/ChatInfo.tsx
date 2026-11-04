@@ -126,6 +126,11 @@ function TopicRow({
           />
         )}
         <span className="bold-chat-topic-title">{job.title}</span>
+        {job.state === 'waiting_on_you' && (
+          <span className="bold-info-needs" data-protected="inline-flex">
+            Needs you
+          </span>
+        )}
         {job.unread > 0 && (
           <span className="bold-unread" aria-label={`${job.unread} unread`}>
             {job.unread > 99 ? '99+' : job.unread}
@@ -231,6 +236,8 @@ export function ChatInfo({
         title="Topics"
         summary={`${openTopicList.length} open`}
         forceOpen={openTopics}
+        // 3.27.1 review: a topic waiting on the person is a decision: Topics opens for it, or shows the badge folded.
+        needsYou={topics.some((job) => job.state === 'waiting_on_you')}
       >
         {topics.length === 0 ? (
           <p className="bold-chat-note">Nothing yet.</p>

@@ -251,7 +251,6 @@
   color: var(--ink);
 }
 
-[data-ui='bold'] .bold-chat-meta code,
 /* 3.27.1: every Info section folds. The heading is the toggle; its body keeps the section's own column layout. */
 [data-ui='bold'] .bold-chat-info .bold-info-head {
   display: flex;
@@ -313,6 +312,7 @@
   text-transform: none;
 }
 
+[data-ui='bold'] .bold-chat-meta code,
 [data-ui='bold'] .bold-chat-info code {
   font-family: var(--font-m);
   color: var(--ink2);

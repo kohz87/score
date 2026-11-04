@@ -130,3 +130,21 @@ test('This topic opens by itself for a paused exchange that needs the person, an
   const badge = document.querySelector('.bold-info-needs')
   expect(badge?.getAttribute('data-protected')).toBe('inline-flex')
 })
+
+test('a topic waiting on the person opens Topics and is marked in its row (3.27.1 review)', () => {
+  const waiting = [
+    ...jobs,
+    makeJob({ id: 'job-3', title: 'Pricing page', state: 'waiting_on_you' }),
+  ]
+  renderInRoom(<ChatInfo room={room} agents={agents} jobs={waiting} everyone />, ['/b?job=job-1'])
+  const topics = toggle(/Topics/)
+  expect(topics.getAttribute('aria-expanded')).toBe('true')
+  const row = screen.getByRole('link', { name: /Pricing page/ })
+  const mark = row.querySelector('.bold-info-needs')
+  expect(mark?.textContent).toBe('Needs you')
+  expect(mark?.getAttribute('data-protected')).not.toBeNull()
+  // Folded again by the person, the heading keeps saying so.
+  fireEvent.click(topics)
+  expect(topics.getAttribute('aria-expanded')).toBe('false')
+  expect(topics.closest('.bold-info-head')?.querySelector('.bold-info-needs')).not.toBeNull()
+})
