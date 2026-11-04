@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import {
   ReportBackSchema,
@@ -13,10 +13,8 @@ import type { Sealer } from '../../auth/sealing.ts'
 import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { redact, redactBounded } from '../../redact.ts'
-import { createJob } from '../exchanges/store.ts'
-import { reserveMessageRun } from '../message-runs.ts'
-import { storeMessage } from '../rooms.ts'
 import { teamRoomId } from '../team-room.ts'
+import { takeCall } from './queue.ts'
 import { parseArgsTemplate, reportBackWarning } from './report-back.ts'
 import { newWebhookSecret, verifyWebhook } from './signature.ts'
 
@@ -305,7 +303,11 @@ export function renderOpening(
   }
 }
 
-export type CallResult = { status: 200; jobId: string; repeated: boolean }
+export type CallResult =
+  /** `jobId` null: the person skipped this call while it waited (3.28.0). */
+  | { status: 200; jobId: string | null; repeated: boolean }
+  /** 3.28.0: the team room had a job running; the call waits in its queue (Next up). */
+  | { status: 202; queueId: string; repeated: boolean }
 
 /** Checks a call before anything is queued: the trigger exists and the signature is valid now. Throws the answer. */
 export function verifyCall(
@@ -374,6 +376,12 @@ export function receiveCall(
     .get(id, headers.id!) as { job_id: string | null } | undefined
   if (seen?.job_id)
     return { result: { status: 200, jobId: seen.job_id, repeated: true }, drafts: [] }
+  // 3.28.0: a call the person skipped from the queue is answered, and starts nothing.
+  if (seen) return { result: { status: 200, jobId: null, repeated: true }, drafts: [] }
+  const waiting = sqlite
+    .prepare('SELECT id FROM room_queue WHERE trigger_id = ? AND webhook_id = ?')
+    .get(id, headers.id!) as { id: string } | undefined
+  if (waiting) return { result: { status: 202, queueId: waiting.id, repeated: true }, drafts: [] }
   let payload: unknown
   try {
     payload = JSON.parse(raw)
@@ -389,15 +397,23 @@ export function receiveCall(
       `SELECT count(*) AS n FROM jobs WHERE ${ofTrigger} AND state NOT IN ('done', 'closed') AND deleted_at IS NULL`,
     )
     .get(id) as { n: number }
-  if (open.n >= TRIGGER_LIMITS.openJobs)
+  // Calls waiting in the queue count as open jobs (3.28.0), so a busy team room can't collect an endless queue.
+  const queued = sqlite
+    .prepare('SELECT count(*) AS n FROM room_queue WHERE trigger_id = ?')
+    .get(id) as { n: number }
+  if (open.n + queued.n >= TRIGGER_LIMITS.openJobs)
     throw new HttpError(
       429,
       'trigger_busy',
       `This trigger already has ${TRIGGER_LIMITS.openJobs} open jobs. Finish or close some, then call again.`,
     )
+  const dayAgo = new Date(nowMs - 24 * 3600_000).toISOString()
   const today = sqlite
-    .prepare(`SELECT count(*) AS n FROM jobs WHERE ${ofTrigger} AND created_at > ?`)
-    .get(id, new Date(nowMs - 24 * 3600_000).toISOString()) as { n: number }
+    .prepare(
+      `SELECT (SELECT count(*) FROM jobs WHERE json_extract(source, '$.triggerId') = ?1 AND created_at > ?2)
+            + (SELECT count(*) FROM room_queue WHERE trigger_id = ?1 AND created_at > ?2) AS n`,
+    )
+    .get(id, dayAgo) as { n: number }
   if (today.n >= TRIGGER_LIMITS.jobsPerDay)
     throw new HttpError(
       429,
@@ -417,67 +433,22 @@ export function receiveCall(
     missing: opening.missing,
   }
   const jobTitle = [source.ref, source.title].filter(Boolean).join(' · ').slice(0, 200)
-  const made = createJob(sqlite, team, jobTitle, now, {
-    spendCapUsd: TRIGGER_LIMITS.jobSpendCapUsd,
-  })
-  sqlite.prepare('UPDATE jobs SET source = ? WHERE id = ?').run(JSON.stringify(source), made.job.id)
-  const messageId = randomUUID()
-  const lead = (
-    sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(team) as {
-      lead_agent_id: string | null
-    }
-  ).lead_agent_id
-  const drafts = [
-    ...made.drafts,
-    ...storeMessage(
-      sqlite,
-      {
-        id: messageId,
-        roomId: team,
-        author: { kind: 'you' },
-        to: lead ? [lead] : [],
-        parts: [
-          { kind: 'text', text: opening.text },
-          ...(lead
-            ? []
-            : [
-                {
-                  kind: 'notice' as const,
-                  code: 'no_lead' as const,
-                  text: 'The team has no lead yet, so nobody was asked to start.',
-                },
-              ]),
-        ],
-        createdAt: now,
-        streaming: false,
-        refs: [],
-        jobId: made.job.id,
-      },
-      now,
-    ),
-  ]
-  if (lead)
-    reserveMessageRun(
-      sqlite,
-      {
-        parentMessageId: messageId,
-        roomId: team,
-        agentId: lead,
-        chainId: messageId,
-        hop: 0,
-        input: opening.text,
-        agents: [lead],
-      },
-      now,
-    )
   // The redacted payload is the trigger's sample for building its mapping.
   sqlite
     .prepare('UPDATE triggers SET sample = ?, last_called_at = ? WHERE id = ?')
     .run(sampleOf(payload), now, id)
-  sqlite
-    .prepare(
-      'INSERT OR REPLACE INTO trigger_calls (trigger_id, webhook_id, received_at, job_id) VALUES (?, ?, ?, ?)',
-    )
-    .run(id, headers.id!, now, made.job.id)
-  return { result: { status: 200, jobId: made.job.id, repeated: false }, drafts }
+  const call = {
+    team,
+    triggerId: id,
+    webhookId: headers.id!,
+    title: jobTitle,
+    source,
+    opening: opening.text,
+  }
+  // 3.28.0 (decision 164): the team room runs one job at a time. A call while one runs, or while older calls still
+  // wait, goes to the back of the queue (Next up); a free room starts its oldest waiting call.
+  const outcome = takeCall(sqlite, call, now)
+  return outcome.started
+    ? { result: { status: 200, jobId: outcome.jobId, repeated: false }, drafts: outcome.drafts }
+    : { result: { status: 202, queueId: outcome.queueId, repeated: false }, drafts: outcome.drafts }
 }

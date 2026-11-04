@@ -77,3 +77,21 @@ test('a recipe run with a topic links the topic to the run', async () => {
   expect(rows).toHaveLength(1)
   expect(rows[0]).toMatchObject({ title: 'Recipe topic', recipe_kind: 'workflow', recipe_ref: id })
 })
+
+test('3.28.0: a run’s topic closes when the run ends, and a chat with a running topic refuses a second run', async () => {
+  h = await harness()
+  const roomId = chat(h)
+  const made = await h.orch.create(create({ gatePolicy: 'none', topic: { roomId, title: 'One' } }))
+  // The chat holds one running job: another run into it is refused, and makes nothing.
+  await expect(h.orch.create(create({ topic: { roomId, title: 'Two' } }))).rejects.toMatchObject({
+    status: 409,
+    code: 'job_running',
+  })
+  expect(topics(h, roomId)).toHaveLength(1)
+  await h.until(() => h!.orch.summary(made.orchestration.id).status === 'succeeded')
+  const state = h.rows<{ state: string }>('SELECT state FROM jobs WHERE id = ?', made.topicId)
+  expect(state).toEqual([{ state: 'closed' }])
+  // The chat is free again.
+  const next = await h.orch.create(create({ topic: { roomId, title: 'Three' } }))
+  expect(next.topicId).toBeDefined()
+})

@@ -216,6 +216,8 @@ test('a job can start with its limits and the recipe run it belongs to (11.10c)'
     spendCapUsd: 2.5,
     recipe: { kind: 'orchestration', ref: 'orc_123' },
   })
+  // 3.28.0: one job per group chat, so the first ends before the next starts (the rule has its own tests).
+  expect((await post(`/api/jobs/${created.json().id}/close`, {})).statusCode).toBe(200)
   const plain = (await post(`/api/rooms/${roomId}/jobs`, { title: 'Plain' })).json()
   expect(plain).toMatchObject({
     exchangeBudget: 8,

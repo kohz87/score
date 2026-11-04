@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ExchangeDecisionRequest } from '@score/contract'
 import { HttpError } from '../../errors.ts'
-import { assertJobOpen } from './job-life.ts'
+import { assertJobOpen, closeJobNow } from './job-life.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
 import { failMessageRun, reserveMessageRun } from '../message-runs.ts'
@@ -267,6 +267,20 @@ export function decideExchange(
         ...updateJob(sqlite, job.id, { state: 'working' }, now),
       ])
     }
+  }
+}
+
+/**
+ * Stop job (3.28.0, decision 164): the job's Stop, then the job closes in the same transaction. This is how a group
+ * chat's one job ends (jobs seldom end on their own); a run's job has its run stopped by the caller first.
+ */
+export function endJob(sqlite: DatabaseSync, jobId: string, now: string): Decided {
+  const job = jobRow(sqlite, jobId)
+  if (job?.state === 'closed') return { drafts: [], running: [] }
+  const stopped = stopJob(sqlite, jobId, now)
+  return {
+    drafts: [...stopped.drafts, ...closeJobNow(sqlite, jobId, now)],
+    running: stopped.running,
   }
 }
 

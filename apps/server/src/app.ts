@@ -48,6 +48,7 @@ import { registerTaskRoutes } from './http/tasks.ts'
 import { registerOrchestrationRoutes } from './http/orchestrations.ts'
 import { registerWorkflowRoutes } from './http/workflows.ts'
 import type { Orchestrator } from './domain/orchestration/executor.ts'
+import { registerOneJobRoutes } from './http/one-job.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { createPlanStarter } from './http/plan-start.ts'
 import { createTaskHolds } from './http/task-holds.ts'
@@ -353,6 +354,15 @@ export function buildApp({
       workspaces,
       knowledge,
     )
+    // 3.28.0 (decision 164): Stop job and the queue of trigger calls waiting for a chat's one job.
+    registerOneJobRoutes(app, {
+      db,
+      ingest,
+      port,
+      dispatch,
+      ...(orchestrator ? { orchestrator } : {}),
+      ...(clock ? { clock } : {}),
+    })
     registerWorkspacesRoutes(app, { port, db, ingest, config, ...(clock ? { clock } : {}) })
     // PLAN 11.1d: webhook triggers. Their signing secrets are sealed with a key in Score's home, so only a server that
     // owns its home (never a test against a borrowed database) serves them.

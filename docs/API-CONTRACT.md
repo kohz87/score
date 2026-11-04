@@ -714,6 +714,18 @@ default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orch
     the job belongs to; Score stores the link and doesn't start anything from it); its agents get sessions of their own
     (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (since 11.11 only an
     orchestration or workflow run's room, which its executor routes).
+  - **One job per chat (3.28.0, decision 164).** A group chat (`Room.role` `team` or `room`) holds at most one *active*
+    job beside its own thread: active = not the default, not deleted, `state` `open`, `working` or `waiting_on_you`.
+    Starting another (`POST /api/rooms/:roomId/jobs`, `topic` on `POST /api/orchestrations` and `/api/workflow-runs`,
+    `POST /api/jobs/:jobId/reopen`, `…/restore` of an unfinished job) is `409 job_running` with `details: { jobId;
+title }` (`JobRunningDetails`, the running one). Rooms that already held several keep them; nothing new starts there
+    until none is active. Direct chats (their one-to-ones) are not limited. A run's job (`Job.recipe`) closes itself when
+    its run ends (succeeded, failed, stopped, finished with unresolved). Any job that closes, finishes or is deleted
+    starts the oldest trigger call waiting for its room (§17).
+  - **H** `POST /api/jobs/:jobId/end` `{}` → `Job` (`state: closed`): **Stop job**. Stops the job's run first (when it
+    has a recipe run that hasn't ended), then stops its exchanges and turns as `…/stop` does and closes the job in the
+    same transaction, even while that work is still settling (a closed job stays closed whatever settles in it).
+    `409 conflict` for the room's own thread. Idempotent.
   - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
@@ -2044,7 +2056,13 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
   signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
   trigger (failed calls count per caller and trigger; calls to trigger ids that don't exist share one budget per
   address), `429 trigger_busy` when the trigger already has 10 open jobs or started 100 in the last 24 h
-  (`TRIGGER_LIMITS.openJobs`, `jobsPerDay`; decision 121), `503 not_ready` without a team room. A trigger's job starts
+  (`TRIGGER_LIMITS.openJobs`, `jobsPerDay`; decision 121; calls waiting in the queue count as open and as started),
+  `503 not_ready` without a team room. **3.28.0 (decision 164):** while the team room has a job running, or older calls
+  still wait, a call is queued → `202 { ok: true; queued: true; queueId }` (a repeat answers the same `queueId`), and
+  starts, oldest first, when that job ends. A repeat of a call the person skipped → `200 { ok: true; jobId: null }`.
+  **S** `GET /api/rooms/:roomId/queue` → `RoomQueueResponse { asOfSeq; items: QueueItem[] }` (`QueueItem { id; roomId;
+title; source { app; ref; title; triggerId }; createdAt }`, oldest first); **H** `DELETE /api/rooms/:roomId/queue/:itemId`
+  → `204` (Skip; `404` once it started or was skipped). Queue changes emit the room's `room.upserted`. A trigger's job starts
   with `spendCapUsd` = `TRIGGER_LIMITS.jobSpendCapUsd` ($5); the person can raise it on the job. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
   nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
 missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
