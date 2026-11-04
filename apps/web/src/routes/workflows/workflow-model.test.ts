@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
 import {
   addNode,
+  addStepAfter,
+  insertStepBefore,
+  insertStepOnEdge,
   addRule,
   ancestorsOf,
   connect,
@@ -197,4 +200,76 @@ test('S2-010: ownText reads own entries only', async () => {
   expect(ownText({}, 'constructor')).toBe('')
   expect(ownText({ constructor: 'x' }, 'constructor')).toBe('x')
   expect(ownText({ topic: 'a' }, 'topic')).toBe('a')
+})
+
+// ---- Adding steps from the layered view (PLAN 3.26.0)
+
+function line(): Draft {
+  return {
+    name: 'x',
+    inputs: [],
+    nodes: [
+      {
+        id: 'a',
+        kind: 'agent',
+        label: 'A',
+        agentId: 'builder',
+        instruction: '',
+        retries: 0,
+        onFailure: 'fail_run',
+      },
+      { id: 'b', kind: 'gate', label: 'B', question: '', onReject: 'stop_run' },
+    ],
+    edges: [{ id: 'e1', from: 'a', port: 'ok', to: 'b' }],
+  }
+}
+
+test('a step inserted on a connection sits between the two, and the old connection now leads to it', () => {
+  const result = insertStepOnEdge(line(), 'e1', 'agent', 'reviewer', 'reviewer')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.nodes.find((n) => n.id === result.id)!.label).toBe('reviewer step')
+  expect(result.draft.edges.map((e) => [e.from, e.port, e.to])).toEqual([
+    ['a', 'ok', result.id],
+    [result.id, 'ok', 'b'],
+  ])
+  expect(result.note).toBe('Added reviewer step before B.')
+})
+
+test('an inserted branch reads the step before it, an inserted end is refused', () => {
+  const result = insertStepOnEdge(line(), 'e1', 'branch')
+  if ('error' in result) throw new Error(result.error)
+  const branch = result.draft.nodes.find((n) => n.id === result.id)!
+  expect(branch.kind === 'branch' && branch.subject).toBe('a')
+  expect(result.draft.edges.find((e) => e.from === result.id)!.port).toBe('rule1')
+  expect(insertStepOnEdge(line(), 'e1', 'end')).toEqual({
+    error: 'An end can’t sit between two steps.',
+  })
+  expect(insertStepOnEdge(line(), 'nope', 'gate')).toEqual({ error: 'That connection is gone.' })
+})
+
+test('a new first step leads to the old first step', () => {
+  const result = insertStepBefore(line(), 'a', 'gate')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.edges).toContainEqual(
+    expect.objectContaining({ from: result.id, port: 'ok', to: 'a' }),
+  )
+  expect(insertStepBefore(line(), 'a', 'end')).toEqual({ error: 'An end can’t come first.' })
+})
+
+test('add after goes between a step and what it led to when its only way on is used; otherwise on a free way', () => {
+  const between = addStepAfter(line(), 'a', 'gate')
+  if ('error' in between) throw new Error(between.error)
+  expect(between.draft.edges.map((e) => [e.from, e.to])).toEqual([
+    ['a', between.id],
+    [between.id, 'b'],
+  ])
+  // After the gate (free "approved" way): connected on it. An end is never inserted between.
+  const free = addStepAfter(line(), 'b', 'agent', 'builder', 'builder')
+  if ('error' in free) throw new Error(free.error)
+  expect(free.draft.edges).toContainEqual(
+    expect.objectContaining({ from: 'b', port: 'ok', to: free.id }),
+  )
+  const ending = addStepAfter(line(), 'a', 'end')
+  if ('error' in ending) throw new Error(ending.error)
+  expect(ending.draft.edges).toHaveLength(1)
 })

@@ -12,7 +12,7 @@ const agents = [
 
 beforeEach(() => {
   vi.useFakeTimers()
-  // With reduced motion the diagram highlights instead of animating dots: nothing here depends on the Web Animations API.
+  // The layered view has no animation: the cards only change state.
   stubReducedMotion()
 })
 afterEach(() => {
@@ -36,10 +36,10 @@ function mount(onStop = vi.fn()) {
 test('says that nothing runs, and lights the steps one after another until a gate asks', async () => {
   mount()
   expect(screen.getByText('Preview: nothing runs, no tokens')).toBeTruthy()
-  expect(node(/Step Draft the notes.*running/)).toBeTruthy()
+  expect(node(/Agent step Draft the notes.*running/)).toBeTruthy()
   await steps(1)
-  expect(node(/Step Draft the notes.*succeeded/)).toBeTruthy()
-  expect(node(/Step Review the draft.*running/)).toBeTruthy()
+  expect(node(/Agent step Draft the notes.*succeeded/)).toBeTruthy()
+  expect(node(/Agent step Review the draft.*running/)).toBeTruthy()
   await steps(1)
   const ask = screen.getByLabelText('Preview: Approve the draft')
   expect(within(ask).getByText('Is the reviewed draft good enough to publish?')).toBeTruthy()
@@ -61,7 +61,7 @@ test('approving at the gate asks which branch outcome to follow, the first rule 
   fireEvent.click(within(ask).getByRole('button', { name: 'Continue' }))
   await steps(3)
   // “Otherwise” leads to the repair step; the published end is passed over.
-  expect(node(/Step Repair the draft.*succeeded/)).toBeTruthy()
+  expect(node(/Agent step Repair the draft.*succeeded/)).toBeTruthy()
   expect(screen.getByText('Preview finished. Nothing ran.')).toBeTruthy()
 })
 

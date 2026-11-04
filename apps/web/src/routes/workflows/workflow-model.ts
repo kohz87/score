@@ -293,6 +293,129 @@ export function ancestorsOf(draft: Pick<Draft, 'edges'>, nodeId: string): Set<st
   return found
 }
 
+// ------------------------------------------------------------------------------------------------- adding steps
+
+export type AddResult = { draft: Draft; id: string; note: string } | { error: string }
+
+/** A new node with its agent's name as the label; the draft is not changed. */
+function newStep(draft: Draft, kind: WorkflowNodeKind, agentId: string, agentName?: string) {
+  const result = addNode(draft, kind, agentId)
+  if ('error' in result) return result
+  const draft2 =
+    kind === 'agent' && agentName
+      ? updateNode(result.draft, result.id, { label: `${agentName} step` })
+      : result.draft
+  const said = kind === 'agent' && agentName ? `${agentName} step` : kind
+  return { draft: draft2, id: result.id, said }
+}
+
+/** The first way out of a node that is not a failure or a rejection (those are routes the person chooses). */
+function forwardPort(node: WorkflowNode): string | undefined {
+  return portsOf(node).find((port) => port.id !== 'failed' && port.id !== 'rejected')?.id
+}
+
+/**
+ * A step connected after `after`: on the first way out of it that leads nowhere yet (never a failure or rejection
+ * route). Without `after`, or after an end, the step is added unconnected.
+ */
+export function addStepAfter(
+  draft: Draft,
+  after: string | null,
+  kind: WorkflowNodeKind,
+  agentId = '',
+  agentName?: string,
+): AddResult {
+  // A step whose only way on is already connected (the usual case in a finished recipe) gets the new step between it and
+  // what it led to, rather than a step floating beside the recipe.
+  const from = after ? draft.nodes.find((node) => node.id === after) : undefined
+  if (from && from.kind !== 'end' && kind !== 'end') {
+    const ways = portsOf(from).filter((port) => port.id !== 'failed' && port.id !== 'rejected')
+    const used = draft.edges.filter((edge) => edge.from === from.id && edge.port === ways[0]?.id)
+    if (ways.length === 1 && used.length === 1)
+      return insertStepOnEdge(draft, used[0]!.id, kind, agentId, agentName)
+  }
+  const made = newStep(draft, kind, agentId, agentName)
+  if ('error' in made) return made
+  let next = made.draft
+  let note = `Added ${made.said}.`
+  const source = after ? next.nodes.find((node) => node.id === after) : undefined
+  if (source && source.kind !== 'end') {
+    const free = portsOf(source).find(
+      (port) =>
+        port.id !== 'failed' &&
+        port.id !== 'rejected' &&
+        !next.edges.some((edge) => edge.from === source.id && edge.port === port.id),
+    )
+    if (free) {
+      const joined = connect(next, source.id, free.id, made.id)
+      if ('draft' in joined) {
+        next = joined.draft
+        note = `${note} Connected after ${source.label}.`
+      }
+    }
+    if (kind === 'branch' && source.kind === 'agent')
+      next = updateNode(next, made.id, { subject: source.id })
+  }
+  return { draft: next, id: made.id, note }
+}
+
+/** A step in the middle of a connection: A (port) to B becomes A (port) to the new step, and the new step to B. */
+export function insertStepOnEdge(
+  draft: Draft,
+  edgeId: string,
+  kind: WorkflowNodeKind,
+  agentId = '',
+  agentName?: string,
+): AddResult {
+  const edge = draft.edges.find((item) => item.id === edgeId)
+  if (!edge) return { error: 'That connection is gone.' }
+  if (kind === 'end') return { error: 'An end can’t sit between two steps.' }
+  const made = newStep(draft, kind, agentId, agentName)
+  if ('error' in made) return made
+  const created = made.draft.nodes.find((node) => node.id === made.id)!
+  const port = forwardPort(created)
+  if (!port) return { error: 'That step has no way on.' }
+  if (made.draft.edges.length >= WORKFLOW_LIMITS.maxEdges)
+    return { error: `A workflow can have at most ${WORKFLOW_LIMITS.maxEdges} connections.` }
+  const from = made.draft.nodes.find((node) => node.id === edge.from)
+  let next: Draft = {
+    ...made.draft,
+    edges: [
+      ...made.draft.edges.map((item) => (item.id === edge.id ? { ...item, to: made.id } : item)),
+      { id: nextEdgeId(made.draft), from: made.id, port, to: edge.to },
+    ],
+  }
+  if (kind === 'branch' && from?.kind === 'agent')
+    next = updateNode(next, made.id, { subject: from.id })
+  const to = draft.nodes.find((node) => node.id === edge.to)?.label ?? edge.to
+  return { draft: next, id: made.id, note: `Added ${made.said} before ${to}.` }
+}
+
+/** A new first step: it leads to `before`, which was a first step itself. */
+export function insertStepBefore(
+  draft: Draft,
+  before: string,
+  kind: WorkflowNodeKind,
+  agentId = '',
+  agentName?: string,
+): AddResult {
+  const target = draft.nodes.find((node) => node.id === before)
+  if (!target) return { error: 'That step is gone.' }
+  if (kind === 'end') return { error: 'An end can’t come first.' }
+  const made = newStep(draft, kind, agentId, agentName)
+  if ('error' in made) return made
+  const created = made.draft.nodes.find((node) => node.id === made.id)!
+  const port = forwardPort(created)
+  if (!port) return { error: 'That step has no way on.' }
+  const joined = connect(made.draft, made.id, port, before)
+  if ('error' in joined) return joined
+  return {
+    draft: joined.draft,
+    id: made.id,
+    note: `Added ${made.said} before ${target.label}.`,
+  }
+}
+
 // ------------------------------------------------------------------------------------------------------- branches
 
 export function addRule(draft: Draft, branchId: string): Draft {

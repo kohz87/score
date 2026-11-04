@@ -1,9 +1,6 @@
-import { WORKFLOW_LIMITS, type AgentSummary, type WorkflowNodeKind } from '@score/contract'
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { PALETTE_MIME, type Selection } from './EditorCanvas.tsx'
+import { WORKFLOW_LIMITS } from '@score/contract'
 import {
   addInput,
-  KIND_HELP,
   KIND_LABEL,
   outlineOf,
   removeInput,
@@ -12,81 +9,9 @@ import {
 } from './workflow-model.ts'
 import type { EditorIssue, IssueIndex } from './workflow-validation.ts'
 
-// The smaller parts of the editor: palette, outline, start inputs and the list of problems.
+// The smaller parts of the editor: outline, start inputs and the list of problems.
 
-/** Local nodes first (they are the new idea), then one entry per agent so each shows its glyph. */
-export function Palette({
-  agents,
-  onAdd,
-  disabled,
-}: {
-  agents: AgentSummary[]
-  onAdd: (kind: WorkflowNodeKind, agentId?: string) => void
-  disabled: boolean
-}) {
-  const hermes = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
-  const drag = (kind: WorkflowNodeKind, agentId = '') => ({
-    draggable: !disabled,
-    onDragStart: (event: React.DragEvent) => {
-      event.dataTransfer.setData(PALETTE_MIME, JSON.stringify({ kind, agentId }))
-      event.dataTransfer.effectAllowed = 'copy'
-    },
-  })
-  return (
-    <section className="wf-palette" aria-label="Palette">
-      <h3>Add to the workflow</h3>
-      <p className="orch-muted">
-        Click to add (it is connected after the selected step), or drag onto the canvas. Dropping on
-        a step connects the new one after it.
-      </p>
-      <h4>Agent steps</h4>
-      <ul>
-        {hermes.map((agent) => (
-          <li key={agent.id}>
-            <button
-              type="button"
-              className="wf-palette__item"
-              disabled={disabled}
-              onClick={() => onAdd('agent', agent.id)}
-              {...drag('agent', agent.id)}
-            >
-              <AgentGlyph agent={agent} size="xs" decorative />
-              <span>
-                <b>{agent.name}</b>
-                <small>{KIND_HELP.agent}</small>
-              </span>
-              <span className="wf-visually-hidden">Add an agent step for {agent.name}</span>
-            </button>
-          </li>
-        ))}
-        {hermes.length === 0 && <li className="orch-muted">No agents on the team yet.</li>}
-      </ul>
-      <h4>Flow control</h4>
-      <ul>
-        {(['gate', 'branch', 'join', 'end'] as const).map((kind) => (
-          <li key={kind}>
-            <button
-              type="button"
-              className="wf-palette__item"
-              disabled={disabled}
-              onClick={() => onAdd(kind)}
-              {...drag(kind)}
-            >
-              <span className={`wf-palette__shape wf-palette__shape--${kind}`} aria-hidden="true" />
-              <span>
-                <b>{KIND_LABEL[kind]}</b>
-                <small>{KIND_HELP[kind]}</small>
-              </span>
-              <span className="wf-visually-hidden">
-                Add {kind === 'end' ? 'an' : 'a'} {KIND_LABEL[kind].toLowerCase()}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
+export type Selection = { kind: 'node' | 'edge'; id: string } | null
 
 /** Every step in reading order with where each connection goes: the text equivalent of the canvas. */
 export function Outline({

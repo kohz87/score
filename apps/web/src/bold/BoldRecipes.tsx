@@ -27,19 +27,25 @@ import { clock } from '../live/resolved.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { boldRecipesLink, boldStartJobLink } from './bold-links.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
-import { EditorCanvas, type Selection } from '../routes/workflows/EditorCanvas.tsx'
+import { PHONE_QUERY, useMediaQuery } from '../data/use-media.ts'
+import { AddMenu, RecipeLayers, type InsertStep } from '../routes/workflows/RecipeLayers.tsx'
+import { layoutRecipe, placement } from '../routes/workflows/recipe-layers.ts'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
-import { InputsEditor, IssueList, Outline, Palette } from '../routes/workflows/EditorParts.tsx'
+import {
+  InputsEditor,
+  IssueList,
+  Outline,
+  type Selection,
+} from '../routes/workflows/EditorParts.tsx'
 import { NodeInspector } from '../routes/workflows/NodeInspector.tsx'
 import { WorkflowPreview } from '../routes/workflows/PreviewRun.tsx'
 import { useDraftHistory } from '../routes/workflows/use-draft-history.ts'
 import { useLiveOverlay } from '../routes/workflows/use-live-overlay.ts'
 import { placeNewNode } from '../routes/workflows/workflow-layout.ts'
 import {
-  addNode,
-  connect,
-  disconnect,
-  portsOf,
+  addStepAfter,
+  insertStepBefore,
+  insertStepOnEdge,
   removeNode,
   sameDraft,
   starterDraft,
@@ -708,45 +714,28 @@ function BoldRecipeEditor({
     selectNode(result.id)
   }
 
-  /** The graph's add: a step connected after the selected one (or dropped onto a step), placed beside it. */
-  function addAfter(
-    kind: WorkflowNodeKind,
-    agentId = '',
-    after: string | null = graphNode?.id ?? null,
-  ) {
-    const result = addNode(draft, kind, agentId)
+  /** The graph's add: a step in the middle of a connection, first, or connected after a step (settings panel). */
+  const insertStep: InsertStep = (at, kind, agentId, agentName) => {
+    const name = agentName || undefined
+    const result =
+      'edgeId' in at
+        ? insertStepOnEdge(draft, at.edgeId, kind, agentId, name)
+        : 'before' in at
+          ? insertStepBefore(draft, at.before, kind, agentId, name)
+          : addStepAfter(draft, at.after || null, kind, agentId, name)
     if ('error' in result) {
       setAnnouncement(result.error)
       return
     }
-    let next = result.draft
-    const source = after ? next.nodes.find((node) => node.id === after) : undefined
-    const agent = agents.find((item) => item.id === agentId)
-    if (kind === 'agent' && agent)
-      next = updateNode(next, result.id, { label: `${agent.name} step` })
-    let note = `Added ${kind === 'agent' && agent ? `${agent.name} step` : kind}.`
-    if (source && source.kind !== 'end') {
-      // The first way out of the selected node that leads nowhere yet (never a failure or rejection route).
-      const free = portsOf(source).find(
-        (port) =>
-          port.id !== 'failed' &&
-          port.id !== 'rejected' &&
-          !next.edges.some((edge) => edge.from === source.id && edge.port === port.id),
-      )
-      if (free) {
-        const joined = connect(next, source.id, free.id, result.id)
-        if ('draft' in joined) {
-          next = joined.draft
-          note = `${note} Connected after ${source.label}.`
-        }
-      }
-      if (kind === 'branch' && source.kind === 'agent')
-        next = updateNode(next, result.id, { subject: source.id })
-    }
-    next = placeNewNode(next, result.id, new Map(), after)
-    commit(next)
+    const near =
+      'edgeId' in at
+        ? (draft.edges.find((edge) => edge.id === at.edgeId)?.from ?? null)
+        : 'after' in at
+          ? at.after || null
+          : null
+    commit(placeNewNode(result.draft, result.id, new Map(), near))
     setSel({ kind: 'node', id: result.id })
-    setAnnouncement(note)
+    setAnnouncement(result.note)
   }
 
   function deleteNode(id: string) {
@@ -754,12 +743,6 @@ function BoldRecipeEditor({
     commit(removeNode(draft, id))
     setSel(null)
     setAnnouncement(`Removed ${label}.`)
-  }
-
-  function deleteEdge(id: string) {
-    commit(disconnect(draft, id))
-    setSel(null)
-    setAnnouncement('Removed the connection.')
   }
 
   function removeStep(id: string) {
@@ -949,9 +932,28 @@ function BoldRecipeEditor({
     })
   }
 
+  // A problem on a connection selects the step it leaves: the layered view has no connection to select.
+  const selectIssue = (selection: Selection) => {
+    if (selection?.kind === 'edge') {
+      const edge = graphDraft.edges.find((item) => item.id === selection.id)
+      selectNode(edge?.from ?? null)
+    } else selectNode(selection?.id ?? null)
+  }
+  const phone = useMediaQuery(PHONE_QUERY)
+  // On a phone the step's settings are a sheet from the bottom, as in the mock-up; only while a step is selected.
+  const sheet = graph && phone && previewing === null
+  const recipeLayout = useMemo(() => layoutRecipe(graphDraft), [graphDraft])
+  const where = graphNode ? placement(graphDraft, recipeLayout, graphNode.id) : null
+
   const inspector = graph ? (
     graphNode ? (
       <fieldset className="bold-rp-readonly" disabled={viewing}>
+        {where && (where.after.length > 0 || where.beside.length > 0) && (
+          <p className="small muted rl-where">
+            {where.after.length > 0 ? `Runs after ${where.after.join(', ')}` : 'Runs first'}
+            {where.beside.length > 0 ? ` · beside ${where.beside.join(', ')}` : ''}
+          </p>
+        )}
         <NodeInspector
           draft={graphDraft}
           node={graphNode}
@@ -961,6 +963,18 @@ function BoldRecipeEditor({
           onDelete={() => deleteNode(graphNode.id)}
           announce={setAnnouncement}
         />
+        {!viewing && graphNode.kind !== 'end' && (
+          <div className="rl-aside-add">
+            <AddMenu
+              label="Add a step after"
+              text="Add a step after"
+              at={{ after: graphNode.id }}
+              agents={agents}
+              onInsert={insertStep}
+              withEnd
+            />
+          </div>
+        )}
       </fieldset>
     ) : (
       <div className="wf-inspector wf-inspector--empty">
@@ -991,7 +1005,7 @@ function BoldRecipeEditor({
 
       <section
         ref={root}
-        className="bold-rp-main"
+        className={`bold-rp-main${sheet && graphNode ? ' bold-rp-main--sheet' : ''}`}
         aria-label="Recipe editor"
         tabIndex={-1}
         onKeyDown={onKeyDown}
@@ -1372,41 +1386,22 @@ function BoldRecipeEditor({
                 Loading version {viewVersion}…
               </p>
             ) : (
-              <EditorCanvas
+              <RecipeLayers
                 readOnly={viewing}
-                overlay={viewing ? null : overlay}
+                states={viewing ? null : overlay?.nodes}
                 draft={graphDraft}
                 agents={agents}
                 issues={index}
-                selected={sel}
-                onSelect={setSel}
-                onConnect={(from, port, to) => {
-                  const result = connect(draft, from, port, to)
-                  if ('error' in result) return result.error
-                  commit(result.draft)
-                  const names = (id: string) =>
-                    draft.nodes.find((node) => node.id === id)?.label ?? id
-                  setAnnouncement(`Connected ${names(from)} to ${names(to)}.`)
-                  return null
-                }}
-                onDropKind={(payload, onto) => addAfter(payload.kind, payload.agentId, onto)}
+                selected={selectedNodeId}
+                onSelect={selectNode}
+                onInsert={insertStep}
                 onDeleteNode={deleteNode}
-                onDeleteEdge={deleteEdge}
-                onLayout={(next, key) => commit(next, key)}
-                announce={setAnnouncement}
-              />
-            )}
-            {!viewing && previewing === null && (
-              <Palette
-                agents={agents}
-                onAdd={(kind, agentId) => addAfter(kind, agentId)}
-                disabled={false}
               />
             )}
             <IssueList
               issues={issues}
               draft={graphDraft}
-              onSelect={setSel}
+              onSelect={selectIssue}
               checking={checking}
               headline={summaryLine(index, checking)}
             />
@@ -1511,12 +1506,33 @@ function BoldRecipeEditor({
         </details>
       </section>
 
-      <aside
-        className="bold-inner bold-rp-aside bold-recipes-inspector wf-editor"
-        aria-label="Selected step"
-      >
-        {inspector}
-      </aside>
+      {(!sheet || graphNode) && (
+        <aside
+          className={`bold-inner bold-rp-aside bold-recipes-inspector wf-editor${sheet ? ' bold-rp-sheet' : ''}`}
+          aria-label="Selected step"
+          onKeyDown={(event) => {
+            if (sheet && event.key === 'Escape') {
+              event.stopPropagation()
+              selectNode(null)
+            }
+          }}
+        >
+          {sheet && (
+            <div className="bold-rp-sheet-head">
+              <span className="bold-rp-sheet-grip" aria-hidden="true" />
+              <button
+                type="button"
+                className="bold-rp-sheet-close"
+                aria-label="Close step settings"
+                onClick={() => selectNode(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {inspector}
+        </aside>
+      )}
 
       {exporting && saved.workflowId && (
         <ExportDialog
