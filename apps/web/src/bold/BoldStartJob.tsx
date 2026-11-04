@@ -354,6 +354,8 @@ export function BoldStartJob({
   const [confirmClose, setConfirmClose] = useState(false)
   // One key for one start attempt; a retry of the job step replays instead of making a second run or job.
   const attemptKey = useRef<string | null>(null)
+  /** The running job "Stop the job and start this" just ended: not asked about again while the room catches up. */
+  const stoppedForStart = useRef<string | null>(null)
   const starting = useRef(false)
   const savedRecipeName = useRef<string | null>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
@@ -1059,11 +1061,12 @@ export function BoldStartJob({
     })
   }
 
-  async function start(proved = false, afterStop = false) {
+  async function start(proved = false) {
     if (!canStart || starting.current) return
     // A start into a chat that already has a job asks first. After "Stop the job and start this" the read of the room
-    // may not have caught up yet, so that retry goes to the server, which answers 409 while it is still stopping.
-    if (nowOnce && startRoom && runningJob && !afterStop) {
+    // may not have caught up yet, so the job just stopped isn't asked about again: the server answers 409 while it is
+    // still stopping. The stop never stands in for the password step below (3.28.0 review).
+    if (nowOnce && startRoom && runningJob && runningJob.id !== stoppedForStart.current) {
       attemptKey.current = null
       askBusy(runningJob)
       return
@@ -1138,7 +1141,12 @@ export function BoldStartJob({
       if (running) {
         // The server's answer is not replayed for a new try: the next start is a new attempt.
         attemptKey.current = null
-        askBusy(running, afterStop ? 'Still stopping… try again in a moment.' : undefined)
+        askBusy(
+          running,
+          running.id === stoppedForStart.current
+            ? 'Still stopping… try again in a moment.'
+            : undefined,
+        )
         return
       }
       if (failure instanceof ApiError && failure.code === 'fresh_auth_required') {
@@ -1231,9 +1239,10 @@ export function BoldStartJob({
           <BusyDialog
             busy={busyStart}
             onStopAndStart={async () => {
+              stoppedForStart.current = busyStart.running.id
               setBusyStart(null)
               attemptKey.current = null
-              await start(true, true)
+              await start()
             }}
             onAnotherChat={() => {
               // The work stays as typed; only the chat changes. The busy chat is not offered again.

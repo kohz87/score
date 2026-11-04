@@ -1542,3 +1542,34 @@ test('3.28.0: Start in another chat keeps the work and asks for the chat, withou
     topic: { roomId: 'design-crew' },
   })
 })
+
+test('3.28.0 review: Stop the job and start this still asks for the password when the run has a check', async () => {
+  teamJobs = [ownThread, runningJob]
+  orchestrationReply = () =>
+    Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
+  endReply = () => Response.json({ ...runningJob, state: 'closed' })
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const start = await fillLeadJob(dialog)
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes('/rooms/team-room/jobs')),
+    ).toBe(true),
+  )
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(start)
+  const busy = await busyDialog()
+  fireEvent.click(within(busy).getByRole('button', { name: 'Stop the job and start this' }))
+  // The job ends, then the password step comes before anything starts.
+  const confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  expect(calls).toEqual(['job-end'])
+  fireEvent.change(within(confirm).getByLabelText('Security password'), {
+    target: { value: 'correct horse' },
+  })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+  // The stopped job isn't asked about again while the room catches up: the start goes to the server.
+  await waitFor(() => expect(calls).toEqual(['job-end', 'security-check', 'orchestrations']))
+  expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
+})
