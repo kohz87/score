@@ -90,34 +90,87 @@
   font-weight: 500;
 }
 
-[data-ui='bold'] .bold-knowledge-readers {
-  margin-top: calc(14px * var(--bold-d, 1));
-  padding: 0 12px;
-}
-
-[data-ui='bold'] .bold-knowledge-readers h2 {
-  margin: 0 0 4px;
-  color: var(--muted);
-  font-family: var(--font-b);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-}
-
-[data-ui='bold'] .bold-knowledge-readers ul {
+/* 3.27.1: each folder row carries a ⋯ (Rename, Move, Delete); "New folder" sits under the list. */
+[data-ui='bold'] .bold-knowledge-frow {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--ink2);
-  font-size: 13px;
+  align-items: center;
+  gap: 2px;
 }
 
-[data-ui='bold'] .bold-knowledge-readers p {
-  margin: 6px 0 0;
+[data-ui='bold'] .bold-knowledge-frow > .bold-knowledge-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-knowledge-fmenu {
+  position: relative;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-knowledge-dots {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+  /* Space stays reserved so rows don't jump; the button shows on hover, focus and while its menu is open. */
+  opacity: 0;
+}
+
+[data-ui='bold'] .bold-knowledge-frow:hover .bold-knowledge-dots,
+[data-ui='bold'] .bold-knowledge-frow:focus-within .bold-knowledge-dots,
+[data-ui='bold'] .bold-knowledge-dots[aria-expanded='true'] {
+  opacity: 1;
+}
+
+[data-ui='bold'] .bold-knowledge-dots:hover,
+[data-ui='bold'] .bold-knowledge-dots[aria-expanded='true'] {
+  background: var(--field);
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  [data-ui='bold'] .bold-knowledge-dots {
+    opacity: 1;
+  }
+}
+
+[data-ui='bold'] .bold-knowledge-menu {
+  top: 100%;
+  right: 0;
+  min-width: 180px;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border: 1px dashed var(--line);
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder-hint {
+  margin: 4px 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder:hover {
+  background: var(--field);
+  color: var(--ink);
 }
 
 /* The panel's own mid/wide rule (bold-library.css, 200px) is more specific than `.is-page > nav`; `.sidebody` here makes
@@ -264,11 +317,29 @@
     gap: 6px;
   }
 
-  [data-ui='bold'] .bold-knowledge-folder {
+  [data-ui='bold'] .bold-knowledge-frow {
     flex: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none !important;
     border: 1px solid var(--line);
     border-radius: 999px;
     gap: 10px;
+  }
+
+  /* Chips: the ⋯ belongs to the selected chip only. */
+  [data-ui='bold'] .bold-knowledge-frow:not(.is-on) .bold-knowledge-fmenu {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-dots {
+    opacity: 1;
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu {
+    right: auto;
+    left: 0;
   }
 
   [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
@@ -299,10 +370,11 @@
     padding: calc(12px * var(--bold-d, 1)) 0 0;
   }
 
+  /* Chips wrap rather than scroll sideways: a scrolling row would clip the ⋯ menu. */
   [data-ui='bold'] .bold-knowledge-folders {
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
     padding-bottom: 4px;
   }
 
@@ -316,8 +388,38 @@
     white-space: nowrap;
   }
 
-  [data-ui='bold'] .bold-knowledge-readers {
-    padding: 0;
+  [data-ui='bold'] .bold-knowledge-frow {
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-frow .bold-knowledge-fmenu {
+    display: block;
+  }
+
+  [data-ui='bold'] .bold-knowledge-dots {
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+  }
+
+  /* Phone: the ⋯ opens a bottom sheet; its dim is its own shadow, so no extra fixed element exists for a theme to hide. */
+  [data-ui='bold'] .menu.bold-knowledge-menu {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    min-width: 0;
+    border-radius: calc(28px * var(--bold-r, 1)) calc(28px * var(--bold-r, 1)) 0 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+    clip-path: inset(-100vmax 0 0 0);
+  }
+
+  [data-ui='bold'] .bold-knowledge-newfolder {
+    min-height: 44px;
+    border-radius: 999px;
   }
 
   [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {

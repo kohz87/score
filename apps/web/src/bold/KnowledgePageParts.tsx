@@ -1,11 +1,16 @@
 import type { AgentSummary, KnowledgeTree } from '@score/contract'
 import type { UseQueryResult } from '@tanstack/react-query'
-import { useMemo } from 'react'
-import { useKnowledgeAccess } from '../routes/team/knowledge-access-queries.ts'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { TYPE_LABEL } from '../routes/knowledge/knowledge-files.ts'
 import { AuthorLabel } from '../routes/knowledge/NotePanels.tsx'
 import { baseName, folderOf, timeAgo } from '../routes/knowledge/knowledge-paths.ts'
-import { agentDisplayName, onTeam } from './bold-agents.ts'
 import { PlusIcon } from './BoldIcons.tsx'
 
 // 3.19.0: the pieces only the Knowledge page uses (folder rail, flat note list). Mock-up:
@@ -16,40 +21,126 @@ export const PAGE_DOCUMENTS = '/documents'
 
 const inside = (path: string, folder: string) => path.startsWith(`${folder}/`)
 
-function AgentRead({ agent }: { agent: AgentSummary }) {
-  const access = useKnowledgeAccess(agent.id)
-  if (access.data?.enabled !== true) return null
-  return <li>{agentDisplayName(agent)}</li>
-}
-
-/** Who can read Knowledge: an agent's access is all or nothing (Agents › Knowledge access). */
-function WhoCanRead({ agents }: { agents: AgentSummary[] }) {
-  const team = agents.filter(onTeam)
+/** The ⋯ on a folder row: Rename, Move and Delete, as a real menu (arrows, Home/End, Escape returns focus). */
+function FolderMenu({
+  folder,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  folder: string
+  onRename: (folder: string) => void
+  onMove: (folder: string) => void
+  onDelete: (folder: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLSpanElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
+  const name = baseName(folder)
+  useEffect(() => {
+    if (!open) return
+    const first = requestAnimationFrame(() => {
+      root.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    })
+    const outside = (event: Event) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+      trigger.current?.focus()
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('focusin', outside)
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      cancelAnimationFrame(first)
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('focusin', outside)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [open])
+  function move(event: ReactKeyboardEvent<HTMLElement>) {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    event.preventDefault()
+    const at = items.indexOf(document.activeElement as HTMLElement)
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (at + 1) % items.length
+            : (at - 1 + items.length) % items.length
+    items[next]?.focus()
+  }
+  const pick = (action: (folder: string) => void) => () => {
+    setOpen(false)
+    action(folder)
+  }
   return (
-    <section className="bold-knowledge-readers" aria-label="Who can read it">
-      <h2>Who can read it</h2>
-      <ul>
-        {team.map((agent) => (
-          <AgentRead key={agent.id} agent={agent} />
-        ))}
-      </ul>
-      <p className="muted small">Set per agent on its page, under Knowledge access.</p>
-    </section>
+    <span className="bold-knowledge-fmenu" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="bold-knowledge-dots"
+        aria-label={`Folder actions for ${name}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="bold-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+      </button>
+      {open && (
+        <div
+          className="menu bold-knowledge-menu"
+          id={menuId}
+          role="menu"
+          aria-label={`${name} actions`}
+          onKeyDown={move}
+        >
+          <button type="button" className="mi" role="menuitem" onClick={pick(onRename)}>
+            Rename…
+          </button>
+          <button type="button" className="mi" role="menuitem" onClick={pick(onMove)}>
+            Move to…
+          </button>
+          <button type="button" className="mi bad" role="menuitem" onClick={pick(onDelete)}>
+            Delete…
+          </button>
+        </div>
+      )}
+    </span>
   )
 }
 
 export function FolderRail({
   tree,
-  agents,
   filter,
   onFilter,
   onNewNote,
+  onNewFolder,
+  onRenameFolder,
+  onMoveFolder,
+  onDeleteFolder,
 }: {
   tree: KnowledgeTree | undefined
-  agents: AgentSummary[]
   filter: string
   onFilter: (next: string) => void
   onNewNote: () => void
+  onNewFolder: () => void
+  onRenameFolder: (folder: string) => void
+  onMoveFolder: (folder: string) => void
+  onDeleteFolder: (folder: string) => void
 }) {
   const rows = useMemo(() => {
     if (!tree) return []
@@ -63,18 +154,28 @@ export function FolderRail({
           tree.documents.filter((doc) => inside(doc.path, folder)).length,
       }))
   }, [tree])
-  const item = (value: string, label: string, count: number, depth = 0) => (
-    <button
-      key={value || 'all'}
-      type="button"
-      className={`bold-knowledge-folder${filter === value ? ' is-on' : ''}`}
-      aria-current={filter === value ? 'true' : undefined}
-      style={{ paddingLeft: `calc(12px + ${depth * 14}px)` }}
-      onClick={() => onFilter(value)}
-    >
-      <span>{label}</span>
-      <span className="bold-knowledge-count">{count}</span>
-    </button>
+  // Only real folders have the ⋯ ("All notes" and "Documents" are filters, not folders).
+  const item = (value: string, label: string, count: number, depth = 0, actions = false) => (
+    <div key={value || 'all'} className={`bold-knowledge-frow${filter === value ? ' is-on' : ''}`}>
+      <button
+        type="button"
+        className={`bold-knowledge-folder${filter === value ? ' is-on' : ''}`}
+        aria-current={filter === value ? 'true' : undefined}
+        style={{ paddingLeft: `calc(12px + ${depth * 14}px)` }}
+        onClick={() => onFilter(value)}
+      >
+        <span>{label}</span>
+        <span className="bold-knowledge-count">{count}</span>
+      </button>
+      {actions && (
+        <FolderMenu
+          folder={value}
+          onRename={onRenameFolder}
+          onMove={onMoveFolder}
+          onDelete={onDeleteFolder}
+        />
+      )}
+    </div>
   )
   return (
     <aside className="bold-knowledge-rail" aria-label="Folders">
@@ -91,10 +192,13 @@ export function FolderRail({
       </div>
       <div className="bold-knowledge-folders">
         {item('', 'All notes', tree ? tree.notes.length + tree.documents.length : 0)}
-        {rows.map((row) => item(row.folder, baseName(row.folder), row.count, row.depth))}
+        {rows.map((row) => item(row.folder, baseName(row.folder), row.count, row.depth, true))}
         {item(PAGE_DOCUMENTS, 'Documents', tree?.documents.length ?? 0)}
       </div>
-      <WhoCanRead agents={agents} />
+      <button type="button" className="bold-knowledge-newfolder" onClick={onNewFolder}>
+        <PlusIcon size={14} /> New folder
+      </button>
+      <p className="bold-knowledge-newfolder-hint">Goes inside the folder you picked.</p>
     </aside>
   )
 }

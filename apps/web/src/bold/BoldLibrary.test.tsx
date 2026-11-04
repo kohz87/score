@@ -449,3 +449,71 @@ test('3.14.5: a folder with notes in it can be renamed and deleted from Files', 
       ),
   ).toBe(true)
 })
+
+test('3.27.1: the Knowledge page no longer lists who can read it', async () => {
+  mount(null, true)
+  await screen.findByRole('complementary', { name: 'Folders' })
+  expect(screen.queryByText('Who can read it')).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Who can read it' })).toBeNull()
+})
+
+test('3.27.1: the rail’s New folder creates inside the selected folder; the list no longer has the folder buttons', async () => {
+  mount(null, true)
+  const rail = await screen.findByRole('complementary', { name: 'Folders' })
+  const nav = screen.getByRole('navigation', { name: 'Library notes' })
+  expect(within(nav).queryByRole('button', { name: /New folder/ })).toBeNull()
+  expect(within(nav).queryByRole('button', { name: /Rename folder/ })).toBeNull()
+  expect(within(nav).queryByRole('button', { name: /Delete folder/ })).toBeNull()
+  fireEvent.click(await within(rail).findByRole('button', { name: /^Decisions/ }))
+  fireEvent.click(within(rail).getByRole('button', { name: /New folder/ }))
+  const input = (await screen.findByLabelText('Folder path')) as HTMLInputElement
+  expect(input.value).toBe('Decisions/')
+  fireEvent.change(input, { target: { value: 'Decisions/Plans' } })
+  fireEvent.submit(input.closest('form')!)
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/knowledge/folders')),
+    ).toBe(true),
+  )
+})
+
+test('3.27.1: a folder’s ⋯ menu reaches Rename, Move and Delete, and is a real menu', async () => {
+  mount(null, true)
+  const rail = await screen.findByRole('complementary', { name: 'Folders' })
+  // Only real folders have one.
+  expect(await within(rail).findAllByRole('button', { name: /^Folder actions for/ })).toHaveLength(
+    1,
+  )
+  const trigger = within(rail).getByRole('button', { name: 'Folder actions for Decisions' })
+  fireEvent.click(trigger)
+  const menu = await screen.findByRole('menu', { name: 'Decisions actions' })
+  const items = within(menu).getAllByRole('menuitem')
+  expect(items.map((item) => item.textContent)).toEqual(['Rename…', 'Move to…', 'Delete…'])
+  await waitFor(() => expect(document.activeElement).toBe(items[0]))
+  // Arrows move, wrapping; Escape closes and returns focus to the ⋯.
+  fireEvent.keyDown(menu, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(items[1])
+  fireEvent.keyDown(menu, { key: 'ArrowUp' })
+  fireEvent.keyDown(menu, { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(items[2])
+  fireEvent.keyDown(menu, { key: 'Home' })
+  expect(document.activeElement).toBe(items[0])
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+  // Rename and Move open the folder-move flow, Delete the confirm.
+  for (const label of ['Rename…', 'Move to…']) {
+    fireEvent.click(trigger)
+    fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: label }))
+    const dialog = await screen.findByRole('dialog', {
+      name: /Rename or move the folder Decisions/,
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Cancel/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  }
+  fireEvent.click(trigger)
+  fireEvent.click(
+    within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete…' }),
+  )
+  expect(await screen.findByRole('dialog', { name: 'Delete the folder Decisions?' })).toBeDefined()
+})
