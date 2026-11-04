@@ -1005,25 +1005,26 @@
   overflow-x: auto;
 }
 
-/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows). */
+/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows).
+   `.jobmap` raises these over the map's narrow rules, which the panel always gets since 3.27.1. */
 [data-ui='bold'] .bold-topic-graph .jobmap-log {
   margin-top: 4px;
   padding: 12px 14px;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log li {
-  grid-template-columns: 78px minmax(0, 1fr);
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li {
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 0 10px;
   font-size: 13px;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log time {
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log time {
   grid-row: 1 / span 2;
   white-space: nowrap;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log li > b,
-[data-ui='bold'] .bold-topic-graph .jobmap-log li > span {
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > b,
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > span {
   grid-column: 2;
 }
 

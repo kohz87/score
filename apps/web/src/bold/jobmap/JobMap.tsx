@@ -1,5 +1,5 @@
 import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { usePrefersReducedMotion } from '../../motion/motion.ts'
@@ -171,7 +171,8 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
   // panel or a narrow sheet the side-by-side top row (you · lead · advisor, about 1020px) wrapped into a muddle.
   const box = useRef<HTMLElement>(null)
   const [width, setWidth] = useState(0)
-  useEffect(() => {
+  // Measured before paint, so the panel never flashes the side-by-side row (3.27.1 review).
+  useLayoutEffect(() => {
     const element = box.current
     if (!element || typeof ResizeObserver === 'undefined') return
     const measure = () => setWidth(element.clientWidth)
