@@ -25,8 +25,9 @@ function under(path: string, root: string): boolean {
 
 /** 2.8.0: the workflow list and editor became the Recipes page; `/workflows[/:id]` maps there, query and hash kept. */
 function recipesPath(path: string, rest: string): string | null {
-  if (path === '/workflows') return `/b/recipes${rest}`
-  if (path.startsWith('/workflows/')) return `/b/recipes/${path.slice('/workflows/'.length)}${rest}`
+  if (path === '/workflows') return `/b/settings/recipes${rest}`
+  if (path.startsWith('/workflows/'))
+    return `/b/settings/recipes/${path.slice('/workflows/'.length)}${rest}`
   return null
 }
 

@@ -305,6 +305,8 @@ export function BoldStartJob({
   const [ask, setAsk] = useState<Ask>('risky')
   const [turns, setTurns] = useState(8)
   const [cap, setCap] = useState(5)
+  // 3.27.0: a lead-decides run keeps going until the person stops it; that choice needs a spend cap.
+  const [untilStoppedChoice, setUntilStopped] = useState(true)
   const [deadlineEnabled, setDeadlineEnabled] = useState(false)
   const [deadline, setDeadline] = useState('')
   const [schedule, setSchedule] = useState<string>(SCHEDULES[0].label)
@@ -589,6 +591,11 @@ export function BoldStartJob({
   const nowOnce = when === 'once'
   const isLead = nowOnce && recipe.kind === 'lead'
   const isPlain = nowOnce && recipe.kind === 'none'
+  const untilStopped = isLead && untilStoppedChoice
+  const capProblem =
+    untilStopped && cap <= 0
+      ? 'Set a spend cap. A run that keeps going until you stop it needs one, so it can’t run up a bill.'
+      : null
   const isSavedRecipe = nowOnce && recipe.kind === 'workflow'
   const showWhat = !isSavedRecipe
   const showRecipe = nowOnce
@@ -736,6 +743,7 @@ export function BoldStartJob({
     checksPass &&
     reachCovered &&
     (!isSavedRecipe || optionProblems.length === 0) &&
+    capProblem === null &&
     (!isLead || (checkProblem === null && helperProblem === null && launchesProblem === null)) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
@@ -918,6 +926,7 @@ export function BoldStartJob({
       ...(deadlineAt ? { deadlineAt } : {}),
       maxSteps: ORCH_DEFAULTS.maxSteps,
       maxLeadTurns: turns,
+      ...(untilStopped ? { untilStopped: true } : {}),
       maxConcurrentSteps: ORCH_DEFAULTS.maxConcurrentSteps,
       leadTurnEstimateUsd: ORCH_DEFAULTS.leadTurnEstimateUsd,
       stepEstimateUsd: ORCH_DEFAULTS.stepEstimateUsd,
@@ -1241,10 +1250,10 @@ export function BoldStartJob({
                   })}
                   <Link
                     className="link"
-                    to="/b/recipes"
+                    to="/b/settings/recipes"
                     onClick={() => {
                       onClose()
-                      void navigate('/b/recipes')
+                      void navigate('/b/settings/recipes')
                     }}
                   >
                     Edit recipes
@@ -1813,7 +1822,26 @@ export function BoldStartJob({
               {nowOnce && (
                 <div className="inner start-limits" data-protected="block">
                   <span className="lab">{isSavedRecipe ? 'Budget and deadline' : 'Limits'}</span>
-                  {!isSavedRecipe && (
+                  {isLead && (
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        checked={untilStoppedChoice}
+                        onChange={(event) => {
+                          setUntilStopped(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Keep going until I stop it
+                    </label>
+                  )}
+                  {untilStopped && (
+                    <span className="small muted">
+                      No step or turn limit: the lead keeps planning until the work is done, you
+                      press Stop, or the spend cap is reached.
+                    </span>
+                  )}
+                  {!isSavedRecipe && !untilStopped && (
                     <>
                       <label htmlFor="start-turns" className="row small">
                         <span className="grow">Turns per back-and-forth</span>
@@ -1834,12 +1862,14 @@ export function BoldStartJob({
                     </>
                   )}
                   <label htmlFor="start-cap" className="row small">
-                    <span className="grow">Spend cap</span>
+                    <span className="grow">Spend cap{untilStopped ? ' (required)' : ''}</span>
                     <b>{cap > 0 ? `$${cap.toFixed(2)}` : 'No cap'}</b>
                   </label>
                   <input
                     id="start-cap"
                     type="range"
+                    required={untilStopped}
+                    aria-invalid={capProblem !== null}
                     min={0}
                     max={20}
                     value={cap}
@@ -1849,6 +1879,11 @@ export function BoldStartJob({
                     }}
                     style={{ accentColor: 'var(--ink)' }}
                   />
+                  {capProblem && (
+                    <span className="small" role="alert">
+                      {capProblem}
+                    </span>
+                  )}
                   {isSavedRecipe && cap > 0 && (
                     <span className="small muted">
                       With a spend cap, a step whose cost Hermes doesn’t report pauses the run so

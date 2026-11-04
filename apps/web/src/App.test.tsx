@@ -165,10 +165,12 @@ test('the redirect keeps the #hash only when the browser address is the page bei
 test('on the new shell the old classic paths redirect to their /b homes and keep the query', async () => {
   for (const [from, to] of [
     ['/watch/builder?from=3', '/b/screen/builder'],
-    ['/workflows', '/b/recipes'],
-    ['/workflows/wf-1', '/b/recipes/wf-1'],
-    ['/b/workflows', '/b/recipes'],
-    ['/b/workflows/wf-1', '/b/recipes/wf-1'],
+    ['/workflows', '/b/settings/recipes'],
+    ['/workflows/wf-1', '/b/settings/recipes/wf-1'],
+    ['/b/workflows', '/b/settings/recipes'],
+    ['/b/workflows/wf-1', '/b/settings/recipes/wf-1'],
+    ['/b/recipes', '/b/settings/recipes'],
+    ['/b/recipes/wf-1', '/b/settings/recipes/wf-1'],
     ['/settings/look/customize/score', '/b/settings/look/customize/score'],
   ] as const) {
     const router = renderRoute(from)
@@ -178,9 +180,15 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
   }
 })
 
+test('/b/recipes keeps its query and ?run= when it moves into Settings', async () => {
+  const router = renderRoute('/b/recipes?run=brief-1&x=y')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+  expect(router.state.location.search).toBe('?run=brief-1&x=y')
+})
+
 test('the old recipe dialog address opens the Recipes page and keeps the other parameters', async () => {
   const router = renderRoute('/b?recipes=1&job=j1#x')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
   expect(router.state.location.search).toBe('?job=j1')
   expect(router.state.location.hash).toBe('#x')
 })
@@ -188,7 +196,7 @@ test('the old recipe dialog address opens the Recipes page and keeps the other p
 test('the old workflow addresses keep the query', async () => {
   for (const from of ['/workflows/wf-1?a=1', '/b/workflows/wf-1?a=1']) {
     const router = renderRoute(from)
-    await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes/wf-1'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes/wf-1'))
     expect(router.state.location.search).toBe('?a=1')
     cleanup()
   }
@@ -197,7 +205,7 @@ test('the old workflow addresses keep the query', async () => {
 test('a run’s old addresses open it on the Recipes page and keep the query', async () => {
   for (const from of ['/runs/brief-1?x=y', '/b/runs/brief-1?x=y', '/now/flow/brief-1?x=y']) {
     const router = renderRoute(from)
-    await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
     expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-1')
     expect(new URLSearchParams(router.state.location.search).get('x')).toBe('y')
     cleanup()
@@ -213,8 +221,8 @@ test.each([
   ['/u', '/b'],
   ['/u/rooms/one', '/b'],
   ['/now/watch/builder', '/b/screen/builder'],
-  ['/now/flow/workflows', '/b/recipes'],
-  ['/now/flow/workflows/wf-1', '/b/recipes/wf-1'],
+  ['/now/flow/workflows', '/b/settings/recipes'],
+  ['/now/flow/workflows/wf-1', '/b/settings/recipes/wf-1'],
 ])('%s redirects to %s', async (path, target) => {
   const router = renderRoute(path)
   await waitFor(() => expect(router.state.location.pathname).toBe(target))

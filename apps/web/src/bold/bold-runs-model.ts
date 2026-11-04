@@ -180,7 +180,9 @@ export function orchestrationThread(run: OrchestrationDetail): ThreadStep[] {
       n: 1,
       kind: 'lead',
       agentId: run.leadAgentId,
-      title: `Lead plans (turn ${run.leadTurnsUsed} of ${run.maxLeadTurns})`,
+      title: run.untilStopped
+        ? `Lead plans (turn ${run.leadTurnsUsed}, until you stop it)`
+        : `Lead plans (turn ${run.leadTurnsUsed} of ${run.maxLeadTurns})`,
       visual: run.leadTurnsUsed > 0 ? 'succeeded' : 'queued',
       reply:
         run.plan.length > 0
