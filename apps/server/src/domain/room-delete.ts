@@ -138,6 +138,8 @@ export function deleteRoom(
     ])
       sqlite.prepare(`DELETE FROM ${table} WHERE brief_id = ?`).run(id)
   sqlite.prepare('DELETE FROM plan_start_runs WHERE room_id = ?').run(roomId)
+  // 3.28.0: trigger calls waiting for this room's job go with the room.
+  sqlite.prepare('DELETE FROM room_queue WHERE room_id = ?').run(roomId)
   sqlite.prepare('DELETE FROM briefs WHERE room_id = ?').run(roomId)
   sqlite
     .prepare(

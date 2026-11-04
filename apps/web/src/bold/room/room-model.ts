@@ -160,3 +160,27 @@ export function reportBackWaiting(jobs: readonly Job[]): Job[] {
 export function isEveryoneRoom(room: Pick<Room, 'role' | 'everyone'>): boolean {
   return room.role === 'team' && room.everyone !== false
 }
+
+/** A job that still runs in its chat: not the chat's own thread, not done or closed (one job per chat, 3.28.0). */
+export function isActiveJob(job: Job): boolean {
+  return (
+    !job.isDefault &&
+    (job.state === 'open' || job.state === 'working' || job.state === 'waiting_on_you')
+  )
+}
+
+/** The chat's active jobs, newest first. One in a chat that follows the rule; several only in an older chat. */
+export function activeJobs(jobs: readonly Job[]): Job[] {
+  return jobs.filter(isActiveJob).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+/** The job a group chat is doing now; null when none runs, or when an older chat holds several (no single answer). */
+export function theActiveJob(jobs: readonly Job[]): Job | null {
+  const active = activeJobs(jobs)
+  return active.length === 1 ? (active[0] ?? null) : null
+}
+
+/** An older chat that still holds several active jobs keeps topic-style dividers and "in <job>" until they end. */
+export function holdsSeveralJobs(jobs: readonly Job[]): boolean {
+  return activeJobs(jobs).length > 1
+}

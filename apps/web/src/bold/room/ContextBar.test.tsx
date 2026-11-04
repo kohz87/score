@@ -70,6 +70,24 @@ test('names who the message goes to, the owner mark and the topic', async () => 
   expect(bar().textContent).toContain('/compress when it fills up')
 })
 
+test('one job per chat: with showTopic off the bar names no job, but the meter still reads that job’s session', () => {
+  stubContext({ model: null, tokens: null, costUsd: null, contextLength: null })
+  renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="lead"
+      agents={agents}
+      ownerId="lead"
+      topic={makeJob({ title: 'Activity feed' })}
+      showTopic={false}
+    />,
+  )
+  expect(bar().textContent).toContain('To lead (owner)')
+  expect(bar().textContent).not.toContain(' in ')
+  expect(bar().textContent).not.toContain('Activity feed')
+})
+
 test('explicit recipients replace the default, and the general conversation has no topic', () => {
   stubContext({ model: null, tokens: null, costUsd: null, contextLength: null })
   renderInRoom(

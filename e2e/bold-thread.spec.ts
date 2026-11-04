@@ -158,7 +158,7 @@ async function openThread(
         posts.push({ path, body })
         return json({ commandId: 'cmd-1' }, 202)
       }
-      if (path === '/api/jobs/job-activity/stop') {
+      if (path === '/api/jobs/job-activity/end') {
         posts.push({ path, body })
         return json({ ok: true })
       }
@@ -186,8 +186,9 @@ async function openThread(
 }
 
 /** Makes the topic current and returns Info's "This topic" section (on a phone Info is the Chat info sheet). */
-async function openTopicInfo(page: Page, title: RegExp) {
-  await openBoldJob(page, title)
+async function openTopicInfo(page: Page, title: RegExp, only = false) {
+  // 3.28.0: a chat with one active job has no list to pick from; that job is the current one and Info shows This job.
+  if (!only) await openBoldJob(page, title)
   if ((page.viewportSize()?.width ?? 1440) <= 860)
     await page.getByRole('button', { name: 'Chat info' }).click()
   const section = page.locator('.bold-topic-info')
@@ -297,18 +298,18 @@ for (const viewport of sizes) {
       await expect(page.getByText('Cursor is stable now.')).toBeVisible()
 
       // Stop asks first, and the confirmation is a protected surface.
-      await topic.getByRole('button', { name: 'Stop', exact: true }).click()
+      await topic.getByRole('button', { name: 'Stop job', exact: true }).click()
       const confirm = page.getByRole('alertdialog', { name: 'Stop Activity feed?' })
       await expect(confirm).toHaveAttribute('data-protected', 'block')
       await confirm.getByRole('button', { name: 'Keep going' }).click()
       await expect(confirm).toHaveCount(0)
-      expect(state.posts.some((item) => item.path === '/api/jobs/job-activity/stop')).toBe(false)
-      await topic.getByRole('button', { name: 'Stop', exact: true }).click()
-      await page.getByRole('button', { name: 'Stop job' }).click()
-      await expect(page.getByRole('status').filter({ hasText: 'Stop sent.' })).toBeVisible()
-      expect(
-        state.posts.filter((item) => item.path === '/api/jobs/job-activity/stop'),
-      ).toHaveLength(1)
+      expect(state.posts.some((item) => item.path === '/api/jobs/job-activity/end')).toBe(false)
+      await topic.getByRole('button', { name: 'Stop job', exact: true }).click()
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Stop job' }).click()
+      await expect(page.getByRole('status').filter({ hasText: 'Stopped.' })).toBeVisible()
+      expect(state.posts.filter((item) => item.path === '/api/jobs/job-activity/end')).toHaveLength(
+        1,
+      )
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         viewport.width,
@@ -445,7 +446,8 @@ for (const viewport of sizes) {
       })
       await page.goto('/b?open=1')
       await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
-      await openTopicInfo(page, /Activity feed plan/)
+      const info = await openTopicInfo(page, /Activity feed plan/, true)
+      await expect(info).toContainText('Activity feed plan')
       const card = page.getByRole('region', { name: 'Recipe run' })
       await expect(card).toContainText('Orchestration')
       await expect(card).toContainText('Activity feed plan')

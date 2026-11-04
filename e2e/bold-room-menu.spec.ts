@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { openInfoSection } from './bold-chat-helpers.ts'
 import { openBoldJob } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 
@@ -19,10 +20,10 @@ async function openRoomPicker(page: Page) {
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
-/** 3.24.0: a phone's topics are Info › Topics (the All topics screen is gone); Escape closes the sheet again. */
+/** 3.28.0: a phone's finished jobs are Info › Past jobs (the sheet opens on it); Escape closes the sheet again. */
 async function openPhoneJobList(page: Page) {
   await page.getByRole('button', { name: 'Chat info' }).click()
-  await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
+  await openInfoSection(page, 'Past jobs')
 }
 const topicRow = (page: Page, title: string) =>
   page
@@ -334,6 +335,8 @@ for (const viewport of sizes) {
           return undefined
         },
       })
+      // 3.28.0: the seeded room is a legacy one (two active jobs), so it keeps its dividers and their job menus until
+      // only one job is active.
       await openBoldJob(page, /Activity feed/)
       await jobMenu(page, 'Activity feed').click()
       await page.getByRole('menuitem', { name: 'Rename…' }).click()
@@ -343,12 +346,6 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Rename' }).click()
       await expect(page.getByRole('status').filter({ hasText: 'Renamed' })).toBeVisible()
       await expect(topicHead(page, 'Activity feed v2')).toBeVisible()
-      if (viewport.width <= 860) {
-        // A phone's chat bar names the chat, not the job; the renamed job shows on the topic list.
-        await openPhoneJobList(page)
-        await expect(topicRow(page, 'Activity feed v2')).toBeVisible()
-        await page.keyboard.press('Escape')
-      }
       expect(
         state.requests.find(
           (request) => request.method === 'PATCH' && request.path === '/api/jobs/job-activity',
@@ -360,16 +357,22 @@ for (const viewport of sizes) {
       await expect(
         page.getByRole('status').filter({ hasText: 'Closed “Activity feed v2”' }),
       ).toBeVisible()
-      if (viewport.width > 860) {
-        // 3.22.0: a closed topic stays in the conversation, marked closed, with its menu (no Closed jobs chip).
-        await expect(topicHead(page, 'Activity feed v2')).toContainText('closed')
-      } else {
+      // One active job is left, so the dividers go and the job bar shows it; the closed job is listed under Past jobs, and
+      // opening it shows its read-only bar with the menu.
+      await expect(page.locator('.bold-job-bar:not(.is-past)')).toContainText('Release notes 2.4')
+      await expect(topicHead(page, 'Activity feed v2')).toHaveCount(0)
+      if (viewport.width > 860) await openBoldJob(page, /Activity feed v2/)
+      else {
         await openPhoneJobList(page)
-        // The closed topic stays listed in Info › Topics (two closed topics sit in a plain list, no fold).
         await expect(topicRow(page, 'Activity feed v2')).toBeVisible()
-        await page.keyboard.press('Escape')
+        await topicRow(page, 'Activity feed v2').click()
       }
-      await jobMenu(page, 'Activity feed v2').click()
+      await expect(page.locator('.bold-job-bar.is-past')).toContainText('Activity feed v2')
+      // The past job's bar carries its menu on a desktop; a phone's chat head is expected to (see the report: it does not).
+      await page
+        .locator('.bold-job-bar.is-past, .bold-chat-phone-bar')
+        .getByRole('button', { name: 'Job menu' })
+        .click()
       await page.getByRole('menuitem', { name: 'Reopen' }).click()
       await expect(
         page.getByRole('status').filter({ hasText: 'Reopened “Activity feed v2”' }),

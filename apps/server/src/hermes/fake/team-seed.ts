@@ -236,7 +236,15 @@ function chat(
   at: string,
   id: string,
 ): { jobId: string; personMessageId: string; answerMessageId: string } {
-  const { job } = createJob(sqlite, room.roomId, title, iso(Date.parse(at) - 120_000))
+  // The seed predates the one-job rule (3.28.0): its rooms keep several open topics, the legacy path.
+  const { job } = createJob(
+    sqlite,
+    room.roomId,
+    title,
+    iso(Date.parse(at) - 120_000),
+    {},
+    { allowBusy: true },
+  )
   const personMessageId = `seed_${id}_you`
   const answerMessageId = `seed_${id}_agent`
   storeText(sqlite, {
@@ -329,7 +337,16 @@ function seedActivityFeed(
   nowMs: number,
   direct: { websockets: { jobId: string }; cursor: { answerMessageId: string } },
 ): string {
-  const { job } = createJob(sqlite, roomId, 'Activity feed', minutes(nowMs, 180))
+  const { job } = createJob(
+    sqlite,
+    roomId,
+    'Activity feed',
+    minutes(nowMs, 180),
+    {},
+    {
+      allowBusy: true,
+    },
+  )
   const requestId = 'seed_feed_request'
   storeText(sqlite, {
     id: requestId,
@@ -544,7 +561,16 @@ function seedActivityFeed(
 }
 
 function seedReleaseNotes(sqlite: DatabaseSync, roomId: string, nowMs: number): string {
-  const { job } = createJob(sqlite, roomId, 'Release notes 2.4', minutes(nowMs, 120))
+  const { job } = createJob(
+    sqlite,
+    roomId,
+    'Release notes 2.4',
+    minutes(nowMs, 120),
+    {},
+    {
+      allowBusy: true,
+    },
+  )
   const requestId = 'seed_notes_request'
   storeText(sqlite, {
     id: requestId,
@@ -643,7 +669,16 @@ function seedReleaseNotes(sqlite: DatabaseSync, roomId: string, nowMs: number): 
 }
 
 function seedQueueResearch(sqlite: DatabaseSync, roomId: string, nowMs: number): string {
-  const { job } = createJob(sqlite, roomId, 'Queue research', minutes(nowMs, 60))
+  const { job } = createJob(
+    sqlite,
+    roomId,
+    'Queue research',
+    minutes(nowMs, 60),
+    {},
+    {
+      allowBusy: true,
+    },
+  )
   storeText(sqlite, {
     id: 'seed_queue_request',
     roomId,

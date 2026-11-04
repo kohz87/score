@@ -21,6 +21,7 @@ import {
   rotateTrigger,
   triggerSecret,
   updateTrigger,
+  type CallResult,
 } from '../domain/triggers/triggers.ts'
 import { startReportBack } from '../domain/triggers/report-back.ts'
 import { jobEvent } from '../domain/exchanges/store.ts'
@@ -104,7 +105,7 @@ export function registerTriggerRoutes(
           'rate_limited',
           'Too many calls to this trigger. Try again in a minute.',
         )
-      let answer: { jobId: string; repeated: boolean } | undefined
+      let answer: CallResult | undefined
       await ingest.submit({
         source: 'triggers',
         identity: randomUUID(),
@@ -114,7 +115,11 @@ export function registerTriggerRoutes(
           return call.drafts
         },
       })
+      // 3.28.0: a call into a team room whose job is running waits as Next up (202) and starts when that job ends.
+      // An older waiting call may have started in the same transaction, so a new call always dispatches (review).
       if (!answer?.repeated) await redispatch()
+      if (answer?.status === 202)
+        return reply.code(202).send({ ok: true, queued: true, queueId: answer.queueId })
       return reply.code(200).send({ ok: true, jobId: answer?.jobId })
     })
   })

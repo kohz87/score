@@ -109,6 +109,11 @@ export const protectedClasses = [
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
+  // 3.28.0 (decision 164): one job per chat. The job bar (Stop job), the queued trigger call (Next up, Skip) and the
+  // dialog that asks what to do when work starts in a chat that already has a job
+  'bold-job-bar',
+  'bold-next-up',
+  'bold-busy-dialog',
   // 3.17.0: taking over the agent's desktop (the confirm card, the red control pill, the status lines, Hand back)
   'bold-to-confirm',
   'bold-to-pill',

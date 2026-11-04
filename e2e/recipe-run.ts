@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { makeTeam, startInOwnChat } from './one-job-helpers.ts'
 
 // Starting a recipe from the Recipes page (2.8.0): Run… opens Start a job with the recipe chosen, and the run then opens
 // on its own page. Shared by the specs that used to start a workflow from the classic list.
@@ -38,7 +39,8 @@ export async function finishStartJob(
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const start = dialog.getByRole('button', { name: 'Start the job' })
   await expect(start).toBeEnabled({ timeout: 30_000 })
-  await start.click()
+  // 3.28.0: Run… opens in the team room, which holds jobs already; the run starts in a chat of its own.
+  await startInOwnChat(page, 'Recipe')
   await expect(dialog.getByRole('heading', { name: 'Started' })).toBeVisible({ timeout: 30_000 })
 }
 
@@ -147,7 +149,9 @@ export async function openCodingRecipeStart(page: Page, label: string) {
       },
     })
   })
-  await page.goto(`/b?start=job&recipe=${id}`)
+  // 3.28.0: the seeded team room holds jobs, so the start opens in a team of its own.
+  const team = await makeTeam(page, 'Coding')
+  await page.goto(`/b?room=${team.id}&start=job&recipe=${id}`)
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await expect(dialog.getByRole('radio', { name })).toBeChecked({ timeout: 30_000 })
   return { dialog, bodies, policy, id }

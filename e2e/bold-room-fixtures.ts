@@ -584,19 +584,22 @@ export async function openBoldRoomWith(
 /** Opens the chat's Info on its Topics: a desktop's side panel already shows it, a phone's sheet opens from `?jobs=1`. */
 export async function openTopicsOnPhone(page: Page) {
   if ((page.viewportSize()?.width ?? 1440) > 860) return
-  // 3.24.0: the All topics screen is gone; an old `?jobs=1` link opens the chat with Info on Topics.
+  // 3.24.0: the All topics screen is gone; an old `?jobs=1` link opens the chat with Info on Past jobs (3.28.0).
   const url = new URL(page.url())
   url.searchParams.set('jobs', '1')
   await page.goto(url.toString())
-  await expect(page.getByRole('heading', { name: 'Topics' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Past jobs' })).toBeVisible()
 }
 
 /** Makes a topic current: the phone picks it in Info › Topics (the sheet closes), the desktop in its side panel. */
 export async function openBoldJob(page: Page, title: RegExp) {
   const phone = (page.viewportSize()?.width ?? 1440) <= 860
   if (phone) await openTopicsOnPhone(page)
-  // 3.27.1: Topics starts folded in a group chat; a person opens it by its heading toggle (a `?jobs=1` landing already has).
-  await openInfoSection(page, 'Topics')
+  // 3.28.0: finished jobs are under Past jobs, and a legacy room's active ones under Open jobs (only there). Both start
+  // folded; a person opens each by its heading toggle (a `?jobs=1` landing already has Past jobs).
+  await openInfoSection(page, 'Past jobs')
+  if ((await page.getByRole('heading', { name: 'Open jobs' }).count()) > 0)
+    await openInfoSection(page, 'Open jobs')
   // The retired job list named its rows "Title. State…"; a topic row's title element holds only the title.
   const rowTitle = new RegExp(title.source.replace(/\\\.(\.\*)?$/, '$'), title.flags)
   await page

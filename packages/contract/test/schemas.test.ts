@@ -382,6 +382,39 @@ const exchangeCases = [
     { app: 'Tickets', ref: 'TCK-1', title: null, link: null, triggerId: 'trg_1', missing: [] },
     { app: 'Tickets' },
   ],
+  // 3.28.0: a trigger call waiting for its team room's job (Next up), its list, and the 409 job_running details.
+  [
+    'QueueItemSchema',
+    {
+      id: 'q_1',
+      roomId: 'team',
+      title: 'TCK-1 · Login fails',
+      source: { app: 'Tickets', ref: 'TCK-1', title: 'Login fails', triggerId: 'trg_1' },
+      createdAt: '2026-11-04T09:00:00.000Z',
+    },
+    { id: 'q_1', roomId: 'team', title: 'x', source: { app: 'Tickets' }, createdAt: 'yesterday' },
+  ],
+  [
+    'RoomQueueResponseSchema',
+    {
+      asOfSeq: 3,
+      items: [
+        {
+          id: 'q_1',
+          roomId: 'team',
+          title: 'TCK-1 · Login fails',
+          source: { app: 'Tickets', ref: 'TCK-1', title: 'Login fails', triggerId: 'trg_1' },
+          createdAt: '2026-11-04T09:00:00.000Z',
+        },
+      ],
+    },
+    { asOfSeq: -1, items: [] },
+  ],
+  [
+    'JobRunningDetailsSchema',
+    { jobId: 'job_1', title: 'Ship the feed' },
+    { jobId: '', title: 'x' },
+  ],
   [
     'JobReportBackSchema',
     { state: 'confirmed', tool: 'add_comment', at: null },

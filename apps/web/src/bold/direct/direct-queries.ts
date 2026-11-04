@@ -1,11 +1,12 @@
 import {
   DirectChatsResponseSchema,
   JobSchema,
+  JobsResponseSchema,
   PostMessageResponseSchema,
   type Job,
   type Room,
 } from '@score/contract'
-import { apiFetch } from '../../data/api.ts'
+import { ApiError, apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 
@@ -75,13 +76,25 @@ export async function shareMessageToJob(messageId: string, jobId: string): Promi
 
 /** Step one of Add someone: a team-room job named for the chat. */
 export async function createTeamJob(teamRoomId: string, chat: Job): Promise<Job> {
-  return JobSchema.parse(
-    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': newId() },
-      body: JSON.stringify({ title: chat.title || 'New chat' }),
-    }),
-  )
+  try {
+    return JobSchema.parse(
+      await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newId() },
+        body: JSON.stringify({ title: chat.title || 'New chat' }),
+      }),
+    )
+  } catch (failure) {
+    // 3.28.0: a team room runs one job at a time. Bringing someone in is a conversation, not new work, so while a job
+    // runs the talk goes to the team room's own thread instead of being refused.
+    if (!(failure instanceof ApiError) || failure.code !== 'job_running') throw failure
+    const jobs = JobsResponseSchema.parse(
+      await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`),
+    )
+    const own = jobs.items.find((item) => item.isDefault)
+    if (!own) throw failure
+    return own
+  }
 }
 
 /** Step two: one message in that job addressed to `to`, carrying the chat as a frozen reference. */

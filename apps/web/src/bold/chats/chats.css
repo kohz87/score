@@ -1028,30 +1028,7 @@
   grid-column: 2;
 }
 
-/* 3.24.0: New topic in Info (the same as /new <title>), and the phone bar's menu with its older-chats list. */
-[data-ui='bold'] .bold-chat-new-topic {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-[data-ui='bold'] .bold-chat-new-topic-row {
-  display: flex;
-  gap: 8px;
-}
-
-[data-ui='bold'] .bold-chat-new-topic-row input {
-  flex: 1;
-  min-width: 0;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--panel, transparent);
-  color: inherit;
-}
-
+/* The phone bar's menu with its older-chats list. */
 [data-ui='bold'] .bold-chat-phone-menu {
   position: relative;
   display: inline-flex;

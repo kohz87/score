@@ -166,8 +166,13 @@ test('repeating a webhook-id answers with the same job and starts nothing new', 
   const again = await call(trigger.id, secret, body)
   expect(again.json()).toEqual(first)
   expect(jobs()).toHaveLength(1)
-  expect((await call(trigger.id, secret, body, { webhookId: 'msg_2' })).statusCode).toBe(200)
-  expect(jobs()).toHaveLength(2)
+  // 3.28.0: a new call while the team room's job runs waits as Next up; repeating it answers the same queue entry.
+  const queued = await call(trigger.id, secret, body, { webhookId: 'msg_2' })
+  expect(queued.statusCode).toBe(202)
+  const again2 = await call(trigger.id, secret, body, { webhookId: 'msg_2' })
+  expect(again2.statusCode).toBe(202)
+  expect(again2.json().queueId).toBe(queued.json().queueId)
+  expect(jobs()).toHaveLength(1)
 })
 
 test('only valid signatures within five minutes are accepted', async () => {
@@ -472,8 +477,11 @@ test('report-back is refused while sending, and a failed turn is never confirmed
 test('a trigger’s jobs start with a spend cap, and a trigger can hold only so many open jobs', async () => {
   const { trigger, secret } = await create()
   const body = JSON.stringify(ticket)
+  // 3.28.0: the first call starts a job; the rest wait behind it (Next up) and count as open.
   for (let i = 0; i < TRIGGER_LIMITS.openJobs; i++)
-    expect((await call(trigger.id, secret, body, { webhookId: `open_${i}` })).statusCode).toBe(200)
+    expect((await call(trigger.id, secret, body, { webhookId: `open_${i}` })).statusCode).toBe(
+      i === 0 ? 200 : 202,
+    )
   const caps = db.sqlite
     .prepare('SELECT DISTINCT spend_cap_usd AS cap FROM jobs WHERE source IS NOT NULL')
     .all() as { cap: number }[]
@@ -481,10 +489,15 @@ test('a trigger’s jobs start with a spend cap, and a trigger can hold only so 
   const busy = await call(trigger.id, secret, body, { webhookId: 'one_too_many' })
   expect(busy.statusCode).toBe(429)
   expect(busy.json().error.code).toBe('trigger_busy')
-  expect(jobs()).toHaveLength(TRIGGER_LIMITS.openJobs)
-  // Finishing one makes room again.
+  expect(jobs()).toHaveLength(1)
+  // Finishing one makes room again: the new call goes to the back, and the oldest waiting call starts.
   db.sqlite.prepare("UPDATE jobs SET state = 'done' WHERE id = ?").run(jobs()[0]!.id)
-  expect((await call(trigger.id, secret, body, { webhookId: 'after_done' })).statusCode).toBe(200)
+  expect((await call(trigger.id, secret, body, { webhookId: 'after_done' })).statusCode).toBe(202)
+  expect(jobs()).toHaveLength(2)
+  const started = db.sqlite
+    .prepare('SELECT webhook_id FROM trigger_calls WHERE job_id = ?')
+    .get(jobs()[1]!.id) as { webhook_id: string }
+  expect(started.webhook_id).toBe('open_1')
 })
 
 test('spraying random trigger ids from one address shares one failure budget', async () => {
@@ -686,6 +699,12 @@ test('a trigger starts its jobs in its chosen team; deleting that team sends the
     items: { id: string; teamRoomId: string | null }[]
   }
   expect(listed.items.find((item) => item.id === trigger.id)!.teamRoomId).toBeNull()
+  // 3.28.0: the first team room runs one job at a time; its job from the archived-team call ends first.
+  db.sqlite
+    .prepare(
+      "UPDATE jobs SET state = 'closed' WHERE room_id = (SELECT id FROM rooms WHERE role = 'team' AND team_everyone = 1)",
+    )
+    .run()
   expect(
     (
       await call(
@@ -704,4 +723,76 @@ test('a trigger starts its jobs in its chosen team; deleting that team sends the
     id: string
   }
   expect(room(jobs().at(-1)!.id)).toBe(first.id)
+})
+
+test('3.28.0: a call while the team room’s job runs waits as Next up, starts when the job ends, and can be skipped', async () => {
+  const { trigger, secret } = await create()
+  const body = (id: string) => JSON.stringify({ ticket: { ...ticket.ticket, id } })
+  expect((await call(trigger.id, secret, body('TCK-A'), { webhookId: 'a' })).statusCode).toBe(200)
+  const first = jobs()[0]!
+  const waiting = await call(trigger.id, secret, body('TCK-B'), { webhookId: 'b' })
+  expect(waiting.statusCode).toBe(202)
+  expect(waiting.json()).toMatchObject({ ok: true, queued: true })
+  const team = (
+    db.sqlite.prepare("SELECT id FROM rooms WHERE role = 'team'").get() as { id: string }
+  ).id
+  const queue = async () =>
+    (await app.inject({ method: 'GET', url: `/api/rooms/${team}/queue`, headers })).json() as {
+      items: { id: string; title: string; source: { ref: string } }[]
+    }
+  expect((await queue()).items.map((item) => item.source.ref)).toEqual(['TCK-B'])
+  // Stop job ends the running one; the waiting call starts with its own job and the lead's turn.
+  const ended = await app.inject({
+    method: 'POST',
+    url: `/api/jobs/${first.id}/end`,
+    headers: { ...headers, 'idempotency-key': 'end-a' },
+    payload: {},
+  })
+  expect(ended.statusCode, ended.body).toBe(200)
+  expect(ended.json().state).toBe('closed')
+  await ingest.flushListeners()
+  await ingest.drain()
+  expect((await queue()).items).toEqual([])
+  expect(jobs().map((job) => JSON.parse(job.source).ref)).toEqual(['TCK-A', 'TCK-B'])
+  const turn = db.sqlite
+    .prepare('SELECT agent_id FROM message_runs WHERE job_id = ?')
+    .get(jobs()[1]!.id) as { agent_id: string }
+  expect(turn.agent_id).toBe('lead')
+  // Skip: the waiting call is dropped; a retry of it is answered and starts nothing.
+  const third = await call(trigger.id, secret, body('TCK-C'), { webhookId: 'c' })
+  expect(third.statusCode).toBe(202)
+  const skipped = await app.inject({
+    method: 'DELETE',
+    url: `/api/rooms/${team}/queue/${third.json().queueId}`,
+    headers: { ...headers, 'idempotency-key': 'skip-c' },
+  })
+  expect(skipped.statusCode).toBe(204)
+  expect((await queue()).items).toEqual([])
+  const retried = await call(trigger.id, secret, body('TCK-C'), { webhookId: 'c' })
+  expect(retried.statusCode).toBe(200)
+  expect(retried.json().jobId).toBeNull()
+  expect(jobs()).toHaveLength(2)
+})
+
+test('3.28.0 review: a call left waiting when its job ended while Score was down starts when Score starts', async () => {
+  const { trigger, secret } = await create()
+  const body = (id: string) => JSON.stringify({ ticket: { ...ticket.ticket, id } })
+  expect((await call(trigger.id, secret, body('TCK-A'), { webhookId: 'a' })).statusCode).toBe(200)
+  expect((await call(trigger.id, secret, body('TCK-B'), { webhookId: 'b' })).statusCode).toBe(202)
+  // Score stops; the job ends meanwhile (no event reaches a running server).
+  await app.close()
+  db.sqlite.prepare("UPDATE jobs SET state = 'closed' WHERE id = ?").run(jobs()[0]!.id)
+  app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: home }),
+    logger: false,
+    db,
+    ingest,
+    port,
+    clock: () => now,
+  })
+  await app.ready()
+  await ingest.flushListeners()
+  await ingest.drain()
+  expect(jobs().map((job) => JSON.parse(job.source).ref)).toEqual(['TCK-A', 'TCK-B'])
+  expect(db.sqlite.prepare('SELECT count(*) AS n FROM room_queue').get()).toEqual({ n: 0 })
 })

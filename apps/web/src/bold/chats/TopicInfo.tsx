@@ -1,7 +1,6 @@
 import type { AgentSummary, Job } from '@score/contract'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../../routes/orchestrations/RoomRunPanel.tsx'
@@ -12,7 +11,7 @@ import { WorkflowRoomPanel } from '../../routes/workflows/WorkflowRoomPanel.tsx'
 import { boldRunLink } from '../bold-links.ts'
 import { InfoSection } from './InfoSection.tsx'
 import { ReportBackLine } from '../room/ReportBack.tsx'
-import { decisionError } from '../room/RoomRequests.tsx'
+import { useStopJob } from '../room/StopJob.tsx'
 import { ThreadTasks } from '../room/RoomTasks.tsx'
 import { jobExchangesQuery, roomJobsQuery } from '../room/room-queries.ts'
 import { exchangeStatus, jobStateLabel, needsYou } from '../room/room-model.ts'
@@ -79,112 +78,10 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
   )
 }
 
-// Ported from the deleted BoldThread: Stop job with its confirm.
-function StopTopic({
-  job,
-  onStopped,
-  onConfirming,
-}: {
-  job: Job
-  onStopped: () => void
-  onConfirming: (confirming: boolean) => void
-}) {
-  const [confirming, setConfirming] = useState(false)
-  const [stopping, setStopping] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const stopButton = useRef<HTMLButtonElement>(null)
-  const keepGoing = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    if (confirming) keepGoing.current?.focus()
-    // The Stop confirm is a decision: the section stays open (or shows its badge) while it waits.
-    onConfirming(confirming)
-  }, [confirming, onConfirming])
-  function cancel() {
-    setConfirming(false)
-    stopButton.current?.focus()
-  }
-  async function stop() {
-    setStopping(true)
-    setError(null)
-    try {
-      await apiFetch(`jobs/${encodeURIComponent(job.id)}/stop`, { method: 'POST', body: '{}' })
-      setStatus('Stop sent.')
-      setConfirming(false)
-      onStopped()
-    } catch (failure) {
-      setError(
-        failure instanceof ApiError && [401, 403, 409].includes(failure.status)
-          ? decisionError(failure)
-          : 'Couldn’t stop this job. Try again.',
-      )
-    } finally {
-      setStopping(false)
-    }
-  }
-  const finished = job.state === 'done' || job.state === 'closed'
-  return (
-    <>
-      <button
-        type="button"
-        ref={stopButton}
-        className="btn sm bold-thread-stop"
-        disabled={finished || stopping}
-        onClick={() => setConfirming(true)}
-      >
-        Stop
-      </button>
-      {confirming && (
-        <div
-          className="bold-thread-stop-confirm"
-          data-protected="block"
-          role="alertdialog"
-          aria-label={`Stop ${job.title}?`}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return
-            event.preventDefault()
-            event.stopPropagation()
-            cancel()
-          }}
-        >
-          <b>Stop “{job.title}”?</b>
-          <span>
-            Running steps are stopped. If Score can’t confirm a step ended, it asks you before going
-            on.
-          </span>
-          <div className="bold-thread-confirm-actions">
-            <button ref={keepGoing} type="button" className="btn sm ghost" onClick={cancel}>
-              Keep going
-            </button>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={stopping}
-              onClick={() => void stop()}
-            >
-              {stopping ? 'Stopping…' : 'Stop job'}
-            </button>
-          </div>
-        </div>
-      )}
-      {status && (
-        <p className="bold-thread-status-line" role="status">
-          {status}
-        </p>
-      )}
-      {error && (
-        <p className="bold-thread-error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
-  )
-}
-
 /**
- * Info › This topic (3.22.0): what the deleted thread panel showed for the job the composer posts to, the live status
- * with its round and turns, the run or recipe, report-back, Hermes tasks and Stop. Step-in answers stay on the pause
- * card in the conversation (ExchangeRequestCard); the context meter and /compress live in the context bar.
+ * Info › This job (3.22.0, "This topic" until 3.28.0): what the deleted thread panel showed for the job the composer
+ * posts to, the live status with its round and turns, the run or recipe, report-back, Hermes tasks and Stop job.
+ * Step-in answers stay on the pause card in the conversation (ExchangeRequestCard); the context meter and /compress live in the context bar.
  */
 export function TopicInfo({
   roomId,
@@ -201,6 +98,10 @@ export function TopicInfo({
   const current = currentExchange(exchanges)
   const waiting = current !== undefined && needsYou(current)
   const [confirmingStop, setConfirmingStop] = useState(false)
+  const stop = useStopJob(job, {
+    onConfirming: setConfirmingStop,
+    onStopped: () => void refetch(),
+  })
   const turns = threadTurns(current, job)
   const state = current ? exchangeStatus(current) : jobStateLabel(job)
   const jobsLive = useStreamQuery(roomJobsQuery(job.roomId)).data?.find(
@@ -217,7 +118,7 @@ export function TopicInfo({
       kind="topic"
       className="bold-topic-info"
       headingId="chat-info-topic"
-      title="This topic"
+      title="This job"
       summary={job.title}
       needsYou={waiting || reportWaits || recipeWaits || confirmingStop}
     >
@@ -225,7 +126,8 @@ export function TopicInfo({
         <b className="bold-topic-title" title={job.title}>
           {job.title}
         </b>
-        <StopTopic job={job} onStopped={() => void refetch()} onConfirming={setConfirmingStop} />
+        {stop.button}
+        {stop.confirm}
       </div>
       <p className="bold-topic-status">
         {waiting && (

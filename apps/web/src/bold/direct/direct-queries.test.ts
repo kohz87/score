@@ -1,7 +1,12 @@
 import type { Job, Room } from '@score/contract'
 import { afterEach, expect, test, vi } from 'vitest'
 import { jsonResponse, makeJob, mockFetch } from '../room/room-test-utils.tsx'
-import { createDirectChat, directChatsQuery, shareMessageToJob } from './direct-queries.ts'
+import {
+  createDirectChat,
+  createTeamJob,
+  directChatsQuery,
+  shareMessageToJob,
+} from './direct-queries.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -84,4 +89,37 @@ test('Share sends the chosen team-room job and starts no turn of its own', async
   vi.stubGlobal('fetch', fetchMock)
   await shareMessageToJob('message-1', 'job-activity')
   expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('3.28.0: bringing someone in while the team room runs a job goes to the team room’s own thread', async () => {
+  const own = makeJob({ id: 'team-own', roomId: 'team', isDefault: true, title: 'Team room' })
+  const running = makeJob({ id: 'team-job', roomId: 'team', title: 'Story suite prompts' })
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url, init) => {
+      if (url === '/api/rooms/team/jobs' && init?.method === 'POST')
+        return jsonResponse(
+          {
+            error: {
+              code: 'job_running',
+              message: 'This chat already has a job running.',
+              details: { jobId: running.id, title: running.title },
+            },
+          },
+          409,
+        )
+      if (url === '/api/rooms/team/jobs') return jsonResponse({ asOfSeq: 1, items: [own, running] })
+      return jsonResponse({}, 404)
+    }),
+  )
+  const made = await createTeamJob('team', chat('chat-1', 'Pricing', null))
+  expect(made.id).toBe('team-own')
+})
+
+test('3.28.0: any other refusal still fails the hand-off', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch(() => jsonResponse({ error: { code: 'conflict', message: 'No.' } }, 409)),
+  )
+  await expect(createTeamJob('team', chat('chat-1', 'Pricing', null))).rejects.toThrow()
 })

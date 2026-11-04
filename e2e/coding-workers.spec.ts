@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { holdLockPerTest } from './locks.ts'
+import { makeTeam } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
@@ -76,7 +77,9 @@ async function withCodingAgent(page: Page, id: string) {
 }
 
 async function openDialog(page: Page, agent: string) {
-  await page.goto('/b?start=job')
+  // 3.28.0: the seeded team room holds jobs, so a start there asks which chat; this starts in a team of its own.
+  const team = await makeTeam(page, 'Coding')
+  await page.goto(`/b?room=${team.id}&start=job`)
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await expect(dialog).toBeVisible()
   // "lead decides" is the default plan; the lead hands steps only to the agents ticked here.

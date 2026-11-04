@@ -8,6 +8,7 @@ import {
   expectRefused,
   wear,
 } from './themes-consent-helpers.ts'
+import { makeTeam } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
 import { openCodingRecipeStart } from './recipe-run.ts'
 import { mockThemes } from './themes-fixtures.ts'
@@ -88,7 +89,9 @@ async function openLeadStart(page: Page, { vetted = false } = {}) {
       json: { error: { code: 'policy_changed', message: 'changed', details: { agentId: agent } } },
     })
   })
-  await page.goto('/b?start=job')
+  // 3.28.0: the seeded team room holds jobs, so a start there asks which chat; this starts in a team of its own.
+  const team = await makeTeam(page, 'Coding')
+  await page.goto(`/b?room=${team.id}&start=job`)
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await dialog.getByLabel('What should the team do?').fill('Add a changelog page to the site')
   // (A cached theme that hides a field may already be switched off by the guard: `vetted` skips this check.)

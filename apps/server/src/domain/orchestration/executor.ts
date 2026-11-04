@@ -55,6 +55,7 @@ import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
 import { createJob } from '../exchanges/store.ts'
+import { closeRunJobs } from '../exchanges/job-life.ts'
 import { teamPausedAt } from '../team-pause.ts'
 import {
   budgetView,
@@ -2267,6 +2268,8 @@ export class Orchestrator {
         )
         .run(status, now, reason, orchId)
       addHistory(sqlite, orchId, 'ended', { status, reason }, now)
+      // 3.28.0: the run was its chat job; the job closes with it, so the chat can start its next one.
+      ctx.events.push(...closeRunJobs(sqlite, orchId, now))
       // Capacity and reservations of this run are released: waiting work elsewhere may be admissible now.
       bumpAdmission(sqlite)
       if (o!.planner === 'workflow') finalizeGraph(ctx, orchId, status)

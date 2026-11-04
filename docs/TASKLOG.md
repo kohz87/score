@@ -2333,3 +2333,30 @@ One entry per completed task: what landed, review results, and any **rejected re
   padding; the phone baselines also lose the stale "Recipes" top-bar button that had passed under the pixel threshold
   since 3.27.0), 8 load flakes passing alone (+ menu 390, room tools 390, tablet width, team choice, workspace, theme
   light switch, ledger ×2). No click intercepted by the pill.
+
+## 3.28.0 — One job per chat (2026-11-04)
+- Owner: "do we need topic/job in the chatgroup? since a chatgroup generally do 1 job at a time so it seems redundant"
+  → chose "One job per chat, strictly" (over the lead's "hide until a second job") → mock-up
+  (https://claude.ai/artifact/TFtwnF1f6DSKPxtxvUGqBy, copies 22-one-job*.dc.html) approved (DECISIONS 164).
+- Lead (server, contract): the rule in `createJob` (`409 job_running { jobId; title }`; reopen and restore too; the
+  fake seed keeps its legacy multi-topic team room via `allowBusy`); Stop job `POST /api/jobs/:id/end` (stops the run,
+  then the work, closes in one transaction); a run's job closes in the executor's `end()`; trigger calls into a busy
+  team room queue (migration 0107 `room_queue`, ordered by rowid; 202; GET/DELETE `/api/rooms/:id/queue`; drained on
+  any job close/done/delete through `ingest.onCommitted`, and at boot); 0107 also closes the jobs of runs that already
+  ended. Found while testing: same-millisecond calls came out of the queue in random order (created_at, id → rowid); a
+  skipped call's retry would queue again (now answered with `jobId: null`).
+- Sonnet review (server): P2s fixed — a call that started an older waiting one didn't dispatch it; no drain at boot and
+  one room's failure stopped the loop; Stop job on a run's job skipped the job's own leftover work; Stop job on a
+  deleted job stopped its run and then 404'd. Accepted: the open-jobs limit test now counts queued calls (the rule
+  changed).
+- Sonnet coder (web, from the brief): job bar (Stop job, ⋯ job menu), Next up with Skip, This job / Past jobs / Open
+  jobs, busy dialog on every start path and any 409, no dividers or "in <topic>" with one job, `/new` refused in group
+  chats; a past job's bar to reopen, rename or delete it. Review P2 fixed by the lead: "Stop the job and start this"
+  skipped the password step for a run with a check. Re-review: none.
+- Gate: contract fixtures for the three new schemas (lead); e2e 87 failed → two triage coders (A: Info/rooms, B:
+  starts/runs) moved new work to rooms of its own or through "Start in another chat…", Topics → Open/Past jobs, the
+  job bar; no assertion weakened (one phone focus wait in the search keyboard test became a title wait: a one-to-one
+  doesn't move focus). App bugs they found, fixed by the lead: the job bar hid its menu on a phone (a past job couldn't
+  be reopened there), and "Add someone" into a busy team room failed (now goes to the room's own thread). Load flakes
+  passing alone: bold-room-chat ×2, live-feel, themes-bold, bold-workspace, bold-team-choice.
+- Accepted P3s: "Stopped…" disappears with the bar; legacy rooms with several active jobs show no job bar.

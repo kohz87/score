@@ -6,18 +6,19 @@ import { newId } from '../../data/ids.ts'
 import type { SlashCommand } from '../../routes/chat/composer-model.ts'
 import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
 import { changeCachedJob } from './room-queries.ts'
+import { activeJobs } from './room-model.ts'
+import type { BusyStart } from './BusyDialog.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { setRoomWorkspace, useSharedWorkspaces } from '../workspaces-queries.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
 export const TOPIC_COMMANDS: SlashCommand[] = [
-  { name: 'new', usage: '/new <title>', description: 'Start a new topic in this chat' },
-  { name: 'rename', usage: '/rename <title>', description: 'Rename the current topic' },
-  { name: 'done', usage: '/done', description: 'Close the current topic' },
+  { name: 'rename', usage: '/rename <title>', description: 'Rename the current job' },
+  { name: 'done', usage: '/done', description: 'Close the current job' },
   {
     name: 'reopen',
     usage: '/reopen',
-    description: 'Reopen the current (or latest finished) topic',
+    description: 'Reopen the current (or latest finished) job',
   },
   { name: 'lead', usage: '/lead @agent', description: 'Make someone the owner of this chat' },
   { name: 'add', usage: '/add @agent', description: 'Add someone to this chat' },
@@ -33,6 +34,16 @@ export const TOPIC_COMMANDS: SlashCommand[] = [
     description: 'Set the folder this chat works in (none clears it)',
   },
 ]
+
+/** A one-to-one still starts new chats; DirectChat lists and runs this itself. */
+export const DIRECT_NEW_COMMAND: SlashCommand = {
+  name: 'new',
+  usage: '/new <title>',
+  description: 'Start a new chat',
+}
+
+/** Typed but not offered in the palette: a chat does one job at a time, so `/new` has nothing to start (3.28.0). */
+export const TYPED_ONLY_COMMANDS = ['new']
 
 const post = (path: string, body: object = {}) =>
   apiFetch(path, {
@@ -62,7 +73,7 @@ export type TopicCommandContext = {
   room: Room
   agents: AgentSummary[]
   jobs: Job[]
-  /** The topic the composer sends to: picked, else the newest open one, else the general conversation. */
+  /** The job the composer sends to: picked, else the active one, else the chat's own thread. */
   current: Job | undefined
   workspaces: { id: string; name: string }[]
   /** A started, closed or reopened topic goes into the cached job list before it is picked. */
@@ -73,6 +84,8 @@ export type TopicCommandContext = {
   say: (text: string) => void
   /** Opens Start a job for this chat (`/run`). Missing where the dialog isn't mounted. */
   startRun?: (options: StartJobOptions) => void
+  /** The chat already has a job running: the busy dialog asks what to do (3.28.0). Without it `/run` just starts. */
+  onBusy?: (busy: BusyStart, options: StartJobOptions) => void
 }
 
 /** Runs one command and says what it did in the stream; throws an Error with plain words when it can't. */
@@ -83,19 +96,19 @@ export async function runTopicCommand(
 ): Promise<void> {
   const { room, agents, jobs, current, pick, say } = ctx
   const topic = current && !current.isDefault ? current : undefined
+  // In a group chat the visible word is "job"; a one-to-one keeps "chat" (3.28.0).
+  const noun = room.kind === 'direct' ? 'chat' : 'job'
   try {
     if (name === 'new') {
-      const title = args.trim()
-      if (!title) throw new Error('Give the topic a title: /new <title>')
-      const job = JobSchema.parse(
-        await post(`rooms/${encodeURIComponent(room.id)}/jobs`, { title: title.slice(0, 200) }),
+      throw new Error(
+        'A chat does one job at a time: start one with /run, or Stop the current job first.',
       )
-      changeCachedJob(ctx.queryClient, job, 'upsert')
-      pick(job.id)
-      say(`You started the topic “${job.title}”`)
     } else if (name === 'rename') {
       const title = args.trim()
-      if (!topic) throw new Error('There is no open topic to rename. Start one with /new <title>.')
+      if (!topic)
+        throw new Error(
+          `There is no open ${noun} to rename.${room.kind === 'direct' ? '' : ' Start one with /run.'}`,
+        )
       if (!title) throw new Error('Give the new title: /rename <title>')
       const job = JobSchema.parse(
         await apiFetch(`jobs/${encodeURIComponent(topic.id)}`, {
@@ -104,13 +117,13 @@ export async function runTopicCommand(
           body: JSON.stringify({ title: title.slice(0, 200) }),
         }),
       )
-      say(`You renamed the topic “${topic.title}” to “${job.title}”`)
+      say(`You renamed the ${noun} “${topic.title}” to “${job.title}”`)
     } else if (name === 'done') {
-      if (!topic) throw new Error('There is no open topic to close.')
+      if (!topic) throw new Error(`There is no open ${noun} to close.`)
       const closed = JobSchema.parse(await post(`jobs/${encodeURIComponent(topic.id)}/close`))
       changeCachedJob(ctx.queryClient, closed, 'upsert')
       pick(null)
-      say(`You closed the topic “${topic.title}”`)
+      say(`You closed the ${noun} “${topic.title}”`)
     } else if (name === 'reopen') {
       const target =
         topic && (topic.state === 'done' || topic.state === 'closed')
@@ -118,11 +131,11 @@ export async function runTopicCommand(
           : [...jobs]
               .filter((job) => !job.isDefault && (job.state === 'done' || job.state === 'closed'))
               .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
-      if (!target) throw new Error('No finished topic to reopen.')
+      if (!target) throw new Error(`No finished ${noun} to reopen.`)
       const reopened = JobSchema.parse(await post(`jobs/${encodeURIComponent(target.id)}/reopen`))
       changeCachedJob(ctx.queryClient, reopened, 'upsert')
       pick(reopened.id)
-      say(`You reopened the topic “${target.title}”`)
+      say(`You reopened the ${noun} “${target.title}”`)
     } else if (name === 'lead' || name === 'add' || name === 'remove') {
       const word = args.trim().split(/\s+/)[0] ?? ''
       if (!word) throw new Error(`Say who: /${name} @agent`)
@@ -160,7 +173,21 @@ export async function runTopicCommand(
       if (room.kind === 'direct') throw new Error('Runs start in a group chat.')
       if (!ctx.startRun) throw new Error('Start a job isn’t available here.')
       const recipeName = args.trim()
-      ctx.startRun({ roomId: room.id, ...(recipeName ? { recipeName } : {}) })
+      const options: StartJobOptions = { roomId: room.id, ...(recipeName ? { recipeName } : {}) }
+      // One job per chat: with one running, the person decides first (stop it, or start this elsewhere).
+      const running = activeJobs(jobs)[0]
+      if (running && ctx.onBusy) {
+        ctx.onBusy(
+          {
+            running: { id: running.id, title: running.title },
+            chatName: room.name,
+            starting: recipeName ? `run “${recipeName}”` : 'a new run',
+          },
+          options,
+        )
+        return
+      }
+      ctx.startRun(options)
     } else if (name === 'workspace') {
       const word = args.trim()
       if (!word) throw new Error('Name the workspace: /workspace <name>, or /workspace none')
@@ -193,6 +220,7 @@ export function useTopicCommands(
   const startJob = useStartJob()
   return {
     items: TOPIC_COMMANDS,
+    typedOnly: TYPED_ONLY_COMMANDS,
     run: (name: string, args: string) =>
       runTopicCommand(name, args, {
         ...ctx,

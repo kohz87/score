@@ -3,7 +3,12 @@ import type { AgentSummary, Room } from '@score/contract'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { roomJobsQuery } from './room-queries.ts'
 import { agents, makeJob, room } from './room-test-utils.tsx'
-import { runTopicCommand, TOPIC_COMMANDS, type TopicCommandContext } from './topic-commands.ts'
+import {
+  runTopicCommand,
+  TOPIC_COMMANDS,
+  TYPED_ONLY_COMMANDS,
+  type TopicCommandContext,
+} from './topic-commands.ts'
 
 type Call = { path: string; method: string; body: unknown }
 let calls: Call[]
@@ -59,7 +64,6 @@ const run = (name: string, args: string, over: Partial<TopicCommandContext> = {}
 
 test('the palette lists every chat command with a usage line and a description', () => {
   expect(TOPIC_COMMANDS.map((item) => item.name)).toEqual([
-    'new',
     'rename',
     'done',
     'reopen',
@@ -75,43 +79,40 @@ test('the palette lists every chat command with a usage line and a description',
   }
 })
 
-test('/new creates a topic in this chat, makes it current and says so', async () => {
-  respond = () => makeJob({ id: 'job-new', title: 'Fix login' })
-  await run('new', '  Fix login ')
-  expect(calls).toHaveLength(1)
-  expect(calls[0]).toMatchObject({
-    path: '/api/rooms/room-1/jobs',
-    method: 'POST',
-    body: { title: 'Fix login' },
-  })
-  expect(picked).toEqual(['job-new'])
-  expect(said).toEqual(['You started the topic “Fix login”'])
-})
-
-test('/new puts the topic in the cached job list before it is picked, so a send posts to it', async () => {
-  const created = makeJob({ id: 'job-new', title: 'Fix login' })
-  respond = () => created
-  queryClient.setQueryData(roomJobsQuery(room.id).key, { asOfSeq: 1, data: [general] })
-  let cached: string[] = []
-  await run('new', 'Fix login', {
-    pick: (jobId) => {
-      picked.push(jobId)
-      cached = (
-        queryClient.getQueryData(roomJobsQuery(room.id).key) as { data: { id: string }[] }
-      ).data.map((job) => job.id)
-    },
-  })
-  expect(picked).toEqual(['job-new'])
-  expect(cached).toContain('job-new')
-})
-
-test('/new without a title asks for one and sends nothing', async () => {
-  await expect(run('new', '  ')).rejects.toThrow('Give the topic a title: /new <title>')
+test('/new is not in the palette; typed, it says a chat does one job at a time and sends nothing', async () => {
+  expect(TOPIC_COMMANDS.map((item) => item.name)).not.toContain('new')
+  expect(TYPED_ONLY_COMMANDS).toContain('new')
+  await expect(run('new', '  Fix login ')).rejects.toThrow(
+    'A chat does one job at a time: start one with /run, or Stop the current job first.',
+  )
+  await expect(run('new', '')).rejects.toThrow('A chat does one job at a time')
   expect(calls).toHaveLength(0)
+  expect(picked).toEqual([])
   expect(said).toEqual([])
 })
 
-test('/rename renames the current topic', async () => {
+test('/reopen puts the reopened job in the cached job list before it is picked, so a send posts to it', async () => {
+  const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
+  respond = () => ({ ...closed, state: 'open' })
+  queryClient.setQueryData(roomJobsQuery(room.id).key, { asOfSeq: 1, data: [general, closed] })
+  let cachedState: string | undefined
+  await run('reopen', '', {
+    current: closed,
+    jobs: [general, closed],
+    pick: (jobId) => {
+      picked.push(jobId)
+      cachedState = (
+        queryClient.getQueryData(roomJobsQuery(room.id).key) as {
+          data: { id: string; state: string }[]
+        }
+      ).data.find((job) => job.id === 'job-closed')?.state
+    },
+  })
+  expect(picked).toEqual(['job-closed'])
+  expect(cachedState).toBe('open')
+})
+
+test('/rename renames the current job', async () => {
   respond = () => makeJob({ id: 'job-feed', title: 'Live feed' })
   await run('rename', 'Live feed')
   expect(calls[0]).toMatchObject({
@@ -119,35 +120,35 @@ test('/rename renames the current topic', async () => {
     method: 'PATCH',
     body: { title: 'Live feed' },
   })
-  expect(said).toEqual(['You renamed the topic “Activity feed” to “Live feed”'])
+  expect(said).toEqual(['You renamed the job “Activity feed” to “Live feed”'])
 })
 
-test('/rename needs an open topic and a title', async () => {
+test('/rename needs an open job and a title', async () => {
   await expect(run('rename', 'x', { current: general })).rejects.toThrow(
-    'There is no open topic to rename. Start one with /new <title>.',
+    'There is no open job to rename. Start one with /run.',
   )
   await expect(run('rename', '')).rejects.toThrow('Give the new title: /rename <title>')
   expect(calls).toHaveLength(0)
 })
 
-test('/done closes the current topic and leaves the choice to the newest open one', async () => {
+test('/done closes the current job and leaves the choice to the newest open one', async () => {
   respond = () => makeJob({ id: 'job-feed', title: 'Activity feed', state: 'closed' })
   await run('done', '')
   expect(calls[0]).toMatchObject({ path: '/api/jobs/job-feed/close', method: 'POST' })
   expect(picked).toEqual([null])
-  expect(said).toEqual(['You closed the topic “Activity feed”'])
+  expect(said).toEqual(['You closed the job “Activity feed”'])
   await expect(run('done', '', { current: general })).rejects.toThrow(
-    'There is no open topic to close.',
+    'There is no open job to close.',
   )
 })
 
-test('/reopen reopens the current finished topic, else the latest finished one', async () => {
+test('/reopen reopens the current finished job, else the latest finished one', async () => {
   const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
   respond = () => ({ ...closed, state: 'open' })
   await run('reopen', '', { current: closed, jobs: [general, feed, closed] })
   expect(calls[0]).toMatchObject({ path: '/api/jobs/job-closed/reopen', method: 'POST' })
   expect(picked).toEqual(['job-closed'])
-  expect(said).toEqual(['You reopened the topic “Old import”'])
+  expect(said).toEqual(['You reopened the job “Old import”'])
 
   calls.length = 0
   const older = makeJob({
@@ -167,7 +168,7 @@ test('/reopen reopens the current finished topic, else the latest finished one',
   expect(calls[0]!.path).toBe('/api/jobs/job-done-2/reopen')
 
   await expect(run('reopen', '', { jobs: [general, feed] })).rejects.toThrow(
-    'No finished topic to reopen.',
+    'No finished job to reopen.',
   )
 })
 
@@ -261,6 +262,34 @@ test('/run opens Start a job for this chat, with the recipe name when one is typ
   await run('run', '  Release notes ', { startRun: (options) => opened.push(options) })
   expect(opened).toEqual([{ roomId: chat.id }, { roomId: chat.id, recipeName: 'Release notes' }])
   expect(calls).toEqual([])
+})
+
+test('/run with a job already running asks first (the busy dialog) and does not open Start a job', async () => {
+  const opened: unknown[] = []
+  const busy: unknown[] = []
+  await run('run', ' Release notes ', {
+    startRun: (options) => opened.push(options),
+    onBusy: (info, options) => busy.push({ info, options }),
+  })
+  expect(opened).toEqual([])
+  expect(busy).toEqual([
+    {
+      info: {
+        running: { id: 'job-feed', title: 'Activity feed' },
+        chatName: 'Team room',
+        starting: 'run “Release notes”',
+      },
+      options: { roomId: chat.id, recipeName: 'Release notes' },
+    },
+  ])
+  // Nothing running: it starts as before.
+  await run('run', '', {
+    jobs: [general],
+    startRun: (options) => opened.push(options),
+    onBusy: (info) => busy.push(info),
+  })
+  expect(opened).toEqual([{ roomId: chat.id }])
+  expect(busy).toHaveLength(1)
 })
 
 test('/run in a direct chat says runs start in a group chat', async () => {

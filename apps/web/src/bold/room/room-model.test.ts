@@ -7,9 +7,13 @@ import {
   exchangePauseTitle,
   exchangeStatus,
   exchangeTurns,
+  activeJobs,
+  holdsSeveralJobs,
+  isActiveJob,
   jobStateLabel,
   jobStateLine,
   needsYou,
+  theActiveJob,
   optionLabel,
 } from './room-model.ts'
 import { makeExchange, makeJob } from './room-test-utils.tsx'
@@ -170,4 +174,32 @@ test('one approval rule: human-pending, still waiting, and not already decided',
     }),
   ).toBe(false)
   expect(approvalNeedsYou({ ...approval, status: 'approved' })).toBe(false)
+})
+
+test('one job per chat: active means not the chat’s own thread and not done or closed', () => {
+  const job = (id: string, state: Job['state'], extra: Partial<Job> = {}) =>
+    ({
+      id,
+      state,
+      isDefault: false,
+      createdAt: `2026-10-24T09:0${id.length}:00.000Z`,
+      ...extra,
+    }) as Job
+  expect(isActiveJob(job('a', 'open'))).toBe(true)
+  expect(isActiveJob(job('a', 'working'))).toBe(true)
+  expect(isActiveJob(job('a', 'waiting_on_you'))).toBe(true)
+  expect(isActiveJob(job('a', 'done'))).toBe(false)
+  expect(isActiveJob(job('a', 'closed'))).toBe(false)
+  expect(isActiveJob(job('a', 'open', { isDefault: true }))).toBe(false)
+
+  const own = job('own', 'open', { isDefault: true })
+  const one = job('one', 'working')
+  expect(theActiveJob([own, one, job('past', 'closed')])?.id).toBe('one')
+  expect(holdsSeveralJobs([own, one])).toBe(false)
+  expect(theActiveJob([own, job('past', 'done')])).toBeNull()
+  // An older chat with two active jobs has no single one, newest first.
+  const two = job('second!', 'waiting_on_you')
+  expect(theActiveJob([own, one, two])).toBeNull()
+  expect(holdsSeveralJobs([own, one, two])).toBe(true)
+  expect(activeJobs([own, one, two]).map((item) => item.id)).toEqual(['second!', 'one'])
 })

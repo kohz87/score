@@ -43,17 +43,17 @@ function toggle(name: RegExp | string) {
   return screen.getByRole('button', { name })
 }
 
-test('defaults: This topic and Files and results open; Members, Workspace and Topics folded, with summaries', () => {
+test('defaults: This job and Files and results open; Members, Workspace and Past jobs folded, with summaries', () => {
   renderInRoom(<ChatInfo room={room} agents={agents} jobs={jobs} everyone />, ['/b?job=job-1'])
-  expect(toggle(/This topic/).getAttribute('aria-expanded')).toBe('true')
-  expect(toggle(/This topic/).textContent).toContain('▾')
+  expect(toggle(/This job/).getAttribute('aria-expanded')).toBe('true')
+  expect(toggle(/This job/).textContent).toContain('▾')
   expect(toggle(/Files and results/).getAttribute('aria-expanded')).toBe('true')
   const members = toggle(/Members/)
   expect(members.getAttribute('aria-expanded')).toBe('false')
   expect(members.textContent).toContain('▸')
   expect(members.textContent).toContain(`Members · ${room.members.length}`)
   expect(toggle(/Workspace/).textContent).toContain('· none')
-  expect(toggle(/Topics/).textContent).toContain('· 1 open')
+  expect(toggle(/Past jobs/).textContent).toContain('· 1')
   // aria-controls points at the body, which is hidden while folded.
   const body = document.getElementById(members.getAttribute('aria-controls')!)!
   expect(body.hidden).toBe(true)
@@ -95,56 +95,56 @@ test('?work=results and the openTopics counter open their sections even when the
     '/b?work=results',
   ])
   expect(toggle(/Files and results/).getAttribute('aria-expanded')).toBe('true')
-  expect(toggle(/Topics/).getAttribute('aria-expanded')).toBe('true')
+  expect(toggle(/Past jobs/).getAttribute('aria-expanded')).toBe('true')
 })
 
 test('a section that holds a decision opens when one arrives and shows a protected badge once folded again', () => {
   const view = render(
-    <InfoSection kind="topic" headingId="h" title="This topic" summary="Activity feed">
+    <InfoSection kind="topic" headingId="h" title="This job" summary="Activity feed">
       body
     </InfoSection>,
   )
-  fireEvent.click(toggle(/This topic/))
-  expect(toggle(/This topic/).getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle(/This job/))
+  expect(toggle(/This job/).getAttribute('aria-expanded')).toBe('false')
   expect(screen.queryByText('Needs you')).toBeNull()
   view.rerender(
-    <InfoSection kind="topic" headingId="h" title="This topic" summary="Activity feed" needsYou>
+    <InfoSection kind="topic" headingId="h" title="This job" summary="Activity feed" needsYou>
       body
     </InfoSection>,
   )
-  expect(toggle(/This topic/).getAttribute('aria-expanded')).toBe('true')
-  fireEvent.click(toggle(/This topic/))
+  expect(toggle(/This job/).getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(toggle(/This job/))
   const badge = screen.getByText('Needs you')
   expect(badge.getAttribute('data-protected')).toBe('inline-flex')
   expect(badge.className).toContain('bold-info-needs')
 })
 
-test('This topic opens by itself for a paused exchange that needs the person, and stays reachable when folded', async () => {
+test('This job opens by itself for a paused exchange that needs the person, and stays reachable when folded', async () => {
   window.localStorage.setItem('score.info-fold.topic', 'folded')
   renderInRoom(<TopicInfo roomId="room-1" job={makeJob()} agents={agents} />)
   // The exchange arrives after the first render: the section opens.
-  await waitFor(() => expect(toggle(/This topic/).getAttribute('aria-expanded')).toBe('true'))
+  await waitFor(() => expect(toggle(/This job/).getAttribute('aria-expanded')).toBe('true'))
   const pill = screen.getByText('Needs you')
   expect(pill.getAttribute('data-protected')).toBe('inline')
-  fireEvent.click(toggle(/This topic/))
+  fireEvent.click(toggle(/This job/))
   const badge = document.querySelector('.bold-info-needs')
   expect(badge?.getAttribute('data-protected')).toBe('inline-flex')
 })
 
-test('a topic waiting on the person opens Topics and is marked in its row (3.27.1 review)', () => {
+test('an older chat’s waiting job opens Open jobs and is marked in its row (3.27.1 review, 3.28.0)', () => {
   const waiting = [
     ...jobs,
     makeJob({ id: 'job-3', title: 'Pricing page', state: 'waiting_on_you' }),
   ]
   renderInRoom(<ChatInfo room={room} agents={agents} jobs={waiting} everyone />, ['/b?job=job-1'])
-  const topics = toggle(/Topics/)
-  expect(topics.getAttribute('aria-expanded')).toBe('true')
+  const open = toggle(/Open jobs/)
+  expect(open.getAttribute('aria-expanded')).toBe('true')
   const row = screen.getByRole('link', { name: /Pricing page/ })
   const mark = row.querySelector('.bold-info-needs')
   expect(mark?.textContent).toBe('Needs you')
   expect(mark?.getAttribute('data-protected')).not.toBeNull()
   // Folded again by the person, the heading keeps saying so.
-  fireEvent.click(topics)
-  expect(topics.getAttribute('aria-expanded')).toBe('false')
-  expect(topics.closest('.bold-info-head')?.querySelector('.bold-info-needs')).not.toBeNull()
+  fireEvent.click(open)
+  expect(open.getAttribute('aria-expanded')).toBe('false')
+  expect(open.closest('.bold-info-head')?.querySelector('.bold-info-needs')).not.toBeNull()
 })

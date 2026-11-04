@@ -28,6 +28,7 @@ export function ContextBar({
   agents,
   ownerId,
   topic,
+  showTopic = true,
   finishedReplies = 0,
   compactSignal,
   compactSubject = null,
@@ -38,6 +39,8 @@ export function ContextBar({
   agents: AgentSummary[]
   ownerId: string | null
   topic: Job | undefined
+  /** Only a chat that holds several active jobs names which one the message goes to; with one job it is just the chat's. */
+  showTopic?: boolean
   finishedReplies?: number
   /** `/compress` (from the composer): the meter opens its compaction confirmation for `compactSubject`. */
   compactSignal?: number
@@ -67,7 +70,7 @@ export function ContextBar({
     .map((id) => agents.find((agent) => agent.id === id))
     .filter((agent): agent is AgentSummary => Boolean(agent))
   const model = session?.model ?? agentModel ?? null
-  const where = topic && !topic.isDefault ? topic.title : null
+  const where = showTopic && topic && !topic.isDefault ? topic.title : null
   return (
     <div className="bold-context-bar" aria-label="Where this message goes">
       <span className="bold-context-to">

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { startInOwnChat } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
 
 // PLAN 7.5b against the fake adapter's scripted lead: no model is called. A goal with [fake:ask] makes the lead ask a
@@ -31,7 +32,8 @@ async function start(page: Page, goal: string, policy: 'plan' | 'handoff' | 'ris
   await expect(startButton).toBeDisabled()
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   await expect(startButton).toBeEnabled({ timeout: 15_000 })
-  await startButton.click()
+  // 3.28.0: the team room holds jobs already, so the run starts in a chat of its own.
+  await startInOwnChat(page, 'Orch')
   await expect(dialog.getByRole('heading', { name: 'Started' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Close' }).click()
   await expect(dialog).toBeHidden()

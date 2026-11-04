@@ -1,15 +1,12 @@
 import type { AgentSummary, Job, Room } from '@score/contract'
-import { useId, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { jobDot } from '../room/job-dot.ts'
-import { jobStateLabel } from '../room/room-model.ts'
+import { activeJobs, holdsSeveralJobs, jobStateLabel } from '../room/room-model.ts'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
-import { runTopicCommand } from '../room/topic-commands.ts'
 import { TopicInfo } from './TopicInfo.tsx'
 import { InfoSection } from './InfoSection.tsx'
 import { FilesAndResults } from './FilesResults.tsx'
@@ -19,84 +16,6 @@ function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string 
   if (!everyone) params.set('room', room.id)
   params.set('job', job.id)
   return `/b?${params}`
-}
-
-/** 3.24.0: "New topic" in Info, the same as `/new <title>` in the composer (the old All topics screen is gone). */
-function NewTopic({
-  room,
-  agents,
-  jobs,
-  everyone,
-  onNavigate,
-}: {
-  room: Room
-  agents: AgentSummary[]
-  jobs: Job[]
-  everyone: boolean
-  onNavigate?: () => void
-}) {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const inputId = useId()
-  const [title, setTitle] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  async function submit() {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await runTopicCommand('new', title, {
-        room,
-        agents,
-        jobs,
-        current: undefined,
-        workspaces: [],
-        queryClient,
-        pick: (jobId) => {
-          if (jobId) void navigate(topicLink(room, { id: jobId }, everyone), { replace: true })
-        },
-        say: () => undefined,
-      })
-      setTitle('')
-      onNavigate?.()
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Couldn’t start the topic. Try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <form
-      className="bold-chat-new-topic"
-      onSubmit={(event) => {
-        event.preventDefault()
-        void submit()
-      }}
-    >
-      <label className="bold-chat-note" htmlFor={inputId}>
-        Topic title
-      </label>
-      <div className="bold-chat-new-topic-row">
-        <input
-          id={inputId}
-          type="text"
-          maxLength={200}
-          value={title}
-          placeholder="What is it about?"
-          onChange={(event) => setTitle(event.target.value)}
-        />
-        <button type="submit" className="btn sm" disabled={busy || title.trim() === ''}>
-          {busy ? 'Starting…' : 'New topic'}
-        </button>
-      </div>
-      {error && (
-        <p className="bold-chat-note" role="alert">
-          {error}
-        </p>
-      )}
-    </form>
-  )
 }
 
 function TopicRow({
@@ -141,7 +60,7 @@ function TopicRow({
   )
 }
 
-/** The side panel's Info tab (3.21.0): members, the chat's workspace and its jobs as Topics. */
+/** The side panel's Info tab (3.21.0): members, the chat's workspace, This job, its files and Past jobs. */
 export function ChatInfo({
   room,
   agents,
@@ -160,7 +79,7 @@ export function ChatInfo({
   phone?: boolean
   /** False while the panel is out of sight (a closed phone sheet or panel): Files and results reads nothing then. */
   visible?: boolean
-  /** A counter: each increase (a `?jobs=1` landing) opens the Topics section. */
+  /** A counter: each increase (a `?jobs=1` landing) opens the Past jobs section. */
   openTopics?: number
   /** A link or button here leaves the sheet (the phone closes it). */
   onNavigate?: () => void
@@ -178,8 +97,13 @@ export function ChatInfo({
     ? workspaces?.find((item) => item.id === room.workspaceId)
     : undefined
   const topics = jobs.filter((job) => !job.isDefault)
-  const closedTopics = topics.filter((job) => job.state === 'closed')
-  const openTopicList = topics.filter((job) => job.state !== 'closed')
+  // 3.28.0: one job per chat. Past jobs are the finished ones, newest first; an older chat that still holds several
+  // active jobs lists them as Open jobs until they end.
+  const pastJobs = topics
+    .filter((job) => job.state === 'done' || job.state === 'closed')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const several = holdsSeveralJobs(jobs)
+  const openJobs = activeJobs(jobs)
   const current = currentTopic(jobs, params.get('job'))
   return (
     <div className="sidebody bold-chat-info" aria-label={`${room.name}, chat info`}>
@@ -230,81 +154,62 @@ export function ChatInfo({
             : []
         }
       />
+      {several && (
+        <InfoSection
+          kind="open-jobs"
+          headingId="chat-info-open-jobs"
+          title="Open jobs"
+          summary={String(openJobs.length)}
+          needsYou={openJobs.some((job) => job.state === 'waiting_on_you')}
+        >
+          <ul className="bold-chat-topics">
+            {openJobs.map((job) => (
+              <TopicRow
+                key={job.id}
+                room={room}
+                job={job}
+                everyone={everyone}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
+        </InfoSection>
+      )}
+      {phone && room.role === 'team' && (
+        <div className="bold-chat-jobs-actions">
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              onNavigate?.()
+              startJob?.openStartJob({ roomId: room.id })
+            }}
+          >
+            Start a job
+          </button>
+        </div>
+      )}
       <InfoSection
         kind="topics"
         headingId="chat-info-topics"
-        title="Topics"
-        summary={`${openTopicList.length} open`}
+        title="Past jobs"
+        summary={String(pastJobs.length)}
         forceOpen={openTopics}
-        // 3.27.1 review: a topic waiting on the person is a decision: Topics opens for it, or shows the badge folded.
-        needsYou={topics.some((job) => job.state === 'waiting_on_you')}
       >
-        {topics.length === 0 ? (
+        {pastJobs.length === 0 ? (
           <p className="bold-chat-note">Nothing yet.</p>
         ) : (
-          <>
-            <ul className="bold-chat-topics">
-              {openTopicList.map((job) => (
-                <TopicRow
-                  key={job.id}
-                  room={room}
-                  job={job}
-                  everyone={everyone}
-                  onNavigate={onNavigate}
-                />
-              ))}
-            </ul>
-            {closedTopics.length > 0 &&
-              (closedTopics.length > 3 ? (
-                <details className="bold-chat-closed">
-                  <summary>Closed topics ({closedTopics.length})</summary>
-                  <ul className="bold-chat-topics">
-                    {closedTopics.map((job) => (
-                      <TopicRow
-                        key={job.id}
-                        room={room}
-                        job={job}
-                        everyone={everyone}
-                        onNavigate={onNavigate}
-                      />
-                    ))}
-                  </ul>
-                </details>
-              ) : (
-                <ul className="bold-chat-topics">
-                  {closedTopics.map((job) => (
-                    <TopicRow
-                      key={job.id}
-                      room={room}
-                      job={job}
-                      everyone={everyone}
-                      onNavigate={onNavigate}
-                    />
-                  ))}
-                </ul>
-              ))}
-          </>
-        )}
-        <NewTopic
-          room={room}
-          agents={agents}
-          jobs={jobs}
-          everyone={everyone}
-          onNavigate={onNavigate}
-        />
-        {phone && room.role === 'team' && (
-          <div className="bold-chat-jobs-actions">
-            <button
-              type="button"
-              className="btn sm"
-              onClick={() => {
-                onNavigate?.()
-                startJob?.openStartJob({ roomId: room.id })
-              }}
-            >
-              Start a job
-            </button>
-          </div>
+          <ul className="bold-chat-topics">
+            {pastJobs.map((job) => (
+              <TopicRow
+                key={job.id}
+                room={room}
+                job={job}
+                everyone={everyone}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
         )}
       </InfoSection>
       <Link className="bold-chat-knowledge" to="/b/knowledge" onClick={onNavigate}>

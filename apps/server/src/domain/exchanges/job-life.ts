@@ -4,7 +4,7 @@ import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { markStaleSummaries } from '../summary-stale.ts'
 import { readRoom, roomChanged, roomRow } from '../rooms.ts'
-import { jobEvent, jobRow, type JobRow } from './store.ts'
+import { assertNoActiveJob, jobEvent, jobRow, type JobRow } from './store.ts'
 
 // A job's own lifecycle from the job menu (decision 121, D6): rename, close and reopen, delete and undo.
 
@@ -80,9 +80,35 @@ export function closeJob(sqlite: DatabaseSync, jobId: string, now: string): Doma
   return jobEvent(sqlite, jobId)
 }
 
+/**
+ * Closes a job though work may still be settling in it — a closed job stays closed whatever settles (3.28.0: Stop job
+ * after its Stop, and a run's job when the run is over). The default thread is refused.
+ */
+export function closeJobNow(sqlite: DatabaseSync, jobId: string, now: string): DomainEventDraft[] {
+  const job = namedJob(sqlite, jobId)
+  if (job.state === 'closed') return []
+  touch(sqlite, jobId, "state = 'closed', closed_at = ?", [now], now)
+  return jobEvent(sqlite, jobId)
+}
+
+/** A run's job closes when its run ends (3.28.0): the run was the job. Nothing is refused here; the run is over. */
+export function closeRunJobs(sqlite: DatabaseSync, runId: string, now: string): DomainEventDraft[] {
+  const jobs = sqlite
+    .prepare(
+      "SELECT id FROM jobs WHERE recipe_ref = ? AND is_default = 0 AND deleted_at IS NULL AND state != 'closed'",
+    )
+    .all(runId) as { id: string }[]
+  return jobs.flatMap(({ id }) => {
+    touch(sqlite, id, "state = 'closed', closed_at = ?", [now], now)
+    return jobEvent(sqlite, id)
+  })
+}
+
 export function reopenJob(sqlite: DatabaseSync, jobId: string, now: string): DomainEventDraft[] {
   const job = namedJob(sqlite, jobId)
   if (job.state !== 'closed') return []
+  // One job per group chat (3.28.0): a closed job comes back only while no other is running.
+  assertNoActiveJob(sqlite, job.room_id, jobId)
   touch(sqlite, jobId, "state = 'open', closed_at = NULL", [], now)
   return jobEvent(sqlite, jobId)
 }
@@ -117,6 +143,8 @@ export function restoreJob(sqlite: DatabaseSync, jobId: string, now: string): Do
   if (!job) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
   const { deleted_at: deletedAt } = life(sqlite, jobId)
   if (!deletedAt) return jobEvent(sqlite, jobId)
+  if (!['done', 'closed'].includes(job.state) && !job.is_default)
+    assertNoActiveJob(sqlite, job.room_id, jobId)
   const before = readRoom(sqlite, job.room_id, roomRow(sqlite, job.room_id).updated_at)
   sqlite
     .prepare('UPDATE messages SET deleted_at = NULL WHERE job_id = ? AND deleted_at = ?')

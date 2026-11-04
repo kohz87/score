@@ -1929,3 +1929,256 @@
    the actions drop to a second row). */
 @media (min-width: 601px) and (max-width: 860px) {
 }
+
+/* 3.28.0 (decision 164): one job per chat. The job bar and Next up are mock-up 22 (22-one-job.dc.html, -busy, -phone). */
+[data-ui='bold'] .bold-job-bar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  margin: calc(14px * var(--bold-d, 1)) 0 0;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  box-sizing: border-box;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-job-bar-row {
+  display: flex;
+  align-items: center;
+  gap: calc(14px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-job-bar-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+[data-ui='bold'] .bold-job-bar-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-job-bar-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-job-bar-title {
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-job-bar-line {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-job-bar .btn {
+  flex: none;
+  min-height: 40px;
+}
+
+[data-ui='bold'] .bold-job-bar .bold-job-bar-graph {
+  background: var(--field);
+}
+
+/* The confirm opens under the row, full width, as the Info panel's does. */
+[data-ui='bold'] .bold-job-bar > .bold-thread-stop-confirm {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-next-up {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  margin: calc(8px * var(--bold-d, 1)) 0 0;
+  padding: calc(12px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  box-sizing: border-box;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-next-up-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+[data-ui='bold'] .bold-next-up-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-next-up-text b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-next-up-error {
+  margin: calc(6px * var(--bold-d, 1)) 0 0;
+}
+
+[data-ui='bold'] .bold-topic-anchor {
+  display: block;
+  height: 0;
+}
+
+/* The busy dialog: a modal <dialog> (the browser puts it above everything), light because it asks the person to decide. */
+/* The room column makes every child full width with 24px gutters; the longer selector keeps this dialog its own size. */
+[data-ui='bold'] dialog.bold-busy-dialog,
+[data-ui='bold'] .roomgrid.bold-chats > .roomcol > dialog.bold-busy-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: min(520px, calc(100vw - 32px));
+  box-sizing: border-box;
+  margin: auto;
+  padding: calc(24px * var(--bold-d, 1)) calc(26px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(28px * var(--bold-r, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] dialog.bold-busy-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-busy-dialog::backdrop {
+  background: rgba(5, 6, 9, 0.62);
+}
+
+[data-ui='bold'] .bold-busy-dialog h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-busy-dialog p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--hi-sub);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-busy-new {
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: color-mix(in srgb, var(--hi-bg) 70%, white);
+  font-size: 14px;
+  color: var(--hi-sub);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-busy-new b {
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-busy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-busy-actions button {
+  min-height: 46px;
+  padding: 0 calc(18px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hi-ink);
+  background: transparent;
+}
+
+[data-ui='bold'] .bold-busy-actions .bold-busy-primary {
+  padding: 0 calc(20px * var(--bold-d, 1));
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-busy-actions .bold-busy-ghost {
+  box-shadow: inset 0 0 0 1px var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-busy-actions .bold-busy-cancel {
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-busy-actions button:disabled {
+  opacity: 0.6;
+}
+
+[data-ui='bold'] .bold-busy-dialog p.bold-busy-note {
+  font-weight: 700;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-busy-dialog p.bold-busy-foot {
+  font-size: 13px;
+  color: var(--hi-sub);
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-job-bar {
+    padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+    border-radius: calc(18px * var(--bold-r, 1));
+  }
+
+  [data-ui='bold'] .bold-job-bar-row {
+    gap: calc(10px * var(--bold-d, 1));
+  }
+
+  /* The phone board: title, state line, Stop job. Graph and the JOB label wait in the side sheet / are dropped. */
+  [data-ui='bold'] .bold-job-bar-eyebrow,
+  [data-ui='bold'] .bold-job-bar-graph {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-job-bar-title {
+    font-size: 15px;
+  }
+
+  [data-ui='bold'] .bold-job-bar-line {
+    font-size: 12px;
+  }
+
+  [data-ui='bold'] .bold-job-bar .btn {
+    min-height: 44px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+}
+
+/* One wrapper for the job bar and Next up, so the room column's own gutters apply to the pair. */
+[data-ui='bold'] .bold-job-strip {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-job-strip:empty {
+  display: none;
+}

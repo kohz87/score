@@ -46,6 +46,18 @@ export function emptyTopics(jobs: Job[], messages: Message[]): Job[] {
   return jobs.filter((job) => !job.isDefault && job.messageCount === 0 && !seen.has(job.id))
 }
 
+/** Where a job's messages start when the chat shows no divider (one job per chat): only the scroll target remains. */
+export function TopicAnchor({ job }: { job: Job }) {
+  return (
+    <span
+      className="bold-topic-anchor"
+      id={`topic-${job.id}`}
+      data-topic-id={job.id}
+      aria-hidden="true"
+    />
+  )
+}
+
 export function TopicDivider({
   job,
   again = false,

@@ -24,7 +24,8 @@ test('deleting a finished run’s room deletes the job that started it, and only
       started: createJob(sqlite, team, 'Review the cards', now, {
         recipe: { kind: 'orchestration', ref: id },
       }).job.id,
-      other: createJob(sqlite, team, 'Something else', now).job.id,
+      // A second team-room job as a room from before the one-job rule (3.28.0) holds it.
+      other: createJob(sqlite, team, 'Something else', now, {}, { allowBusy: true }).job.id,
     }
   })
   const roomId = h.orch.summary(id).roomId

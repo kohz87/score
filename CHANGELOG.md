@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.28.0] — 2026-11-04
+
+### Changed
+- **One job per chat.** A group chat now does one job at a time. The current job sits in a bar at the top of the
+  conversation (who's working, its spend cap, Graph, **Stop job**); Info shows **This job** and **Past jobs**. Topic
+  dividers, "in <topic>" and `/new` are gone from group chats; direct chats are unchanged.
+- **Stop job ends the job.** It stops the running steps and closes the job in one step, so the chat is free for the
+  next one. A job started by a run closes by itself when its run ends (jobs of runs that already ended close too).
+- **Starting work while a job runs** asks first: stop the job and start this, start it in another chat, or cancel.
+- **Triggers wait their turn.** A trigger that fires while the team room has a job running waits under the job bar as
+  **Next up** and starts when the job ends; **Skip** drops it.
+- Chats that already had several open topics keep them under **Open jobs** until they end.
+
 ## [3.27.2] — 2026-11-04
 
 ### Fixed

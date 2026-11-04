@@ -7,7 +7,6 @@ import { openBoldJob } from './bold-room-fixtures.ts'
 // server-sent events", "The cursor bug", "Working in the Docker sandbox"; reviewer: "How strict to be on docs").
 test.use({ reducedMotion: 'reduce' })
 
-const web = { 'x-score-client': 'web' }
 const sizes = [
   { name: '1440×900', viewport: { width: 1440, height: 900 } },
   { name: '390×844', viewport: { width: 390, height: 844 } },
@@ -266,13 +265,16 @@ for (const { name, viewport } of sizes) {
     test('a shared reply appears in the team room labelled "shared from a one-to-one"', async ({
       page,
     }) => {
-      const roomId = await teamRoomId(page)
-      const jobTitle = tag('Share target')
-      const made = await page.request.post(`/api/rooms/${roomId}/jobs`, {
-        headers: web,
-        data: { title: jobTitle },
-      })
-      expect(made.status()).toBe(201)
+      // 3.28.0: the team room already has two active jobs, so a new one is refused (409 job_running); share into the
+      // seeded Activity feed job instead.
+      await teamRoomId(page)
+      const jobTitle = 'Activity feed'
+      const team = (await (await page.request.get('/api/team-room')).json()) as {
+        jobs: { id: string; title: string }[]
+      }
+      const target = team.jobs.find((item) => item.title === jobTitle)
+      expect(target).toBeTruthy()
+      const made = { id: target!.id }
       await page.goto('/b?with=reviewer')
       await expectPrivacy(page, 'reviewer')
       await expect(
@@ -283,14 +285,18 @@ for (const { name, viewport } of sizes) {
       const menu = page.getByRole('dialog', { name: 'Share to the team room' })
       await expect(menu).toHaveAttribute('data-protected', 'block')
       await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
+      // The confirmation sits in the message's hover row: the menu's job buttons are not under the message, so point at it again.
+      await messages(page)
+        .filter({ hasText: 'I’ll block only when steps are missing or wrong' })
+        .hover()
       await expect(
         stream(page).getByRole('status').filter({ hasText: 'Shared to the team room' }),
       ).toBeVisible()
       const share = posts.find((post) => /\/api\/messages\/[^/]+\/share$/.test(post.url))
-      expect(share?.body).toEqual({ jobId: (await made.json()).id })
+      expect(share?.body).toEqual({ jobId: made.id })
 
       // The team room shows a frozen copy, named for the one-to-one it came from.
-      await page.goto(`/b?job=${(await made.json()).id}`)
+      await page.goto(`/b?job=${made.id}`)
       const shared = page.locator('.bold-shared')
       // 3.22.0: the team room is one merged conversation, so the copies shared to earlier jobs show too.
       await expect(shared.first()).toBeVisible()

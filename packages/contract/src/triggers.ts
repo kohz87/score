@@ -120,3 +120,30 @@ export const JobReportBackSchema = z.object({
   at: z.iso.datetime().nullable(),
 })
 export type JobReportBack = z.infer<typeof JobReportBackSchema>
+
+/**
+ * 3.28.0 (decision 164): a trigger call waiting in its team room's queue (Next up) while the room's one job runs. It
+ * starts, oldest first, when that job ends; Skip drops it.
+ */
+export const QueueItemSchema = z.object({
+  id: z.string().min(1),
+  roomId: z.string().min(1),
+  title: z.string(),
+  source: z.object({
+    app: z.string(),
+    ref: z.string(),
+    title: z.string().nullable(),
+    triggerId: z.string().min(1),
+  }),
+  createdAt: z.iso.datetime(),
+})
+export type QueueItem = z.infer<typeof QueueItemSchema>
+export const RoomQueueResponseSchema = z.object({
+  asOfSeq: z.int().min(0),
+  items: z.array(QueueItemSchema),
+})
+export type RoomQueueResponse = z.infer<typeof RoomQueueResponseSchema>
+
+/** `409 job_running` details: the group chat's job that is running (3.28.0). */
+export const JobRunningDetailsSchema = z.object({ jobId: z.string().min(1), title: z.string() })
+export type JobRunningDetails = z.infer<typeof JobRunningDetailsSchema>

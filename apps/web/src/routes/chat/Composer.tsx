@@ -173,7 +173,12 @@ export function Composer({
    * 3.22.0: the chat commands (/new, /rename, /done, …). Listed in the palette; `run` does the work and throws an Error
    * with plain words when it can't, which this composer shows and then keeps the typed text.
    */
-  topicCommands?: { items: SlashCommand[]; run: (name: string, args: string) => Promise<void> }
+  topicCommands?: {
+    items: SlashCommand[]
+    /** Names that run when typed but are not offered in the `/` palette. */
+    typedOnly?: string[]
+    run: (name: string, args: string) => Promise<void>
+  }
   /** 3.22.0: replaces the hint line under the box (the chat's context bar) and the fixed "To" label. */
   footer?: (state: {
     to: string[]
@@ -584,7 +589,10 @@ export function Composer({
     const typed = !editing && topicCommands ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
     if (typed && topicCommands) {
       const word = typed[1]!.toLowerCase()
-      if (topicCommands.items.some((item) => item.name === word)) {
+      if (
+        topicCommands.items.some((item) => item.name === word) ||
+        topicCommands.typedOnly?.includes(word)
+      ) {
         setNotice(null)
         setPending(true)
         try {

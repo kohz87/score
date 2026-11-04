@@ -306,9 +306,12 @@ test('the chat bar names the owner, members and workspace; Info is the panel by 
     'builder',
   ])
   await waitFor(() => expect(within(info).getByText('activity-feed · /code/feed')).toBeDefined())
-  const topics = within(within(info).getByRole('heading', { name: 'Topics' }).parentElement!)
-  const topic = await topics.findByRole('link', { name: /Swap polling for a socket/ })
-  expect(topic.getAttribute('href')).toBe('/b?room=feed&job=j-feed')
+  // 3.28.0: the chat's one active job is This job; the finished ones are Past jobs and open read-only.
+  const thisJob = within(within(info).getByRole('heading', { name: 'This job' }).parentElement!)
+  expect(await thisJob.findByText('Swap polling for a socket')).toBeDefined()
+  const pastJobs = within(within(info).getByRole('heading', { name: /Past jobs/ }).parentElement!)
+  const past = await pastJobs.findByRole('link', { name: /Feed pagination/ })
+  expect(past.getAttribute('href')).toBe('/b?room=feed&job=j-page')
 
   // Closing the panel gives the chat the full width; Chat info brings it back.
   fireEvent.click(button)
@@ -412,15 +415,17 @@ test('on a phone, the room menu’s older-chats list opens that room’s convers
   expect(screen.queryByRole('region', { name: 'Jobs' })).toBeNull()
 })
 
-test('on a phone, an old ?jobs=1 link lands on the chat with Info open at Topics', async () => {
+test('on a phone, an old ?jobs=1 link lands on the chat with Info open at Past jobs', async () => {
   phone = true
   const router = open('/b?jobs=1')
-  expect(await screen.findByRole('heading', { name: 'Topics' })).toBeDefined()
+  expect(await screen.findByRole('heading', { name: /Past jobs/ })).toBeDefined()
   expect(await screen.findByRole('button', { name: 'Back to chats' })).toBeDefined()
   await waitFor(() => expect(router.state.location.search).toBe(''))
   expect(screen.queryByRole('region', { name: 'All topics' })).toBeNull()
   expect(document.getElementById('bold-side-panel')?.hasAttribute('hidden')).toBe(false)
-  expect(screen.getByRole('button', { name: 'New topic' })).toBeDefined()
-  // 3.27.1: the Topics section is folded by default; the landing opens it.
-  expect(screen.getByRole('button', { name: /Topics/ }).getAttribute('aria-expanded')).toBe('true')
+  expect(screen.queryByRole('button', { name: 'New topic' })).toBeNull()
+  // 3.27.1: the Past jobs section is folded by default; the landing opens it.
+  expect(screen.getByRole('button', { name: /Past jobs/ }).getAttribute('aria-expanded')).toBe(
+    'true',
+  )
 })
