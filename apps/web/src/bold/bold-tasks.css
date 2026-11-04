@@ -57,11 +57,29 @@
   align-items: center;
 }
 
+/* 3.24.1: one row that scrolls sideways (no wrapping into two rows); a fade marks the cut edge, and the padding keeps
+   the last chip clear of it when everything fits. */
 [data-ui='bold'] .bold-tb-chips {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding-right: 28px;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+[data-ui='bold'] .bold-tb-chips::-webkit-scrollbar {
+  display: none;
+}
+
+[data-ui='bold'] .bold-tb-chips button {
+  flex: none;
+  white-space: nowrap;
 }
 
 [data-ui='bold'] .bold-tb-chips button {
@@ -98,14 +116,28 @@
   flex: 999 1 760px;
   min-width: 0;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 2px;
+  scrollbar-width: thin;
+}
+
+/* Below the wide layout the board is the whole row; the details open as a side sheet. */
+[data-ui='bold'] .bold-tb-layout.is-sheet .bold-tb-scroll {
+  flex: 1 1 100%;
 }
 
 [data-ui='bold'] .bold-tb-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(156px, 1fr));
+  /* Columns are never narrower than 240px; when five do not fit, the board scrolls inside its own box (snap, and the
+     next column peeks in) instead of being cut off or squeezing the cards. */
+  grid-template-columns: repeat(5, minmax(240px, 1fr));
   gap: 14px;
-  min-width: 840px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-grid > .bold-tb-col {
+  scroll-snap-align: start;
 }
 
 [data-ui='bold'] .bold-tb-col {
@@ -406,6 +438,12 @@
   overflow-wrap: anywhere;
 }
 
+/* The ghost button on the block's own ink took the page's ink (dark on dark in the light look). */
+[data-ui='bold'] .bold-tb-needs-block .btn.ghost {
+  color: inherit;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
 [data-ui='bold'] .bold-tb-actions {
   display: flex;
   gap: 8px;
@@ -594,6 +632,17 @@
   color: var(--ink);
   padding: max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 32px
     max(16px, env(safe-area-inset-left, 0px));
+}
+
+/* The side sheet (601-1279px): the details panel slides over the board's right edge; the dim is its own shadow, so no
+   extra fixed element exists for a theme to hide. */
+[data-ui='bold'] .bold-tb-sheet--side {
+  inset: 0 0 0 auto;
+  width: min(440px, 100%);
+  box-sizing: border-box;
+  border-radius: calc(28px * var(--bold-r, 1)) 0 0 calc(28px * var(--bold-r, 1));
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+  clip-path: inset(0 0 0 -100vmax);
 }
 
 @media (max-width: 600px) {

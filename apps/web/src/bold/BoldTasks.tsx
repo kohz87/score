@@ -36,6 +36,8 @@ import './bold-tasks.css'
 // (unblock, an approval, a comment). Mock-up: docs/design/bold/mockups/13-tasks-board*.dc.html.
 
 const PHONE = '(max-width: 600px)'
+// The details panel sits beside the board from here; below it the panel opens as a side sheet.
+const WIDE = '(min-width: 1280px)'
 const PHONE_TABS: TaskColumn[] = ['working', 'planned', 'in_review', 'done']
 
 type Lookup = {
@@ -432,7 +434,16 @@ function TaskPanel({
   )
 }
 
-function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Sheet({
+  children,
+  onClose,
+  side = false,
+}: {
+  children: React.ReactNode
+  onClose: () => void
+  /** 601-1279px: a sheet on the right over the board instead of the phone's full screen. */
+  side?: boolean
+}) {
   const ref = useRef<HTMLDivElement>(null)
   // The page re-renders on every stream event with a new onClose: read it through a ref so focus moves only when the
   // sheet opens and closes, never while someone is typing in it.
@@ -457,7 +468,7 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () =
   return (
     <div
       ref={ref}
-      className="bold-tb-sheet"
+      className={`bold-tb-sheet${side ? ' bold-tb-sheet--side' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label="Task details"
@@ -554,6 +565,7 @@ function Chips<T extends string>({
 /** The route: `/b/tasks`. */
 export function BoldTasksPage() {
   const phone = useMediaQuery(PHONE)
+  const wide = useMediaQuery(WIDE)
   const tasksState = useStreamQuery(allTasksQuery)
   const agentsState = useStreamQuery(agentsQuery)
   const roomsState = useStreamQuery(roomsQuery)
@@ -695,7 +707,7 @@ export function BoldTasksPage() {
               )}
             </>
           ) : (
-            <div className="bold-tb-layout">
+            <div className={`bold-tb-layout${wide ? '' : ' is-sheet'}`}>
               <div className="bold-tb-scroll">
                 <div className="bold-tb-grid">
                   {BOARD_COLUMNS.map((column) => (
@@ -712,20 +724,33 @@ export function BoldTasksPage() {
                   ))}
                 </div>
               </div>
-              <aside className="bold-tb-panel" aria-label="Task details">
-                {selected ? (
-                  <TaskPanel
-                    key={selected.id}
-                    task={selected}
-                    lookup={lookup}
-                    onClose={() => setSelectedId(null)}
-                  />
-                ) : (
-                  <p className="bold-tb-empty">
-                    Pick a task to see its steps, comments and what it needs from you.
-                  </p>
-                )}
-              </aside>
+              {wide ? (
+                <aside className="bold-tb-panel" aria-label="Task details">
+                  {selected ? (
+                    <TaskPanel
+                      key={selected.id}
+                      task={selected}
+                      lookup={lookup}
+                      onClose={() => setSelectedId(null)}
+                    />
+                  ) : (
+                    <p className="bold-tb-empty">
+                      Pick a task to see its steps, comments and what it needs from you.
+                    </p>
+                  )}
+                </aside>
+              ) : (
+                selected && (
+                  <Sheet side onClose={() => setSelectedId(null)}>
+                    <TaskPanel
+                      key={selected.id}
+                      task={selected}
+                      lookup={lookup}
+                      onClose={() => setSelectedId(null)}
+                    />
+                  </Sheet>
+                )
+              )}
             </div>
           )}
         </>

@@ -200,11 +200,14 @@ export function BoldLibrary({
     if (!element || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(([entry]) => {
       const size = entry?.contentRect.width ?? 0
-      setWidth(size >= 1180 ? 'wide' : size >= 860 ? 'mid' : 'narrow')
+      // The page also holds the folders and the list beside the note, so its right column joins the note a little
+      // later (window ~1320, so the note keeps 420px+) than in the side panel.
+      const wide = page ? 1320 : 1180
+      setWidth(size >= wide ? 'wide' : size >= 860 ? 'mid' : 'narrow')
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [page])
   const info = useKnowledgeInfo()
   const tree = useKnowledgeTree()
   const actions = useKnowledgeActions()

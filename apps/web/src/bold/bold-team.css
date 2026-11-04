@@ -234,8 +234,14 @@
   color: var(--ink);
 }
 
+/* 3.24.1: the cards reflow with the window (never narrower than 280px) instead of squeezing four across. */
+[data-ui='bold'] .bold-team-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
 [data-ui='bold'] .bold-team-grid .agentcard {
   min-height: 248px;
+  min-width: 0;
 }
 
 [data-ui='bold'] .bold-agentcard-top {
@@ -254,6 +260,8 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 [data-ui='bold'] .bold-agentcard-name a {
@@ -286,6 +294,7 @@
 
 [data-ui='bold'] .bold-glimpse {
   margin-left: auto;
+  flex: none;
 }
 
 [data-ui='bold'] .thumb {
@@ -337,6 +346,8 @@
 /* Agent page */
 [data-ui='bold'] .bold-agent,
 [data-ui='bold'] .bold-team {
+  /* The page header sits where Tasks' and Knowledge's do (the shell's `.bold-page` top spacing), not against the bar. */
+  padding-top: calc(44px * var(--bold-d, 1));
   /* The classic Team components keep their markup; these tokens make them read as bold cards. */
   --card: var(--panel);
   --hairline: var(--line);
