@@ -325,18 +325,6 @@ async function withSnapshot(
   }
 }
 
-test('the log tags the lines about a coding agent’s step with its program', async () => {
-  await withSnapshot([], async () => {
-    mount(<RunHarness orchestrationId="orch-1" />)
-    await screen.findByRole('log', { name: 'Events' })
-    expect(await screen.findByRole('article', { name: /^s2, / })).toBeTruthy()
-    // The log tags the lines about a coding agent's step too.
-    expect(
-      within(screen.getByRole('log', { name: 'Events' })).getAllByText('Claude Code').length,
-    ).toBeGreaterThan(0)
-  })
-})
-
 test('"agent changed" offers the new settings: a policy-only remap carrying the policy id and the acknowledgement', async () => {
   preflight = {
     ...base,

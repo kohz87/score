@@ -142,7 +142,9 @@ test('start with every-step gates, approve each step, watch the Job map reach su
   // 3.29.1: the step diagram was removed (owner): Replay, the scrubber, the diagram node states and "Selected step" are gone.
 })
 
-test('dots travel along the edges for real events', async ({ page }) => {
+// 3.29.1: the step diagram was removed (owner): its one-dot-per-real-event playback is gone; the job map's dots run
+// along a line while that layer is active, which is what this checks now.
+test('dots run along the job map while a step is active', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
   await start(page, 'Dots e2e-b')
@@ -165,6 +167,7 @@ test('reduced motion: no travelling dot on the Job map', async ({ browser }) => 
     await pair(page)
     await start(page, 'Reduced e2e-c')
     await openLive(page, 'Reduced e2e-c')
+    // 3.29.1: the step diagram was removed (owner): its lit nodes under reduced motion are gone; no dot is the check.
     await recordSeen(page, '.jobmap-dot')
     await approve(page, 's1')
     // No dot ever appeared, not merely none right now.
@@ -216,6 +219,7 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
   await expect(page.getByText('Stopping', { exact: true }).first()).toBeVisible({ timeout: 30_000 })
   // 3.29.0: the old run page's "Finish" summary is gone; the chat's needs-you cards say it.
+  // 3.29.1: the step diagram was removed (owner): its "unknown" node state is gone; the card is the check.
   // Abandoning is a separate, acknowledged human decision.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
   await expect(card.first()).toBeVisible({ timeout: 30_000 })

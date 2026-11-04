@@ -241,8 +241,12 @@ test.describe('a coding step on the Job map', () => {
       .getByRole('region', { name: 'Current job' })
       .getByRole('button', { name: 'Graph' })
       .click()
-    // 3.29.1: the step diagram was removed (owner): the program name on its node and the log tag are shown nowhere now.
-    await expect(page.getByRole('region', { name: 'Job map' })).toBeVisible()
+    // 3.29.1: the step diagram was removed (owner); the job map's worker card names the program instead.
+    const map = page.getByRole('region', { name: 'Job map' })
+    await expect(map).toBeVisible()
+    await expect(
+      map.getByRole('button', { name: /^Workers layer: .*\(Claude Code\)/ }).first(),
+    ).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     if (shots) {
       mkdirSync(shots, { recursive: true })

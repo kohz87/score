@@ -451,3 +451,9 @@
     animation: none;
   }
 }
+
+/* 3.29.1: a coding worker's program after its name, quieter than the name. */
+[data-ui='bold'] .jobmap-program {
+  font-weight: 500;
+  color: var(--muted);
+}

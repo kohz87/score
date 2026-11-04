@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.29.1] — 2026-11-04
+
+### Changed
+- **The step diagram is gone.** A lead-decides run's graph in the chat is its job map; decisions stay as cards in the
+  chat. A coding worker's card on the job map names its program (Claude Code, Codex).
+
+### Removed
+- Code no longer in use after the run pages and the step diagram retired (about a thousand lines), with their tests
+  moved to the parts that still carry the behaviour.
+
 ## [3.29.0] — 2026-11-04
 
 ### Changed
