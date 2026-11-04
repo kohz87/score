@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.29.0] — 2026-11-04
+
+### Changed
+- **Recipes are a library.** Settings › Recipes shows your recipes as cards: what each does, **Last run · <chat> ›**
+  (opens that chat's Graph), **Edit** and **Run in a chat…**. It no longer opens on an empty recipe.
+- **Editing a recipe** puts the chosen step's settings in a panel beside the recipe, in Graph and As text, and lists
+  what to fix in one line with **Show it**. Undo, Redo, Export and the rest are in the ⋯ menu.
+- **The old run pages are gone.** A run opens in its chat, with Graph and the session log; the chat's Graph tab has a
+  folded **Run details** (spend, limits, the advisor, helpers and check). A run from before runs had chats opens as a
+  read-only Graph and log over Recipes.
+
+### Fixed
+- An empty Files and results says "Nothing made in this job yet".
+
 ## [3.28.0] — 2026-11-04
 
 ### Changed
