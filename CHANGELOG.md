@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.24.1] — 2026-11-04
+
+### Fixed
+- **Knowledge, Tasks and Agents follow the window.** Knowledge uses the whole width (no fixed cap): long file names stay
+  in their column, the side cards are full width, the toolbar is one row while it fits. Tasks' columns keep a usable
+  width and the board scrolls sideways inside itself; the agent chips are one row; below 1280px a task opens as a side
+  sheet. Agents has the other pages' spacing and its cards reflow.
+
 ## [3.24.0] — 2026-11-04
 
 ### Changed
