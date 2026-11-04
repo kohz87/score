@@ -3,7 +3,9 @@ import {
   TasksSnapshotSchema,
   TaskSummarySchema,
   type TaskColumn,
+  type TaskCreateRequest,
   type TaskDetail,
+  type TaskPatchRequest,
   type TaskSummary,
 } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -67,17 +69,36 @@ export function useTaskDetail(taskId: string | null) {
   })
 }
 
-export function taskAction(
-  taskId: string,
-  action: 'unblock' | 'comment',
-  text?: string,
-  key = newId(),
-) {
+export type TaskActionName =
+  'unblock' | 'comment' | 'start' | 'block' | 'request_review' | 'complete' | 'archive'
+
+export function taskAction(taskId: string, action: TaskActionName, text?: string, key = newId()) {
   return apiFetch(`tasks/${encodeURIComponent(taskId)}/actions`, {
     method: 'POST',
     headers: { 'Idempotency-Key': key },
     body: JSON.stringify({ action, ...(text?.trim() ? { text: text.trim() } : {}) }),
   })
+}
+
+/** 3.27.0: `POST /api/tasks`. The key is the caller's, kept across retries so a retry never makes a second task. */
+export async function createTask(request: TaskCreateRequest, key: string): Promise<TaskDetail> {
+  return TaskDetailSchema.parse(
+    await apiFetch('tasks', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify(request),
+    }),
+  )
+}
+
+/** 3.27.0: `PATCH /api/tasks/:taskId` with only what changed. */
+export async function patchTask(taskId: string, request: TaskPatchRequest): Promise<TaskDetail> {
+  return TaskDetailSchema.parse(
+    await apiFetch(`tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    }),
+  )
 }
 
 export function useTaskRefresh() {

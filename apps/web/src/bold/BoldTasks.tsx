@@ -29,11 +29,12 @@ import {
   useTaskDetail,
   useTaskRefresh,
 } from './room/task-queries.ts'
+import { ArchiveBox, NewTaskDialog, TaskEditForm, TaskMoves } from './BoldTaskEdit.tsx'
 import './bold-tasks.css'
 
 // 3.16.0: the Tasks board, back in the new shell (the Kanban board went in 11.11). Every Hermes task across rooms in
-// columns. Agents move their own tasks, so there is no drag and no create or edit: the person acts on what needs them
-// (unblock, an approval, a comment). Mock-up: docs/design/bold/mockups/13-tasks-board*.dc.html.
+// columns. Agents move their own tasks, so there is no drag; the person acts on what needs them (unblock, an approval,
+// a comment). 3.27.0 adds New task, Edit, the moves and Archive (BoldTaskEdit.tsx). Mock-up: docs/design/bold/mockups/13-tasks-board*.dc.html.
 
 const PHONE = '(max-width: 600px)'
 // The details panel sits beside the board from here; below it the panel opens as a side sheet.
@@ -353,13 +354,16 @@ function TaskPanel({
   task,
   lookup,
   onClose,
+  onArchived,
 }: {
   task: TaskSummary
   lookup: Lookup
   onClose: () => void
+  onArchived: () => void
 }) {
   const detailQuery = useTaskDetail(task.id)
   const detail = detailQuery.data
+  const [editing, setEditing] = useState(false)
   const agent = agentOf(lookup, task.assignee)
   const reviewer = agentOf(lookup, task.reviewer)
   const column =
@@ -379,7 +383,23 @@ function TaskPanel({
           ×
         </button>
       </span>
-      <h2>{task.title}</h2>
+      {editing && detail ? (
+        <TaskEditForm detail={detail} agents={lookup.agents} onDone={() => setEditing(false)} />
+      ) : (
+        <>
+          <h2>{task.title}</h2>
+          <span className="bold-tb-actions">
+            <button
+              type="button"
+              className="btn sm"
+              disabled={!detail}
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+          </span>
+        </>
+      )}
       <dl className="bold-tb-facts">
         <dt>Room</dt>
         <dd>{task.roomId ? <Link to="/b">{roomName(lookup, task.roomId)}</Link> : 'No room'}</dd>
@@ -393,6 +413,7 @@ function TaskPanel({
         <dd>{column}</dd>
       </dl>
       <NeedsBlock task={task} detail={detail} />
+      <TaskMoves taskId={task.id} column={boardColumn(task)} />
       <section className="bold-tb-section" aria-label="Steps">
         <h3>Steps</h3>
         {detailQuery.isPending && <p className="bold-tb-empty">Reading steps…</p>}
@@ -430,6 +451,7 @@ function TaskPanel({
         )}
         <CommentBox task={task} agent={agent} />
       </section>
+      <ArchiveBox taskId={task.id} onArchived={onArchived} />
     </div>
   )
 }
@@ -572,7 +594,16 @@ export function BoldTasksPage() {
   const agents = useMemo(() => (agentsState.data ?? []).filter(onTeam), [agentsState.data])
   const rooms = useMemo(() => roomsState.data?.rooms ?? [], [roomsState.data])
   const lookup = useMemo<Lookup>(() => ({ agents, rooms }), [agents, rooms])
-  const all = useMemo(() => tasksState.data?.tasks ?? [], [tasksState.data])
+  // An archived task leaves the board at once; the stream and the refetch then agree.
+  const [archivedIds, setArchivedIds] = useState<string[]>([])
+  const [making, setMaking] = useState(false)
+  const all = useMemo(
+    () =>
+      (tasksState.data?.tasks ?? []).filter(
+        (task) => task.hermesStatus !== 'archived' && !archivedIds.includes(task.id),
+      ),
+    [tasksState.data, archivedIds],
+  )
   const [agentFilter, setAgentFilter] = useState<string | null>(null)
   const [roomFilter, setRoomFilter] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -592,6 +623,11 @@ export function BoldTasksPage() {
   const filtered = agentFilter !== null || activeRoom !== null
   const selected = selectedId ? (all.find((task) => task.id === selectedId) ?? null) : null
 
+  const archived = () => {
+    if (selectedId) setArchivedIds((ids) => [...ids, selectedId])
+    setSelectedId(null)
+  }
+
   const status = tasksState.status
   const loading = status === 'pending' && !tasksState.data
   const failed = status === 'error' && !tasksState.data
@@ -610,10 +646,23 @@ export function BoldTasksPage() {
     <div className="bold-page bold-tb" data-ui-page="tasks">
       <header className="bold-tb-head">
         <div className="bold-tb-title">
-          <h1>Tasks</h1>
+          <div className="bold-tb-h1row">
+            <h1>Tasks</h1>
+            <button type="button" className="bold-tb-new" onClick={() => setMaking(true)}>
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path
+                  d="M6 1.5v9M1.5 6h9"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span>New task</span>
+            </button>
+          </div>
           <p>
-            Every Hermes task across your rooms. Agents move their own tasks; you act on the ones
-            that need you.
+            Every Hermes task across your chats. Agents move their own; you can add, change, move or
+            archive any of them.
           </p>
         </div>
         {needsCount > 0 ? (
@@ -624,6 +673,18 @@ export function BoldTasksPage() {
           <span className="bold-tb-quiet">Nothing needs you</span>
         )}
       </header>
+
+      {making && (
+        <NewTaskDialog
+          agents={agents}
+          rooms={rooms}
+          onClose={() => setMaking(false)}
+          onCreated={(made) => {
+            setMaking(false)
+            setSelectedId(made.id)
+          }}
+        />
+      )}
 
       {loading && <p role="status">Reading tasks…</p>}
       {failed && <p role="alert">Couldn’t read the tasks. Try again in a moment.</p>}
@@ -702,6 +763,7 @@ export function BoldTasksPage() {
                     task={selected}
                     lookup={lookup}
                     onClose={() => setSelectedId(null)}
+                    onArchived={archived}
                   />
                 </Sheet>
               )}
@@ -732,6 +794,7 @@ export function BoldTasksPage() {
                       task={selected}
                       lookup={lookup}
                       onClose={() => setSelectedId(null)}
+                      onArchived={archived}
                     />
                   ) : (
                     <p className="bold-tb-empty">
@@ -747,6 +810,7 @@ export function BoldTasksPage() {
                       task={selected}
                       lookup={lookup}
                       onClose={() => setSelectedId(null)}
+                      onArchived={archived}
                     />
                   </Sheet>
                 )

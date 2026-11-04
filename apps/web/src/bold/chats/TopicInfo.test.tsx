@@ -46,6 +46,7 @@ const orchestration: OrchestrationSummary = {
   steps: { total: 4, active: 1, succeeded: 2, failed: 0 },
   leadTurnsUsed: 1,
   maxLeadTurns: 8,
+  untilStopped: false,
   needsYou: [],
   createdAt: '2026-10-24T09:00:00.000Z',
   updatedAt: '2026-10-24T10:00:00.000Z',
