@@ -465,7 +465,6 @@ export function BoldLibrary({
       {page && !reading && (
         <FolderRail
           tree={tree.data}
-          agents={agents}
           filter={pageFilter}
           onFilter={(next) => {
             setPageFilter(next)
@@ -473,6 +472,10 @@ export function BoldLibrary({
             setSection('notes')
           }}
           onNewNote={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
+          onNewFolder={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
+          onRenameFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
+          onMoveFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
+          onDeleteFolder={(folder) => openDialog({ kind: 'folder-delete', path: folder })}
         />
       )}
       <nav
@@ -646,29 +649,33 @@ export function BoldLibrary({
                   <PlusIcon size={14} /> New note
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
-              >
-                <PlusIcon size={14} /> New folder
-              </button>
-              {/* 3.14.5 (owner): the picked folder can be renamed or deleted from here too. */}
-              {picked !== '' && (
+              {!page && (
                 <>
                   <button
                     type="button"
-                    aria-label={`Rename folder ${baseName(picked)}`}
-                    onClick={() => openDialog({ kind: 'folder-move', path: picked })}
+                    onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
                   >
-                    Rename folder
+                    <PlusIcon size={14} /> New folder
                   </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete folder ${baseName(picked)}`}
-                    onClick={() => openDialog({ kind: 'folder-delete', path: picked })}
-                  >
-                    Delete folder
-                  </button>
+                  {/* 3.14.5 (owner): the picked folder can be renamed or deleted from here too. */}
+                  {picked !== '' && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`Rename folder ${baseName(picked)}`}
+                        onClick={() => openDialog({ kind: 'folder-move', path: picked })}
+                      >
+                        Rename folder
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete folder ${baseName(picked)}`}
+                        onClick={() => openDialog({ kind: 'folder-delete', path: picked })}
+                      >
+                        Delete folder
+                      </button>
+                    </>
+                  )}
                 </>
               )}
               <input
