@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { orchestrationFixtures } from '../../../../../e2e/orchestration-fixtures.ts'
@@ -96,16 +96,10 @@ test('both run kinds show Stop (and Pause while running) at the top of the graph
   expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
 })
 
-test('3.29.0 gate: a lead-decides run switches between its job map and the step diagram; a recipe run has no switch', async () => {
+test('3.29.1: the job map is a lead-decides run’s graph, with no step diagram to switch to (owner)', async () => {
   mount({ kind: 'orchestration', ref: 'orch-1' }, true)
-  const toDiagram = await screen.findByRole('button', { name: 'Show the step diagram' })
-  expect(toDiagram.getAttribute('aria-pressed')).toBe('false')
-  expect(screen.getByRole('region', { name: 'Job map' })).toBeTruthy()
-  fireEvent.click(toDiagram)
-  const back = screen.getByRole('button', { name: 'Show the job map' })
-  expect(back.getAttribute('aria-pressed')).toBe('true')
-  expect(screen.queryByRole('region', { name: 'Job map' })).toBeNull()
-  expect(screen.getByRole('region', { name: 'Session log' })).toBeTruthy()
+  expect(await screen.findByRole('region', { name: 'Job map' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /Show the step diagram/ })).toBeNull()
   cleanup()
   mount({ kind: 'workflow', ref: 'wfrun-1' }, true)
   await screen.findByRole('button', { name: 'Pause' })
