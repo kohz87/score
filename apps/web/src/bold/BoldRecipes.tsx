@@ -167,6 +167,7 @@ function BoldRecipesList() {
     )
     return { ...starter, name: 'Untitled recipe' }
     // A new recipe is made once per press of "New recipe"; the agent list only seeds its first step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newKey])
 
   const choose = useCallback(
