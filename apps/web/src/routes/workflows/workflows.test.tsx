@@ -439,3 +439,26 @@ test('the run view draws the nodes where the saved version put them, and the edg
   expect(first[0]).toBeGreaterThan(48)
   expect(last[0]).toBe(480)
 })
+
+test('3.29.0: the chat’s Graph tab says how a finished run ended (its graph outcome and note)', async () => {
+  snapshot = revisionOf((run) => {
+    Object.assign(run, {
+      status: 'finished_with_unresolved',
+      graphOutcome: 'reached_end',
+      outcomeNote: 'Workflow reached its end — 1 step run not confirmed as ended',
+      needsYou: [],
+      endedAt: '2026-10-10T10:00:00.000Z',
+    })
+  })
+  mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} pane="graph" />)
+  const note = await screen.findByText(
+    'Workflow reached its end — 1 step run not confirmed as ended',
+  )
+  expect(note.className).toBe('wf-outcome-note')
+  expect(note.closest('.wf-pane-outcome')).not.toBeNull()
+  // The log pane doesn't repeat it.
+  cleanup()
+  mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} pane="log" />)
+  await screen.findByRole('log', { name: 'Events' })
+  expect(document.querySelector('.wf-pane-outcome')).toBeNull()
+})

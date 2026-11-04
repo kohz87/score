@@ -128,6 +128,19 @@ export function WorkflowRunLive({
 
   return (
     <div className="orch-live wf-run" data-pane={pane}>
+      {/* 3.29.0: the chat's Graph tab is the run's only page now, so it says how the run ended (the graph's outcome
+          and its note), as the run's own header did. */}
+      {pane === 'graph' && over && (graphLine || note || detail.endReason) && (
+        <div className="wf-pane-outcome">
+          {graphLine && (
+            <span className={`orch-badge wf-graph-badge wf-graph-badge--${detail.graphOutcome}`}>
+              {graphLine}
+            </span>
+          )}
+          {note && <p className="wf-outcome-note">{note}</p>}
+          {detail.endReason && <p className="orch-muted">{detail.endReason}</p>}
+        </div>
+      )}
       {pane && over && events.length > 0 && (
         <div className="orch-head-actions">
           <button type="button" aria-pressed={replaying} onClick={playback.toggleReplay}>
