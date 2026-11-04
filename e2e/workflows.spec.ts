@@ -17,6 +17,14 @@ const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click(
 const web = { 'x-score-client': 'web' }
 
 const node = (page: Page, id: string) => page.locator(`[data-node="${id}"]`)
+/** The selected card's "Add a step after" menu in the settings panel, then one of its items. */
+async function addAfter(page: Page, item: string | RegExp) {
+  await page
+    .getByRole('complementary', { name: 'Selected step' })
+    .getByRole('button', { name: 'Add a step after', exact: true })
+    .click()
+  await page.getByRole('menuitem', { name: item }).click()
+}
 
 async function createWorkflow(page: Page, definition: unknown): Promise<string> {
   const response = await page.request.post('/api/workflows', {
@@ -62,7 +70,9 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await inputs.getByLabel('Name').fill('topic')
   await inputs.getByLabel('Label').fill('Topic')
 
-  // Replace the starter end: delete it with the keyboard, then build the route with the palette.
+  // Replace the starter end: delete it with the keyboard (the layered view asks first), then build the route from the
+  // selected card's "Add a step after" menu.
+  page.on('dialog', (prompt) => void prompt.accept())
   await node(page, 'end1').focus()
   await page.keyboard.press('Delete')
   await expect(node(page, 'end1')).toHaveCount(0)
@@ -88,24 +98,24 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   })
 
   // Add a gate after it (connected from "when done"), then a branch after the gate.
-  await page.getByRole('button', { name: 'Add a gate' }).click()
+  await addAfter(page, 'Add a gate')
   await inspector.getByLabel('Title').fill(gateTitle)
   await inspector
     .getByRole('combobox', { name: 'Question' })
     .fill('Is the draft good enough to publish?')
-  await page.getByRole('button', { name: 'Add a branch' }).click()
+  await addAfter(page, 'Add a branch')
   await inspector.getByLabel('Title').fill('Passed review?')
   await inspector.getByLabel('Looks at').selectOption({ label: 'Draft' })
   // Rule 1 is "the verdict is: passed"; its path goes to an end, the "otherwise" path to a repair step.
-  await page.getByRole('button', { name: 'Add an end' }).click()
+  await addAfter(page, 'Add an end')
   await inspector.getByLabel('Title').fill('Published')
   await node(page, 'branch1').click()
-  await page.getByRole('button', { name: /Add an agent step for reviewer/ }).click()
+  await addAfter(page, /Add an agent step for reviewer/)
   await inspector.getByLabel('Title').fill('Repair')
   await inspector
     .getByRole('combobox', { name: 'Instruction' })
     .fill('Fix the draft: {{nodes.step1.output}}')
-  await page.getByRole('button', { name: 'Add an end' }).click()
+  await addAfter(page, 'Add an end')
   await inspector.getByLabel('Title').fill('Repaired')
 
   // The outline lists the same graph as text.
@@ -284,12 +294,13 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('2 of 2 used')
 })
 
-test('drag a node, save, reload: it is where it was left, and the run view draws the same arrangement', async ({
+test('saved positions survive an edit in the layered view, and the run view draws the same arrangement', async ({
   page,
 }) => {
   test.setTimeout(180_000)
   await pair(page)
   const name = uniqueRecipeName('Free layout')
+  const layout = { nodes: { one: { x: 32, y: 48 }, finish: { x: 464, y: 288 } } }
   const id = await createWorkflow(page, {
     name,
     inputs: [],
@@ -306,50 +317,30 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
       { id: 'finish', kind: 'end', label: 'Finish' },
     ],
     edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'finish' }],
+    layout,
   })
   await page.goto(`/b/recipes/${id}`)
-  const box = (nodeId: string) => page.locator(`.wf-node[data-wf-node="${nodeId}"]`)
-  const place = async (nodeId: string) => ({
-    left: await box(nodeId).evaluate((el) => (el as HTMLElement).style.left),
-    top: await box(nodeId).evaluate((el) => (el as HTMLElement).style.top),
-  })
+  // The editor is the layered view: cards are buttons, never placed by the saved positions.
   await expect(node(page, 'one')).toBeVisible()
-  const auto = await place('finish')
+  await expect(page.locator('.wf-node')).toHaveCount(0)
 
-  // Drag the end well below and to the right; it snaps to the 16 px grid and the connection follows.
-  const target = await node(page, 'finish').boundingBox()
-  await page.mouse.move(target!.x + 20, target!.y + 10)
-  await page.mouse.down()
-  await page.mouse.move(target!.x + 20 + 40, target!.y + 10 + 150, { steps: 6 })
-  await page.mouse.up()
-  const moved = await place('finish')
-  expect(moved).not.toEqual(auto)
-  expect(Number.parseFloat(moved.left) % 16).toBe(0)
-  expect(Number.parseFloat(moved.top) % 16).toBe(0)
+  // Edit a step's title in its settings and save: the positions in the saved version are untouched.
+  await node(page, 'one').click()
+  await page
+    .getByRole('complementary', { name: 'Selected step' })
+    .getByLabel('Title')
+    .fill('First, renamed')
   await expect(page.getByText('unsaved changes')).toBeVisible()
   await page.getByRole('button', { name: /^Save as version 2$/ }).click()
   await expect(page.getByText('Saved as version 2.').first()).toBeVisible()
+  const detail = await page.request.get(`/api/workflows/${id}`, { headers: web })
+  const saved = (await detail.json()) as {
+    latest: { definition: { layout?: typeof layout; nodes: { id: string; label: string }[] } }
+  }
+  expect(saved.latest.definition.layout).toEqual(layout)
+  expect(saved.latest.definition.nodes.find((n) => n.id === 'one')?.label).toBe('First, renamed')
 
-  // Reload: same place. The first node was pinned by the first move, so it did not shift either.
-  await page.reload()
-  await expect(node(page, 'finish')).toBeVisible()
-  expect(await place('finish')).toEqual(moved)
-
-  // The keyboard way: M, arrows, Escape; then Arrange automatically puts it back.
-  await node(page, 'finish').focus()
-  await page.keyboard.press('m')
-  await page.keyboard.press('ArrowRight')
-  await page.keyboard.press('Escape')
-  expect(Number.parseFloat((await place('finish')).left)).toBe(Number.parseFloat(moved.left) + 16)
-  await page.getByRole('button', { name: 'Arrange automatically' }).click()
-  expect(await place('finish')).toEqual(auto)
-  await page.getByRole('button', { name: 'Undo' }).click()
-  expect(Number.parseFloat((await place('finish')).left)).toBe(Number.parseFloat(moved.left) + 16)
-  await page.getByRole('button', { name: 'Undo' }).click()
-  expect(await place('finish')).toEqual(moved)
-  const editorFirst = await place('one')
-
-  // A run of this version draws the nodes at the same coordinates.
+  // A run of this version draws the nodes at the stored coordinates.
   await startFromList(page, name)
   await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
   const inRun = (nodeId: string) =>
@@ -357,6 +348,6 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
       const wrapper = el.closest<HTMLElement>('[style*="left"]')!
       return { left: wrapper.style.left, top: wrapper.style.top }
     })
-  expect(await inRun('finish')).toEqual(moved)
-  expect(await inRun('one')).toEqual(editorFirst)
+  expect(await inRun('finish')).toEqual({ left: '464px', top: '288px' })
+  expect(await inRun('one')).toEqual({ left: '32px', top: '48px' })
 })

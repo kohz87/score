@@ -9,6 +9,9 @@ import { FILE_ROWS_SHOWN, fileRows, viewerLink, type FileRow } from './files-mod
 
 /** The row the viewer sheet was opened from; closing the sheet returns focus to it. */
 let lastOpenedRow: string | null = null
+export function rememberOpenedRow(key: string | null): void {
+  lastOpenedRow = key
+}
 export function focusOpenedRow(root: ParentNode = document): boolean {
   if (lastOpenedRow === null) return false
   const rows = root.querySelectorAll<HTMLElement>('[data-files-row]')
@@ -19,6 +22,26 @@ export function focusOpenedRow(root: ParentNode = document): boolean {
     }
   }
   return false
+}
+
+/**
+ * Focus the opened row once it can take it: the sheet's unmount (a router transition) and the siblings it made inert
+ * going live again land a variable number of frames after the close, so one try is a race. Retries each frame, then
+ * falls back to `fallback` when the row never takes focus.
+ */
+export function focusOpenedRowSoon(fallback: () => void, frames = 30): void {
+  const attempt = (left: number) => {
+    if (lastOpenedRow === null) return fallback()
+    const found = focusOpenedRow()
+    const row = document.activeElement
+    if (found && row instanceof HTMLElement && row.dataset.filesRow === lastOpenedRow) return
+    if (left <= 0) {
+      if (!found) fallback()
+      return
+    }
+    requestAnimationFrame(() => attempt(left - 1))
+  }
+  requestAnimationFrame(() => attempt(frames))
 }
 
 function RowIcon({ kind }: { kind: FileRow['kind'] }) {
@@ -113,7 +136,7 @@ export function FilesAndResults({
                     data-kind={row.kind}
                     title={row.title}
                     onClick={() => {
-                      lastOpenedRow = row.key
+                      rememberOpenedRow(row.key)
                     }}
                   >
                     <span className="bold-files-icon">

@@ -2261,3 +2261,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   focus is a pre-existing 1-in-3 flake).
 - Lead process note: the coder briefly tried `SCORE_E2E_DEV=1` (its dev proxy targets the live port; it failed before
   any request). The rule was in memory but missing from the brief; restored in every brief since.
+
+## 3.26.0 — the recipe editor in the job-map layout (2026-11-04)
+- Owner: "can the recipe use the graph layout structure?" → mock-up (https://claude.ai/artifact/KkksFFSPGWBZEQN2z8jf1M,
+  copies 19-recipes*.dc.html) → "mock up approved". Sonnet coder: a layered top-to-bottom view (rank by longest path,
+  never stored positions, which are kept on save), job-map cards, parallel steps side by side with a join pill, the
+  approval as a light card, branch paths, back-edges as markers, + between layers, settings beside (a sheet on a phone),
+  Preview and the live overlay on the cards; the free canvas, palette, zoom and auto-arrange removed.
+- Review P2s fixed in one round: orphans in layer 0 (a "Not connected" group now), fan-out add floating a step, branch
+  inserts leaving `default` open, a middle-step delete leaving the tail disconnected (now joins its neighbours), Preview
+  losing the path taken (now "took: …" and "↩ again"), focus lost after delete/insert, the + not a keyboard menu, phone
+  sheet focus, the phone sheet compact as the mock-up, dead layout code. Re-review: one lint note restored (lead).
+- Gate: check green (web 3318, server 4972); e2e 16 failed: triage coder moved bold-recipes, workflows, live-feel to the
+  layered view (drag/snap/auto-arrange steps removed on purpose, listed), 3 Recipes baselines (one had passed against a
+  stale image under the 1% threshold), a real 3.25.0 bug (phone: the viewer's focus return to its row raced the
+  unmount; now retried per frame up to 30 frames, vitest), 9 load flakes passing alone (remote-access fails ~1 in 6 on
+  its own https port: a known flake).

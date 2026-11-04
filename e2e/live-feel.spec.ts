@@ -27,7 +27,7 @@ async function createWorkflow(page: Page, name: string, gate?: string): Promise<
   return ((await response.json()) as { workflowId: string }).workflowId
 }
 
-test('the workflow editor previews a gate and a branch without calling the server, and Stop returns to the canvas', async ({
+test('the workflow editor previews a gate and a branch without calling the server, and Stop returns to the recipe', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -67,11 +67,11 @@ test('the workflow editor previews a gate and a branch without calling the serve
     .getByRole('button', { name: 'Stop', exact: true })
     .click()
   await expect(page.getByText('Preview: nothing runs, no tokens')).toHaveCount(0)
-  await expect(page.locator('[data-wf-node="draft"]')).toBeVisible()
+  await expect(page.locator('[data-node="draft"]')).toBeVisible()
   expect(posts).toEqual([])
 })
 
-test('the editor draws a run of the version on screen over the canvas and links to it', async ({
+test('the editor draws a run of the version on screen over the cards and links to it', async ({
   page,
 }) => {
   test.setTimeout(150_000)
@@ -87,8 +87,8 @@ test('the editor draws a run of the version on screen over the canvas and links 
   await page.goto(`/b/recipes/${id}`)
   const live = page.getByText(/Live: run started/)
   await expect(live).toBeVisible({ timeout: 20_000 })
-  await expect(page.locator('[data-node="approve"]')).toHaveClass(/orch-node--gate/)
-  await expect(page.locator('[data-node="draft"]')).toHaveClass(/orch-node--succeeded/)
+  await expect(page.locator('[data-node="approve"]')).toHaveAttribute('data-state', 'gate')
+  await expect(page.locator('[data-node="draft"]')).toHaveAttribute('data-state', 'succeeded')
   // The draft is untouched.
   await expect(page.getByText(/unsaved changes/)).toHaveCount(0)
   await page.getByRole('link', { name: /Open the run/ }).click()

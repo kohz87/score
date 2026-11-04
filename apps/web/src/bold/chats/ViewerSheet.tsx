@@ -6,7 +6,7 @@ import { CloseIcon } from '../BoldIcons.tsx'
 import { BoldWorkbench, type JobFace } from '../BoldWorkbench.tsx'
 import { goToNearestCard, waitingCards } from '../room/needs-jump-dom.ts'
 import { directChatsQuery } from '../direct/direct-queries.ts'
-import { focusOpenedRow } from './FilesResults.tsx'
+import { focusOpenedRowSoon } from './FilesResults.tsx'
 import { viewerClosedSearch } from './files-model.ts'
 
 const FOCUSABLE =
@@ -36,12 +36,8 @@ export function ViewerSheet({
 
   const close = () => {
     setParams(viewerClosedSearch(paramsRef.current), { replace: true })
-    // Two frames: the sheet unmounts (and the siblings it made inert are live again) before focus goes to the row.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (!focusOpenedRow()) document.getElementById('chat-info-files')?.focus()
-      }),
-    )
+    // The sheet unmounts (and the siblings it made inert are live again) a few frames later: retry until the row has focus.
+    focusOpenedRowSoon(() => document.getElementById('chat-info-files')?.focus())
   }
   // A needs-you card that waits in this chat is under the sheet: the bar says so and takes the person back to it.
   const [needing, setNeeding] = useState(0)
