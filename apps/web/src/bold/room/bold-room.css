@@ -879,6 +879,38 @@
   display: flex;
 }
 
+/* 3.28.0 (owner: "it keep moving the screen when it appears and disappear"): with a mouse, the hover actions float over
+   the message's bottom edge as a pill instead of taking a row, so nothing below them moves. Touch keeps the row. */
+@media (hover: hover) {
+  [data-ui='bold'] .bold-acts {
+    position: absolute;
+    top: calc(100% - 6px * var(--bold-d, 1));
+    left: calc(36px * var(--bold-d, 1));
+    z-index: 3;
+    flex-wrap: nowrap;
+    max-width: calc(100% - 36px * var(--bold-d, 1));
+    padding: calc(3px * var(--bold-d, 1)) calc(5px * var(--bold-d, 1));
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow:
+      0 0 0 1px var(--line),
+      0 6px 18px rgb(var(--shadow-rgb) / 0.28);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  /* Room under the newest message for its floating actions, kept always so it never moves either. */
+  [data-ui='bold'] .bold-stream {
+    padding-bottom: calc(24px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-message > .chat-message--you + .bold-acts {
+    left: auto;
+    right: 2px;
+    padding-right: calc(5px * var(--bold-d, 1));
+  }
+}
+
 [data-ui='bold'] .bold-message:focus-visible {
   outline: 2px solid var(--hi-bg);
   outline-offset: 4px;
