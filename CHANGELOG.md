@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.27.2] — 2026-11-04
+
+### Fixed
+- **Hovering a message no longer moves the chat.** With a mouse, a message's actions (Copy, Save to Library, Try
+  another, Pin, Delete) float as a small bar on the message's edge instead of pushing everything below down. On a touch
+  screen they stay where they were.
+
 ## [3.27.1] — 2026-11-04
 
 ### Changed

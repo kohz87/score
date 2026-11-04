@@ -2322,3 +2322,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   failed, all passing on rerun (load flakes: one-to-ones share at 390, bold-room unread, bold-workspace); the job-map fix
   updated one baseline (the log's time column, viewed).
 - Accepted P3s: the "Needs you" auto-open isn't saved as the person's fold choice; Rename and Move open the same dialog.
+
+## 3.27.2 — hover actions float, the chat no longer moves (2026-11-04)
+- Owner: "when hovering over message, it has the options below like copy, save to library, try another, pin, delete etc,
+  but it keep moving the screen when it appears and disappear, anywhere to keep that position lock for them?"
+- Lead (CSS only): with a mouse (`hover: hover`) a message's actions float as a pill over its bottom edge instead of a
+  row; the stream keeps 24px under the newest message for its pill. Touch keeps the row. Look-check: hovering moved the
+  next message 0.0px; the pill clears the composer.
+- Gate: check green (contract 1613, web 3349, server 4981); e2e 29 failed: 21 Room baselines (viewed: the 24px stream
+  padding; the phone baselines also lose the stale "Recipes" top-bar button that had passed under the pixel threshold
+  since 3.27.0), 8 load flakes passing alone (+ menu 390, room tools 390, tablet width, team choice, workspace, theme
+  light switch, ledger ×2). No click intercepted by the pill.
