@@ -8,10 +8,11 @@ import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { type VersionView } from '../../routes/chat/versions.tsx'
 import { agentDisplayName } from '../bold-agents.ts'
 import { authorName, BoldMessage, buildMessageNodes, retryableIds } from './BoldMessage.tsx'
-import { approvalPointerSet } from './room-model.ts'
+import { approvalPointerSet, holdsSeveralJobs } from './room-model.ts'
 import {
   emptyTopics,
   SystemLineRow,
+  TopicAnchor,
   TopicDivider,
   topicDividers,
   type SystemLine,
@@ -92,6 +93,7 @@ export function RoomMessageStream({
   seek,
   onSeeked,
   focusTopic = null,
+  oneJobPerChat = false,
   topicMenu,
   systemLines = [],
   messageExtras,
@@ -105,6 +107,8 @@ export function RoomMessageStream({
   onSeeked: () => void
   /** The topic the person picked (Info, a divider or a link): the stream scrolls to its divider when it changes. */
   focusTopic?: string | null
+  /** 3.28.0: a group chat holds one job at a time, so its dividers go (a one-to-one keeps them for its earlier chats). */
+  oneJobPerChat?: boolean
   /** The per-topic menu drawn in each divider. */
   topicMenu?: (job: Job) => ReactNode
   /** Small local lines for what a command changed ("You made builder the owner"). */
@@ -373,12 +377,20 @@ export function RoomMessageStream({
       built = { nodes: [], branched: false }
       const dividers = topicDividers(jobs, items)
       const quiet = emptyTopics(jobs, items)
+      // 3.28.0: one job per chat, so the dividers have nothing to tell apart; an older chat that still holds several
+      // active jobs keeps them. The run card stays either way, and the job's anchor keeps "scroll to it" working.
+      const dividerAt = (job: Job | null, again: boolean) =>
+        !oneJobPerChat || holdsSeveralJobs(jobs) ? (
+          <TopicDivider job={job} again={again} menu={job ? topicMenu?.(job) : undefined} />
+        ) : job && !again ? (
+          <TopicAnchor job={job} />
+        ) : null
       const marks: { at: string; node: ReactNode }[] = [
         ...quiet.map((job) => ({
           at: job.createdAt,
           node: (
             <Fragment key={`topic-${job.id}`}>
-              <TopicDivider job={job} menu={topicMenu?.(job)} />
+              {dividerAt(job, false)}
               {runCard(job)}
               <NeedsSlot id={slotIds.topic(job.id)} />
             </Fragment>
@@ -406,11 +418,7 @@ export function RoomMessageStream({
           flush(false)
           built.nodes.push(
             <Fragment key={`divider-${message.id}`}>
-              <TopicDivider
-                job={divider.job}
-                again={divider.again}
-                menu={divider.job ? topicMenu?.(divider.job) : undefined}
-              />
+              {dividerAt(divider.job, divider.again)}
               {divider.job && !divider.again && runCard(divider.job)}
             </Fragment>,
           )

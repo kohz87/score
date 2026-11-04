@@ -30,7 +30,7 @@ import { NeedsSlotsProvider } from '../room/needs-slots.tsx'
 import { RoomRequests } from '../room/RoomRequests.tsx'
 import { changeCachedJob, roomChatMessagesQuery } from '../room/room-queries.ts'
 import type { SystemLine } from '../room/topic-divider.tsx'
-import { useTopicCommands } from '../room/topic-commands.ts'
+import { DIRECT_NEW_COMMAND, useTopicCommands } from '../room/topic-commands.ts'
 import '../room/bold-room.css'
 import { DirectBar, DirectPhoneBar } from './DirectHeader.tsx'
 import { currentChat } from './direct-model.ts'
@@ -267,7 +267,7 @@ function LoadedDirect({
     setSystemLines((lines) => [...lines, { id: newId(), at: new Date().toISOString(), text }])
   const base = useTopicCommands({ room, agents, jobs: chats, current, pick: setChat, say })
   const topicCommands = {
-    items: base.items
+    items: [DIRECT_NEW_COMMAND, ...base.items]
       .filter((item) => DIRECT_COMMANDS.has(item.name))
       .map((item) =>
         item.name === 'new'

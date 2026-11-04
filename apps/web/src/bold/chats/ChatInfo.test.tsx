@@ -1,15 +1,6 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { useLocation } from 'react-router'
+import { screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import {
-  agents,
-  disposeRoomTest,
-  jsonResponse,
-  makeJob,
-  mockFetch,
-  renderInRoom,
-  room,
-} from '../room/room-test-utils.tsx'
+import { agents, disposeRoomTest, makeJob, renderInRoom, room } from '../room/room-test-utils.tsx'
 import { ChatInfo } from './ChatInfo.tsx'
 import { openAllInfoSections, resetInfoFolds } from './info-test-utils.ts'
 
@@ -22,70 +13,108 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function Where() {
-  const location = useLocation()
-  return <span data-testid="where">{`${location.pathname}${location.search}`}</span>
-}
+// 3.28.0 (decision 164): one job per chat. Info shows This job and Past jobs; the New topic form is gone.
+const defaultJob = makeJob({
+  id: 'job-default',
+  title: 'Team room',
+  isDefault: true,
+  state: 'open',
+})
 
-// 3.24.0: the All topics screen is gone; Info lists the topics and starts a new one (the same as /new <title>).
-test('Info lists the topics and starts a new one like /new, then goes to it and closes the sheet', async () => {
-  const posted: unknown[] = []
-  vi.stubGlobal(
-    'fetch',
-    mockFetch((url, init) => {
-      if (url === '/api/rooms/room-1/jobs' && init.method === 'POST') {
-        posted.push(JSON.parse(String(init.body)))
-        return jsonResponse(makeJob({ id: 'job-new', title: 'Fix login', state: 'open' }))
-      }
-      return jsonResponse({ asOfSeq: 1, items: [] })
-    }),
+test('Info shows This job for the one active job and Past jobs for the finished ones, newest first, with no New topic form', () => {
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[
+        defaultJob,
+        makeJob({ id: 'job-1', title: 'Activity feed', state: 'working' }),
+        makeJob({
+          id: 'job-old',
+          title: 'Old import',
+          state: 'closed',
+          createdAt: '2026-10-20T09:00:00.000Z',
+        }),
+        makeJob({
+          id: 'job-done',
+          title: 'Release notes',
+          state: 'done',
+          createdAt: '2026-10-22T09:00:00.000Z',
+        }),
+      ]}
+      everyone
+    />,
   )
-  const onNavigate = vi.fn()
+  expect(screen.getByRole('heading', { name: 'This job' })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: /This topic/ })).toBeNull()
+  expect(screen.queryByRole('heading', { name: /Open jobs/ })).toBeNull()
+  const past = screen.getByRole('heading', { name: /Past jobs/ })
+  expect(past).toBeDefined()
+  const rows = [...(past.closest('section')?.querySelectorAll('li a') ?? [])].map(
+    (link) => link.textContent,
+  )
+  expect(rows).toEqual([
+    expect.stringContaining('Release notes'),
+    expect.stringContaining('Old import'),
+  ])
+  // The running job is This job, not a row of Past jobs.
+  expect(past.closest('section')?.textContent).not.toContain('Activity feed')
+  expect(screen.queryByLabelText('Topic title')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'New topic' })).toBeNull()
+  expect(screen.queryByRole('heading', { name: 'Topics' })).toBeNull()
+})
+
+test('a past job row opens that job’s conversation', () => {
   renderInRoom(
     <>
       <ChatInfo
         room={room}
         agents={agents}
-        jobs={[
-          makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
-          makeJob({ id: 'job-1', title: 'Activity feed' }),
-        ]}
+        jobs={[defaultJob, makeJob({ id: 'job-old', title: 'Old import', state: 'closed' })]}
         everyone
-        phone
-        onNavigate={onNavigate}
       />
-      <Where />
     </>,
   )
-
-  expect(screen.getByRole('heading', { name: 'Topics' })).toBeDefined()
-  expect(screen.getByRole('link', { name: /Activity feed/ })).toBeDefined()
-  expect(screen.queryByRole('link', { name: 'All topics' })).toBeNull()
-
-  const add = screen.getByRole('button', { name: 'New topic' })
-  expect(add.hasAttribute('disabled')).toBe(true)
-  fireEvent.change(screen.getByLabelText('Topic title'), { target: { value: 'Fix login' } })
-  fireEvent.click(add)
-
-  await waitFor(() => expect(posted).toEqual([{ title: 'Fix login' }]))
-  await waitFor(() => expect(screen.getByTestId('where').textContent).toContain('job=job-new'))
-  expect(onNavigate).toHaveBeenCalled()
+  expect(screen.getByRole('link', { name: /Old import/ }).getAttribute('href')).toBe(
+    '/b?job=job-old',
+  )
 })
 
-test('a failed New topic says why and keeps the title', async () => {
-  vi.stubGlobal(
-    'fetch',
-    mockFetch((url, init) =>
-      url === '/api/rooms/room-1/jobs' && init.method === 'POST'
-        ? jsonResponse({ error: { code: 'invalid', message: 'That title is taken.' } }, 409)
-        : jsonResponse({ asOfSeq: 1, items: [] }),
-    ),
+test('an older chat that still holds several active jobs lists them under Open jobs with their needs-you mark', () => {
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[
+        defaultJob,
+        makeJob({ id: 'job-1', title: 'Activity feed', state: 'working' }),
+        makeJob({ id: 'job-2', title: 'Release notes', state: 'waiting_on_you' }),
+        makeJob({ id: 'job-old', title: 'Old import', state: 'closed' }),
+      ]}
+      everyone
+    />,
   )
-  renderInRoom(<ChatInfo room={room} agents={agents} jobs={[]} everyone />)
-  fireEvent.change(screen.getByLabelText('Topic title'), { target: { value: 'Fix login' } })
-  fireEvent.click(screen.getByRole('button', { name: 'New topic' }))
-  expect((await screen.findByRole('alert')).textContent).toContain('That title is taken.')
-  expect((screen.getByLabelText('Topic title') as HTMLInputElement).value).toBe('Fix login')
+  const open = screen.getByRole('heading', { name: /Open jobs/ }).closest('section')!
+  expect(open.querySelectorAll('li').length).toBe(2)
+  expect(open.querySelector('.bold-info-needs')?.getAttribute('data-protected')).toBe('inline-flex')
+  const past = screen.getByRole('heading', { name: /Past jobs/ }).closest('section')!
+  expect(past.textContent).toContain('Old import')
+  expect(past.textContent).not.toContain('Activity feed')
+})
+
+test('on a phone, Info keeps Start a job beside the sections', () => {
+  const onNavigate = vi.fn()
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[defaultJob]}
+      everyone
+      phone
+      onNavigate={onNavigate}
+    />,
+  )
+  expect(screen.getByRole('button', { name: 'Start a job' })).toBeDefined()
 })
 
 test('each topic row shows its unread count; closed topics stay listed with a check', () => {
@@ -111,7 +140,7 @@ test('each topic row shows its unread count; closed topics stay listed with a ch
   expect(document.querySelector('details.bold-chat-closed')).toBeNull()
 })
 
-test('more than three closed topics fold under a Closed topics (N) disclosure', () => {
+test('every finished job is a Past jobs row (there is no Closed topics disclosure any more)', () => {
   const closed = [1, 2, 3, 4].map((n) =>
     makeJob({ id: `job-c${n}`, title: `Closed ${n}`, state: 'closed' }),
   )
@@ -119,14 +148,11 @@ test('more than three closed topics fold under a Closed topics (N) disclosure', 
     <ChatInfo
       room={room}
       agents={agents}
-      jobs={[makeJob({ id: 'job-1', title: 'Activity feed' }), ...closed]}
+      jobs={[defaultJob, makeJob({ id: 'job-1', title: 'Activity feed' }), ...closed]}
       everyone
     />,
   )
-  const disclosure = document.querySelector('details.bold-chat-closed') as HTMLDetailsElement
-  expect(disclosure.querySelector('summary')?.textContent).toBe('Closed topics (4)')
-  expect(disclosure.open).toBe(false)
-  expect(disclosure.querySelectorAll('a').length).toBe(4)
-  // The open topic stays outside it.
-  expect(disclosure.contains(screen.getByRole('link', { name: /Activity feed/ }))).toBe(false)
+  const past = screen.getByRole('heading', { name: /Past jobs/ }).closest('section')!
+  expect(past.querySelectorAll('li a').length).toBe(4)
+  expect(document.querySelector('details.bold-chat-closed')).toBeNull()
 })

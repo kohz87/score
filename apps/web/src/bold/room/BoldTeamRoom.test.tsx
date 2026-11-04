@@ -14,6 +14,7 @@ import {
   openOtherRooms,
 } from './room-test-utils.tsx'
 import { BoldTeamRoom } from './BoldTeamRoom.tsx'
+import { StartJobContext, type StartJobOptions } from '../BoldStartJob.tsx'
 import { JobUndoToast } from './JobUndoToast.tsx'
 import { resetJobUndo } from './job-undo.ts'
 
@@ -172,6 +173,11 @@ function topicDivider(title: string) {
     .find((item) => item.getAttribute('aria-label')?.startsWith(`Topic: ${title},`))
   if (!found) throw new Error(`No divider for the topic ${title}`)
   return found
+}
+
+/** One job per chat (3.28.0): the job bar carries the job's ⋯ menu now that its divider is gone. */
+function jobBar(name: 'Current job' | 'Past job' = 'Current job') {
+  return screen.getByRole('region', { name })
 }
 
 function lastRequest(fetchMock: ReturnType<typeof stubRoom>, path: string, method: string) {
@@ -712,7 +718,7 @@ test('a missing phone topic in a fresh room says so, with no list', async () => 
 })
 
 // was: 'selecting a job changes the composer destination and hides the message param'
-test('the context bar follows the topic picked in the address, else the newest open one, else the general conversation', async () => {
+test('one job per chat: the context bar says only who it goes to, and a message goes to the active job, else the chat’s own thread', async () => {
   stubRoom([
     makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
     makeJob({
@@ -723,28 +729,150 @@ test('the context bar follows the topic picked in the address, else the newest o
     }),
     makeJob({ id: 'job-1', title: 'Activity feed', createdAt: '2026-10-24T09:00:00.000Z' }),
   ])
+  // A finished job opened from Past jobs is read-only: the message still goes to the chat's active job.
   const first = renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-old&message=old'])
-  expect((await screen.findByLabelText('Where this message goes')).textContent).toContain(
-    'in Old work',
-  )
+  const bar = await screen.findByLabelText('Where this message goes')
+  expect(bar.textContent).toContain('lead')
+  expect(bar.textContent).not.toContain(' in ')
   first.unmount()
 
   const second = renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-  await waitFor(() =>
-    expect(screen.getByLabelText('Where this message goes').textContent).toContain(
-      'in Activity feed',
-    ),
-  )
+  await screen.findByRole('region', { name: 'Current job' })
+  expect(screen.getByLabelText('Where this message goes').textContent).not.toContain(' in ')
   second.unmount()
 
-  // With every topic finished, a message goes to the general conversation: no "in …".
+  // With every job finished, a message goes to the chat's own thread: no bar, no "in …".
   stubRoom([
     makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
     makeJob({ id: 'job-old', title: 'Old work', state: 'done' }),
   ])
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-  await screen.findByRole('separator', { name: 'Topic: Old work, done' })
+  await screen.findByLabelText('Where this message goes')
+  expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull()
+  expect(screen.queryByRole('separator')).toBeNull()
   expect(screen.getByLabelText('Where this message goes').textContent).not.toContain(' in ')
+})
+
+test('an older chat that still holds several active jobs keeps choosing: the context bar names the newest open one', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', createdAt: '2026-10-24T09:00:00.000Z' }),
+    makeJob({ id: 'job-2', title: 'Release notes', createdAt: '2026-10-24T09:30:00.000Z' }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  await waitFor(() =>
+    expect(screen.getByLabelText('Where this message goes').textContent).toContain(
+      'in Release notes',
+    ),
+  )
+  // No single job to show on a bar: the dividers stay, and the bar does not.
+  expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull()
+  expect(screen.getAllByRole('separator').length).toBeGreaterThan(1)
+})
+
+test('the job bar shows only with an active job, with its title, state line and Stop job', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({
+      id: 'job-1',
+      title: 'Activity feed',
+      holderAgentId: 'builder',
+      activeAgents: ['builder'],
+      spendCapUsd: 5,
+    }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  expect(bar.getAttribute('data-protected')).toBe('block')
+  expect(bar.textContent).toContain('JOB')
+  expect(within(bar).getByText('Activity feed').getAttribute('title')).toBe('Activity feed')
+  expect(bar.textContent).toContain('builder is working')
+  expect(bar.textContent).toContain('cap $5.00')
+  expect(within(bar).getByRole('button', { name: 'Stop job' })).toBeDefined()
+  // No run, no Graph.
+  expect(within(bar).queryByRole('button', { name: 'Graph' })).toBeNull()
+  // One job: no divider in the stream.
+  expect(screen.queryByRole('separator')).toBeNull()
+})
+
+test('a job with a run shows Graph on the bar, which opens the side panel’s Graph tab for it', async () => {
+  stubRoom([
+    makeJob({
+      id: 'job-1',
+      title: 'Activity feed',
+      recipe: { kind: 'orchestration', ref: 'orch-1' },
+    }),
+  ])
+  const shown: string[] = []
+  renderInRoom(<BoldTeamRoom agents={agents} onShowGraph={(id) => shown.push(id)} />, ['/b'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  fireEvent.click(within(bar).getByRole('button', { name: 'Graph' }))
+  expect(shown).toEqual(['job-1'])
+})
+
+test('Stop job on the bar asks first, then ends the job; Keep going leaves it running', async () => {
+  const fetchMock = stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/jobs/job-1/end' && init?.method === 'POST')
+      return jsonResponse(makeJob({ id: 'job-1', title: 'Activity feed', state: 'closed' }))
+    return fallback(input, init)
+  })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  fireEvent.click(within(bar).getByRole('button', { name: 'Stop job' }))
+  const confirm = screen.getByRole('alertdialog', { name: 'Stop Activity feed?' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  expect(confirm.textContent).toContain('Stop “Activity feed”?')
+  expect(confirm.textContent).toContain(
+    'Running steps stop and the job closes. What it made stays in Past jobs.',
+  )
+  // Keep going closes the confirm and sends nothing.
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Keep going' }))
+  expect(screen.queryByRole('alertdialog')).toBeNull()
+  expect(lastRequest(fetchMock, '/api/jobs/job-1/end', 'POST')).toBeUndefined()
+
+  fireEvent.click(within(bar).getByRole('button', { name: 'Stop job' }))
+  fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Stop job' }))
+  await waitFor(() => expect(lastRequest(fetchMock, '/api/jobs/job-1/end', 'POST')).toBeDefined())
+  // The job is closed: its bar goes.
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull())
+})
+
+test('Next up shows a queued trigger call under the bar, and Skip drops it', async () => {
+  const queue = {
+    asOfSeq: 1,
+    items: [
+      {
+        id: 'q-1',
+        roomId: 'room-1',
+        title: 'Nightly report',
+        source: { app: 'schedule', ref: 'nightly', title: null, triggerId: 'trg-1' },
+        createdAt: '2026-10-24T09:10:00.000Z',
+      },
+    ],
+  }
+  let skipped = false
+  const fetchMock = stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input)
+    if (url === '/api/rooms/room-1/queue/q-1' && init?.method === 'DELETE') {
+      skipped = true
+      return new Response(null, { status: 204 })
+    }
+    if (url === '/api/rooms/room-1/queue')
+      return jsonResponse(skipped ? { asOfSeq: 2, items: [] } : queue)
+    return fallback(input, init)
+  })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  const next = await screen.findByRole('region', { name: 'Next up' })
+  expect(next.getAttribute('data-protected')).toBe('block')
+  expect(next.textContent).toContain('Next up:')
+  expect(next.textContent).toContain('“Nightly report” from schedule waits until this job ends.')
+  fireEvent.click(within(next).getByRole('button', { name: /^Skip/ }))
+  await waitFor(() => expect(skipped).toBe(true))
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Next up' })).toBeNull())
 })
 
 // was: 'opening the room reads only the jobs on screen, and a second job waits for its tab'
@@ -797,7 +925,7 @@ test('an older room opens read-write with today’s @mention routing', async () 
 })
 
 // was: 'rename sends PATCH with the trimmed title'
-test('renaming a topic from its divider sends PATCH with the trimmed title and relabels the divider', async () => {
+test('renaming the job from its bar menu sends PATCH with the trimmed title and relabels the bar', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   const fallback = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) => {
@@ -806,8 +934,8 @@ test('renaming a topic from its divider sends PATCH with the trimmed title and r
     return fallback(input, init)
   })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
-  await screen.findByRole('separator', { name: 'Topic: Activity feed, working' })
-  fireEvent.click(within(topicDivider('Activity feed')).getByRole('button', { name: 'Job menu' }))
+  await screen.findByRole('region', { name: 'Current job' })
+  fireEvent.click(within(jobBar()).getByRole('button', { name: 'Job menu' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename…' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
     target: { value: '  Activity feed v2  ' },
@@ -822,12 +950,12 @@ test('renaming a topic from its divider sends PATCH with the trimmed title and r
     title: 'Activity feed v2',
   })
   expect(await screen.findByText('Renamed “Activity feed v2”.')).toBeDefined()
-  expect(screen.getByRole('separator', { name: 'Topic: Activity feed v2, working' })).toBeDefined()
-  expect(screen.queryByRole('separator', { name: 'Topic: Activity feed, working' })).toBeNull()
+  expect(within(jobBar()).getByText('Activity feed v2')).toBeDefined()
+  expect(within(jobBar()).queryByText('Activity feed')).toBeNull()
 })
 
 // was: 'delete asks for the typed title, then offers a 10-second undo that restores'
-test('deleting a topic asks for its typed title, takes its divider away, and Undo brings it back', async () => {
+test('deleting the job asks for its typed title, takes its bar away, and Undo brings it back', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   const fallback = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) => {
@@ -845,8 +973,8 @@ test('deleting a topic asks for its typed title, takes its divider away, and Und
     </>,
     ['/b?job=job-activity'],
   )
-  await screen.findByRole('separator', { name: 'Topic: Activity feed, working' })
-  fireEvent.click(within(topicDivider('Activity feed')).getByRole('button', { name: 'Job menu' }))
+  await screen.findByRole('region', { name: 'Current job' })
+  fireEvent.click(within(jobBar()).getByRole('button', { name: 'Job menu' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete job' }))
   const confirm = screen.getByRole('button', { name: 'Delete job' })
   expect((confirm as HTMLButtonElement).disabled).toBe(true)
@@ -854,19 +982,19 @@ test('deleting a topic asks for its typed title, takes its divider away, and Und
   expect((confirm as HTMLButtonElement).disabled).toBe(false)
   fireEvent.click(confirm)
   expect(await screen.findByText(/Job deleted/)).toBeDefined()
-  expect(screen.queryByRole('separator', { name: /^Topic: Activity feed/ })).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
   await waitFor(() =>
     expect(lastRequest(fetchMock, '/api/jobs/job-activity/restore', 'POST')).toBeDefined(),
   )
   expect(await screen.findByText('Restored “Activity feed”.')).toBeDefined()
   expect(
-    await screen.findByRole('separator', { name: 'Topic: Activity feed, working' }),
+    within(await screen.findByRole('region', { name: 'Current job' })).getByText('Activity feed'),
   ).toBeDefined()
 })
 
 // was: 'closing a job posts close and tells the person where to find it'
-test('closing a topic posts close, says how to reopen it, and its divider reads closed', async () => {
+test('closing the job posts close, says how to reopen it, and it reads as a past job', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
   const fallback = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) => {
@@ -875,68 +1003,66 @@ test('closing a topic posts close, says how to reopen it, and its divider reads 
     return fallback(input, init)
   })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
-  await screen.findByRole('separator', { name: 'Topic: Activity feed, working' })
+  await screen.findByRole('region', { name: 'Current job' })
 
-  fireEvent.click(within(topicDivider('Activity feed')).getByRole('button', { name: 'Job menu' }))
+  fireEvent.click(within(jobBar()).getByRole('button', { name: 'Job menu' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Close' }))
 
-  expect(
-    await screen.findByText('Closed “Activity feed”. Reopen it from its topic menu.'),
-  ).toBeDefined()
-  // It stays in the conversation as a closed topic: nothing disappears into a hidden list.
-  expect(
-    await screen.findByRole('separator', { name: 'Topic: Activity feed, closed' }),
-  ).toBeDefined()
+  expect(await screen.findByText('Closed “Activity feed”. Reopen it from its menu.')).toBeDefined()
+  // It stays reachable as a closed past job: nothing disappears into a hidden list.
+  const past = await screen.findByRole('region', { name: 'Past job' })
+  expect(past.textContent).toContain('Activity feed')
+  expect(past.textContent).toContain('Closed')
+  expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull()
   const call = lastRequest(fetchMock, '/api/jobs/job-activity/close', 'POST')
   expect(call).toBeDefined()
   expect(new Headers(call?.[1]?.headers).get('Idempotency-Key')).toBeTruthy()
 })
 
 // was: 'a closed job is listed under Closed jobs and its menu reopens it'
-test('a closed topic keeps its divider and its menu reopens it', async () => {
-  const fetchMock = stubRoom([
-    makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' }),
-    makeJob({ id: 'job-activity', title: 'Activity feed' }),
-  ])
+test('a past job opened from Info shows its own bar, and its menu reopens it', async () => {
+  const fetchMock = stubRoom([makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })])
   const fallback = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) => {
     if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
       return jsonResponse(makeJob({ id: 'job-closed', title: 'Old import', state: 'open' }))
     return fallback(input, init)
   })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-closed'])
 
-  await screen.findByRole('separator', { name: 'Topic: Old import, closed' })
-  fireEvent.click(within(topicDivider('Old import')).getByRole('button', { name: 'Job menu' }))
+  const past = await screen.findByRole('region', { name: 'Past job' })
+  expect(past.textContent).toContain('Old import')
+  expect(past.textContent).toContain('opened read-only')
+  expect(within(past).queryByRole('button', { name: 'Stop job' })).toBeNull()
+  fireEvent.click(within(past).getByRole('button', { name: 'Job menu' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
 
   expect(await screen.findByText('Reopened “Old import”.')).toBeDefined()
-  expect(await screen.findByRole('separator', { name: 'Topic: Old import, open' })).toBeDefined()
+  // Reopened, it is the chat's one active job: the Current job bar replaces the past one.
+  expect(
+    within(await screen.findByRole('region', { name: 'Current job' })).getByText('Old import'),
+  ).toBeDefined()
   expect(lastRequest(fetchMock, '/api/jobs/job-closed/reopen', 'POST')).toBeDefined()
-  // Reopening makes it the current topic.
-  expect(screen.getByLabelText('Where this message goes').textContent).toContain('in Old import')
+  expect(screen.getByLabelText('Where this message goes').textContent).not.toContain(' in ')
 })
 
 // was: 'a closed job from the server snapshot is under Closed jobs after a reload'
-test('a topic that is closed in the server snapshot is a closed divider after a reload, and can be reopened', async () => {
+test('a job closed in the server snapshot is a past job beside the running one: the running job keeps its bar', async () => {
   const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
-  const fetchMock = stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
-      return jsonResponse({ ...closed, state: 'open' })
-    return fallback(input, init)
-  })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-closed'])
 
-  expect(await screen.findByRole('separator', { name: 'Topic: Old import, closed' })).toBeDefined()
-  fireEvent.click(within(topicDivider('Old import')).getByRole('button', { name: 'Job menu' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
-  expect(await screen.findByText('Reopened “Old import”.')).toBeDefined()
+  const past = await screen.findByRole('region', { name: 'Past job' })
+  expect(past.textContent).toContain('Closed')
+  expect(
+    within(await screen.findByRole('region', { name: 'Current job' })).getByText('Activity feed'),
+  ).toBeDefined()
+  expect(screen.queryByRole('separator')).toBeNull()
+  expect(within(past).getByRole('button', { name: 'Job menu' })).toBeDefined()
 })
 
 // was: 'a job.deleted event returns the open job to All with a note'
-test('a job.deleted event takes the open topic out of the conversation, clears ?job= and says why', async () => {
+test('a job.deleted event takes the open job out of the conversation, clears ?job= and says why', async () => {
   stubRoom([
     makeJob({ id: 'job-activity', title: 'Activity feed' }),
     makeJob({ id: 'job-notes', title: 'Release notes' }),
@@ -960,7 +1086,11 @@ test('a job.deleted event takes the open topic out of the conversation, clears ?
   expect(await screen.findByText('That job was deleted.')).toBeDefined()
   await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('job='))
   expect(screen.queryByRole('separator', { name: /^Topic: Activity feed/ })).toBeNull()
-  expect(screen.getByRole('separator', { name: 'Topic: Release notes, working' })).toBeDefined()
+  // One job is left, so the chat drops its dividers and shows Release notes on the bar.
+  expect(screen.queryByRole('separator')).toBeNull()
+  expect(
+    within(await screen.findByRole('region', { name: 'Current job' })).getByText('Release notes'),
+  ).toBeDefined()
 })
 
 // was: 'a job.deleted event returns an open phone job to the list with a note'
@@ -1046,20 +1176,13 @@ test('typing / opens the palette above the composer: it filters as you type, arr
     within(palette)
       .getAllByRole('option')
       .map((option) => option.querySelector('.chat-menu-command')?.textContent)
-  for (const name of [
-    '/new',
-    '/rename',
-    '/done',
-    '/reopen',
-    '/lead',
-    '/add',
-    '/remove',
-    '/workspace',
-  ])
+  for (const name of ['/rename', '/done', '/reopen', '/lead', '/add', '/remove', '/workspace'])
     expect(names()).toContain(name)
+  // A chat does one job at a time: /new is not offered.
+  expect(names()).not.toContain('/new')
   // Each entry carries its one-line description.
   expect(within(palette).getByRole('option', { name: /\/done/ }).textContent).toContain(
-    'Close the current topic',
+    'Close the current job',
   )
 
   fireEvent.change(composer, { target: { value: '/re' } })
@@ -1096,31 +1219,21 @@ test('an unknown /command gets a plain-words hint and nothing is sent', async ()
   expect((composer as HTMLTextAreaElement).value).toBe('/frobnicate now')
 })
 
-test('/new makes a topic, selects it, says so in the stream and clears the composer', async () => {
+test('/new is refused with the one-job words: nothing is created or sent, and the text stays', async () => {
   const fetchMock = stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })])
-  const fallback = fetchMock.getMockImplementation()!
-  fetchMock.mockImplementation(async (input, init) => {
-    if (String(input) === '/api/rooms/room-1/jobs' && init?.method === 'POST')
-      return jsonResponse(makeJob({ id: 'job-new', title: 'Fix login', state: 'open' }))
-    return fallback(input, init)
-  })
-  renderInRoom(
-    <>
-      <BoldTeamRoom agents={agents} />
-      <ParamsProbe />
-    </>,
-    ['/b'],
-  )
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
   const composer = (await screen.findByRole('combobox', {
     name: /^Message Team room/,
   })) as HTMLTextAreaElement
   fireEvent.change(composer, { target: { value: '/new Fix login' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-  expect(await screen.findByText('You started the topic “Fix login”')).toBeDefined()
-  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-new'))
-  await waitFor(() => expect(composer.value).toBe(''))
-  expect(lastRequest(fetchMock, '/api/rooms/room-1/jobs', 'POST')).toBeDefined()
-  // Nothing was posted as a chat message.
+  expect(
+    await screen.findByText(
+      'A chat does one job at a time: start one with /run, or Stop the current job first.',
+    ),
+  ).toBeDefined()
+  expect(composer.value).toBe('/new Fix login')
+  expect(lastRequest(fetchMock, '/api/rooms/room-1/jobs', 'POST')).toBeUndefined()
   expect(
     fetchMock.mock.calls.some(
       ([url, init]) => String(url).endsWith('/messages') && init?.method === 'POST',
@@ -1158,16 +1271,21 @@ test('with ?job= set and the topics still loading, the composer is held rather t
     { timeout: 4000 },
   )) as HTMLTextAreaElement
   expect(held.disabled).toBe(true)
-  expect(held.placeholder).toBe('Loading the topic…')
+  expect(held.placeholder).toBe('Loading the job…')
   release()
   await waitFor(() => expect(held.disabled).toBe(false), { timeout: 4000 })
 })
 
 // Replaces 'moving to another topic drops its file and keeps the other parameters' (the phone list it used is gone):
 // the lifecycle path (Reopen moving to another topic) goes through the same selectJob.
-test('reopening another topic drops the open file but keeps the other parameters', async () => {
+test('reopening another job drops the open file but keeps the other parameters', async () => {
   const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
-  const fetchMock = stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  // An older chat that still holds two active jobs keeps its dividers, so another job's menu is on screen.
+  const fetchMock = stubRoom([
+    closed,
+    makeJob({ id: 'job-activity', title: 'Activity feed' }),
+    makeJob({ id: 'job-notes', title: 'Release notes' }),
+  ])
   const fallback = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) => {
     if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
@@ -1234,4 +1352,104 @@ test('on a phone, opening a chat moves focus to the chat title', async () => {
     expect(title).not.toBeNull()
     expect(document.activeElement).toBe(title)
   })
+})
+
+// 3.28.0: starting work while the chat has a job asks first (the busy dialog), whichever way it was started.
+function renderBusy(jobsList = [makeJob({ id: 'job-1', title: 'Story suite prompts' })]) {
+  const opened: (StartJobOptions | undefined)[] = []
+  const fetchMock = stubRoom(jobsList)
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/jobs/job-1/end' && init?.method === 'POST')
+      return jsonResponse(makeJob({ id: 'job-1', title: 'Story suite prompts', state: 'closed' }))
+    return fallback(input, init)
+  })
+  renderInRoom(
+    <StartJobContext value={{ openStartJob: (options) => opened.push(options) }}>
+      <BoldTeamRoom agents={agents} />
+    </StartJobContext>,
+    ['/b'],
+  )
+  return { opened, fetchMock }
+}
+
+async function startRunFromMenu() {
+  await screen.findByRole('region', { name: 'Current job' })
+  fireEvent.click(await screen.findByRole('button', { name: 'Attach, voice and commands' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Start a run…' }))
+  return screen.findByRole('dialog', { name: 'Team room already has a job' })
+}
+
+test('the + menu’s Start a run… with a job running opens the busy dialog instead of Start a job', async () => {
+  const { opened } = renderBusy()
+  const dialog = await startRunFromMenu()
+  expect(dialog.getAttribute('data-protected')).toBe('block')
+  expect(dialog.textContent).toContain('“Story suite prompts” is still running.')
+  expect(dialog.textContent).toContain('New: a new run')
+  expect(opened).toEqual([])
+  // Cancel is where focus starts; Escape cancels and focus goes back to a sensible place (the composer).
+  expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }))
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull(),
+  )
+  expect(opened).toEqual([])
+  expect(document.activeElement).toBe(screen.getByRole('combobox', { name: /^Message Team room/ }))
+})
+
+test('the busy dialog keeps Tab inside it', async () => {
+  renderBusy()
+  const dialog = await startRunFromMenu()
+  const buttons = within(dialog).getAllByRole('button')
+  expect(buttons.map((button) => button.textContent)).toEqual([
+    'Stop the job and start this',
+    'Start in another chat…',
+    'Cancel',
+  ])
+  buttons[2]!.focus()
+  fireEvent.keyDown(buttons[2]!, { key: 'Tab' })
+  expect(document.activeElement).toBe(buttons[0])
+  fireEvent.keyDown(buttons[0]!, { key: 'Tab', shiftKey: true })
+  expect(document.activeElement).toBe(buttons[2])
+})
+
+test('/run with a job running asks first too, naming the recipe; Stop the job and start this ends it and then opens Start a job', async () => {
+  const { opened, fetchMock } = renderBusy()
+  await screen.findByRole('region', { name: 'Current job' })
+  const composer = await screen.findByRole('combobox', { name: /^Message Team room/ })
+  fireEvent.change(composer, { target: { value: '/run Write and review' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Team room already has a job' })
+  expect(dialog.textContent).toContain('New: run “Write and review”')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Stop the job and start this' }))
+  await waitFor(() => expect(lastRequest(fetchMock, '/api/jobs/job-1/end', 'POST')).toBeDefined())
+  await waitFor(() =>
+    expect(opened).toEqual([{ roomId: 'room-1', recipeName: 'Write and review' }]),
+  )
+  expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
+  // The job ended, so its bar is gone.
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull())
+})
+
+test('Start in another chat… opens Start a job with the chat picker and without the busy chat', async () => {
+  const { opened } = renderBusy()
+  const dialog = await startRunFromMenu()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Start in another chat…' }))
+  expect(opened).toEqual([{ pickChat: true, exceptRoomId: 'room-1' }])
+  expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
+})
+
+test('with no job running, Start a run… goes straight to Start a job', async () => {
+  const opened: (StartJobOptions | undefined)[] = []
+  stubRoom([makeJob({ id: 'job-1', title: 'Old', state: 'closed' })])
+  renderInRoom(
+    <StartJobContext value={{ openStartJob: (options) => opened.push(options) }}>
+      <BoldTeamRoom agents={agents} />
+    </StartJobContext>,
+    ['/b'],
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Attach, voice and commands' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Start a run…' }))
+  await waitFor(() => expect(opened).toEqual([{ roomId: 'room-1' }]))
+  expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
 })

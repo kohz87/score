@@ -43,7 +43,10 @@ import {
 } from './RoomMenus.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
-import { isEveryoneRoom } from './room-model.ts'
+import { holdsSeveralJobs, isActiveJob, isEveryoneRoom, theActiveJob } from './room-model.ts'
+import { BusyDialog, type BusyStart } from './BusyDialog.tsx'
+import { JobBar, NextUp, PastJobBar } from './JobBar.tsx'
+import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { ContextBar } from './ContextBar.tsx'
 import { useTopicCommands } from './topic-commands.ts'
 import type { SystemLine } from './topic-divider.tsx'
@@ -155,6 +158,12 @@ function LoadedTeamRoom({
   const [renamingJob, setRenamingJob] = useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
   const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null)
+  // 3.28.0: starting work while the chat has a job asks first (the busy dialog).
+  const [busyStart, setBusyStart] = useState<{
+    busy: BusyStart
+    options: StartJobOptions
+  } | null>(null)
+  const startJob = useStartJob()
   const [lifecycleNotice, setLifecycleNotice] = useState<{
     job: Job
     text: string
@@ -188,7 +197,12 @@ function LoadedTeamRoom({
   // A `?job=` that points at a topic whose list hasn't loaded yet must not fall back to the general conversation.
   // Held only while the topics load; a failed read shows its own error and leaves the composer usable.
   const holdForTopic = requestedJob !== 'all' && jobsStatus === 'pending'
-  const composerJobId = currentJob && !currentJob.isDefault ? currentJob.id : null
+  // 3.28.0: one job per chat. A message goes to the chat's active job, else the chat's own thread; only an older chat that
+  // still holds several active jobs keeps choosing (the picked one, else the newest).
+  const severalJobs = holdsSeveralJobs(allJobs)
+  const activeJob = theActiveJob(allJobs)
+  const sendJob = severalJobs ? currentJob : (activeJob ?? undefined)
+  const composerJobId = sendJob && !sendJob.isDefault ? sendJob.id : null
   const baseMessagesDefinition = useMemo(
     () => roomChatMessagesQuery(room.id, null, defaultJobId),
     [defaultJobId, room.id],
@@ -286,10 +300,14 @@ function LoadedTeamRoom({
       )
       changeCachedJob(queryClient, changed, 'upsert')
       if (action === 'close') {
-        if (selectedJob === job.id) selectJob('all')
+        // An older chat keeps the closed job's divider. With one job per chat there is none, so the closed job stays
+        // picked: its past-job bar carries the menu the notice points to.
+        if (severalJobs) {
+          if (selectedJob === job.id) selectJob('all')
+        } else selectJob(changed.id)
         setLifecycleNotice({
           job: changed,
-          text: `Closed “${changed.title}”. Reopen it from its topic menu.`,
+          text: `Closed “${changed.title}”. Reopen it from its menu.`,
           stillWorking: false,
         })
       } else {
@@ -367,6 +385,23 @@ function LoadedTeamRoom({
   const olderRoom = room.role !== 'team' && room.routing === 'mentions'
   const toLabel = lead ? `To: ${agentDisplayName(lead)}` : 'No lead yet — use @name'
 
+  // The job's ⋯ menu: on the dividers of an older chat that holds several jobs, and on the job bar otherwise.
+  const jobMenu = (topic: Job) => (
+    <JobMenu
+      room={room}
+      job={topic}
+      onShare={setSharingJob}
+      onRename={setRenamingJob}
+      onCloseJob={(target) => void changeJobState(target, 'close')}
+      onReopen={(target) => void changeJobState(target, 'reopen')}
+      onDelete={setDeletingJob}
+    />
+  )
+  // On a phone the chat head already carries the menu of the job it shows.
+  const barMenu = (topic: Job) => (phone && phoneJob?.id === topic.id ? undefined : jobMenu(topic))
+  // A finished job opened from Past jobs shows its own bar (the menu to reopen, rename or delete it lives there).
+  const pastPicked = picked && !picked.isDefault && !isActiveJob(picked) ? picked : null
+
   const clearSeek = useCallback(() => {
     const next = new URLSearchParams(params)
     if (!next.has('message')) return
@@ -389,6 +424,7 @@ function LoadedTeamRoom({
     },
     say: (text) =>
       setSystemLines((lines) => [...lines, { id: newId(), at: new Date().toISOString(), text }]),
+    onBusy: (busy, options) => setBusyStart({ busy, options }),
   })
 
   function startWith(text: string) {
@@ -451,6 +487,22 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
+      {(activeJob || pastPicked || room.role === 'team') && (
+        <div className="bold-job-strip">
+          {activeJob && (
+            <JobBar
+              job={activeJob}
+              agents={agents}
+              onShowGraph={onShowGraph}
+              menu={barMenu(activeJob)}
+            />
+          )}
+          {pastPicked && (
+            <PastJobBar job={pastPicked} onShowGraph={onShowGraph} menu={barMenu(pastPicked)} />
+          )}
+          {room.role === 'team' && <NextUp roomId={room.id} />}
+        </div>
+      )}
       <RoomRequests
         roomId={room.id}
         jobs={allJobs}
@@ -481,18 +533,9 @@ function LoadedTeamRoom({
             showDeleted={showDeleted}
             seek={seek}
             focusTopic={picked?.id ?? null}
+            oneJobPerChat
             systemLines={systemLines}
-            topicMenu={(topic) => (
-              <JobMenu
-                room={room}
-                job={topic}
-                onShare={setSharingJob}
-                onRename={setRenamingJob}
-                onCloseJob={(target) => void changeJobState(target, 'close')}
-                onReopen={(target) => void changeJobState(target, 'reopen')}
-                onDelete={setDeletingJob}
-              />
-            )}
+            topicMenu={jobMenu}
             onSeeked={clearSeek}
             onShowGraph={onShowGraph}
           />
@@ -507,7 +550,7 @@ function LoadedTeamRoom({
           offered={talkable}
           leadAgentId={room.leadAgentId}
           jobId={composerJobId}
-          hold={holdForTopic ? 'Loading the topic…' : undefined}
+          hold={holdForTopic ? 'Loading the job…' : undefined}
           roomMode
           toLabel={toLabel}
           placeholder={
@@ -528,7 +571,8 @@ function LoadedTeamRoom({
               subjectId={subject}
               agents={agents}
               ownerId={room.leadAgentId}
-              topic={currentJob}
+              topic={sendJob}
+              showTopic={severalJobs}
             />
           )}
           messagesKey={baseMessagesDefinition.key}
@@ -542,6 +586,26 @@ function LoadedTeamRoom({
           }}
         />
       </div>
+      {busyStart && (
+        <BusyDialog
+          busy={busyStart.busy}
+          onStopAndStart={async () => {
+            const options = busyStart.options
+            setBusyStart(null)
+            startJob?.openStartJob(options)
+          }}
+          onAnotherChat={() => {
+            const { recipeName } = busyStart.options
+            setBusyStart(null)
+            startJob?.openStartJob({
+              pickChat: true,
+              exceptRoomId: room.id,
+              ...(recipeName ? { recipeName } : {}),
+            })
+          }}
+          onCancel={() => setBusyStart(null)}
+        />
+      )}
       {sharingJob && <ShareDialog room={room} job={sharingJob} close={() => setSharingJob(null)} />}
       {renamingJob && (
         <RenameJobDialog

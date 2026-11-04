@@ -1,5 +1,5 @@
 import type { AgentSummary, OrchestrationSummary } from '@score/contract'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   disposeRoomTest,
@@ -73,17 +73,17 @@ function stub(options: {
         asOfSeq: 1,
         columns: { planned: [], working: [task], in_review: [], needs_you: [], done: [] },
       })
-    if (url === '/api/jobs/job-1/stop' && init.method === 'POST') return jsonResponse({})
+    if (url === '/api/jobs/job-1/end' && init.method === 'POST') return jsonResponse({})
     return jsonResponse({ asOfSeq: 0, items: [] })
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
 
-test('This topic shows the title, the protected status pill with round and turns, and the Hermes tasks', async () => {
+test('This job shows the title, the protected status pill with round and turns, and the Hermes tasks', async () => {
   stub({ exchanges: [makeExchange()] })
   renderInRoom(<TopicInfo roomId="room-1" job={makeJob()} agents={agents} />)
-  expect(screen.getByRole('heading', { name: 'This topic' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'This job' })).toBeTruthy()
   expect(screen.getByText('Activity feed')).toBeTruthy()
   const pill = await screen.findByText('Needs you')
   expect(pill.getAttribute('data-protected')).toBe('inline')
@@ -136,18 +136,21 @@ test('report-back state and its protected Send show for a job from an outside ti
   expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
 })
 
-test('Stop asks first, then stops the job', async () => {
+test('Stop job asks first, then ends the job (stops the work and closes it)', async () => {
   const fetchMock = stub({})
   renderInRoom(<TopicInfo roomId="room-1" job={makeJob()} agents={agents} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-  expect(screen.getByRole('alertdialog', { name: 'Stop Activity feed?' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Stop job' }))
+  const confirm = screen.getByRole('alertdialog', { name: 'Stop Activity feed?' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  expect(confirm.textContent).toContain('Running steps stop and the job closes.')
+  expect(confirm.textContent).toContain('What it made stays in Past jobs.')
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Stop job' }))
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.some(
-        ([url, init]) => String(url) === '/api/jobs/job-1/stop' && init?.method === 'POST',
+        ([url, init]) => String(url) === '/api/jobs/job-1/end' && init?.method === 'POST',
       ),
     ).toBe(true),
   )
-  expect(await screen.findByText('Stop sent.')).toBeTruthy()
+  expect(await screen.findByText('Stopped. It moves to Past jobs.')).toBeTruthy()
 })

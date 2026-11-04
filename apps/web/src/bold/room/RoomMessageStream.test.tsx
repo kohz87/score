@@ -733,3 +733,46 @@ test('a live message from another topic merges into the same conversation in tim
       .at(-1),
   ).toBe('Topic: Release notes, done')
 })
+
+test('one job per chat: no topic dividers (the stream is one conversation), the job’s anchor and run card stay', async () => {
+  stubStream({ pages: topicPages })
+  const withRun = { ...feed, recipe: { kind: 'orchestration' as const, ref: 'orch-1' } }
+  renderInRoom(
+    <RoomMessageStream
+      roomId="room-1"
+      jobs={[general, withRun, notes]}
+      agents={agents}
+      showDeleted={false}
+      seek={null}
+      onSeeked={() => undefined}
+      onShowGraph={() => undefined}
+      oneJobPerChat
+    />,
+  )
+  await screen.findByText('Morning, team.')
+  expect(screen.queryAllByRole('separator')).toEqual([])
+  expect(screen.queryByText(/Back to topic/)).toBeNull()
+  expect(screen.queryByText(/Topic ·/)).toBeNull()
+  // Its anchor is where "scroll to this job" lands; the run card is still drawn.
+  expect(document.getElementById('topic-job-1')).not.toBeNull()
+  expect(await screen.findByRole('button', { name: 'Show graph' })).toBeDefined()
+})
+
+test('an older chat that still holds several active jobs keeps its dividers', async () => {
+  stubStream({ pages: topicPages })
+  const second = { ...notes, state: 'working' as const }
+  renderInRoom(
+    <RoomMessageStream
+      roomId="room-1"
+      jobs={[general, feed, second]}
+      agents={agents}
+      showDeleted={false}
+      seek={null}
+      onSeeked={() => undefined}
+      oneJobPerChat
+    />,
+  )
+  await screen.findByText('Morning, team.')
+  expect(screen.getAllByRole('separator').length).toBeGreaterThan(1)
+  expect(screen.getByText(/Back to topic/)).toBeDefined()
+})

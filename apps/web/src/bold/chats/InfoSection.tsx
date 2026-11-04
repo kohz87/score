@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 're
 
 /** The sections the person can fold in Info (3.27.1), by kind; a direct chat's Workspace is the same kind as a group's. */
 export type InfoSectionKind =
-  'members' | 'workspace' | 'topic' | 'files' | 'topics' | 'agent' | 'chats' | 'add'
+  'members' | 'workspace' | 'topic' | 'files' | 'topics' | 'open-jobs' | 'agent' | 'chats' | 'add'
 
 const DEFAULT_OPEN: Record<InfoSectionKind, boolean> = {
   members: false,
@@ -10,6 +10,7 @@ const DEFAULT_OPEN: Record<InfoSectionKind, boolean> = {
   topic: true,
   files: true,
   topics: false,
+  'open-jobs': true,
   agent: false,
   chats: false,
   add: false,

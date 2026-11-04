@@ -36,8 +36,9 @@ import { copyText } from '../data/clipboard.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../data/passkeys.ts'
 import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
-import { isEveryoneRoom } from './room/room-model.ts'
-import { teamRoomQuery, teamRoomsQuery } from './room/room-queries.ts'
+import { activeJobs, isEveryoneRoom } from './room/room-model.ts'
+import { teamRoomQuery, teamRoomsQuery, roomJobsQuery } from './room/room-queries.ts'
+import { BusyDialog, jobRunningOf, type BusyStart } from './room/BusyDialog.tsx'
 import { pairingProblem } from './bold-errors.ts'
 import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
@@ -97,6 +98,10 @@ export type StartJobOptions = {
   roomId?: string
   /** `/run <name>`: the saved recipe to preselect (case-insensitive). */
   recipeName?: string
+  /** 3.28.0: ask which chat it starts in ("Start in another chat…" from the busy dialog). */
+  pickChat?: boolean
+  /** The chat the person is leaving (it has a job running); the picker doesn't list it. */
+  exceptRoomId?: string
 }
 
 export const StartJobContext = createContext<{
@@ -288,9 +293,24 @@ export function BoldStartJob({
   const askedMissing =
     options?.roomId !== undefined && askedFound === undefined && !askedDirect && !askedLoading
   const askedBlocked = askedArchived || askedMissing || askedLoading
-  const startRoom = askedBlocked
+  // 3.28.0: "Start in another chat…" asks which chat (null = not asking). The chat that is busy isn't offered.
+  const [chatPick, setChatPick] = useState<string | null>(options?.pickChat ? '' : null)
+  const [leftRoomId, setLeftRoomId] = useState<string | null>(options?.exceptRoomId ?? null)
+  const chatChoices = [...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].filter(
+    (item, index, all) =>
+      !item.archived &&
+      item.id !== leftRoomId &&
+      all.findIndex((other) => other.id === item.id) === index,
+  )
+  const defaultRoom = askedBlocked
     ? null
     : (askedRoom ?? chosenTeam ?? teamRoomState.data?.room ?? null)
+  const startRoom =
+    chatPick === null ? defaultRoom : (chatChoices.find((item) => item.id === chatPick) ?? null)
+  // The room's jobs: one job per chat, so a start into a chat that is busy asks first.
+  const startRoomJobs = useStreamQuery(roomJobsQuery(startRoom?.id ?? null)).data
+  const runningJob = activeJobs(startRoomJobs ?? [])[0] ?? null
+  const [busyStart, setBusyStart] = useState<BusyStart | null>(null)
   const teamRoom = {
     data: teamRoomState.data,
     isPending: teamRoomState.status === 'pending',
@@ -340,19 +360,28 @@ export function BoldStartJob({
   const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
-  const askedProblem = askedDirect
-    ? 'Runs start in a group chat.'
-    : askedArchived
-      ? 'This chat is archived; unarchive it to start a run here.'
-      : askedMissing
-        ? 'Couldn’t find that chat.'
-        : null
+  const askedProblem =
+    chatPick !== null
+      ? null
+      : askedDirect
+        ? 'Runs start in a group chat.'
+        : askedArchived
+          ? 'This chat is archived; unarchive it to start a run here.'
+          : askedMissing
+            ? 'Couldn’t find that chat.'
+            : null
   const roomCheck: StartCheck = askedProblem
     ? { key: 'team-room', status: 'fail', text: askedProblem }
-    : askedLoading
-      ? { key: 'team-room', status: 'pending', text: 'Checking the chat' }
-      : checkOf(teamRoom)
-  const roomProblem = askedProblem ?? 'The team room is not ready yet.'
+    : chatPick !== null
+      ? startRoom
+        ? { key: 'team-room', status: 'ok', text: `The job opens in ${startRoom.name}` }
+        : { key: 'team-room', status: 'fail', text: 'Choose a chat to start this in' }
+      : askedLoading
+        ? { key: 'team-room', status: 'pending', text: 'Checking the chat' }
+        : checkOf(teamRoom)
+  const roomProblem =
+    askedProblem ??
+    (chatPick !== null ? 'Choose a chat to start this in.' : 'The team room is not ready yet.')
   const teamLead = startRoom?.leadAgentId ?? null
   // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
   const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
@@ -1020,8 +1049,25 @@ export function BoldStartJob({
     }
   }
 
-  async function start(proved = false) {
+  /** One job per chat (3.28.0): the busy dialog names the running job and what was being started. */
+  function askBusy(running: { id: string; title: string }, note?: string) {
+    setBusyStart({
+      running,
+      chatName: startRoom?.name ?? 'This chat',
+      starting: isSavedRecipe && nowOnce ? `${jobTitle} · run “${recipe.name}”` : jobTitle,
+      ...(note ? { note } : {}),
+    })
+  }
+
+  async function start(proved = false, afterStop = false) {
     if (!canStart || starting.current) return
+    // A start into a chat that already has a job asks first. After "Stop the job and start this" the read of the room
+    // may not have caught up yet, so that retry goes to the server, which answers 409 while it is still stopping.
+    if (nowOnce && startRoom && runningJob && !afterStop) {
+      attemptKey.current = null
+      askBusy(runningJob)
+      return
+    }
     // 3.13: a check runs a command as this user, so starting needs the password or passkey first.
     if (isLead && checkOn && !proved) {
       setAuthError(null)
@@ -1088,6 +1134,13 @@ export function BoldStartJob({
       }
       await saveRecipeAfterStart()
     } catch (failure) {
+      const running = jobRunningOf(failure)
+      if (running) {
+        // The server's answer is not replayed for a new try: the next start is a new attempt.
+        attemptKey.current = null
+        askBusy(running, afterStop ? 'Still stopping… try again in a moment.' : undefined)
+        return
+      }
       if (failure instanceof ApiError && failure.code === 'fresh_auth_required') {
         setAuthError(startError(failure))
         setAuthNeeded(true)
@@ -1174,10 +1227,53 @@ export function BoldStartJob({
           />
         )}
 
+        {busyStart && (
+          <BusyDialog
+            busy={busyStart}
+            onStopAndStart={async () => {
+              setBusyStart(null)
+              attemptKey.current = null
+              await start(true, true)
+            }}
+            onAnotherChat={() => {
+              // The work stays as typed; only the chat changes. The busy chat is not offered again.
+              setLeftRoomId(startRoom?.id ?? null)
+              setChatPick('')
+              setBusyStart(null)
+              attemptKey.current = null
+            }}
+            onCancel={() => setBusyStart(null)}
+          />
+        )}
+
         {result ? (
           <ResultCard result={result} saveWarning={saveWarning} onClose={onClose} />
         ) : (
           <>
+            {chatPick !== null && (
+              <div>
+                <label htmlFor="start-chat" className="lab">
+                  Start it in
+                </label>
+                <select
+                  id="start-chat"
+                  className="field"
+                  value={chatPick}
+                  onChange={(event) => {
+                    setChatPick(event.target.value)
+                    attemptKey.current = null
+                    touch()
+                  }}
+                >
+                  <option value="">Choose a chat…</option>
+                  {chatChoices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {showWhat && (
               <div>
                 <label htmlFor="start-what" className="lab">
