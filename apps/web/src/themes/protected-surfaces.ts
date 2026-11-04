@@ -31,6 +31,8 @@ export const protectedClasses = [
   'bold-chat-rail-item',
   // 3.24.0: the jump chip ("2 need you ↑") above the composer; replaces the pinned box's "N more below" cue
   'bold-needs-jump',
+  // 3.25.0: the viewer sheet's "N need you · Back to the chat" cue (a decision waits under the sheet)
+  'bold-viewer-needs',
   // 3.24.0: the slots a needs-you card is drawn into inside the conversation, and the host that wraps the card
   'bold-needs-slot',
   'bold-needs-host',

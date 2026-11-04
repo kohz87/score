@@ -991,3 +991,124 @@
     min-height: 44px;
   }
 }
+
+/* 3.25.0: Info's Files and results rows: icon, name, who made it and when. */
+[data-ui='bold'] .bold-files-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-files-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 12px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-files-row:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-files-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-files-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-files-meta {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The viewer sheet (3.25.0): the Workbench over the conversation column; a phone's is full screen. */
+[data-ui='bold'] .roomcol:has(> .bold-viewer-sheet) {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-viewer-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel, var(--bg));
+  color: var(--ink);
+}
+
+[data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-viewer-sheet {
+  max-width: none;
+  padding-inline: 0;
+  margin-inline: 0;
+  width: auto;
+}
+
+[data-ui='bold'] .bold-viewer-sheet.phone {
+  position: fixed;
+  z-index: 60;
+}
+
+[data-ui='bold'] .bold-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Not .bold-chat-kicker: a phone hides those visually (the chat list's headings), and this title must show. */
+[data-ui='bold'] .bold-viewer-title {
+  margin: 0;
+  margin-inline-end: auto;
+  font-family: var(--font-b);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* A light object of Score's own: a decision is waiting under the sheet. */
+[data-ui='bold'] .bold-viewer-needs {
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #ececf1;
+  color: #12131a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-viewer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 24px 24px;
+}
+
+[data-ui='bold'] .bold-viewer-body .bold-workbench {
+  max-width: 1000px;
+  margin-inline: auto;
+}

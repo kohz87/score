@@ -96,22 +96,6 @@ export function workbenchHref(jobId: string, tab: WorkbenchTab, file?: string): 
   return boldQuery(file ? { job: jobId, work: tab, file } : { job: jobId, work: tab })
 }
 
-/** The Work header's Workbench switch keeps the room's current job, message and note. */
-export function boldWorkbenchLink(search: string): string {
-  const params = new URLSearchParams(search)
-  params.set('work', 'workbench')
-  params.delete('file')
-  return `/b?${params.toString()}`
-}
-
-/** The Work header's Results switch keeps the room's current job and note, and leaves the Workbench. */
-export function boldResultsLink(search: string): string {
-  const params = new URLSearchParams(search)
-  params.delete('work')
-  params.delete('file')
-  return params.size > 0 ? `/b?${params.toString()}` : '/b'
-}
-
 /** 11.6b: an agent's full screen, reached from the Workbench and the agent page. */
 export function boldAgentScreenLink(agentId: string): string {
   return `/b/screen/${encodeURIComponent(agentId)}`
