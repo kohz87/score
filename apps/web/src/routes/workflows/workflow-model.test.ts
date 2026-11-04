@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
 import {
   addNode,
+  addStepAfter,
+  insertStepBefore,
+  insertStepOnEdge,
   addRule,
   ancestorsOf,
   connect,
@@ -9,6 +12,7 @@ import {
   outlineOf,
   portsOf,
   removeNode,
+  removeNodeJoining,
   removeRule,
   renameInput,
   renameNode,
@@ -197,4 +201,151 @@ test('S2-010: ownText reads own entries only', async () => {
   expect(ownText({}, 'constructor')).toBe('')
   expect(ownText({ constructor: 'x' }, 'constructor')).toBe('x')
   expect(ownText({ topic: 'a' }, 'topic')).toBe('a')
+})
+
+// ---- Adding steps from the layered view (PLAN 3.26.0)
+
+function line(): Draft {
+  return {
+    name: 'x',
+    inputs: [],
+    nodes: [
+      {
+        id: 'a',
+        kind: 'agent',
+        label: 'A',
+        agentId: 'builder',
+        instruction: '',
+        retries: 0,
+        onFailure: 'fail_run',
+      },
+      { id: 'b', kind: 'gate', label: 'B', question: '', onReject: 'stop_run' },
+    ],
+    edges: [{ id: 'e1', from: 'a', port: 'ok', to: 'b' }],
+  }
+}
+
+test('a step inserted on a connection sits between the two, and the old connection now leads to it', () => {
+  const result = insertStepOnEdge(line(), 'e1', 'agent', 'reviewer', 'reviewer')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.nodes.find((n) => n.id === result.id)!.label).toBe('reviewer step')
+  expect(result.draft.edges.map((e) => [e.from, e.port, e.to])).toEqual([
+    ['a', 'ok', result.id],
+    [result.id, 'ok', 'b'],
+  ])
+  expect(result.note).toBe('Added reviewer step before B.')
+})
+
+test('an inserted branch reads the step before it, an inserted end is refused', () => {
+  const result = insertStepOnEdge(line(), 'e1', 'branch')
+  if ('error' in result) throw new Error(result.error)
+  const branch = result.draft.nodes.find((n) => n.id === result.id)!
+  expect(branch.kind === 'branch' && branch.subject).toBe('a')
+  // Both ways out of the new branch lead on, so validation has nothing dangling to warn about.
+  expect(result.draft.edges.filter((e) => e.from === result.id).map((e) => [e.port, e.to])).toEqual(
+    [
+      ['rule1', 'b'],
+      ['default', 'b'],
+    ],
+  )
+  expect(result.draft.edges.find((e) => e.to === result.id)!.from).toBe('a')
+  expect(insertStepOnEdge(line(), 'e1', 'end')).toEqual({
+    error: 'An end can’t sit between two steps.',
+  })
+  expect(insertStepOnEdge(line(), 'nope', 'gate')).toEqual({ error: 'That connection is gone.' })
+})
+
+test('a new first step leads to the old first step', () => {
+  const result = insertStepBefore(line(), 'a', 'gate')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.edges).toContainEqual(
+    expect.objectContaining({ from: result.id, port: 'ok', to: 'a' }),
+  )
+  expect(insertStepBefore(line(), 'a', 'end')).toEqual({ error: 'An end can’t come first.' })
+})
+
+test('add after goes between a step and what it led to when its only way on is used; otherwise on a free way', () => {
+  const between = addStepAfter(line(), 'a', 'gate')
+  if ('error' in between) throw new Error(between.error)
+  expect(between.draft.edges.map((e) => [e.from, e.to])).toEqual([
+    ['a', between.id],
+    [between.id, 'b'],
+  ])
+  // After the gate (free "approved" way): connected on it. An end is never inserted between.
+  const free = addStepAfter(line(), 'b', 'agent', 'builder', 'builder')
+  if ('error' in free) throw new Error(free.error)
+  expect(free.draft.edges).toContainEqual(
+    expect.objectContaining({ from: 'b', port: 'ok', to: free.id }),
+  )
+  const ending = addStepAfter(line(), 'a', 'end')
+  if ('error' in ending) throw new Error(ending.error)
+  expect(ending.draft.edges).toHaveLength(1)
+})
+
+test('a branch inserted before the first step leads on from its rule and from otherwise', () => {
+  const result = insertStepBefore(line(), 'a', 'branch')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.edges.filter((e) => e.from === result.id).map((e) => [e.port, e.to])).toEqual(
+    [
+      ['rule1', 'a'],
+      ['default', 'a'],
+    ],
+  )
+})
+
+const fan = (): Draft => {
+  const base = line()
+  const extra = addNode(base, 'agent', 'builder')
+  if ('error' in extra) throw new Error(extra.error)
+  return {
+    ...extra.draft,
+    edges: [...extra.draft.edges, { id: 'e9', from: 'a', port: 'ok', to: extra.id }],
+  }
+}
+
+test('a step added after one whose way on fans out becomes one more path from it', () => {
+  const result = addStepAfter(fan(), 'a', 'agent', 'builder', 'builder')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.edges.filter((e) => e.from === 'a' && e.port === 'ok')).toHaveLength(3)
+  expect(result.draft.edges.some((e) => e.from === 'a' && e.to === result.id)).toBe(true)
+  expect(result.note).toContain('one more path after A')
+})
+
+test('past the connection limit it is added unconnected and says how to connect it', () => {
+  const draft = fan()
+  const full: Draft = {
+    ...draft,
+    edges: [
+      ...draft.edges,
+      ...Array.from({ length: 100 - draft.edges.length }, (_, n) => ({
+        id: `x${n}`,
+        from: 'b',
+        port: 'ok',
+        to: 'a',
+      })),
+    ],
+  }
+  const result = addStepAfter(full, 'a', 'agent', 'builder', 'builder')
+  if ('error' in result) throw new Error(result.error)
+  expect(result.draft.edges.some((e) => e.to === result.id)).toBe(false)
+  expect(result.note).toBe('Added builder step, not connected yet: connect it in its settings.')
+})
+
+test('deleting a middle step joins the step before to the step after, on the same ports', () => {
+  const result = removeNodeJoining(line(), 'b')
+  expect(result.note).toBeNull()
+  // a → b is the whole line here (b is last); a three-step line has a middle.
+  const three = insertStepOnEdge(line(), 'e1', 'agent', 'builder', 'mid')
+  if ('error' in three) throw new Error(three.error)
+  const joined = removeNodeJoining(three.draft, three.id)
+  expect(joined.note).toBe('Joined A to B.')
+  expect(joined.draft.nodes.map((n) => n.id)).not.toContain(three.id)
+  expect(joined.draft.edges.map((e) => [e.from, e.port, e.to])).toEqual([['a', 'ok', 'b']])
+})
+
+test('other shapes keep plain removal: a step with two ways in, or with no way out', () => {
+  const draft = fan()
+  expect(removeNodeJoining(draft, 'a').note).toBeNull()
+  expect(removeNodeJoining(draft, 'a').draft).toEqual(removeNode(draft, 'a'))
+  expect(removeNodeJoining(line(), 'b').draft).toEqual(removeNode(line(), 'b'))
 })

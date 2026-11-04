@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.26.0] — 2026-11-04
+
+### Changed
+- **Recipes read like a run's Graph.** The editor lays a recipe out top to bottom: your input, each step as a card with
+  its agent, steps that run at the same time side by side, your approval as a light card, branches with their paths.
+  **+** between two steps adds one there; a step's settings open beside it (a short sheet on a phone). Deleting a middle
+  step joins its neighbours; a step that isn't connected shows under "Not connected". Preview shows each step's state and
+  the path taken on the cards. The free canvas, zoom and Arrange automatically are gone.
+
 ## [3.25.0] — 2026-11-04
 
 ### Changed

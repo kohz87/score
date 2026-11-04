@@ -615,16 +615,20 @@ test('the graph editor adds, connects and removes steps, keeps keyboard use, and
   await inspector(page).getByLabel('Agent').selectOption({ label: 'builder' })
   await inspector(page).getByRole('combobox', { name: 'Instruction' }).fill('Write a short note.')
 
-  // Replace the starter end: delete it from the keyboard, then build the route with the palette.
+  // Replace the starter end: delete it from the keyboard (the layered view asks first), then build the route from the
+  // selected card's "Add a step after" menu.
+  page.on('dialog', (prompt) => void prompt.accept())
   const end = page.locator('[data-node="end1"]')
   await end.focus()
   await page.keyboard.press('Delete')
   await expect(nodes).toHaveCount(1)
   await page.locator('[data-node="step1"]').click()
-  await page.getByRole('button', { name: /Add a gate/ }).click()
+  await inspector(page).getByRole('button', { name: 'Add a step after', exact: true }).click()
+  await page.getByRole('menuitem', { name: /Add a gate/ }).click()
   await expect(nodes).toHaveCount(2)
   await inspector(page).getByRole('combobox', { name: 'Question' }).fill('Publish it?')
-  await page.getByRole('button', { name: /Add an end/ }).click()
+  await inspector(page).getByRole('button', { name: 'Add a step after', exact: true }).click()
+  await page.getByRole('menuitem', { name: /Add an end/ }).click()
   await expect(nodes).toHaveCount(3)
   await expect(page.getByRole('status').filter({ hasText: 'Looks good' })).toBeVisible({
     timeout: 20_000,
@@ -690,7 +694,7 @@ test('a saved version opens read-only, Preview plays without running, and Run op
   await page.getByLabel('View a saved version (read-only)').selectOption('1')
   await expect(page.getByText('Version 1 (read-only)')).toBeVisible()
   await expect(page.getByRole('button', { name: /Save as version/ })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Arrange automatically' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Add a step/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Back to my draft' }).click()
 
   await page.getByRole('button', { name: 'Preview, nothing runs' }).click()
@@ -713,9 +717,17 @@ test('a phone stacks the list, the recipe and the step settings without sideways
   await openRecipes(page, 'new')
   const list = await page.getByRole('navigation', { name: 'Recipes' }).boundingBox()
   const main = await page.getByRole('region', { name: 'Recipe editor' }).boundingBox()
-  const panel = await inspector(page).boundingBox()
   expect(main!.y).toBeGreaterThan(list!.y + list!.height - 1)
-  expect(panel!.y).toBeGreaterThan(main!.y + main!.height - 1)
+  // The step's settings are a sheet from the bottom, only while a card is selected.
+  await expect(inspector(page)).toHaveCount(0)
+  await page.locator('[data-node="step1"]').click()
+  await expect(inspector(page)).toBeVisible()
+  const panel = await inspector(page).boundingBox()
+  expect(panel!.x).toBeGreaterThanOrEqual(0)
+  expect(panel!.x + panel!.width).toBeLessThanOrEqual(390)
+  expect(panel!.y + panel!.height).toBeGreaterThan(844 - 2)
+  await page.getByRole('button', { name: 'Close step settings' }).click()
+  await expect(inspector(page)).toHaveCount(0)
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

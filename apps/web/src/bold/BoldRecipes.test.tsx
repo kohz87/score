@@ -27,6 +27,9 @@ const agents = [
     role: '',
     style: { color: '#19C39A', shape: 'square' },
     status: 'idle',
+    activity: null,
+    model: null,
+    served: true,
   },
   {
     id: 'reviewer',
@@ -34,6 +37,9 @@ const agents = [
     role: '',
     style: { color: '#FFB61E', shape: 'triangle' },
     status: 'idle',
+    activity: null,
+    model: null,
+    served: true,
   },
 ]
 
@@ -285,13 +291,44 @@ test('the list is searchable and lead decides is a page with a way to start a jo
   expect(router.state.location.pathname).toBe('/b/recipes/lead-decides')
 })
 
-test('a step added in the graph is connected after the selected one and saved with the draft', async () => {
+test('a + between two layers adds a step on that connection, and the draft is saved with it', async () => {
   mount()
-  const palette = await screen.findByRole('region', { name: 'Palette' })
+  await screen.findByRole('button', { name: /Gate Approve the draft/ })
   const before = document.querySelectorAll('[data-node]').length
-  fireEvent.click(within(palette).getByRole('button', { name: /Add a gate/ }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a step after Approve the draft' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Add a gate' }))
   await waitFor(() => expect(document.querySelectorAll('[data-node]').length).toBe(before + 1))
+  // The new gate sits between the approval and the branch: approve → gate → branch.
+  const added = document.querySelector<HTMLElement>('[data-kind="gate"][data-node="gate1"]')!
+  expect(added).toBeTruthy()
+  const cards = [...document.querySelectorAll<HTMLElement>('.rl-card[data-node]')].map(
+    (card) => card.dataset.node,
+  )
+  expect(cards.indexOf('gate1')).toBe(cards.indexOf('approve') + 1)
+  expect(cards.indexOf('gate1')).toBe(cards.indexOf('passed') - 1)
   await waitFor(() => expect(saveButton()).toBeTruthy())
+  // The new card is selected, and its settings are in the panel.
+  expect(
+    within(screen.getByRole('complementary', { name: 'Selected step' })).getByRole('heading', {
+      name: 'Check with me',
+    }),
+  ).toBeTruthy()
+})
+
+test('Add a step after, in the settings, connects the new step after the selected one', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: /Agent step Review the draft/ }))
+  const inspector = screen.getByRole('complementary', { name: 'Selected step' })
+  expect(within(inspector).getByText('Runs after step 1')).toBeTruthy()
+  fireEvent.click(within(inspector).getByRole('button', { name: 'Add a step after' }))
+  fireEvent.click(
+    await within(inspector).findByRole('menuitem', { name: 'Add an agent step for builder' }),
+  )
+  expect(
+    await screen.findByRole('button', { name: /Agent step builder step, builder/ }),
+  ).toBeTruthy()
+  // The new step is selected and runs after the one that was selected.
+  expect(within(inspector).getByText(/Runs after step 2/)).toBeTruthy()
 })
 
 test('Run opens Start a job with this recipe, and a saved version can be viewed read-only', async () => {
@@ -380,7 +417,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
   expect(within(alert).getByRole('button', { name: /Reload version 2/ })).toBeTruthy()
 })
 
-test('the outline is the canvas as text, and the inspector connects with a select (the keyboard way)', async () => {
+test('the outline is the graph as text, and the inspector connects with a select (the keyboard way)', async () => {
   mount('/b/recipes/wf-release')
   const outline = await screen.findByRole('region', { name: 'Outline' })
   expect(within(outline).getByText('when done goes to Review the draft')).toBeTruthy()
@@ -400,112 +437,51 @@ test('the outline is the canvas as text, and the inspector connects with a selec
   ).toBe(true)
 })
 
-// ---- Free placement (PLAN 7.1c)
+// ---- The layered view (PLAN 3.26.0). The free canvas is gone; stored positions are kept but never drawn from.
 
-const nodeBox = (id: string) =>
-  document.querySelector<HTMLElement>(`.wf-node[data-wf-node="${id}"]`)!
-const at = (id: string) => ({
-  x: Number.parseFloat(nodeBox(id).style.left),
-  y: Number.parseFloat(nodeBox(id).style.top),
-})
-const drawnNode = (name: RegExp) => screen.findByRole('button', { name })
-function drag(
-  el: HTMLElement,
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  alt = false,
-) {
-  fireEvent.pointerDown(el, { clientX: from.x, clientY: from.y, button: 0, pointerId: 1 })
-  fireEvent.pointerMove(el, { clientX: to.x, clientY: to.y, altKey: alt, pointerId: 1 })
-  fireEvent.pointerUp(el, { clientX: to.x, clientY: to.y, altKey: alt, pointerId: 1 })
+const withStoredLayout = () => {
+  const drawn = structuredClone(workflowFixtures['/api/workflows/wf-release']) as {
+    latest: { definition: { layout?: unknown } }
+  }
+  drawn.latest.definition.layout = {
+    nodes: { draft: { x: 640, y: 480 }, review: { x: 16, y: 16 }, publish: { x: 320, y: 160 } },
+  }
+  const original = workflowFixtures['/api/workflows/wf-release']
+  workflowFixtures['/api/workflows/wf-release'] = drawn
+  dispose.push(() => {
+    workflowFixtures['/api/workflows/wf-release'] = original
+  })
 }
 
-test('dragging a node moves it on a 16 px grid, marks the draft unsaved and keeps the others where they were', async () => {
+test('the cards read top to bottom by rank, whatever positions were saved; parallel steps sit side by side', async () => {
+  withStoredLayout()
   mount('/b/recipes/wf-release')
-  const node = await drawnNode(/Agent step Draft the notes/)
-  const before = { draft: at('draft'), review: at('review'), publish: at('publish') }
-  const start = { x: before.draft.x + 20, y: before.draft.y + 10 }
-  drag(node, start, { x: start.x + 53, y: start.y + 37 })
-  expect(at('draft')).toEqual({
-    x: Math.round((before.draft.x + 53) / 16) * 16,
-    y: Math.round((before.draft.y + 37) / 16) * 16,
-  })
-  // Pinning on the first move: nobody else jumps.
-  expect(at('review')).toEqual(before.review)
-  expect(at('publish')).toEqual(before.publish)
-  expect(screen.getByText(/unsaved changes/)).toBeTruthy()
-  // The drag did not select the node.
-  expect(screen.getByRole('complementary', { name: 'Selected step' }).textContent).toMatch(
-    /Nothing selected/,
+  await screen.findByRole('button', { name: /Agent step Draft the notes/ })
+  const order = [...document.querySelectorAll<HTMLElement>('.rl-card[data-node]')].map(
+    (card) => card.dataset.node,
   )
-})
-
-test('holding Alt places the node exactly under the pointer, and a node never goes off the top left', async () => {
-  mount('/b/recipes/wf-release')
-  const node = await drawnNode(/Agent step Draft the notes/)
-  const p = at('draft')
-  drag(node, { x: p.x + 5, y: p.y + 5 }, { x: p.x + 5 + 53, y: p.y + 5 + 37 }, true)
-  expect(at('draft')).toEqual({ x: p.x + 53, y: p.y + 37 })
-  drag(node, { x: 500, y: 500 }, { x: -900, y: -900 })
-  expect(at('draft')).toEqual({ x: 0, y: 0 })
-})
-
-test('the keyboard moves a node: M, arrows (Shift for big steps), Escape; one undo step per run of presses', async () => {
-  mount('/b/recipes/wf-release')
-  const node = await drawnNode(/Agent step Draft the notes/)
-  node.focus()
-  const p = at('draft')
-  // Before M, the arrows move the focus, not the node.
-  fireEvent.keyDown(node, { key: 'ArrowRight' })
-  expect(at('draft')).toEqual(p)
-  fireEvent.keyDown(node, { key: 'm' })
-  fireEvent.keyDown(node, { key: 'ArrowRight' })
-  fireEvent.keyDown(node, { key: 'ArrowRight' })
-  fireEvent.keyDown(node, { key: 'ArrowDown', shiftKey: true })
-  expect(at('draft')).toEqual({
-    x: Math.round((p.x + 32) / 16) * 16,
-    y: Math.round((p.y + 80) / 16) * 16,
-  })
+  expect(order).toEqual(['draft', 'review', 'approve', 'passed', 'publish', 'repair', 'repaired'])
+  // publish and repair are one layer: one row, "at the same time".
+  const row = document.querySelector('.rl-row')!
   expect(
-    screen.getByText(/draft at|Draft the notes at/, { selector: '[role="status"]' }),
-  ).toBeTruthy()
-  fireEvent.keyDown(node, { key: 'Escape' })
-  fireEvent.keyDown(node, { key: 'ArrowRight' })
-  expect(at('draft').x).toBeLessThan(p.x + 33 + 16)
-  // The three presses are one history step.
-  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-  expect(at('draft')).toEqual(p)
-  expect(screen.queryByText(/unsaved changes/)).toBeNull()
+    [...row.querySelectorAll('[data-node]')].map((card) => (card as HTMLElement).dataset.node),
+  ).toEqual(['publish', 'repair'])
+  expect(screen.getByText('at the same time')).toBeTruthy()
+  // The free canvas's controls are gone.
+  expect(screen.queryByRole('button', { name: 'Arrange automatically' })).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Palette' })).toBeNull()
 })
 
-test('Arrange automatically is one undoable step that drops the saved positions', async () => {
-  mount('/b/recipes/wf-release')
-  const node = await drawnNode(/Agent step Draft the notes/)
-  const arrange = screen.getByRole('button', { name: 'Arrange automatically' }) as HTMLButtonElement
-  expect(arrange.disabled).toBe(true)
-  const auto = at('draft')
-  drag(node, { x: auto.x + 5, y: auto.y + 5 }, { x: auto.x + 205, y: auto.y + 165 })
-  const dragged = at('draft')
-  expect(dragged).not.toEqual(auto)
-  expect(arrange.disabled).toBe(false)
-  fireEvent.click(arrange)
-  expect(at('draft')).toEqual(auto)
-  expect(arrange.disabled).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-  expect(at('draft')).toEqual(dragged)
-})
-
-test('saving sends the layout with the definition; a moved node is the only change', async () => {
+test('saving keeps the stored positions as they were', async () => {
+  withStoredLayout()
   post = (url) =>
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
   mount('/b/recipes/wf-release')
-  const node = await drawnNode(/Agent step Draft the notes/)
+  const name = (await screen.findByRole('textbox', { name: 'Recipe name' })) as HTMLInputElement
+  fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
-  expect(save.disabled).toBe(true)
-  const p = at('draft')
-  drag(node, { x: p.x + 5, y: p.y + 5 }, { x: p.x + 69, y: p.y + 5 })
   await waitFor(() => expect(save.disabled).toBe(false))
   fireEvent.click(save)
   await screen.findByRole('alert', { name: 'Someone saved first' })
@@ -514,37 +490,70 @@ test('saving sends the layout with the definition; a moved node is the only chan
   ) as {
     definition: { layout: { nodes: Record<string, { x: number; y: number }> }; nodes: unknown[] }
   }
-  expect(Object.keys(sent.definition.layout.nodes).sort()).toEqual(
-    releaseDefinition.nodes.map((n) => n.id).sort(),
-  )
-  expect(sent.definition.layout.nodes.draft).toEqual(at('draft'))
+  expect(sent.definition.layout.nodes).toEqual({
+    draft: { x: 640, y: 480 },
+    review: { x: 16, y: 16 },
+    publish: { x: 320, y: 160 },
+  })
   expect(sent.definition.nodes).toEqual(releaseDefinition.nodes)
 })
 
-test('deleting a node drops its position, and a saved layout is what the editor draws', async () => {
-  const drawn = structuredClone(workflowFixtures['/api/workflows/wf-release']) as {
-    latest: { definition: { layout?: unknown } }
-  }
-  drawn.latest.definition.layout = {
-    nodes: { draft: { x: 320, y: 160 }, review: { x: 640, y: 48 } },
-  }
-  const original = workflowFixtures['/api/workflows/wf-release']
-  workflowFixtures['/api/workflows/wf-release'] = drawn
-  dispose.push(() => {
-    workflowFixtures['/api/workflows/wf-release'] = original
-  })
+test('Delete on a selected card asks first; a no keeps the step, a yes removes it and its saved position', async () => {
+  withStoredLayout()
   mount('/b/recipes/wf-release')
-  await drawnNode(/Agent step Draft the notes/)
-  expect(at('draft')).toEqual({ x: 320, y: 160 })
-  expect(at('review')).toEqual({ x: 640, y: 48 })
-  // A node without a position is placed automatically.
-  expect(at('publish').x).toBeGreaterThan(0)
-  expect(
-    (screen.getByRole('button', { name: 'Arrange automatically' }) as HTMLButtonElement).disabled,
-  ).toBe(false)
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  fireEvent.keyDown(card, { key: 'Delete' })
+  expect(ask).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('button', { name: /Agent step Review the draft/ })).toBeTruthy()
+  expect(screen.queryByText(/unsaved changes/)).toBeNull()
+  ask.mockReturnValue(true)
+  fireEvent.keyDown(card, { key: 'Backspace' })
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: /Agent step Review the draft/ })).toBeNull(),
+  )
+  expect(screen.getByText(/unsaved changes/)).toBeTruthy()
+  // Undo brings it back.
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(await screen.findByRole('button', { name: /Agent step Review the draft/ })).toBeTruthy()
 })
 
-test('the editor draws a run of the version on screen over the canvas, and links to it', async () => {
+test('a card is a button: Enter or a click selects it, and the settings open beside it', async () => {
+  mount('/b/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Gate Approve the draft/ })
+  expect(card.getAttribute('aria-pressed')).toBe('false')
+  fireEvent.click(card)
+  expect(card.getAttribute('aria-pressed')).toBe('true')
+  expect(
+    within(screen.getByRole('complementary', { name: 'Selected step' })).getByRole('heading', {
+      name: 'Approve the draft',
+    }),
+  ).toBeTruthy()
+})
+
+test('on a phone the step settings are a sheet that closes with its button', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('width < 600px'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+  mount('/b/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  // Nothing selected: no panel, the graph has the page.
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  fireEvent.click(card)
+  const sheet = screen.getByRole('complementary', { name: 'Selected step' })
+  expect(sheet.className).toContain('bold-rp-sheet')
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Close step settings' }))
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+})
+
+test('the editor draws a run of the version on screen over the cards, and links to it', async () => {
   mount('/b/recipes/wf-release')
   const live = await screen.findByText(/Live: run started/)
   expect(
@@ -560,7 +569,7 @@ test('the editor draws a run of the version on screen over the canvas, and links
   expect(screen.queryByText(/unsaved changes/)).toBeNull()
 })
 
-test('Preview plays the drawn workflow, says nothing runs, and Stop returns to the canvas', async () => {
+test('Preview plays the drawn workflow, says nothing runs, and Stop returns to the cards', async () => {
   mount('/b/recipes/wf-release')
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
@@ -685,4 +694,83 @@ test('/b/recipes?run= shows the list of runs instead of the recipes', async () =
   mount('/b/recipes?run=')
   expect(await screen.findByRole('list', { name: 'Runs' })).toBeDefined()
   expect(screen.queryByRole('navigation', { name: 'Recipes' })).toBeNull()
+})
+
+const phoneMedia = () =>
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('width < 600px'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+
+test('deleting a middle step joins the step before to the step after, says so, and focuses the joined card', async () => {
+  mount('/b/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  fireEvent.keyDown(card, { key: 'Delete' })
+  expect(await screen.findByText(/Joined .* to Approve the draft\./)).toBeTruthy()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: /Gate Approve the draft/ }),
+    ),
+  )
+  // One undo brings back the step and its connections together.
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(await screen.findByRole('button', { name: /Agent step Review the draft/ })).toBeTruthy()
+})
+
+test('after an insert, focus goes to the new card', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a step after Approve the draft' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Add a gate' }))
+  await waitFor(() =>
+    expect(document.activeElement).toBe(document.querySelector('.rl-card[data-node="gate1"]')),
+  )
+})
+
+test('phone sheet: compact with the instruction, focus moves in and back, Escape closes it from anywhere, More settings expands it', async () => {
+  phoneMedia()
+  mount('/b/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  fireEvent.click(card)
+  const sheet = screen.getByRole('complementary', { name: 'Selected step' })
+  await waitFor(() => expect(document.activeElement).toBe(sheet))
+  expect(within(sheet).getByRole('heading', { name: 'Review the draft' })).toBeTruthy()
+  expect(within(sheet).getByRole('combobox', { name: 'Instruction' })).toBeTruthy()
+  expect(within(sheet).getByRole('button', { name: 'Delete step' })).toBeTruthy()
+  // Compact: the title field and the retries live behind "More settings".
+  expect(within(sheet).queryByRole('textbox', { name: 'Title' })).toBeNull()
+  fireEvent.click(within(sheet).getByRole('button', { name: 'More settings' }))
+  expect(within(sheet).getByRole('textbox', { name: 'Title' })).toBeTruthy()
+  expect(within(sheet).getByRole('button', { name: 'Fewer settings' })).toBeTruthy()
+  // Escape closes it even when focus is back on a card, and the card has focus afterwards.
+  const other = screen.getByRole('button', { name: /Gate Approve the draft/ })
+  other.focus()
+  fireEvent.keyDown(other, { key: 'Escape' })
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: /Agent step Review the draft/ }),
+    ),
+  )
+})
+
+test('phone sheet: Delete step removes the step with its join, and an insert keeps focus on the new card', async () => {
+  phoneMedia()
+  mount('/b/recipes/wf-release')
+  fireEvent.click(await screen.findByRole('button', { name: /Agent step Review the draft/ }))
+  const sheet = screen.getByRole('complementary', { name: 'Selected step' })
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Delete step' }))
+  expect(screen.queryByRole('button', { name: /Agent step Review the draft/ })).toBeNull()
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Add a step after Approve the draft' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Add a gate' }))
+  await waitFor(() =>
+    expect(document.activeElement).toBe(document.querySelector('.rl-card[data-node="gate1"]')),
+  )
 })
