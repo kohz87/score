@@ -444,7 +444,8 @@
     min-height: 32px;
   }
 
-  /* The chat gets the width: the Info panel is a 300px column and the chat's content a centred 860px column. */
+  /* The chat gets the width: the Info panel is a 300px column and the chat's content fills the rest (3.27.1, owner:
+     no centred 860px column; each message bubble keeps its own reading width). */
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
     flex: 1 1 0;
     max-width: none;
@@ -452,7 +453,7 @@
 
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
     width: 100%;
-    max-width: 860px;
+    max-width: none;
     margin-inline: auto;
     box-sizing: border-box;
   }
@@ -807,8 +808,22 @@
 /* Info › This topic (3.22.0): the old thread panel's status, run, report-back and tasks, compact for a 300px column. */
 [data-ui='bold'] .bold-topic-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* 3.27.1 (owner's Troubleshooting note): the Stop confirm takes its own row under the title, so a long title is not
+   squeezed to a letter per line and the confirm stays inside the panel. A long title shows three lines; the rest is in
+   its tooltip. */
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm {
+  flex: 1 0 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm > b {
+  overflow-wrap: anywhere;
 }
 
 [data-ui='bold'] .bold-topic-title {
@@ -818,6 +833,11 @@
   font-size: 16px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 [data-ui='bold'] .bold-topic-status {

@@ -72,8 +72,10 @@ for (const size of sizes) {
     await pair(page)
     await openLibrary(page, size.width, size.height)
     const folder = `fold${Date.now().toString(36)}`
-    const nav = page.getByRole('navigation', { name: 'Library notes' })
-    await nav.getByRole('button', { name: 'New folder' }).click()
+    await page
+      .getByRole('complementary', { name: 'Folders' })
+      .getByRole('button', { name: /New folder/ })
+      .click()
     const dialog = page.getByRole('dialog', { name: 'New folder' })
     await dialog.getByLabel('Folder path').fill(folder)
     await dialog.getByRole('button', { name: /^Create/ }).click()

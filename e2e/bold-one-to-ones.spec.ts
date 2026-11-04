@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { openAllInfoSections } from './bold-chat-helpers.ts'
 import { openBoldJob } from './bold-room-fixtures.ts'
 
 // PLAN 11.7: one-to-ones in the bold shell, against the fake adapter's seeded direct chats (builder: "Websockets or
@@ -37,6 +38,8 @@ async function openInfo(page: Page) {
   const info = panel.getByRole('tab', { name: 'Info' })
   if ((await info.count()) > 0 && (await info.getAttribute('aria-selected')) !== 'true')
     await info.click()
+  // 3.27.1: the Info sections start folded; a person opens the ones they want.
+  await openAllInfoSections(panel)
   return panel
 }
 

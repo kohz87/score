@@ -222,7 +222,9 @@ export function TopicInfo({
       needsYou={waiting || reportWaits || recipeWaits || confirmingStop}
     >
       <div className="bold-topic-head">
-        <b className="bold-topic-title">{job.title}</b>
+        <b className="bold-topic-title" title={job.title}>
+          {job.title}
+        </b>
         <StopTopic job={job} onStopped={() => void refetch()} onConfirming={setConfirmingStop} />
       </div>
       <p className="bold-topic-status">
