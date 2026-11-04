@@ -36,9 +36,12 @@ export function ViewerSheet({
 
   const close = () => {
     setParams(viewerClosedSearch(paramsRef.current), { replace: true })
-    requestAnimationFrame(() => {
-      if (!focusOpenedRow()) document.getElementById('chat-info-files')?.focus()
-    })
+    // Two frames: the sheet unmounts (and the siblings it made inert are live again) before focus goes to the row.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!focusOpenedRow()) document.getElementById('chat-info-files')?.focus()
+      }),
+    )
   }
   // A needs-you card that waits in this chat is under the sheet: the bar says so and takes the person back to it.
   const [needing, setNeeding] = useState(0)

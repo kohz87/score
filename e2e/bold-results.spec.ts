@@ -1,8 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 import { visualHello } from './visual-fixtures.ts'
 
-// PLAN 11.5: the seeded team room's Results at the two review sizes, with reduced motion. The fake demo moves on over
+// PLAN 11.5, moved in 3.25.0: Results folded into Info's "Files and results" (and the viewer sheet). The seeded team room at the two review sizes, with reduced motion. The fake demo moves on over
 // time, so the assertions use the seeded jobs' stable content rather than transient status or timestamps.
 
 const sizes = [
@@ -29,80 +29,59 @@ async function activityFeedJob(page: Page) {
 async function openResults(page: Page, size: Size, path = '/b?open=1') {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  // 3.21.0: the side panel opens on Info by default. On desktop `?work=results` asks for Work; on a phone Chat info opens
-  // the sheet on Info and the Results tab switches it.
+  // 3.25.0: Results is Info's "Files and results" section. `?work=results` opens Info at it; on a phone Chat info opens
+  // the sheet on Info.
   const phone = size.width < 861
   await page.goto(phone ? path : `${path}${path.includes('?') ? '&' : '?'}work=results`)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  if (phone) {
-    await page.getByRole('button', { name: 'Chat info' }).click()
-    const sheet = page.getByRole('complementary', { name: 'Side panel' })
-    await sheet.getByRole('tab', { name: 'Results' }).click()
-  }
+  if (phone) await page.getByRole('button', { name: 'Chat info' }).click()
 
   const panel = page.getByRole('complementary', { name: 'Side panel' })
   await expect(panel).toBeVisible()
-  const work = panel.getByRole('navigation', { name: 'How to see the work' })
-  await expect(work.getByText('Results', { exact: true })).toHaveAttribute('aria-current', 'page')
-  // 3.22.0: the panel is Info | Results only (pill tabs); Results is the chosen one.
-  await expect(panel.getByRole('tab', { name: 'Results' })).toHaveAttribute('aria-selected', 'true')
-  await expect(panel.getByTestId('bold-results')).toBeVisible()
-  return panel
+  // The panel is Info (| Graph) only: no Results tab and no Results/Workbench switch.
+  await expect(panel.getByRole('tab', { name: 'Info' })).toHaveAttribute('aria-selected', 'true')
+  await expect(panel.getByRole('tab', { name: 'Results' })).toHaveCount(0)
+  await expect(panel.getByRole('navigation', { name: 'How to see the work' })).toHaveCount(0)
+  const files = panel.getByTestId('files-results')
+  await expect(files).toBeVisible()
+  return { panel, files }
+}
+
+/** Every row, with "Show all" pressed when the section folds some away. */
+async function allRows(files: Locator) {
+  const more = files.getByRole('button', { name: /^Show all/ })
+  if (await more.count()) await more.click()
 }
 
 for (const size of sizes) {
   test.describe(size.name, () => {
-    test('shows the seeded change, live preview, draft and screens without raw code', async ({
-      page,
-    }) => {
+    test('shows the seeded files, link, draft and screens without raw code', async ({ page }) => {
       await pair(page)
-      const panel = await openResults(page, size)
+      const job = await activityFeedJob(page)
+      const { files } = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
+      await allRows(files)
 
-      const change = panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' })
-      await expect(change).toContainText('What changed')
-      await expect(change).toContainText('Activity feed')
-      await expect(change).toContainText('Events in the same millisecond get skipped.')
-      await expect(change).toContainText('reviewer caught this')
-      await expect(change).not.toContainText('api/events.py')
-      await expect(change.getByRole('link', { name: 'See the code · 2 files' })).toHaveAttribute(
+      const code = files.locator('[data-files-row="code:api/events.py"]')
+      await expect(code).toHaveAttribute('data-kind', 'file')
+      await expect(code).toContainText('events.py')
+      await expect(code).not.toContainText('api/events.py')
+      await expect(code).toHaveAttribute(
         'href',
-        /^\/b\?job=.+&work=code$/,
+        /^\/b\?.*job=.+&work=code&file=api%2Fevents\.py|work=code/,
+      )
+      await expect(code).toContainText('builder')
+
+      const link = files.locator('[data-kind="link"]').filter({ hasText: 'Activity feed' })
+      await expect(link).toHaveAttribute('title', 'http://localhost:5173/feed')
+      await expect(link).toHaveAttribute('href', /^\/b\?.*work=screen/)
+
+      const screens = files.locator('[data-kind="screen"]')
+      await expect(screens.first()).toHaveAttribute('href', /^\/b\?.*work=screen/)
+      await expect(files.locator('[data-files-row="screen:builder"]')).toContainText(
+        'builder’s screen',
       )
 
-      const preview = panel.locator('[data-card="preview"]')
-      await expect(preview.getByRole('heading', { name: 'Activity feed' })).toBeVisible()
-      await expect(preview).toContainText('Live preview')
-      await expect(preview).toContainText('http://localhost:5173/feed')
-      await expect(
-        preview.getByRole('link', { name: 'Open Activity feed in the Workbench' }),
-      ).toHaveAttribute('href', /^\/b\?job=.+&work=screen$/)
-
-      const draft = panel
-        .locator('[data-card="draft"]')
-        .filter({ hasText: 'Announcement image.md' })
-      await expect(draft.getByRole('heading', { name: 'Announcement image.md' })).toBeVisible()
-      await expect(draft).toContainText('Release notes 2.4')
-      await expect(draft).toContainText('Attached document')
-      await expect(draft).not.toContainText('Saved to the Library')
-      await expect(draft.getByRole('link', { name: 'Open the draft' })).toHaveAttribute(
-        'href',
-        /^\/b\?job=.+&work=draft$/,
-      )
-
-      // Earlier specs' lead jobs show their own screens too since 3.14 (their run's turns count): check the seeded job's
-      // own screen link, found by the job id of its change card.
-      const codeHref = await change
-        .getByRole('link', { name: 'See the code · 2 files' })
-        .getAttribute('href')
-      const seededJob = /job=([^&]+)/.exec(codeHref ?? '')?.[1]
-      expect(seededJob).toBeTruthy()
-      const screens = panel.getByRole('region', { name: 'Screens' })
-      const seededScreen = screens.locator(`a[href="/b?job=${seededJob}&work=screen"]`)
-      await expect(seededScreen).toHaveCount(1)
-      await expect(seededScreen).toHaveAccessibleName('Watch builder’s screen')
-      await expect(screens).toContainText('builder')
-
-      const running = await panel.getByTestId('bold-results').evaluate((root) =>
+      const running = await files.evaluate((root) =>
         root
           .getAnimations({ subtree: true })
           .filter((animation) => animation.playState === 'running')
@@ -111,11 +90,37 @@ for (const size of sizes) {
       expect(running).toEqual([])
 
       if (size.width < 861) {
-        const box = await panel.boundingBox()
+        const box = await files.boundingBox()
         expect(box).not.toBeNull()
         expect(box!.x).toBeGreaterThanOrEqual(0)
         expect(box!.x + box!.width).toBeLessThanOrEqual(size.width + 0.5)
       }
+    })
+
+    test('the seeded draft is a row that opens the draft in the viewer', async ({ page }) => {
+      await pair(page)
+      let draftJob: string | undefined
+      for (const job of (await teamRoom(page)).jobs) {
+        const body = (await (await page.request.get(`/api/jobs/${job.id}/results`)).json()) as {
+          items: { kind: string; title?: string }[]
+        }
+        if (
+          body.items.some((item) => item.kind === 'draft' && item.title === 'Announcement image.md')
+        )
+          draftJob = job.id
+      }
+      expect(draftJob, 'a seeded job has the draft').toBeDefined()
+      const { files } = await openResults(page, size, `/b?job=${encodeURIComponent(draftJob!)}`)
+      await allRows(files)
+      const draft = files
+        .locator('[data-kind="draft"]')
+        .filter({ hasText: 'Announcement image.md' })
+      await expect(draft).toHaveAttribute('href', /^\/b\?.*work=draft/)
+      await expect(draft).not.toContainText('Saved to the Library')
+      await draft.click()
+      const sheet = page.getByRole('dialog', { name: 'Workbench viewer' })
+      await expect(sheet.getByRole('heading', { name: 'Announcement image.md' })).toBeVisible()
+      await expect(sheet).toContainText('Attached document')
     })
 
     test('a fresh team room shows the empty state', async ({ page }) => {
@@ -132,11 +137,12 @@ for (const size of sizes) {
       await page.route('**/api/stream**', (route) =>
         route.fulfill({ contentType: 'text/event-stream', body: hello }),
       )
-      const panel = await openResults(page, size)
-      await expect(panel.getByRole('heading', { name: 'Nothing being made yet' })).toBeVisible()
+      const { files } = await openResults(page, size)
+      await expect(files.getByText('Nothing made in this topic yet')).toBeVisible()
+      await expect(files.getByRole('link')).toHaveCount(0)
     })
 
-    test('a failed Results request shows Retry and loads after it', async ({ page }) => {
+    test('a failed results request shows Retry and loads after it', async ({ page }) => {
       await pair(page)
       const job = await activityFeedJob(page)
       let attempts = 0
@@ -152,15 +158,15 @@ for (const size of sizes) {
         const response = await route.fetch()
         await route.fulfill({ response })
       })
-      const panel = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
-      const alert = panel.getByRole('alert')
-      await expect(alert).toContainText('Couldn’t load the Results')
+      const { files } = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
+      const alert = files.getByRole('alert')
+      await expect(alert).toContainText('Couldn’t load the files and results')
       await alert.getByRole('button', { name: 'Retry' }).click()
-      await expect(panel.locator('[data-card="change"]').getByText('What changed')).toBeVisible()
-      await expect(panel.getByRole('alert')).toHaveCount(0)
+      await expect(files.locator('[data-files-row]').first()).toBeVisible()
+      await expect(files.getByRole('alert')).toHaveCount(0)
     })
 
-    test('a new watch frame refreshes the Results content', async ({ page }) => {
+    test('a new watch frame refreshes the files and results', async ({ page }) => {
       await pair(page)
       const job = await activityFeedJob(page)
       let refreshed = false
@@ -194,79 +200,68 @@ for (const size of sizes) {
       await page.route('**/api/stream**', (route) =>
         route.fulfill({ contentType: 'text/event-stream', body: stream }),
       )
-      const panel = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
-      await expect(panel.getByRole('heading', { name: 'Activity feed' })).toBeVisible()
+      const { files } = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
+      await allRows(files)
+      await expect(
+        files.locator('[data-kind="link"]').filter({ hasText: 'Activity feed' }),
+      ).toBeVisible()
       const before = resultsCalls
       refreshed = true
       // Stream events are envelopes { seq, ts, type, data }, as the hub sends them.
       const envelope = { seq: 48, ts: frame.at, type: 'watch.frame', data: frame }
       stream = `${hello}event: watch.frame\nid: 48\ndata: ${JSON.stringify(envelope)}\n\n`
-      await expect(panel.getByRole('heading', { name: 'Activity feed after refresh' })).toBeVisible(
-        { timeout: 20_000 },
-      )
+      await expect(
+        files.locator('[data-kind="link"]').filter({ hasText: 'Activity feed after refresh' }),
+      ).toBeVisible({ timeout: 20_000 })
       expect(resultsCalls).toBeGreaterThan(before)
     })
 
-    test('switching Info and Results keeps both working', async ({ page }) => {
+    test('Info keeps working beside the files, and the old Results tab and switch are gone', async ({
+      page,
+    }) => {
       await pair(page)
-      const panel = await openResults(page, size)
-      await expect(
-        panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
-      ).toBeVisible()
-
-      // 3.22.0: the Library mode is gone from the panel (Knowledge has its own page); Info takes its place here.
-      await panel.getByRole('tab', { name: 'Info' }).click()
-      await expect(panel.getByRole('tab', { name: 'Info' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
-      await expect(panel.getByTestId('bold-results')).toBeHidden()
+      const { panel, files } = await openResults(page, size)
+      await expect(files.locator('[data-files-row]').first()).toBeVisible()
+      await expect(panel.getByRole('heading', { name: 'Members' })).toBeVisible()
       await expect(page.getByTestId('bold-library')).toHaveCount(0)
-
-      await panel.getByRole('tab', { name: 'Results' }).click()
-      await expect(panel.getByTestId('bold-results')).toBeVisible()
-      await expect(
-        panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
-      ).toBeVisible()
+      await expect(page.getByTestId('bold-results')).toHaveCount(0)
     })
 
-    test('Workbench keeps the selected job, and has a visible focus target', async ({ page }) => {
+    test('a row opens the viewer sheet on the carried topic, with a visible focus target, and Escape returns to the row', async ({
+      page,
+    }) => {
       await pair(page)
       const job = await activityFeedJob(page)
-      // `?note=` is a one-shot request to open the Library (11.12c), so it is not part of this carried state.
-      const panel = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
-      const work = panel.getByRole('navigation', { name: 'How to see the work' })
-      const link = work.getByRole('link', { name: 'Workbench' })
-      // The Work nav is Results then Workbench (11.6b): Tab reaches Results first, then Workbench.
-      await work.getByRole('link', { name: 'Results' }).focus()
+      const { files } = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
+      const row = files.locator('[data-files-row="code:api/events.py"]')
+      // A key press (not only .focus()) puts the page in keyboard modality, as after a pointer tap on a phone.
+      await row.focus()
+      await page.keyboard.press('Shift+Tab')
       await page.keyboard.press('Tab')
-      await expect(link).toBeFocused()
-      expect(await link.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
-      await expect
-        .poll(() => link.evaluate((element) => getComputedStyle(element).outlineStyle))
-        .toBe('solid')
+      await expect(row).toBeFocused()
+      expect(await row.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
       if (size.width < 861) {
-        const box = await link.boundingBox()
+        const box = await row.boundingBox()
         expect(box).not.toBeNull()
         expect(box!.height).toBeGreaterThanOrEqual(44)
       }
 
-      await link.click()
+      await row.click()
       await expect
         .poll(() => {
           const url = new URL(page.url())
           return [url.pathname, url.searchParams.get('job'), url.searchParams.get('work')]
         })
-        .toEqual(['/b', job.id, 'workbench'])
-      // Since 11.12c the Workbench replaces the Results cards in the panel (BoldRoom hides them), so the carried job
-      // shows as the Workbench's own heading; the old check saw the cards only in the frame before the swap.
-      await expect(panel.getByRole('heading', { name: 'Activity feed', level: 2 })).toBeVisible({
+        .toEqual(['/b', job.id, 'code'])
+      const sheet = page.getByRole('dialog', { name: 'Workbench viewer' })
+      await expect(sheet.getByRole('heading', { name: 'Activity feed', level: 2 })).toBeVisible({
         timeout: 20_000,
       })
-      await expect(
-        panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
-      ).toBeHidden()
-      await expect(panel.locator('[data-card="draft"]')).toHaveCount(0)
+
+      await page.keyboard.press('Escape')
+      await expect(sheet).toHaveCount(0)
+      await expect(row).toBeFocused()
+      await expect.poll(() => new URL(page.url()).searchParams.get('work')).toBeNull()
     })
   })
 }

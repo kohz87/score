@@ -2245,3 +2245,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   a Knowledge editor test whose second screen (1600px) now leaves the note ~600px so the table's minimum widths win
   (the second screen is 2000px now; the proportion assertion is unchanged), 2 load flakes passing alone (+ menu phone,
   Workbench phone delete), the rest passing on re-run.
+
+## 3.25.0 — Results fold into Info (2026-11-04)
+- Owner: "do we still need result and workbench under info?" → chose "Fold into Info" (DECISIONS 161). The side panel is
+  Info and Graph; Info lists the topic's Files and results (one-to-ones too); a row opens the Workbench viewer as a
+  sheet over the conversation; old `?work=` links land there. Sonnet coder; lead screenshot check.
+- Review P2s fixed (coder round + lead): the section refetched on every agent's watch frame, even with Info closed (now
+  only this topic's agents and only while visible); the viewer sheet covered waiting decisions (a protected "N need you
+  · Back to the chat" cue, the conversation inert under the sheet); the phone viewer title was clipped. Re-review P2:
+  on a phone the cue left the Info sheet open over the card (lead: the cue closes it, test). Accepted P3: the sheet's
+  cleanup could clear an inert React set (not reachable on a phone).
+- Gate: check green (web 3279, server 4972); e2e 32 failed: triage coder rewrote bold-results/bold-workbench/bold-phone
+  for Info and the viewer, 2 Room baselines, and found a real bug (phone: Escape on the viewer didn't return focus to the
+  row, the inert was lifted a frame late → two frames); the rest load flakes passing alone (one-to-ones share-dialog
+  focus is a pre-existing 1-in-3 flake).
+- Lead process note: the coder briefly tried `SCORE_E2E_DEV=1` (its dev proxy targets the live port; it failed before
+  any request). The rule was in memory but missing from the brief; restored in every brief since.

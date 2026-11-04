@@ -201,19 +201,44 @@ for (const size of sizes) {
       await expect(opener).toBeFocused()
     })
 
-    test('Escape closes the sheet on its Results tab and returns focus', async ({ page }) => {
-      // 3.22.0: the panel's mode menu is gone (Info | Results tabs), so there is no inner menu to close first.
+    test('Escape closes the viewer over the sheet first, then the sheet, and returns focus', async ({
+      page,
+    }) => {
+      // 3.25.0: the Results tab is gone; a Files and results row opens the viewer (a full-screen dialog) over Info's sheet.
+      // The room's jobs are fixtures, so their results are one too: a draft the builder made.
+      await page.route('**/api/jobs/*/results', (route) =>
+        route.fulfill({
+          json: {
+            asOfSeq: 1,
+            screens: [],
+            items: [
+              {
+                kind: 'draft',
+                id: 'draft-1',
+                agentId: 'builder',
+                title: 'Notes.md',
+                target: { kind: 'workspace', path: 'Notes.md' },
+                at: '2026-10-24T10:00:00.000Z',
+              },
+            ],
+          },
+        }),
+      )
       await openBoldRoom(page)
       const opener = page.getByRole('button', { name: 'Chat info' }).first()
       await opener.click()
       const panel = page.getByRole('complementary', { name: 'Side panel' })
       await expect(panel).toBeVisible()
+      await expect(panel.getByRole('tab', { name: 'Results' })).toHaveCount(0)
 
-      await panel.getByRole('tab', { name: 'Results' }).click()
-      await expect(panel.getByRole('tab', { name: 'Results' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
+      const row = panel.getByTestId('files-results').locator('[data-files-row]').first()
+      await row.click()
+      const viewer = page.getByRole('dialog', { name: 'Workbench viewer' })
+      await expect(viewer).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(viewer).toHaveCount(0)
+      await expect(panel).toBeVisible()
+      await expect(row).toBeFocused()
 
       await page.keyboard.press('Escape')
       await expect(panel).toBeHidden()
