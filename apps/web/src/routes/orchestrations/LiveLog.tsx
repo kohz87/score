@@ -12,8 +12,6 @@ export type LogEvent = {
   tool?: string | null
   verdict: string | null
   summary: string
-  /** The program a coding agent runs on, when the line is about one of its steps. */
-  badge?: string | null
 }
 
 const kindLabel: Record<string, string> = {
@@ -111,10 +109,7 @@ export function LiveLog({
             >
               <time dateTime={event.at}>{clock(event.at)}</time>
               <span className="orch-log-kind">{kindLabel[event.kind] ?? 'Run'}</span>
-              <span className="orch-log-text">
-                {event.badge && <em className="orch-cli">{event.badge}</em>}
-                {event.summary}
-              </span>
+              <span className="orch-log-text">{event.summary}</span>
             </li>
           ))}
         </ol>

@@ -95,7 +95,7 @@ async function serveHeldRun(page: Page): Promise<{ answers: { url: string; body:
 test.describe('a step held for a low limit', () => {
   test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 
-  test('admin view: the diagram says why, and the card sends each of the three answers', async ({
+  test('admin view: the card says why, and the card sends each of the three answers', async ({
     page,
   }) => {
     const { answers } = await serveHeldRun(page)
@@ -108,11 +108,8 @@ test.describe('a step held for a low limit', () => {
       .getByRole('region', { name: 'Current job' })
       .getByRole('button', { name: 'Graph' })
       .click()
-    // 3.29.0: the Graph tab opens on the Job map; the step diagram is one click away.
-    await page.getByRole('button', { name: 'Show the step diagram' }).click()
-    const node = page.locator('[data-node="s3"]')
-    await expect(node).toBeVisible()
-    await expect(node).toContainText(/Held: limit low \(6% left, resets [^)]+\)/)
+    // 3.29.1: the step diagram was removed (owner): the held text is the needs-you card's (heldNeedsText).
+    await expect(card).toContainText('s3 is held: reviewer’s limit is low')
     await page.evaluate(() => document.fonts.ready)
     await shot(page, 'held', '.orch-live')
     await card.getByRole('button', { name: 'Wait until it resets' }).click()

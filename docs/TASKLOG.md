@@ -2381,3 +2381,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   coding specs).
 - Accepted P3s: cards fetch each recipe's detail (fine for a local server); only the first problem is named in the
   one-line summary.
+
+## 3.29.1 — The step diagram goes; code no longer in use removed (2026-11-04)
+- Owner: "I think we can do away with the step diagram as well", then "do a clean up after removal of step diagram,
+  especially codes no longer in use; I'm going to bed so act on your recommendation" (DECISIONS 166).
+- Lead: the switch and the one-view diagram leave `RunGraph`; a coding worker's job-map card names its program
+  (nothing else showed it once the diagram left). Unused code found by reachability from `main.tsx` and an export scan
+  (both throwaway scripts).
+- Sonnet coders: e2e follow the job map (gates as cards, chips, `.jobmap-dot`, the held needs-you card; Replay, the
+  scrubber, node states and the diagram's log filter removed with a comment each); the cleanup — OrchestrationLive,
+  the watch mini-screen, two icons, the project API wrappers, a type, an editor list, a constant, the stage-mention
+  mechanism (nothing dispatched `score:mention` on main), diagram-only orch-model helpers, `jobStateLine`, their CSS;
+  tests of behaviour still in the app re-targeted to `RunHarness` (RunNeeds, StepCard, BudgetBlock, LiveLog).
+- Review P2s fixed by the lead: the log's runtime badge was shown nowhere any more (prop and test removed); the e2e
+  asserts the worker card's program. Re-review: none.
+- Gate: check green (contract 1619, web 3360, server 4988); e2e 17 failed, all passing on a fresh server or alone
+  (bold-room-menu ×8 depend on state other specs leave; one-to-ones, room-chat, team choice, terminal, workspace; the
+  recipes leave-dirty test failed only on a reused server and passed on 3.29.0 and 3.29.1 alike when fresh).

@@ -181,12 +181,10 @@ test('the start dialog explains what a coding agent can read and asks for one ac
   })
 })
 
-test.describe('a coding step in the live diagram', () => {
+test.describe('a coding step on the Job map', () => {
   test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 
-  test('the step names its program, the log tags it, and a blocked step offers its actions', async ({
-    page,
-  }) => {
+  test('a blocked step offers its actions', async ({ page }) => {
     await page.clock.setFixedTime(new Date(fixtureNow))
     const agents = structuredClone(visualFixtures['/api/agents']) as {
       items: { id: string; runtime?: string }[]
@@ -243,15 +241,11 @@ test.describe('a coding step in the live diagram', () => {
       .getByRole('region', { name: 'Current job' })
       .getByRole('button', { name: 'Graph' })
       .click()
-    // 3.29.0: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
-    await page.getByRole('button', { name: 'Show the step diagram' }).click()
-    const node = page.locator('[data-node="s2"]')
-    await expect(node).toBeVisible()
-    await expect(node).toContainText('Claude Code')
-    await expect(node).toHaveAttribute('aria-label', /reviewer \(Claude Code\)/)
-    await expect(page.locator('[data-node="s1"]')).not.toContainText('Claude Code')
+    // 3.29.1: the step diagram was removed (owner); the job map's worker card names the program instead.
+    const map = page.getByRole('region', { name: 'Job map' })
+    await expect(map).toBeVisible()
     await expect(
-      page.getByRole('log', { name: 'Events' }).getByText('Claude Code').first(),
+      map.getByRole('button', { name: /^Workers layer: .*\(Claude Code\)/ }).first(),
     ).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     if (shots) {

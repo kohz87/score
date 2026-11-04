@@ -8,7 +8,7 @@ import type {
   StepView,
 } from '@score/contract'
 import type { RunCoding } from './CodingCards.tsx'
-import { heldCaption, heldNeedsText } from './quota-text.ts'
+import { heldNeedsText } from './quota-text.ts'
 
 // Pure model of the orchestration pages: how a step looks, which graph the diagram draws, which events move a dot,
 // how the live log is filtered and what the diagram shows at a scrubbed time of the replay. No React, no DOM.
@@ -110,44 +110,6 @@ export const leadStepCounts = (
   return { succeeded: own.filter((step) => step.status === 'succeeded').length, total: own.length }
 }
 
-/** A lead node plus one node per step; edges from `after` and `replaces` (dashed); the lead feeds steps with no `after`. */
-export function buildGraph(
-  detail: Pick<OrchestrationDetail, 'leadAgentId' | 'stepsList'>,
-  visibleSteps?: ReadonlySet<string>,
-): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const steps = leadSteps(detail.stepsList).filter(
-    (step) => !visibleSteps || visibleSteps.has(step.id),
-  )
-  const ids = new Set(steps.map((step) => step.id))
-  const nodes: GraphNode[] = [
-    { id: LEAD_NODE, kind: 'lead', agentId: detail.leadAgentId, label: 'Lead' },
-    ...steps.map((step) => ({
-      id: step.id,
-      kind: 'step' as const,
-      agentId: step.agentId,
-      label: step.id,
-      // A step held for a low limit says so on the diagram (8.6).
-      ...(step.quotaHold ? { caption: heldCaption(step.quotaHold) } : {}),
-    })),
-  ]
-  const edges: GraphEdge[] = []
-  for (const step of steps) {
-    const deps = step.after.filter((id) => ids.has(id))
-    if (deps.length === 0 && (!step.replaces || !ids.has(step.replaces)))
-      edges.push({ id: `lead>${step.id}`, from: LEAD_NODE, to: step.id, kind: 'assign' })
-    for (const dep of deps)
-      edges.push({ id: `${dep}>${step.id}`, from: dep, to: step.id, kind: 'after' })
-    if (step.replaces && ids.has(step.replaces))
-      edges.push({
-        id: `${step.replaces}~>${step.id}`,
-        from: step.replaces,
-        to: step.id,
-        kind: 'replaces',
-      })
-  }
-  return { nodes, edges }
-}
-
 // ----------------------------------------------------------------------------------------- events become effects
 
 export type EffectTone = 'ok' | 'refused' | 'need' | 'fail'
@@ -161,59 +123,6 @@ export interface Effect {
   from: string
   to: string
   tone: EffectTone
-}
-
-/**
- * What a recorded event shows on the diagram. A dot travels only where a real hand-off happened: lead → step when
- * an assignment was accepted, step → lead when its result was. Everything else lights one node.
- */
-export function eventEffect(event: OrchEvent, known: ReadonlySet<string>): Effect | null {
-  const step = event.stepId && known.has(event.stepId) ? event.stepId : null
-  const base = { eventId: event.id }
-  switch (event.kind) {
-    case 'lead_wake':
-      return { ...base, kind: 'pulse', from: LEAD_NODE, to: LEAD_NODE, tone: 'ok' }
-    case 'command':
-      if (event.verdict === 'accepted') {
-        if (event.tool === 'orch.assign' && step)
-          return { ...base, kind: 'dot', from: LEAD_NODE, to: step, tone: 'ok' }
-        return { ...base, kind: 'pulse', from: LEAD_NODE, to: LEAD_NODE, tone: 'ok' }
-      }
-      return { ...base, kind: 'pulse', from: LEAD_NODE, to: LEAD_NODE, tone: 'refused' }
-    case 'step_result':
-      if (!step) return null
-      return {
-        ...base,
-        kind: 'dot',
-        from: step,
-        to: LEAD_NODE,
-        tone: event.verdict === 'succeeded' ? 'ok' : 'fail',
-      }
-    case 'step_admitted':
-      return step ? { ...base, kind: 'pulse', from: step, to: step, tone: 'ok' } : null
-    case 'gate_opened':
-      return step ? { ...base, kind: 'pulse', from: step, to: step, tone: 'need' } : null
-    case 'gate_decided':
-      return step
-        ? {
-            ...base,
-            kind: 'pulse',
-            from: step,
-            to: step,
-            tone: event.verdict === 'approved' ? 'ok' : 'refused',
-          }
-        : null
-    case 'step_state':
-      return step ? { ...base, kind: 'pulse', from: step, to: step, tone: 'refused' } : null
-    case 'inquiry_opened':
-      return { ...base, kind: 'pulse', from: LEAD_NODE, to: LEAD_NODE, tone: 'need' }
-    case 'control':
-      return event.verdict === 'stop_requested'
-        ? { ...base, kind: 'pulse', from: LEAD_NODE, to: LEAD_NODE, tone: 'refused' }
-        : null
-    default:
-      return null
-  }
 }
 
 /**

@@ -15,7 +15,6 @@ import { newId } from '../../data/ids.ts'
 import { useStream } from '../../data/query-client.ts'
 
 export type Skill = AgentDetail['skills'][number]
-export type MemoryEntry = AgentDetail['memory'][number]
 export type Tool = AgentDetail['tools'][number]
 export type { HubSkill, MemoryPage as MemoryPageData } from '@score/contract'
 

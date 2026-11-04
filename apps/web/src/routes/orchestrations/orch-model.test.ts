@@ -1,10 +1,9 @@
 import type { OrchEvent, StepView } from '@score/contract'
 import { describe, expect, test } from 'vitest'
 import {
-  buildGraph,
   EffectQueue,
-  eventEffect,
   filterLog,
+  leadSteps,
   LEAD_NODE,
   replayAt,
   replayDelayMs,
@@ -65,56 +64,10 @@ describe('state to visuals', () => {
     expect(stepVisual({ status: 'cancelled' })).toBe('cancelled')
   })
 
-  test('the graph has a lead, one node per step, after edges and dashed replaces lineage', () => {
-    const graph = buildGraph({
-      leadAgentId: 'lead',
-      stepsList: [step('s1'), step('s2', { after: ['s1'] }), step('s3', { replaces: 's1' })],
-    })
-    expect(graph.nodes.map((node) => node.id)).toEqual([LEAD_NODE, 's1', 's2', 's3'])
-    expect(graph.edges.map((edge) => `${edge.kind}:${edge.from}>${edge.to}`)).toEqual([
-      'assign:lead>s1',
-      'after:s1>s2',
-      'replaces:s1>s3',
-    ])
-  })
-
-  test('an advisor consult is not a node of the lead graph (3.14)', () => {
-    const graph = buildGraph({
-      leadAgentId: 'lead',
-      stepsList: [step('s1'), step('a1', { role: 'advisor' })],
-    })
-    expect(graph.nodes.map((node) => node.id)).toEqual([LEAD_NODE, 's1'])
-  })
-})
-
-describe('events to effects', () => {
-  const known = new Set(['s1'])
-  test('an accepted assignment sends a dot lead to step, a result sends one back', () => {
-    expect(
-      eventEffect(
-        ev({ kind: 'command', tool: 'orch.assign', verdict: 'accepted', stepId: 's1' }),
-        known,
-      ),
-    ).toMatchObject({ kind: 'dot', from: LEAD_NODE, to: 's1', tone: 'ok' })
-    expect(
-      eventEffect(ev({ kind: 'step_result', stepId: 's1', verdict: 'failed' }), known),
-    ).toMatchObject({ kind: 'dot', from: 's1', to: LEAD_NODE, tone: 'fail' })
-  })
-
-  test('a refused call lights the lead as refused and never moves a dot', () => {
-    const effect = eventEffect(
-      ev({ kind: 'command', tool: 'orch.assign', verdict: 'refused', code: 'step_limit' }),
-      known,
+  test('an advisor consult is not one of the lead’s steps (3.14)', () => {
+    expect(leadSteps([step('s1'), step('a1', { role: 'advisor' })]).map((item) => item.id)).toEqual(
+      ['s1'],
     )
-    expect(effect).toMatchObject({ kind: 'pulse', to: LEAD_NODE, tone: 'refused' })
-  })
-
-  test('nothing is invented: events about unknown steps or without a visual give no effect', () => {
-    expect(
-      eventEffect(ev({ kind: 'step_result', stepId: 'zz', verdict: 'succeeded' }), known),
-    ).toBeNull()
-    expect(eventEffect(ev({ kind: 'run_started' }), known)).toBeNull()
-    expect(eventEffect(ev({ kind: 'lead_done' }), known)).toBeNull()
   })
 })
 

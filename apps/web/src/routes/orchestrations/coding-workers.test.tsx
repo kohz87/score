@@ -11,7 +11,7 @@ import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { NewOrchestrationDialog } from './NewOrchestrationDialog.tsx'
-import { OrchestrationLive } from './OrchestrationLive.tsx'
+import { RunHarness } from './run-test-utils.tsx'
 
 // 7.7b-3: coding agents as workers in the browser: the start dialog (reach acknowledged by policy id, unknown cost per
 // source, the coding step limit), the CLI badge, and the two blocked-step actions.
@@ -325,21 +325,6 @@ async function withSnapshot(
   }
 }
 
-test('the diagram names the program of a coding agent next to its name', async () => {
-  await withSnapshot([], async () => {
-    mount(<OrchestrationLive orchestrationId="orch-1" />)
-    await screen.findByRole('log', { name: 'Events' })
-    expect(
-      await screen.findByRole('button', { name: /Step s2, reviewer \(Claude Code\), running/ }),
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Step s1, builder, succeeded/ })).toBeTruthy()
-    // The log tags the lines about a coding agent's step too.
-    expect(
-      within(screen.getByRole('log', { name: 'Events' })).getAllByText('Claude Code').length,
-    ).toBeGreaterThan(0)
-  })
-})
-
 test('"agent changed" offers the new settings: a policy-only remap carrying the policy id and the acknowledgement', async () => {
   preflight = {
     ...base,
@@ -348,7 +333,7 @@ test('"agent changed" offers the new settings: a policy-only remap carrying the 
   await withSnapshot(
     [{ kind: 'policy_changed', stepId: 's2', agentId: 'reviewer', currentPolicyId: hexB }],
     async () => {
-      mount(<OrchestrationLive orchestrationId="orch-1" />)
+      mount(<RunHarness orchestrationId="orch-1" />)
       const card = await screen.findByRole('region', { name: 'New settings for reviewer' })
       const button = await within(card).findByRole('button', { name: 'Use the new settings' })
       // It reads beyond its workspace now: accept that first.
@@ -374,7 +359,7 @@ test('"agent changed" offers the new settings: a policy-only remap carrying the 
 
 test('"limit reached" offers to raise the number of coding steps', async () => {
   await withSnapshot([{ kind: 'coding_limit', stepId: 's2' }], async () => {
-    mount(<OrchestrationLive orchestrationId="orch-1" />)
+    mount(<RunHarness orchestrationId="orch-1" />)
     const card = await screen.findByRole('region', { name: 'Coding step limit' })
     expect(within(card).getByText(/up to 3 coding steps/)).toBeTruthy()
     fireEvent.change(within(card).getByLabelText(/New limit/), { target: { value: '9' } })
@@ -390,7 +375,7 @@ test('"limit reached" offers to raise the number of coding steps', async () => {
 
 test('unknown spend can be accepted for one source', async () => {
   await withSnapshot([{ kind: 'budget', reason: 'unknown_spend' }], async () => {
-    mount(<OrchestrationLive orchestrationId="orch-1" />)
+    mount(<RunHarness orchestrationId="orch-1" />)
     const card = await screen.findByRole('region', { name: 'Budget or deadline' })
     fireEvent.click(
       within(card).getByRole('button', { name: 'Continue although Claude Code cost is unknown' }),

@@ -94,13 +94,12 @@ async function wasSeen(page: Page, selector: string) {
 
 async function openLive(page: Page, goal: string) {
   // 3.29.0: no run page. `/b?run=` opens the run's chat with the Graph tab; the decisions are its needs-you cards, the
-  // step diagram is one click from the Job map and carries its Session log under it.
+  // Job map (3.29.1: the step diagram was removed) is the Graph tab's only graph and carries its Session log.
   await page.goto(`/b?run=${encodeURIComponent(await runBriefId(page, goal))}`)
-  await page.getByRole('button', { name: 'Show the step diagram' }).click()
-  await expect(page.locator('[data-node="lead"]')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Job map' })).toBeVisible()
 }
 
-test('start with every-step gates, approve each step, watch the diagram reach succeeded, replay it', async ({
+test('start with every-step gates, approve each step, watch the Job map reach succeeded', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -123,67 +122,36 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   const gate = page.getByRole('region', { name: 'Approve s1' })
   await expect(gate).toBeVisible({ timeout: 30_000 })
   await expect(gate).toContainText('Draft: Write the release notes e2e-a')
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
+  // 3.29.1: the step diagram was removed (owner): the diagram node states are gone; the gate is the chat's card.
   await approve(page, 's1')
 
   // Dots are the playback of real events: the step result sends one back to the lead.
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'succeeded', {
-    timeout: 60_000,
-  })
+  const jobMap = page.getByRole('region', { name: 'Job map' })
+  await expect(jobMap.getByText('s1 ✓')).toBeVisible({ timeout: 60_000 })
   await approve(page, 's2')
-  await expect(page.locator('[data-node="s2"]')).toHaveAttribute('data-state', 'succeeded', {
-    timeout: 60_000,
-  })
+  await expect(jobMap.getByText('s2 ✓')).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
     timeout: 60_000,
   })
 
   // The log carries the lead's calls with Score's verdicts, the gates and the results.
-  const log = page.getByRole('log', { name: 'Events' })
-  await expect(log).toContainText('Assigned s1 to builder')
-  await expect(log).toContainText('You approved s1')
-  await expect(log).toContainText('s1 succeeded')
-  // Clicking a node filters the log to it and opens its output.
-  await page.locator('[data-node="s2"]').click()
-  await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('Result')
-  // The diagram and its log are one view in the chat's Graph tab (3.29.0): the selection filters the log.
-  await expect(page.getByText('Showing s2')).toBeVisible()
-  await expect(log).not.toContainText('Assigned s1')
-  await page.getByRole('button', { name: 'Show everything' }).click()
-
-  // Replay: the scrubber starts at the beginning and the diagram and log follow it.
-  await page.getByRole('button', { name: 'Replay this run' }).first().click()
-  const scrub = page.getByRole('slider', { name: 'Replay position' })
-  await expect(scrub).toHaveValue('0')
-  await expect(page.locator('[data-node="s1"]')).toHaveCount(0)
-  await page.getByRole('radio', { name: '16×' }).click()
-  await page.getByRole('button', { name: 'Play', exact: true }).click()
-  await expect(page.locator('[data-node="s2"]')).toHaveAttribute('data-state', 'succeeded', {
-    timeout: 60_000,
-  })
-  const max = await scrub.getAttribute('max')
-  await expect(scrub).toHaveValue(max!)
-  // Stepping from the start: s1 appears queued the moment its assignment is accepted, then waits at its gate.
-  await scrub.fill('0')
-  await expect(page.locator('[data-node="s1"]')).toHaveCount(0)
-  for (let i = 0; i < 12 && (await page.locator('[data-node="s1"]').count()) === 0; i++)
-    await page.getByRole('button', { name: 'Step forward' }).click()
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'queued')
-  // …and the log follows the replay.
-  await expect(log).toContainText('Assigned s1')
-  await expect(log).not.toContainText('s1 succeeded')
-  await page.getByRole('button', { name: 'Step forward' }).click()
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
+  const log = page.getByRole('region', { name: 'Session log' })
+  // The Job map's own log shows the latest lines only (the older s1 lines are scrolled out of it).
+  await expect(log).toContainText('s2 succeeded')
+  await expect(log).toContainText('Run ended: succeeded')
+  // 3.29.1: the step diagram was removed (owner): Replay, the scrubber, the diagram node states and "Selected step" are gone.
 })
 
-test('dots travel along the edges for real events', async ({ page }) => {
+// 3.29.1: the step diagram was removed (owner): its one-dot-per-real-event playback is gone; the job map's dots run
+// along a line while that layer is active, which is what this checks now.
+test('dots run along the job map while a step is active', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
   await start(page, 'Dots e2e-b')
   await openLive(page, 'Dots e2e-b')
-  await recordSeen(page, '.orch-dot')
+  await recordSeen(page, '.jobmap-dot')
   await approve(page, 's1')
-  await wasSeen(page, '.orch-dot')
+  await wasSeen(page, '.jobmap-dot')
   // Let the run finish: approve the second step.
   await approve(page, 's2')
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
@@ -191,9 +159,7 @@ test('dots travel along the edges for real events', async ({ page }) => {
   })
 })
 
-test('reduced motion: no travelling dot, the nodes and the edge light up instead', async ({
-  browser,
-}) => {
+test('reduced motion: no travelling dot on the Job map', async ({ browser }) => {
   test.setTimeout(120_000)
   const context = await browser.newContext({ reducedMotion: 'reduce' })
   const page = await context.newPage()
@@ -201,14 +167,13 @@ test('reduced motion: no travelling dot, the nodes and the edge light up instead
     await pair(page)
     await start(page, 'Reduced e2e-c')
     await openLive(page, 'Reduced e2e-c')
-    await recordSeen(page, '.orch-node--lit')
-    await recordSeen(page, '.orch-dot')
+    // 3.29.1: the step diagram was removed (owner): its lit nodes under reduced motion are gone; no dot is the check.
+    await recordSeen(page, '.jobmap-dot')
     await approve(page, 's1')
-    await wasSeen(page, '.orch-node--lit')
     // No dot ever appeared, not merely none right now.
     expect(
       await page.evaluate(
-        () => (window as unknown as { __seen: Record<string, boolean> }).__seen['.orch-dot'],
+        () => (window as unknown as { __seen: Record<string, boolean> }).__seen['.jobmap-dot'],
       ),
     ).toBe(false)
     await approve(page, 's2')
@@ -244,19 +209,17 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await pair(page)
   await start(page, 'Hold [fake:hold] e2e-e', 'risky')
   await openLive(page, 'Hold [fake:hold] e2e-e')
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'running', {
+  await expect(page.getByRole('region', { name: 'Job map' }).getByText('s1 running')).toBeVisible({
     timeout: 60_000,
   })
-  // The Graph tab's own Pause / Resume / Stop (3.29.0), above the diagram.
+  // The Graph tab's own Pause / Resume / Stop (3.29.0), above the Job map.
   const panel = page.locator('.bold-topic-graph')
   await panel.getByRole('button', { name: 'Stop', exact: true }).click()
   await panel.getByRole('button', { name: 'Stop the run' }).click()
   // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
   await expect(page.getByText('Stopping', { exact: true }).first()).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'unknown', {
-    timeout: 30_000,
-  })
   // 3.29.0: the old run page's "Finish" summary is gone; the chat's needs-you cards say it.
+  // 3.29.1: the step diagram was removed (owner): its "unknown" node state is gone; the card is the check.
   // Abandoning is a separate, acknowledged human decision.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
   await expect(card.first()).toBeVisible({ timeout: 30_000 })

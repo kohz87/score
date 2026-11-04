@@ -1,17 +1,16 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   orchestrationEvents,
   orchestrationFixtures,
-  orchestrationSnapshot,
 } from '../../../../../e2e/orchestration-fixtures.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { NewOrchestrationDialog } from './NewOrchestrationDialog.tsx'
-import { OrchestrationLive } from './OrchestrationLive.tsx'
+import { RunHarness } from './run-test-utils.tsx'
 
 class Source extends EventTarget {
   static current: Source
@@ -131,12 +130,11 @@ function mount(ui: React.ReactElement) {
   return { queryClient }
 }
 
-test('the live page shows each step in its state, the gate with its frozen assignment, and the full log', async () => {
-  mount(<OrchestrationLive orchestrationId="orch-1" />)
+test('the run shows the gate with its frozen assignment, the full log and the budget fields', async () => {
+  mount(<RunHarness orchestrationId="orch-1" />)
   await screen.findByRole('log', { name: 'Events' })
-  expect(screen.getByRole('button', { name: /Step s1, builder, succeeded/ })).toBeTruthy()
-  expect(screen.getByRole('button', { name: /Step s2, reviewer, running/ })).toBeTruthy()
-  expect(screen.getByRole('button', { name: /Step s3, designer, needs you/ })).toBeTruthy()
+  expect(screen.getByRole('article', { name: /^s1, / })).toBeTruthy()
+  expect(screen.getByRole('article', { name: /^s2, / })).toBeTruthy()
   const gate = screen.getByRole('region', { name: 'Approve s3' })
   expect(within(gate).getByText('Design a announcement image for the release.')).toBeTruthy()
   expect(within(gate).getByText(/s1 \(result version 1, succeeded\)/)).toBeTruthy()
@@ -153,7 +151,7 @@ test('approving posts exactly the gate and run revisions the page showed', async
       orchestrationFixtures['/api/orchestrations'] &&
         (orchestrationFixtures['/api/orchestrations'] as { items: unknown[] }).items[0],
     )
-  mount(<OrchestrationLive orchestrationId="orch-1" />)
+  mount(<RunHarness orchestrationId="orch-1" />)
   const gate = await screen.findByRole('region', { name: 'Approve s3' })
   fireEvent.click(within(gate).getByRole('button', { name: 'Approve s3' }))
   await waitFor(() => expect(requests.some((r) => r.url.endsWith('/gates/g3/decision'))).toBe(true))
@@ -169,7 +167,7 @@ test('approving posts exactly the gate and run revisions the page showed', async
 test('a stale decision (409 conflict) is explained and the run is read again', async () => {
   post = () =>
     json({ error: { code: 'conflict', message: 'stale', details: { currentRevision: 10 } } }, 409)
-  mount(<OrchestrationLive orchestrationId="orch-1" />)
+  mount(<RunHarness orchestrationId="orch-1" />)
   const gate = await screen.findByRole('region', { name: 'Approve s3' })
   const before = requests.filter((r) => r.url === '/api/orchestrations/orch-1').length
   fireEvent.click(within(gate).getByRole('button', { name: 'Approve s3' }))
@@ -181,101 +179,17 @@ test('a stale decision (409 conflict) is explained and the run is read again', a
   )
 })
 
-test('clicking a node filters the log to it and opens its output', async () => {
-  mount(<OrchestrationLive orchestrationId="orch-1" />)
+test('showing a step in the log filters the log to it and opens its output', async () => {
+  mount(<RunHarness orchestrationId="orch-1" />)
   const log = await screen.findByRole('log', { name: 'Events' })
   expect(within(log).getByText(/Lead turn 1 started/)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: /Step s1, builder/ }))
+  const selected = screen.getByRole('article', { name: /^s1, / })
+  fireEvent.click(within(selected).getByRole('button', { name: 'Show in log' }))
   expect(within(log).queryByText(/Lead turn 1 started/)).toBeNull()
   expect(within(log).getByText(/s1 succeeded/)).toBeTruthy()
-  const selected = screen.getByRole('region', { name: 'Selected step' })
   expect(within(selected).getAllByText(/Draft ready: 14 changes/).length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: 'Show everything' }))
   expect(within(log).getByText(/Lead turn 1 started/)).toBeTruthy()
-})
-
-test('a dot travels only for an event that arrives after the page loaded, and not for old ones', async () => {
-  const { queryClient } = mount(<OrchestrationLive orchestrationId="orch-1" />)
-  await screen.findByRole('log', { name: 'Events' })
-  // Nothing from the history moves.
-  expect(document.querySelectorAll('.orch-dot')).toHaveLength(0)
-  const next = structuredClone(orchestrationEvents)
-  next.events.push({
-    id: 'e17',
-    at: '2026-10-08T21:31:30.000Z',
-    kind: 'step_result',
-    stepId: 's2',
-    attemptId: 'a3',
-    tool: null,
-    verdict: 'succeeded',
-    code: null,
-    summary: 's2 succeeded (reviewer)',
-  })
-  events = next
-  await act(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['orchestrations', 'run', 'orch-1'] })
-  })
-  await waitFor(() => expect(document.querySelectorAll('.orch-dot').length).toBe(1))
-  expect(within(screen.getByRole('log')).getByText(/s2 succeeded/)).toBeTruthy()
-})
-
-test('with reduced motion nothing travels: the nodes and the edge are highlighted instead', async () => {
-  vi.stubGlobal(
-    'matchMedia',
-    (query: string) =>
-      ({
-        matches: true,
-        media: query,
-        addEventListener() {},
-        removeEventListener() {},
-      }) as unknown as MediaQueryList,
-  )
-  const { queryClient } = mount(<OrchestrationLive orchestrationId="orch-1" />)
-  await screen.findByRole('log', { name: 'Events' })
-  const next = structuredClone(orchestrationEvents)
-  next.events.push({
-    id: 'e17',
-    at: '2026-10-08T21:31:30.000Z',
-    kind: 'step_result',
-    stepId: 's1',
-    attemptId: 'a2',
-    tool: null,
-    verdict: 'succeeded',
-    code: null,
-    summary: 's1 succeeded again',
-  })
-  events = next
-  await act(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['orchestrations', 'run', 'orch-1'] })
-  })
-  await waitFor(() => expect(document.querySelector('.orch-node--lit')).not.toBeNull())
-  expect(document.querySelectorAll('.orch-dot')).toHaveLength(0)
-  expect(document.querySelector('.orch-edge--lit')).not.toBeNull()
-})
-
-test('a run that is over can be replayed from the recorded events', async () => {
-  const done = structuredClone(orchestrationSnapshot)
-  done.orchestration.status = 'succeeded'
-  done.orchestration.endedAt = '2026-10-08T21:30:00.000Z'
-  done.orchestration.needsYou = []
-  orchestrationFixtures['/api/orchestrations/orch-1'] = done
-  try {
-    mount(<OrchestrationLive orchestrationId="orch-1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Replay this run' }))
-    const scrub = screen.getByRole('slider', { name: 'Replay position' })
-    expect((scrub as HTMLInputElement).value).toBe('0')
-    expect(screen.queryByRole('button', { name: /Step s1/ })).toBeNull()
-    fireEvent.change(scrub, { target: { value: '10' } })
-    expect(screen.getByRole('button', { name: /Step s1, builder, succeeded/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Step s2/ })).toBeNull()
-    fireEvent.change(scrub, { target: { value: '4' } })
-    expect(screen.getByRole('button', { name: /Step s1, builder, queued/ })).toBeTruthy()
-    expect(within(screen.getByRole('log')).queryByText(/s1 succeeded/)).toBeNull()
-    fireEvent.click(screen.getByRole('radio', { name: '16×' }))
-    expect(screen.getByRole('radio', { name: '16×' }).getAttribute('aria-checked')).toBe('true')
-  } finally {
-    orchestrationFixtures['/api/orchestrations/orch-1'] = orchestrationSnapshot
-  }
 })
 
 test('the start screen shows the acknowledgement, the gate notes, the unknown tool readiness and per-turn estimates', async () => {
@@ -334,7 +248,7 @@ test('a replaced agent asks for a remap decision paired with the incarnations th
   ]
   post = () => json((orchestrationFixtures['/api/orchestrations'] as { items: unknown[] }).items[0])
   try {
-    mount(<OrchestrationLive orchestrationId="orch-1" />)
+    mount(<RunHarness orchestrationId="orch-1" />)
     const card = await screen.findByRole('region', { name: 'Replaced builder' })
     fireEvent.click(within(card).getByRole('button', { name: 'Use the new builder for this run' }))
     await waitFor(() => expect(requests.some((r) => r.url.endsWith('/orch-1/remap'))).toBe(true))

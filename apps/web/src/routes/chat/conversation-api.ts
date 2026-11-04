@@ -25,20 +25,6 @@ export async function createProject(body: { name: string; color: string }): Prom
     await apiFetch('room-projects', { method: 'POST', body: JSON.stringify(body) }),
   )
 }
-export async function updateProject(
-  id: string,
-  body: { name?: string; color?: string },
-): Promise<RoomProject> {
-  return RoomProjectSchema.parse(
-    await apiFetch(`room-projects/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }),
-  )
-}
-export async function deleteProject(id: string): Promise<void> {
-  await apiFetch(`room-projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
-}
 
 export const PROJECT_COLORS = [
   { value: '#6B4EFF', label: 'Violet' },
