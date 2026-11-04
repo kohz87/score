@@ -116,9 +116,10 @@ export function registerTriggerRoutes(
         },
       })
       // 3.28.0: a call into a team room whose job is running waits as Next up (202) and starts when that job ends.
+      // An older waiting call may have started in the same transaction, so a new call always dispatches (review).
+      if (!answer?.repeated) await redispatch()
       if (answer?.status === 202)
         return reply.code(202).send({ ok: true, queued: true, queueId: answer.queueId })
-      if (!answer?.repeated) await redispatch()
       return reply.code(200).send({ ok: true, jobId: answer?.jobId })
     })
   })

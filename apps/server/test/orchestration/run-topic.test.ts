@@ -89,7 +89,7 @@ test('3.28.0: a run’s topic closes when the run ends, and a chat with a runnin
   })
   expect(topics(h, roomId)).toHaveLength(1)
   await h.until(() => h!.orch.summary(made.orchestration.id).status === 'succeeded')
-  const state = h.rows<{ state: string }>('SELECT state FROM jobs WHERE id = ?', made.topicId)
+  const state = h.rows<{ state: string }>('SELECT state FROM jobs WHERE id = ?', made.topicId!)
   expect(state).toEqual([{ state: 'closed' }])
   // The chat is free again.
   const next = await h.orch.create(create({ topic: { roomId, title: 'Three' } }))

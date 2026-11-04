@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { endJob } from '../domain/exchanges/decisions.ts'
+import { jobDeleted } from '../domain/exchanges/job-life.ts'
 import { jobFromRow, jobRow } from '../domain/exchanges/store.ts'
 import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import { roomRow } from '../domain/rooms.ts'
@@ -42,7 +43,15 @@ export function registerOneJobRoutes(
   /** A run's job ends with its run: the run is stopped first (its own fence and drain), then the job closes. */
   async function stopRecipe(jobId: string) {
     const row = db.read((sqlite) => jobRow(sqlite, jobId))
-    if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
+    // Refused before anything stops: a deleted job, or the room's own thread (review).
+    if (!row || db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
+    if (row.is_default)
+      throw new HttpError(
+        409,
+        'conflict',
+        'The room’s own thread follows the room: rename or delete the room instead.',
+      )
     if (!orchestrator || !row.recipe_ref || !row.recipe_kind || row.state === 'closed') return
     try {
       if (row.recipe_kind === 'workflow') await orchestrator.wfStop(row.recipe_ref)
@@ -53,23 +62,39 @@ export function registerOneJobRoutes(
     }
   }
 
-  /** Starts the oldest waiting call of each room that no longer has a job running, then its lead's turn. */
+  /**
+   * Starts the oldest waiting call of each room that no longer has a job running, then its lead's turn. One room's
+   * failure doesn't stop the others; its call stays first and is tried again at the next job end or call (review).
+   */
   async function startNext(roomIds: Iterable<string>) {
     let started = false
     for (const roomId of new Set(roomIds)) {
-      if (!db.read((sqlite) => hasQueued(sqlite, roomId))) continue
-      await ingest.submit({
-        source: 'triggers',
-        identity: randomUUID(),
-        apply: ({ sqlite, now }) => {
-          const next = startQueued(sqlite, roomId, now)
-          started ||= next.started
-          return next.drafts
-        },
-      })
+      try {
+        if (!db.read((sqlite) => hasQueued(sqlite, roomId))) continue
+        await ingest.submit({
+          source: 'triggers',
+          identity: randomUUID(),
+          apply: ({ sqlite, now }) => {
+            const next = startQueued(sqlite, roomId, now)
+            started ||= next.started
+            return next.drafts
+          },
+        })
+      } catch (error) {
+        app.log.error({ err: error, roomId }, 'Starting the next queued trigger call failed')
+      }
     }
     if (started) await dispatch()
   }
+
+  // At start: a job that ended while Score was down left its room's queue waiting (review).
+  app.addHook('onReady', async () => {
+    const rooms = db.read(
+      (sqlite) =>
+        sqlite.prepare('SELECT DISTINCT room_id FROM room_queue').all() as { room_id: string }[],
+    )
+    if (rooms.length > 0) void startNext(rooms.map((row) => row.room_id))
+  })
 
   // A job that ends by any path (Stop job, Close, Delete, its run ending, Done) frees its chat for the next call.
   const stopListening = ingest.onCommitted((events) => {
@@ -79,10 +104,7 @@ export function registerOneJobRoutes(
       else if (event.type === 'job.upserted' && ['closed', 'done'].includes(event.data.state))
         freed.push(event.data.roomId)
     }
-    if (freed.length > 0)
-      startNext(freed).catch((error: unknown) =>
-        app.log.error({ err: error }, 'Starting the next queued trigger call failed'),
-      )
+    if (freed.length > 0) void startNext(freed)
   })
   app.addHook('onClose', async () => stopListening())
 

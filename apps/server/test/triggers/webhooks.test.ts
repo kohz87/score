@@ -773,3 +773,26 @@ test('3.28.0: a call while the team room’s job runs waits as Next up, starts w
   expect(retried.json().jobId).toBeNull()
   expect(jobs()).toHaveLength(2)
 })
+
+test('3.28.0 review: a call left waiting when its job ended while Score was down starts when Score starts', async () => {
+  const { trigger, secret } = await create()
+  const body = (id: string) => JSON.stringify({ ticket: { ...ticket.ticket, id } })
+  expect((await call(trigger.id, secret, body('TCK-A'), { webhookId: 'a' })).statusCode).toBe(200)
+  expect((await call(trigger.id, secret, body('TCK-B'), { webhookId: 'b' })).statusCode).toBe(202)
+  // Score stops; the job ends meanwhile (no event reaches a running server).
+  await app.close()
+  db.sqlite.prepare("UPDATE jobs SET state = 'closed' WHERE id = ?").run(jobs()[0]!.id)
+  app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: home }),
+    logger: false,
+    db,
+    ingest,
+    port,
+    clock: () => now,
+  })
+  await app.ready()
+  await ingest.flushListeners()
+  await ingest.drain()
+  expect(jobs().map((job) => JSON.parse(job.source).ref)).toEqual(['TCK-A', 'TCK-B'])
+  expect(db.sqlite.prepare('SELECT count(*) AS n FROM room_queue').get()).toEqual({ n: 0 })
+})

@@ -134,3 +134,28 @@ test('the room’s own thread has no Stop job, and deleting the running job free
   const restored = await post(`/api/jobs/${job.id}/restore`, {})
   expect(restored.statusCode).toBe(409)
 })
+
+test('Stop job still stops a closed job’s leftover work (a run closes its job first), and a deleted job is 404', async () => {
+  const job = (await post(`/api/rooms/${roomId}/jobs`, { title: 'Run job' })).json() as {
+    id: string
+  }
+  expect((await send({ text: '@builder Build the feed', jobId: job.id })).statusCode).toBe(200)
+  // As a run's end does: the job is closed with its turn still queued.
+  db.sqlite.prepare("UPDATE jobs SET state = 'closed' WHERE id = ?").run(job.id)
+  db.sqlite
+    .prepare("UPDATE message_runs SET state = 'pending' WHERE job_id = ? AND state = 'active'")
+    .run(job.id)
+  expect((await post(`/api/jobs/${job.id}/end`, {})).statusCode).toBe(200)
+  expect(
+    db.sqlite
+      .prepare(
+        "SELECT count(*) AS n FROM message_runs WHERE job_id = ? AND state IN ('pending', 'active')",
+      )
+      .get(job.id),
+  ).toEqual({ n: 0 })
+  const gone = (await post(`/api/rooms/${roomId}/jobs`, { title: 'Gone' })).json() as { id: string }
+  expect(
+    (await app.inject({ method: 'DELETE', url: `/api/jobs/${gone.id}`, headers })).statusCode,
+  ).toBe(204)
+  expect((await post(`/api/jobs/${gone.id}/end`, {})).statusCode).toBe(404)
+})

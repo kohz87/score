@@ -275,8 +275,8 @@ export function decideExchange(
  * chat's one job ends (jobs seldom end on their own); a run's job has its run stopped by the caller first.
  */
 export function endJob(sqlite: DatabaseSync, jobId: string, now: string): Decided {
-  const job = jobRow(sqlite, jobId)
-  if (job?.state === 'closed') return { drafts: [], running: [] }
+  // Stopped even when already closed: a run's job is closed by its run ending (Stop job stops the run first), and the
+  // job's own exchanges and turns must still stop (review). A second Stop job finds nothing left to stop.
   const stopped = stopJob(sqlite, jobId, now)
   return {
     drafts: [...stopped.drafts, ...closeJobNow(sqlite, jobId, now)],
