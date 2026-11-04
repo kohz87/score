@@ -1,16 +1,11 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  LiveDiagram,
-  useEffectPlayer,
-  usePrefersReducedMotion,
-} from '../orchestrations/LiveDiagram.tsx'
-import type { NodeVisual } from '../orchestrations/orch-model.ts'
 import { defaultChoice, startPreview, stepPreview, type PreviewState } from './preview-stepper.ts'
+import { RecipeLayers, type CardState } from './RecipeLayers.tsx'
 import type { Draft } from './workflow-model.ts'
-import { buildWorkflowGraph } from './workflow-run-model.ts'
+import { indexIssues } from './workflow-validation.ts'
 
-// PLAN 5.39: "Preview" plays the drawn workflow through the live diagram. Nothing runs and no model is called: the
+// PLAN 5.39: "Preview" plays the drawn workflow through the recipe's layered view (3.26.0). Nothing runs and no model is called: the
 // walk is pure client code (preview-stepper.ts). It waits at a gate and at a branch for the person to choose.
 
 type Speed = 1 | 4
@@ -29,24 +24,12 @@ export function WorkflowPreview({
   agents: AgentSummary[]
   onStop: () => void
 }) {
-  const reducedMotion = usePrefersReducedMotion()
   const [speed, setSpeed] = useState<Speed>(1)
-  const quiet = reducedMotion || speed > 1
-  const player = useEffectPlayer(quiet)
   const [state, setState] = useState<PreviewState>(() => startPreview(draft))
   const [branch, setBranch] = useState<string | null>(null)
-  const { enqueue, reset: resetPlayer } = player
-  const sentFirst = useRef(false)
-  useEffect(() => {
-    // The first state has its own pulse on the steps that start.
-    if (sentFirst.current) return
-    sentFirst.current = true
-    enqueue([...state.effects])
-  }, [enqueue, state.effects])
 
   const advance = (choice?: string) => {
     const next = stepPreview(state, draft, choice)
-    enqueue([...next.effects])
     setBranch(null)
     setState(next)
   }
@@ -61,24 +44,14 @@ export function WorkflowPreview({
     return () => window.clearTimeout(timer)
   }, [state, speed])
 
-  const graph = useMemo(() => buildWorkflowGraph(draft), [draft])
-  const positions = useMemo(
-    () => new Map(Object.entries(draft.layout?.nodes ?? {})),
-    [draft.layout],
-  )
-  const statuses = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const [id, visual] of state.nodes) if (visual === 'running') map.set(id, 'Previewing…')
+  // The states of the steps, drawn on each card of the layered view; a running step says it is previewing.
+  const cards = useMemo(() => {
+    const map = new Map<string, CardState>()
+    for (const [id, visual] of state.nodes)
+      map.set(id, visual === 'running' ? { visual, status: 'Previewing…' } : { visual })
     return map
   }, [state.nodes])
-  const nodes = useMemo(
-    () =>
-      graph.nodes.map((node) =>
-        statuses.has(node.id) ? { ...node, status: statuses.get(node.id)! } : node,
-      ),
-    [graph.nodes, statuses],
-  )
-  const visuals: ReadonlyMap<string, NodeVisual> = state.nodes
+  const noIssues = useMemo(() => indexIssues([]), [])
   const pause = state.pause
   const label = (id: string) => draft.nodes.find((node) => node.id === id)?.label ?? id
   const question =
@@ -112,10 +85,8 @@ export function WorkflowPreview({
             <button
               type="button"
               onClick={() => {
-                resetPlayer()
-                const first = startPreview(draft)
-                setState(first)
-                enqueue([...first.effects])
+                setBranch(null)
+                setState(startPreview(draft))
               }}
             >
               Play again
@@ -192,24 +163,17 @@ export function WorkflowPreview({
         )}
       </div>
 
-      <div className="orch-diagram">
-        <LiveDiagram
-          nodes={nodes}
-          edges={graph.edges}
-          visuals={visuals}
-          lead="idle"
-          agents={agents}
-          selected={null}
-          onSelect={() => {}}
-          active={player.active}
-          reducedMotion={quiet}
-          edgeStates={state.edges}
-          positions={positions}
-          noun="Step"
-          ariaLabel="Preview of the workflow. Nothing runs."
-          columnGap={84}
-        />
-      </div>
+      <RecipeLayers
+        draft={draft}
+        agents={agents}
+        issues={noIssues}
+        selected={null}
+        onSelect={() => {}}
+        states={cards}
+        edges={state.edges}
+        readOnly
+        ariaLabel="Preview of the recipe. Nothing runs."
+      />
     </section>
   )
 }

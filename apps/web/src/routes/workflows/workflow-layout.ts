@@ -1,62 +1,41 @@
-import { WORKFLOW_LAYOUT_LIMIT, type WorkflowLayout, type WorkflowNode } from '@score/contract'
+import { WORKFLOW_LAYOUT_LIMIT, type WorkflowNode } from '@score/contract'
 import { nodeSize } from '../orchestrations/LiveDiagram.tsx'
 import { portsOf, type Draft } from './workflow-model.ts'
 
-// Free placement in the editor (PLAN 7.1c): pure helpers over the draft's optional `layout`.
+// Where a new step goes in a recipe that still carries saved positions (PLAN 7.1c). The recipe view lays itself out by
+// rank and never reads them, but they stay in the draft untouched; a step added to such a draft gets one too, so the
+// saved version stays complete.
 
-export const GRID = 16
-export const STEP = GRID
-export const BIG_STEP = GRID * 5
+const GRID = 16
 const PORT_PITCH = 24
 
 type Positions = Record<string, { x: number; y: number }>
 
 /** Editor sizes: a branch grows with its rules so every port has room. */
-export function editSize(node: WorkflowNode): { w: number; h: number } {
+function editSize(node: WorkflowNode): { w: number; h: number } {
   const base = nodeSize({ shape: node.kind })
   return { w: base.w, h: Math.max(base.h, PORT_PITCH * portsOf(node).length + 14) }
 }
 
-export const snap = (value: number, disable = false): number =>
-  disable ? Math.round(value) : Math.round(value / GRID) * GRID
+const snap = (value: number): number => Math.round(value / GRID) * GRID
 
-export const clampCoord = (value: number): number =>
-  Math.min(WORKFLOW_LAYOUT_LIMIT, Math.max(0, value))
+const clampCoord = (value: number): number => Math.min(WORKFLOW_LAYOUT_LIMIT, Math.max(0, value))
 
 /** The draft with this layout; an empty layout is removed so the definition goes back to "auto-arranged". */
-export function withLayout(draft: Draft, nodes: Positions | undefined): Draft {
+function withLayout(draft: Draft, nodes: Positions | undefined): Draft {
   const { layout: _old, ...rest } = draft
   void _old
   if (!nodes || Object.keys(nodes).length === 0) return rest
   return { ...rest, layout: { nodes } }
 }
 
-export function layoutOf(draft: Draft): Positions {
+function layoutOf(draft: Draft): Positions {
   return draft.layout?.nodes ?? {}
 }
 
 /** Own entries only: a node may be called `constructor` or `toString` (S2-010). */
-export function positionOf(positions: Positions, id: string): { x: number; y: number } | undefined {
+function positionOf(positions: Positions, id: string): { x: number; y: number } | undefined {
   return Object.hasOwn(positions, id) ? positions[id] : undefined
-}
-
-/**
- * Moves one node. The first move pins every node where it is drawn now (`current`), so the saved version reopens exactly
- * as it looked and later edits cannot shuffle the rest.
- */
-export function moveNode(
-  draft: Draft,
-  current: ReadonlyMap<string, { x: number; y: number }>,
-  id: string,
-  to: { x: number; y: number },
-): Draft {
-  const nodes: Positions = { ...layoutOf(draft) }
-  for (const node of draft.nodes) {
-    const at = positionOf(nodes, node.id) ?? current.get(node.id)
-    if (at) nodes[node.id] = { x: at.x, y: at.y }
-  }
-  nodes[id] = { x: clampCoord(to.x), y: clampCoord(to.y) }
-  return withLayout(draft, nodes)
 }
 
 const overlaps = (a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean =>
@@ -99,5 +78,3 @@ export function placeNewNode(
   }
   return withLayout(draft, { ...layoutOf(draft), [id]: { x: clampCoord(x), y: clampCoord(y) } })
 }
-
-export type { WorkflowLayout }
