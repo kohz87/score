@@ -30,66 +30,73 @@ export function RunSheet({ briefId, onClose }: { briefId: string; onClose: () =>
       : null
   const pending = orchestrations.status === 'pending' || workflows.status === 'pending'
   const failed = orchestrations.status === 'error' && workflows.status === 'error'
-  const close = useRef<HTMLButtonElement>(null)
-  useEffect(() => close.current?.focus(), [])
+  const dialog = useRef<HTMLDialogElement>(null)
+  // The parent passes a fresh function each render; the dialog must not close and reopen for that.
+  const onCloseRef = useRef(onClose)
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+    onCloseRef.current = onClose
+  })
+  // A native modal dialog: focus is trapped and the page behind is inert; Escape closes it, and closing gives the focus
+  // back to what had it before (the library's card link, or nothing on a direct URL).
+  useEffect(() => {
+    const node = dialog.current
+    if (!node) return
+    const closed = () => onCloseRef.current()
+    node.addEventListener('close', closed)
+    // jsdom has no showModal; the open attribute is enough there.
+    if (!node.open) {
+      if (typeof node.showModal === 'function') node.showModal()
+      else node.setAttribute('open', '')
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+    return () => {
+      node.removeEventListener('close', closed)
+      if (node.open && typeof node.close === 'function') node.close()
+    }
+  }, [])
   return (
-    <div className="bold-rp-scrim">
-      <section
-        className="bold-rp-runsheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Run: ${title}`}
-      >
-        <header className="bold-rp-runsheet-head">
-          <div>
-            <h2>{title}</h2>
-            <p className="small muted">
-              {status ? `${status} · ` : ''}Read-only: this run belongs to no chat.
-            </p>
-          </div>
+    <dialog ref={dialog} className="bold-rp-runsheet" aria-label={`Run: ${title}`}>
+      <header className="bold-rp-runsheet-head">
+        <div>
+          <h2>{title}</h2>
+          <p className="small muted">{status ? `${status} · ` : ''}This run belongs to no chat.</p>
+        </div>
+        <button
+          type="button"
+          className="bold-rp-sheet-close"
+          aria-label="Close the run"
+          autoFocus
+          onClick={() =>
+            typeof dialog.current?.close === 'function' ? dialog.current.close() : onClose()
+          }
+        >
+          ×
+        </button>
+      </header>
+      {recipe ? (
+        <RunGraph recipe={recipe} />
+      ) : failed ? (
+        <p role="alert" className="bold-error">
+          Couldn’t load this run.{' '}
           <button
-            ref={close}
             type="button"
-            className="bold-rp-sheet-close"
-            aria-label="Close the run"
-            onClick={onClose}
+            className="bold-link"
+            onClick={() => {
+              void refetchOrchestrations()
+              void refetchWorkflows()
+            }}
           >
-            ×
+            Try again
           </button>
-        </header>
-        {recipe ? (
-          <RunGraph recipe={recipe} />
-        ) : failed ? (
-          <p role="alert" className="bold-error">
-            Couldn’t load this run.{' '}
-            <button
-              type="button"
-              className="bold-link"
-              onClick={() => {
-                void refetchOrchestrations()
-                void refetchWorkflows()
-              }}
-            >
-              Try again
-            </button>
-          </p>
-        ) : pending ? (
-          <p role="status" className="muted">
-            Loading the run…
-          </p>
-        ) : (
-          <p role="alert" className="muted">
-            That run isn’t available.
-          </p>
-        )}
-      </section>
-    </div>
+        </p>
+      ) : pending ? (
+        <p role="status" className="muted">
+          Loading the run…
+        </p>
+      ) : (
+        <p role="alert" className="muted">
+          That run isn’t available.
+        </p>
+      )}
+    </dialog>
   )
 }

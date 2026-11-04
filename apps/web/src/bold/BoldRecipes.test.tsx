@@ -351,7 +351,11 @@ test('archived recipes sit behind "Archived recipes · N" and can be unarchived'
 test('a run that belongs to no chat opens a read-only sheet over the library, not a run page', async () => {
   const router = mount('/b/settings/recipes?run=brief-wfrun-1')
   const sheet = await screen.findByRole('dialog', { name: /Run: Release notes: the 2.4 release/ })
-  expect(within(sheet).getByText(/Read-only: this run belongs to no chat/)).toBeTruthy()
+  expect(within(sheet).getByText(/This run belongs to no chat/)).toBeTruthy()
+  expect(within(sheet).queryByText(/Read-only/)).toBeNull()
+  // A stuck chat-less run must still be stoppable: the controls are in the sheet.
+  expect(await within(sheet).findByRole('button', { name: 'Pause' })).toBeTruthy()
+  expect(within(sheet).getByRole('button', { name: 'Stop' })).toBeTruthy()
   // The same parts as a chat's Graph tab: the graph, the session log and the folded Run details.
   expect(await within(sheet).findByRole('region', { name: 'Session log' })).toBeTruthy()
   expect(within(sheet).getByText('Run details')).toBeTruthy()
@@ -363,6 +367,43 @@ test('a run that belongs to no chat opens a read-only sheet over the library, no
   fireEvent.click(within(sheet).getByRole('button', { name: 'Close the run' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(router.state.location.search).toBe('')
+})
+
+test('the sheet is a native modal dialog and Escape closes it', async () => {
+  const router = mount('/b/settings/recipes?run=brief-wfrun-1')
+  const sheet = (await screen.findByRole('dialog', { name: /Run: / })) as HTMLDialogElement
+  expect(sheet.tagName).toBe('DIALOG')
+  // jsdom has no showModal; the browser's own dialog supplies the focus trap, the inert page and Escape.
+  fireEvent(sheet, new Event('close'))
+  await waitFor(() => expect(router.state.location.search).toBe(''))
+})
+
+test('a recipe run that has agents changed says so above the graph, protected, with the run controls', async () => {
+  const fixtures = workflowFixtures as Record<string, unknown>
+  const original = fixtures['/api/workflow-runs/wfrun-1'] as {
+    run: { agentMap: unknown[] }
+  }
+  fixtures['/api/workflow-runs/wfrun-1'] = {
+    ...original,
+    run: {
+      ...original.run,
+      agentMap: [
+        { agentId: 'builder', incarnation: 'new-builder', status: 'changed' },
+        { agentId: 'reviewer', incarnation: 'old-reviewer', status: 'removed' },
+      ],
+    },
+  }
+  try {
+    mount('/b/settings/recipes?run=brief-wfrun-1')
+    const sheet = await screen.findByRole('dialog', { name: /Run: / })
+    const warning = await within(sheet).findByRole('list', { name: 'Agents that changed' })
+    expect(warning.getAttribute('data-protected')).toBe('block')
+    expect(warning.textContent).toContain('builder was replaced since this run started')
+    expect(warning.textContent).toContain('reviewer was removed since this run started')
+    expect(await within(sheet).findByRole('button', { name: 'Pause' })).toBeTruthy()
+  } finally {
+    fixtures['/api/workflow-runs/wfrun-1'] = original
+  }
 })
 
 test('a run that is not there says so, and an empty ?run= is just the library', async () => {
@@ -648,7 +689,7 @@ test('on a phone the step settings are a sheet that closes with its button', asy
     'matchMedia',
     (query: string) =>
       ({
-        matches: query.includes('width < 600px'),
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},
@@ -665,12 +706,37 @@ test('on a phone the step settings are a sheet that closes with its button', asy
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
 })
 
+test('on a tablet (600 to 860px) the step settings are a bottom sheet too, in both views, not a block under the recipe', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('width <= 860px'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+  mount('/b/settings/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  fireEvent.click(card)
+  expect(screen.getByRole('complementary', { name: 'Selected step' }).className).toContain(
+    'bold-rp-sheet',
+  )
+  const steps = await showText()
+  fireEvent.click(within(steps).getByRole('button', { name: /^2.*Review the draft/ }))
+  expect(screen.getByRole('complementary', { name: 'Selected step' }).className).toContain(
+    'bold-rp-sheet',
+  )
+})
+
 test('on a phone the step settings are a bottom sheet in As text too, opening when a step is chosen', async () => {
   vi.stubGlobal(
     'matchMedia',
     (query: string) =>
       ({
-        matches: query.includes('width < 600px'),
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},
@@ -794,6 +860,8 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     fireEvent.click(confirm)
     await waitFor(() => expect(body).toEqual({ confirm: releaseDetail.name }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+    // The library says what happened.
+    expect((await screen.findByText('Deleted the recipe.')).getAttribute('role')).toBe('status')
   } finally {
     fixtures['/api/workflows'] = original
   }
@@ -829,7 +897,7 @@ const phoneMedia = () =>
     'matchMedia',
     (query: string) =>
       ({
-        matches: query.includes('width < 600px'),
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},

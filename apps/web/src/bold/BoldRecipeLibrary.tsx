@@ -1,6 +1,6 @@
 import type { OrchestrationSummary, WorkflowRunSummary, WorkflowSummary } from '@score/contract'
 import { useId, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { orchestrationsQuery } from '../routes/orchestrations/orchestration-queries.ts'
 import { statusLabel } from '../routes/orchestrations/orch-model.ts'
@@ -132,6 +132,8 @@ function RecipeCard({
  */
 export function RecipeLibrary({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate()
+  const deleted =
+    (useLocation().state as { deletedRecipe?: boolean } | null)?.deletedRecipe === true
   const workflows = useWorkflows()
   const orchestrations = useStreamQuery(orchestrationsQuery).data
   const runs = useStreamQuery(workflowRunsQuery).data
@@ -185,6 +187,11 @@ export function RecipeLibrary({ onBack }: { onBack: () => void }) {
         Saved plans a chat’s lead can run with <b>/run</b>. A run shows in its chat: the run card,
         the Graph and the session log.
       </p>
+      {deleted && (
+        <p className="small muted bold-recipes-notice" role="status">
+          Deleted the recipe.
+        </p>
+      )}
       {workflows.isError ? (
         <p role="alert" className="bold-error">
           Couldn’t load recipes.{' '}

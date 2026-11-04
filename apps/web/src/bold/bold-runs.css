@@ -271,3 +271,17 @@
 [data-ui='bold'] .bold-topic-graph .bold-run-tiles {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* 3.29.0: the warning about agents that changed since a recipe run started, above its graph (a protected line). */
+[data-ui='bold'] .bold-run-warnings {
+  list-style: none;
+  margin: 0;
+  padding: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: rgba(255, 201, 77, 0.12);
+  color: var(--warn);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+}

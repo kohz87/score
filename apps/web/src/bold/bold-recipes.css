@@ -825,6 +825,7 @@
 [data-ui='bold'] .bold-rp-sheet {
   position: fixed;
   z-index: 70;
+  top: auto; /* the aside's sticky top would otherwise pin the sheet to the top */
   left: 0;
   right: 0;
   bottom: 0;
@@ -1124,19 +1125,30 @@
 
 /* The run that belongs to no chat: a read-only sheet over the library. */
 [data-ui='bold'] .bold-rp-runsheet {
-  position: relative;
-  width: 100%;
-  max-width: 720px;
-  margin-top: max(30px, env(safe-area-inset-top, 0px));
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  margin: auto;
+  border: 0;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: calc(14px * var(--bold-d, 1));
   background: var(--panel);
   color: var(--ink);
   padding: calc(24px * var(--bold-d, 1));
   border-radius: calc(26px * var(--bold-r, 1));
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+[data-ui='bold'] .bold-rp-runsheet[open] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+[data-ui='bold'] .bold-rp-runsheet::backdrop {
+  background: rgba(5, 6, 9, 0.62);
+}
+[data-ui='bold'] .bold-rp-runsheet .bold-rp-sheet-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 [data-ui='bold'] .bold-rp-runsheet-head {

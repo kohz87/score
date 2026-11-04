@@ -19,7 +19,7 @@ import {
   boldStartJobLink,
 } from './bold-links.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
-import { PHONE_QUERY, useMediaQuery } from '../data/use-media.ts'
+import { useMediaQuery } from '../data/use-media.ts'
 import { AddMenu, RecipeLayers, type InsertStep } from '../routes/workflows/RecipeLayers.tsx'
 import { layoutRecipe, placement } from '../routes/workflows/recipe-layers.ts'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
@@ -86,6 +86,8 @@ import './bold-recipes.css'
 // chosen). A run is read in its chat; only one that belongs to no chat opens a read-only sheet over the library.
 
 const BUILT_IN = 'lead-decides'
+// The bold shell's narrow breakpoint: below it the step settings are a bottom sheet (a tablet gets it too).
+const NARROW_QUERY = '(width <= 860px)'
 
 type Problem = RecipeProblem & { edgeId?: string | null }
 
@@ -236,7 +238,8 @@ function BoldRecipeRoute({ workflowId }: { workflowId: string }) {
       if (selected === 'new') after(id)
     },
     onDeleted: () => {
-      void navigate(boldRecipesLink(), { replace: true })
+      // The library says so (router state, so a reload doesn't repeat it).
+      void navigate(boldRecipesLink(), { replace: true, state: { deletedRecipe: true } })
     },
     onDuplicated: (id: string) => {
       setNotice('Made a copy. It is saved as version 1.')
@@ -783,9 +786,9 @@ function BoldRecipeEditor({
     })
   }
 
-  const phone = useMediaQuery(PHONE_QUERY)
-  // On a phone the step's settings are a sheet from the bottom, as in the mock-up (both views); only while a step is selected.
-  const sheet = phone && previewing === null
+  const narrow = useMediaQuery(NARROW_QUERY)
+  // Below 860px (phone and tablet) the step's settings are a sheet from the bottom, as in the mock-up (both views); only while a step is selected.
+  const sheet = narrow && previewing === null
   const recipeLayout = useMemo(() => layoutRecipe(graphDraft), [graphDraft])
   const sheetOpen = sheet && graphNode !== undefined
   const graphId = graphNode?.id ?? null

@@ -7,6 +7,7 @@ import { workflowFixtures } from '../../../../../e2e/workflow-fixtures.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
+import { RunControlsBar } from './RunControlsBar.tsx'
 import { RunDetails } from './RunDetails.tsx'
 
 class Source extends EventTarget {
@@ -51,6 +52,7 @@ function mount(recipe: { kind: 'orchestration' | 'workflow'; ref: string }) {
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client, queries }}>
         <MemoryRouter>
+          <RunControlsBar recipe={recipe} />
           <RunDetails recipe={recipe} />
         </MemoryRouter>
       </StreamContext>
@@ -76,4 +78,13 @@ test('a recipe run folds its spend, limits and inputs under "Run details"', asyn
   expect(await within(section).findByLabelText('Spend')).toBeTruthy()
   expect(within(section).getByLabelText('Limits')).toBeTruthy()
   expect(within(section).getByLabelText('Inputs')).toBeTruthy()
+})
+
+test('both run kinds show Stop (and Pause while running) at the top of the graph', async () => {
+  mount({ kind: 'orchestration', ref: 'orch-1' })
+  expect(await screen.findByRole('button', { name: 'Stop' })).toBeTruthy()
+  cleanup()
+  mount({ kind: 'workflow', ref: 'wfrun-1' })
+  expect(await screen.findByRole('button', { name: 'Pause' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
 })

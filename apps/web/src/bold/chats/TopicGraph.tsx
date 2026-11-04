@@ -7,16 +7,18 @@ import { WorkflowRunLive } from '../../routes/workflows/WorkflowRunLive.tsx'
 import { ClassicPaper } from '../ClassicPaper.tsx'
 import { JobMap } from '../jobmap/JobMap.tsx'
 import { recipeRun, type JobRecipe } from '../room/thread-model.ts'
+import { RunControlsBar } from './RunControlsBar.tsx'
 import { RunDetails } from './RunDetails.tsx'
 
 /**
- * A run's graph with its moving dots and phases (the job map for a lead-decides run, the recipe's live graph for a recipe
+ * A run's graph (under its Pause / Resume / Stop and any changed-agent warning) with its moving dots and phases (the job map for a lead-decides run, the recipe's live graph for a recipe
  * run), the Session log under it, and the folded Run details (3.29.0). The chat's Graph tab and the read-only sheet for a
  * run that belongs to no chat both draw this.
  */
 export function RunGraph({ recipe }: { recipe: JobRecipe }) {
   return (
     <>
+      <RunControlsBar recipe={recipe} />
       {recipe.kind === 'orchestration' ? (
         // The job map carries its own Session log under the graph.
         <JobMap orchestrationId={recipe.ref} />
