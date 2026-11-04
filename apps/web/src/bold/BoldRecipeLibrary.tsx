@@ -1,5 +1,5 @@
 import type { OrchestrationSummary, WorkflowRunSummary, WorkflowSummary } from '@score/contract'
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { orchestrationsQuery } from '../routes/orchestrations/orchestration-queries.ts'
@@ -132,8 +132,15 @@ function RecipeCard({
  */
 export function RecipeLibrary({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate()
-  const deleted =
-    (useLocation().state as { deletedRecipe?: boolean } | null)?.deletedRecipe === true
+  const location = useLocation()
+  // The notice is read once and the history entry's state cleared, so a reload doesn't say it again (3.29.0 review).
+  const [deleted] = useState(
+    () => (location.state as { deletedRecipe?: boolean } | null)?.deletedRecipe === true,
+  )
+  useEffect(() => {
+    if ((location.state as { deletedRecipe?: boolean } | null)?.deletedRecipe)
+      void navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+  }, [location.pathname, location.search, location.state, navigate])
   const workflows = useWorkflows()
   const orchestrations = useStreamQuery(orchestrationsQuery).data
   const runs = useStreamQuery(workflowRunsQuery).data

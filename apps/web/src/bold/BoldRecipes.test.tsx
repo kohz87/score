@@ -862,6 +862,9 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
     // The library says what happened.
     expect((await screen.findByText('Deleted the recipe.')).getAttribute('role')).toBe('status')
+    // The history entry no longer carries it, so a reload or a later visit doesn't repeat it (3.29.0 review).
+    await waitFor(() => expect(router.state.location.state).toBeNull())
+    expect(screen.getByText('Deleted the recipe.')).toBeDefined()
   } finally {
     fixtures['/api/workflows'] = original
   }
