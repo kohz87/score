@@ -285,3 +285,21 @@
   flex-direction: column;
   gap: calc(4px * var(--bold-d, 1));
 }
+
+/* 3.29.0 gate: the Graph tab's switch between a lead-decides run's job map and its step diagram. */
+[data-ui='bold'] .bold-run-diagram-switch {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-run-diagram-link {
+  min-height: 32px;
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}

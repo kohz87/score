@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { orchestrationFixtures } from '../../../../../e2e/orchestration-fixtures.ts'
@@ -9,6 +9,7 @@ import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { RunControlsBar } from './RunControlsBar.tsx'
 import { RunDetails } from './RunDetails.tsx'
+import { RunGraph } from './TopicGraph.tsx'
 
 class Source extends EventTarget {
   close() {}
@@ -39,7 +40,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(recipe: { kind: 'orchestration' | 'workflow'; ref: string }) {
+function mount(recipe: { kind: 'orchestration' | 'workflow'; ref: string }, graph = false) {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client)
@@ -52,8 +53,14 @@ function mount(recipe: { kind: 'orchestration' | 'workflow'; ref: string }) {
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client, queries }}>
         <MemoryRouter>
-          <RunControlsBar recipe={recipe} />
-          <RunDetails recipe={recipe} />
+          {graph ? (
+            <RunGraph recipe={recipe} />
+          ) : (
+            <>
+              <RunControlsBar recipe={recipe} />
+              <RunDetails recipe={recipe} />
+            </>
+          )}
         </MemoryRouter>
       </StreamContext>
     </QueryClientProvider>,
@@ -87,4 +94,20 @@ test('both run kinds show Stop (and Pause while running) at the top of the graph
   mount({ kind: 'workflow', ref: 'wfrun-1' })
   expect(await screen.findByRole('button', { name: 'Pause' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
+})
+
+test('3.29.0 gate: a lead-decides run switches between its job map and the step diagram; a recipe run has no switch', async () => {
+  mount({ kind: 'orchestration', ref: 'orch-1' }, true)
+  const toDiagram = await screen.findByRole('button', { name: 'Show the step diagram' })
+  expect(toDiagram.getAttribute('aria-pressed')).toBe('false')
+  expect(screen.getByRole('region', { name: 'Job map' })).toBeTruthy()
+  fireEvent.click(toDiagram)
+  const back = screen.getByRole('button', { name: 'Show the job map' })
+  expect(back.getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('region', { name: 'Job map' })).toBeNull()
+  expect(screen.getByRole('region', { name: 'Session log' })).toBeTruthy()
+  cleanup()
+  mount({ kind: 'workflow', ref: 'wfrun-1' }, true)
+  await screen.findByRole('button', { name: 'Pause' })
+  expect(screen.queryByRole('button', { name: /Show the step diagram/ })).toBeNull()
 })
