@@ -1099,6 +1099,29 @@ test('the conversation under the viewer sheet is inert, and a waiting card is cu
   await waitFor(() => expect(document.activeElement).toBe(card))
 })
 
+test('on a phone the cue also closes the Info sheet, so the card it goes to is not covered', async () => {
+  phone = true
+  openWithFiles('/b?job=job-plain')
+  fireEvent.click(await screen.findByRole('button', { name: 'Chat info' }))
+  const panel = await screen.findByRole('complementary', { name: 'Side panel' })
+  fireEvent.click(await within(panel).findByRole('link', { name: /Release notes/ }))
+  const sheet = await screen.findByRole('dialog', { name: 'Workbench viewer' })
+  const stream = document.getElementById('bold-room-stream')!
+  const card = document.createElement('div')
+  card.setAttribute('data-pin-key', 'approval:a1')
+  card.tabIndex = -1
+  card.getBoundingClientRect = () => ({ top: 10, bottom: 60, height: 50 }) as DOMRect
+  stream.appendChild(card)
+  fireEvent.click(
+    await within(sheet).findByRole('button', { name: '1 needs you · Back to the chat' }),
+  )
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Workbench viewer' })).toBeNull())
+  await waitFor(() =>
+    expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull(),
+  )
+  await waitFor(() => expect(document.activeElement).toBe(card))
+})
+
 test('a row opens the viewer sheet over the conversation; Escape and the close button return focus to the row', async () => {
   const router = openWithFiles('/b?job=job-plain')
   const section = await screen.findByTestId('files-results')

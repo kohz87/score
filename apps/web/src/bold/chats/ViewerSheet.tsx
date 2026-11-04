@@ -21,10 +21,13 @@ export function ViewerSheet({
   agents,
   phone,
   fallbackJob,
+  onBackToChat,
 }: {
   agents: AgentSummary[]
   phone: boolean
   fallbackJob?: JobFace | undefined
+  /** Phone: the cue also closes the Info sheet the viewer was opened from, so the card it goes to isn't covered. */
+  onBackToChat?: () => void
 }) {
   const [params, setParams] = useSearchParams()
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -40,6 +43,7 @@ export function ViewerSheet({
   // A needs-you card that waits in this chat is under the sheet: the bar says so and takes the person back to it.
   const [needing, setNeeding] = useState(0)
   const backToCards = () => {
+    onBackToChat?.()
     setParams(viewerClosedSearch(paramsRef.current), { replace: true })
     // Two frames: the sheet unmounts (and the conversation stops being inert) before focus goes to the card.
     requestAnimationFrame(() => requestAnimationFrame(() => void goToNearestCard()))
@@ -169,10 +173,12 @@ export function DirectViewerSheet({
   agents,
   agentId,
   phone,
+  onBackToChat,
 }: {
   agents: AgentSummary[]
   agentId: string
   phone: boolean
+  onBackToChat?: () => void
 }) {
   const definition = useMemo(() => directChatsQuery(agentId), [agentId])
   const chats = useStreamQuery(definition).data?.chats ?? []
@@ -181,5 +187,12 @@ export function DirectViewerSheet({
   const fallbackJob: JobFace | undefined = chat
     ? { id: chat.id, title: chat.isDefault ? 'Main chat' : chat.title, state: chat.state }
     : undefined
-  return <ViewerSheet agents={agents} phone={phone} fallbackJob={fallbackJob} />
+  return (
+    <ViewerSheet
+      agents={agents}
+      phone={phone}
+      fallbackJob={fallbackJob}
+      onBackToChat={onBackToChat}
+    />
+  )
 }

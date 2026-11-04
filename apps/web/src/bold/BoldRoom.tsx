@@ -389,9 +389,21 @@ export function BoldRoom() {
       {viewerOpen &&
         phone &&
         (directMode ? (
-          directAgent && <DirectViewerSheet agents={agents} agentId={directAgent.id} phone />
+          directAgent && (
+            <DirectViewerSheet
+              agents={agents}
+              agentId={directAgent.id}
+              phone
+              onBackToChat={() => setSheetOpen(false)}
+            />
+          )
         ) : (
-          <ViewerSheet agents={agents} phone fallbackJob={currentJob} />
+          <ViewerSheet
+            agents={agents}
+            phone
+            fallbackJob={currentJob}
+            onBackToChat={() => setSheetOpen(false)}
+          />
         ))}
 
       <div
