@@ -2261,3 +2261,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   focus is a pre-existing 1-in-3 flake).
 - Lead process note: the coder briefly tried `SCORE_E2E_DEV=1` (its dev proxy targets the live port; it failed before
   any request). The rule was in memory but missing from the brief; restored in every brief since.
+- **v3.24.1 deployed live** (~02:30 UTC), backup score-pre-3.24.1-20261104.db, health ok; live screenshots (owner's
+  data): Knowledge uses the window with long names inside the list and full-width side cards; Tasks scrolls its board
+  sideways with the next column peeking. **v3.25.0 deployed live** (~03:17 UTC), backup score-pre-3.25.0-20261104.db,
+  health ok, fence off; live: the side panel is Info | Graph. Both pushed.
