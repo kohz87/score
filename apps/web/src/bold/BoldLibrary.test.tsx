@@ -517,3 +517,19 @@ test('3.27.1: a folder’s ⋯ menu reaches Rename, Move and Delete, and is a re
   )
   expect(await screen.findByRole('dialog', { name: 'Delete the folder Decisions?' })).toBeDefined()
 })
+
+test('3.27.1 review: a tap on the menu’s scrim closes it without reaching what lies beneath', async () => {
+  mount(null, true)
+  const rail = await screen.findByRole('complementary', { name: 'Folders' })
+  const trigger = await within(rail).findByRole('button', { name: 'Folder actions for Decisions' })
+  fireEvent.click(trigger)
+  const menu = await screen.findByRole('menu', { name: 'Decisions actions' })
+  const scrim = document.querySelector('.bold-knowledge-scrim')!
+  // The scrim is part of the menu's own root, so its pointerdown is not an outside tap that would let the click through.
+  fireEvent.pointerDown(scrim)
+  expect(screen.getByRole('menu')).toBe(menu)
+  fireEvent.click(scrim)
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+  expect(screen.queryByRole('dialog')).toBeNull()
+})

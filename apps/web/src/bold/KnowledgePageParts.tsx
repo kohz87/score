@@ -101,6 +101,17 @@ function FolderMenu({
         </span>
       </button>
       {open && (
+        // 3.27.1 review: a real scrim (shown only on a phone) takes the dismissing tap, so it can't open what lies beneath.
+        <span
+          className="bold-knowledge-scrim"
+          aria-hidden="true"
+          onClick={() => {
+            setOpen(false)
+            trigger.current?.focus()
+          }}
+        />
+      )}
+      {open && (
         <div
           className="menu bold-knowledge-menu"
           id={menuId}
@@ -108,6 +119,10 @@ function FolderMenu({
           aria-label={`${name} actions`}
           onKeyDown={move}
         >
+          <span className="bold-knowledge-menu-head" aria-hidden="true">
+            <span className="bold-knowledge-menu-grip" />
+            {name}
+          </span>
           <button type="button" className="mi" role="menuitem" onClick={pick(onRename)}>
             Rename…
           </button>

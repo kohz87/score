@@ -103,6 +103,11 @@
   min-width: 0;
 }
 
+[data-ui='bold'] .bold-knowledge-scrim,
+[data-ui='bold'] .bold-knowledge-menu-head {
+  display: none;
+}
+
 [data-ui='bold'] .bold-knowledge-fmenu {
   position: relative;
   flex: none;
@@ -402,7 +407,35 @@
     opacity: 1;
   }
 
-  /* Phone: the ⋯ opens a bottom sheet; its dim is its own shadow, so no extra fixed element exists for a theme to hide. */
+  /* Phone: the ⋯ opens a bottom sheet over a real scrim that takes the dismissing tap (3.27.1 review). */
+  [data-ui='bold'] .bold-knowledge-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 89;
+    background: rgb(var(--shadow-rgb) / 0.55);
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu-head {
+    display: flex;
+    flex-direction: column;
+    gap: calc(10px * var(--bold-d, 1));
+    padding: 0 calc(14px * var(--bold-d, 1)) calc(6px * var(--bold-d, 1));
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--ink2);
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu-grip {
+    align-self: center;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
   [data-ui='bold'] .menu.bold-knowledge-menu {
     position: fixed;
     top: auto;
@@ -413,8 +446,6 @@
     min-width: 0;
     border-radius: calc(28px * var(--bold-r, 1)) calc(28px * var(--bold-r, 1)) 0 0;
     padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
-    clip-path: inset(-100vmax 0 0 0);
   }
 
   [data-ui='bold'] .bold-knowledge-newfolder {
