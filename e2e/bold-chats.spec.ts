@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { makeRoom } from './bold-chat-helpers.ts'
+import { makeRoom, openInfoSection } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
 // 3.21.0: the messenger layout (chat list, chat header, Info tab, phone list), docs/design/bold/mockups/18-chats*.
@@ -62,6 +62,7 @@ test('Chat info opens the Info tab with members and topics, and closing it gives
   await expect(info).toHaveAttribute('aria-pressed', 'true')
   const panel = page.getByLabel(`${room.name}, chat info`)
   await expect(panel.getByRole('heading', { name: 'Members' })).toBeVisible()
+  await openInfoSection(panel, 'Members')
   await expect(panel.getByText('owner', { exact: true })).toBeVisible()
   await expect(panel.getByRole('heading', { name: 'Topics' })).toBeVisible()
 

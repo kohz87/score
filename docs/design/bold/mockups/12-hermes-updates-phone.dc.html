@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hermes updates on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+select,input{font:500 16px 'Hanken Grotesk',sans-serif}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1500px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px">
+<a href="#" style="font-size: 14px; color: #9AA0AD; text-decoration: none">‹ Settings</a>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700">System</h1>
+
+<section aria-labelledby="ph" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 id="ph" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 19px; font-weight: 700">Hermes updates</h2>
+<span style="font-size: 12px; color: #4FD1A5; font-weight: 600">Connected</span>
+</div>
+<span style="font-size: 14px; color: #C9CDD6">Version <b style="color: #ECEEF2">{{version}}</b> · channel: every change (main)</span>
+<span style="font-size: 14px; color: {{checkColor}}; font-weight: 600">Score's check: {{checkText}}</span>
+
+<sc-if value="{{showCard}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="background: #12131A; border-radius: 14px; padding: 12px; font-size: 14px">An update is available: 2,158 changes. The gateway restarts (about a minute).</span>
+<button type="button" onClick="{{openUpdate}}" style="min-height: 48px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 15px 'Hanken Grotesk', sans-serif">Update Hermes…</button>
+</div>
+</sc-if>
+
+<sc-if value="{{showConfirm}}" hint-placeholder-val="{{false}}">
+<form data-protected="block" onSubmit="{{start}}" aria-label="Update Hermes" style="background: #ECEEF2; color: #12131A; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Update Hermes</h3>
+<span style="font-size: 14px; line-height: 1.45; color: #2B2E38">Waits for the agents, backs up your Hermes folder (1.4 GB; 8.0 GB free), updates, checks, then sends one test message.</span>
+<label for="pa" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Test with
+<select id="pa" style="min-height: 48px; border-radius: 14px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 12px"><option>gem38 · gemini-3.8-flash (cheapest)</option><option>voter · typesafe/jev-1.13</option><option>No test message (checks only)</option></select>
+</label>
+<label for="ppw" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Security password
+<input id="ppw" type="password" autocomplete="current-password" style="min-height: 48px; border-radius: 14px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 14px">
+</label>
+<button type="submit" style="min-height: 48px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 15px 'Hanken Grotesk', sans-serif">Back up and update</button>
+<button type="button" onClick="{{cancel}}" style="min-height: 44px; border-radius: 999px; border: 1px solid #12131A; background: transparent; color: #12131A; font: 600 14px 'Hanken Grotesk', sans-serif">Cancel</button>
+</form>
+</sc-if>
+
+<sc-if value="{{showRun}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" role="status" aria-label="Update progress" style="background: #12131A; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+<span style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px">
+<span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; {{s.dot}}">{{s.mark}}</span>
+<span style="color: {{s.ink}}">{{s.label}}</span>
+</span>
+</sc-for>
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{advance}}" style="min-height: 40px; border-radius: 999px; border: 1px dashed #3A3E4A; background: transparent; color: #9AA0AD; font: 600 13px 'Hanken Grotesk', sans-serif">Next step (mock-up only)</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{showResult}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" style="background: #12131A; border: 1px solid #F2A65A; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-weight: 700; color: #F2A65A">Something Score relies on looks different</span>
+<span style="font-size: 14px; color: #C9CDD6">Session database: a new table. The test message passed. Approvals are paused; you can turn them on anyway.</span>
+<button type="button" onClick="{{turnOn}}" style="min-height: 48px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 15px 'Hanken Grotesk', sans-serif">Turn approvals on anyway</button>
+<button type="button" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">Stay paused</button>
+</div>
+</sc-if>
+<sc-if value="{{showOn}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{reset}}" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">Start the mock-up again</button>
+</sc-if>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'card', step: 0, on: false };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var labels = ['Waiting for agents to finish', 'Backing up (1.4 GB)', 'Updating Hermes', 'Restarting the gateway', 'Checking the new version', 'Test message to gem38'];
+    var done = s.phase === 'result';
+    var steps = labels.map(function (label, i) {
+      var finished = done || i < s.step;
+      var current = !done && i === s.step;
+      return { label: label, mark: finished ? '✓' : current ? '…' : '', dot: finished ? 'background: #1F3A2E; color: #4FD1A5' : current ? 'background: #3A2F1C; color: #F2A65A' : 'background: #23262F; color: #9AA0AD', ink: finished || current ? '#ECEEF2' : '#7C8291' };
+    });
+    return {
+      version: done ? '0.22.5 + 3,257' : '0.22.5 + 1,099',
+      checkText: !done ? 'Tested' : s.on ? 'Turned on anyway' : 'Approvals paused',
+      checkColor: !done || s.on ? '#4FD1A5' : '#F2A65A',
+      showCard: s.phase === 'card',
+      openUpdate: function () { self.setState({ phase: 'confirm' }); },
+      showConfirm: s.phase === 'confirm',
+      start: function (e) { if (e && e.preventDefault) e.preventDefault(); self.setState({ phase: 'run', step: 0 }); },
+      cancel: function () { self.setState({ phase: 'card' }); },
+      showRun: s.phase === 'run' || done,
+      running: s.phase === 'run',
+      steps: steps,
+      advance: function () { if (s.step >= 5) self.setState({ phase: 'result' }); else self.setState({ step: s.step + 1 }); },
+      showResult: done && !s.on,
+      turnOn: function () { self.setState({ on: true }); },
+      showOn: done,
+      reset: function () { self.setState({ phase: 'card', step: 0, on: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

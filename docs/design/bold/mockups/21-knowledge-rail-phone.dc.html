@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knowledge folders on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:18px 16px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <h1 style="flex:1;margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:26px">Knowledge</h1>
+    <button type="button" aria-label="New note" style="width:44px;height:44px;border-radius:50%;border:0;background:#ECECF1;color:#12131A;font-size:20px">+</button>
+  </div>
+  <a href="#" style="display:flex;align-items:center;height:48px;padding:0 14px;border-radius:14px;background:#22242C;text-decoration:none;font-size:15px;font-weight:600"><span style="flex:1">All notes</span><span style="color:#A6A8B4">12</span></a>
+  <a href="#" style="display:flex;align-items:center;height:48px;padding:0 14px;border-radius:14px;background:#1A1C23;text-decoration:none;font-size:15px"><span style="flex:1">inbox</span><span style="color:#A6A8B4">2</span></a>
+  <div style="display:flex;align-items:center;height:48px;padding:0 4px 0 14px;border-radius:14px;background:#1A1C23;font-size:15px">
+    <a href="#" style="flex:1;text-decoration:none">Knowledge</a>
+    <span style="color:#A6A8B4;margin-right:4px">4</span>
+    <button type="button" aria-label="Folder actions for Knowledge" style="width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:#ECECF1;font-size:18px">⋯</button>
+  </div>
+  <div style="display:flex;align-items:center;height:48px;padding:0 4px 0 14px;border-radius:14px;background:#1A1C23;font-size:15px">
+    <a href="#" style="flex:1;text-decoration:none">Documents</a>
+    <span style="color:#A6A8B4;margin-right:4px">6</span>
+    <button type="button" aria-label="Folder actions for Documents" style="width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:#ECECF1;font-size:18px">⋯</button>
+  </div>
+  <button type="button" style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:44px;margin-top:6px;padding:0 16px 0 14px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:14px;font-weight:600;line-height:1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span>New folder</span></button>
+
+  <div role="menu" aria-label="Knowledge folder" style="position:absolute;left:0;right:0;bottom:0;box-sizing:border-box;padding:12px 16px 22px;border-radius:24px 24px 0 0;background:#1A1C23;box-shadow:0 -12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:6px">
+    <div aria-hidden="true" style="align-self:center;width:40px;height:4px;border-radius:2px;background:#3A3D4A;margin-bottom:6px"></div>
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin-bottom:4px">KNOWLEDGE</div>
+    <button type="button" role="menuitem" style="height:48px;text-align:left;padding:0 14px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:15px">Rename…</button>
+    <button type="button" role="menuitem" style="height:48px;text-align:left;padding:0 14px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:15px">Move to…</button>
+    <button type="button" role="menuitem" style="height:48px;text-align:left;padding:0 14px;border-radius:14px;border:0;background:#262833;color:#FF8A9B;font:inherit;font-size:15px">Delete…</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

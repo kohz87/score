@@ -2303,3 +2303,22 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.26.0 live** (~03:55 UTC, backup score-pre-3.26.0-20261104.db) and **v3.27.0 live** (~05:29 UTC, backup
   score-pre-3.27.0-20261104.db, migration 0106, health ok, fence off); both pushed. Live: the top bar is Chats, Agents,
   Knowledge, Tasks, Screens; Tasks has + New task; Settings › Recipes holds the layered editor.
+
+## 3.27.1 — Info sections fold, Knowledge folder actions in the rail, chat and graph fixes (2026-11-04)
+- Owner: "can each section in chat info be collapsible?"; "for knowledge, left navigation bar, can we move folder
+  operation there, and remove WHO CAN READ IT" → mock-up (https://claude.ai/artifact/WhHJkF4Qpu4QGhmBwKDEhC, copies
+  21-knowledge-rail*.dc.html) → approved; then Troubleshooting.md notes: a long topic title one letter per line with
+  the Stop confirm overflowing, "why shouldn't the chat screen be extended fully", "graph gets distorted" (DECISIONS 163).
+- Two Sonnet coders in parallel (Info folds; Knowledge rail, paused for the mock-up and resumed on approval). Lead: the
+  long-title and full-width fixes, and the job map stacking by its own width (it used the screen query, so the 420px
+  Graph panel and a ~980px sheet wrapped its side-by-side top row; the threshold depends on whether an advisor shows).
+- Reviews: Info folds P2s (a CSS selector list joined to the fold rule; a topic waiting on the person hidden in folded
+  Topics → Topics opens for it and the row says "Needs you", protected); Knowledge P2s (the phone sheet's dim was a
+  hard-coded shadow and a tap through it reached the page → a real scrim in KNOWN_OVERLAYS, plus the mock-up's grip and
+  caption). Re-reviews: none.
+- Gate 1: check green; e2e 35 failed: specs open folded sections by their toggle (helpers `openInfoSection`,
+  `openAllInfoSections`), Knowledge specs use the rail's New folder, 14 Room baselines (viewed: folded sections and the
+  new Needs-you row mark). Gate 2 after the lead's fixes: check green (contract 1613, web 3348, server 4981); e2e 3
+  failed, all passing on rerun (load flakes: one-to-ones share at 390, bold-room unread, bold-workspace); the job-map fix
+  updated one baseline (the log's time column, viewed).
+- Accepted P3s: the "Needs you" auto-open isn't saved as the person's fold choice; Rename and Move open the same dialog.

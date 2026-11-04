@@ -118,6 +118,8 @@ export const KNOWN_OVERLAYS = [
   '.bold-tb-sheet',
   '.bold-tb-scrim',
   '.bold-viewer-sheet',
+  '.bold-knowledge-menu',
+  '.bold-knowledge-scrim',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =

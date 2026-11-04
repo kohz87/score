@@ -1,5 +1,6 @@
 import { expect, type Page, type Route } from '@playwright/test'
 import { pair } from './pair.ts'
+import { openInfoSection } from './bold-chat-helpers.ts'
 
 type Json = Record<string, unknown>
 
@@ -594,6 +595,8 @@ export async function openTopicsOnPhone(page: Page) {
 export async function openBoldJob(page: Page, title: RegExp) {
   const phone = (page.viewportSize()?.width ?? 1440) <= 860
   if (phone) await openTopicsOnPhone(page)
+  // 3.27.1: Topics starts folded in a group chat; a person opens it by its heading toggle (a `?jobs=1` landing already has).
+  await openInfoSection(page, 'Topics')
   // The retired job list named its rows "Title. State…"; a topic row's title element holds only the title.
   const rowTitle = new RegExp(title.source.replace(/\\\.(\.\*)?$/, '$'), title.flags)
   await page

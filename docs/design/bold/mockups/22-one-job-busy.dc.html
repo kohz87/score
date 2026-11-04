@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Starting new work while a job runs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;position:relative;overflow:hidden">
+  <div aria-hidden="true" style="position:absolute;inset:0;padding:96px 324px 0 324px;display:flex;flex-direction:column;gap:14px;opacity:0.35">
+    <div style="padding:14px 16px;border-radius:20px;background:#1A1C23;font-weight:700">JOB · Story suite prompts · lead is working</div>
+    <div style="padding:10px 14px;border-radius:18px;background:#22242C;width:520px">Outline is done: 6 stories, one prompt file each.</div>
+  </div>
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(5,6,9,0.62)"></div>
+
+  <form role="dialog" aria-modal="true" aria-labelledby="busy-title" data-protected="block" style="position:absolute;left:50%;top:200px;transform:translateX(-50%);width:520px;box-sizing:border-box;padding:24px 26px;border-radius:28px;background:#ECECF1;color:#12131A;display:flex;flex-direction:column;gap:14px">
+    <h2 id="busy-title" style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px">Team room already has a job</h2>
+    <p style="margin:0;font-size:15px;line-height:1.5;color:#2B2E38">“Story suite prompts” is still running. A chat does one job at a time, so stop it first, or start this in another chat.</p>
+    <div style="padding:12px 14px;border-radius:16px;background:#FFFFFF;font-size:14px;color:#2B2E38"><b style="color:#12131A">New:</b> Release notes 2.4 · run “Write and review”</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button type="submit" style="height:46px;padding:0 20px;border-radius:999px;border:0;background:#12131A;color:#ECECF1;font:inherit;font-size:15px;font-weight:700">Stop the job and start this</button>
+      <button type="button" style="height:46px;padding:0 18px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px #12131A;color:#12131A;font:inherit;font-size:14px;font-weight:600">Start in another chat…</button>
+      <button type="button" style="height:46px;padding:0 18px;border-radius:999px;border:0;background:transparent;color:#12131A;font:inherit;font-size:14px;font-weight:600;text-decoration:underline">Cancel</button>
+    </div>
+    <p style="margin:0;font-size:13px;color:#4A4E5A">Stopping ends the running steps and keeps what the job made. It moves to Past jobs.</p>
+  </form>
+
+  <section aria-label="A trigger while busy" style="position:absolute;left:324px;right:324px;bottom:40px;padding:14px 18px;border-radius:20px;background:#1A1C23;display:flex;align-items:center;gap:12px">
+    <span aria-hidden="true" style="width:10px;height:10px;border-radius:50%;background:#F2A65A;flex:none"></span>
+    <span style="flex:1;font-size:14px;color:#C9CBD6"><b style="color:#ECECF1">Next up:</b> “Nightly report” from a schedule waits until this job ends.</span>
+    <button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Skip it</button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

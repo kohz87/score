@@ -10,10 +10,11 @@ import { briefHasRun } from '../../routes/runs/brief-run.ts'
 import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { WorkflowRoomPanel } from '../../routes/workflows/WorkflowRoomPanel.tsx'
 import { boldRunLink } from '../bold-links.ts'
+import { InfoSection } from './InfoSection.tsx'
 import { ReportBackLine } from '../room/ReportBack.tsx'
 import { decisionError } from '../room/RoomRequests.tsx'
 import { ThreadTasks } from '../room/RoomTasks.tsx'
-import { jobExchangesQuery } from '../room/room-queries.ts'
+import { jobExchangesQuery, roomJobsQuery } from '../room/room-queries.ts'
 import { exchangeStatus, jobStateLabel, needsYou } from '../room/room-model.ts'
 import {
   currentExchange,
@@ -79,7 +80,15 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
 }
 
 // Ported from the deleted BoldThread: Stop job with its confirm.
-function StopTopic({ job, onStopped }: { job: Job; onStopped: () => void }) {
+function StopTopic({
+  job,
+  onStopped,
+  onConfirming,
+}: {
+  job: Job
+  onStopped: () => void
+  onConfirming: (confirming: boolean) => void
+}) {
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -88,7 +97,9 @@ function StopTopic({ job, onStopped }: { job: Job; onStopped: () => void }) {
   const keepGoing = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (confirming) keepGoing.current?.focus()
-  }, [confirming])
+    // The Stop confirm is a decision: the section stays open (or shows its badge) while it waits.
+    onConfirming(confirming)
+  }, [confirming, onConfirming])
   function cancel() {
     setConfirming(false)
     stopButton.current?.focus()
@@ -189,16 +200,32 @@ export function TopicInfo({
   const refetch = useStreamQueryRefetch(definition)
   const current = currentExchange(exchanges)
   const waiting = current !== undefined && needsYou(current)
+  const [confirmingStop, setConfirmingStop] = useState(false)
   const turns = threadTurns(current, job)
   const state = current ? exchangeStatus(current) : jobStateLabel(job)
+  const jobsLive = useStreamQuery(roomJobsQuery(job.roomId)).data?.find(
+    (item) => item.id === job.id,
+  )
+  const reportState = (jobsLive?.reportBack ?? job.reportBack)?.state
+  const reportWaits = reportState === 'needs_ok' || reportState === 'not_confirmed'
+  const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
+  const workflows = useStreamQuery(workflowRunsQuery).data ?? []
+  const recipeMatch = job.recipe ? recipeRun(job.recipe, orchestrations, workflows) : undefined
+  const recipeWaits = (recipeMatch?.summary.needsYou.length ?? 0) > 0
   return (
-    <section className="bold-topic-info" aria-labelledby="chat-info-topic">
-      <h2 id="chat-info-topic" className="bold-chat-kicker">
-        This topic
-      </h2>
+    <InfoSection
+      kind="topic"
+      className="bold-topic-info"
+      headingId="chat-info-topic"
+      title="This topic"
+      summary={job.title}
+      needsYou={waiting || reportWaits || recipeWaits || confirmingStop}
+    >
       <div className="bold-topic-head">
-        <b className="bold-topic-title">{job.title}</b>
-        <StopTopic job={job} onStopped={() => void refetch()} />
+        <b className="bold-topic-title" title={job.title}>
+          {job.title}
+        </b>
+        <StopTopic job={job} onStopped={() => void refetch()} onConfirming={setConfirmingStop} />
       </div>
       <p className="bold-topic-status">
         {waiting && (
@@ -214,6 +241,6 @@ export function TopicInfo({
       <ReportBackLine job={job} inThread />
       {job.recipe && <RecipeRunCard recipe={job.recipe} agents={agents} />}
       <ThreadTasks roomId={roomId} agents={agents} />
-    </section>
+    </InfoSection>
   )
 }

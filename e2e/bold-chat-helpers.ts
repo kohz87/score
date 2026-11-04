@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 // Helpers for the team-room specs that run against the real fake server (the 3.0.0 port of the classic Chat specs).
 const web = { 'x-score-client': 'web' }
@@ -64,4 +64,22 @@ export async function sendAndWait(
   await expect(replies).toHaveCount(before + 1, { timeout: 40_000 })
   await expect(streamOf(page).getByRole('button', { name: /^Stop reply/ })).toHaveCount(0)
   return mine
+}
+
+/** Opens a foldable Info section the way a person would: clicks its heading toggle when it is folded (3.27.1). */
+export async function openInfoSection(scope: Page | Locator, title: string | RegExp) {
+  const heading = scope.getByRole('heading', { name: title }).first()
+  await expect(heading).toBeVisible()
+  const toggle = heading.getByRole('button')
+  // A section holding a decision opens itself once it arrives, so a click can land on an already-open one: look again.
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 })
+  }).toPass({ timeout: 10_000 })
+}
+
+/** Opens every folded Info section in a panel by clicking its heading toggle (3.27.1). */
+export async function openAllInfoSections(scope: Page | Locator) {
+  const folded = scope.getByRole('heading').getByRole('button', { expanded: false })
+  while ((await folded.count()) > 0) await folded.first().click()
 }

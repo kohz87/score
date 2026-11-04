@@ -113,3 +113,30 @@ test('reduced motion draws no moving dots', () => {
   expect(container.querySelector('.jobmap--still')).toBeTruthy()
   expect(container.querySelectorAll('.jobmap-dot').length).toBe(0)
 })
+
+// 3.27.1 (owner's Troubleshooting note): the map stacks by its own width, so the 420px Graph panel and a narrow sheet
+// get the one-column layout instead of a wrapped side-by-side top row.
+function boxWidth(width: number) {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width)
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  )
+}
+
+test('a map narrower than its top row stacks; a plain map needs less room than one with an advisor', () => {
+  boxWidth(980)
+  const advised = view()
+  expect(advised.container.querySelector('.jobmap--phone')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /^Lead layer/ }).textContent).toContain('1 consult')
+  advised.unmount()
+  const plain = view(plainRun)
+  expect(plain.container.querySelector('.jobmap--phone')).toBeNull()
+  plain.unmount()
+  boxWidth(420)
+  expect(view(plainRun).container.querySelector('.jobmap--phone')).toBeTruthy()
+  vi.restoreAllMocks()
+})

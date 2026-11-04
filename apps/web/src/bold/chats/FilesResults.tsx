@@ -4,6 +4,7 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { agentDisplayName } from '../bold-agents.ts'
 import { ScreenIcon } from '../BoldIcons.tsx'
 import { useJobResults } from '../bold-results-queries.ts'
+import { InfoSection } from './InfoSection.tsx'
 import { activityLabel } from './chat-model.ts'
 import { FILE_ROWS_SHOWN, fileRows, viewerLink, type FileRow } from './files-model.ts'
 
@@ -105,10 +106,15 @@ export function FilesAndResults({
   }, [landed])
 
   return (
-    <section aria-labelledby="chat-info-files" data-testid="files-results">
-      <h2 id="chat-info-files" ref={headingRef} className="bold-chat-kicker" tabIndex={-1}>
-        Files and results
-      </h2>
+    <InfoSection
+      kind="files"
+      headingId="chat-info-files"
+      title="Files and results"
+      summary={rows.length > 0 ? String(rows.length) : 'none'}
+      forceOpen={landed ? 1 : 0}
+      headingRef={headingRef}
+      testId="files-results"
+    >
       {jobId === null || (rows.length === 0 && !pending && !failed) ? (
         <p className="bold-chat-note">Nothing made in this topic yet</p>
       ) : rows.length === 0 && failed ? (
@@ -170,6 +176,6 @@ export function FilesAndResults({
           Some files couldn’t be refreshed.
         </p>
       )}
-    </section>
+    </InfoSection>
   )
 }

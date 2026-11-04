@@ -251,6 +251,67 @@
   color: var(--ink);
 }
 
+/* 3.27.1: every Info section folds. The heading is the toggle; its body keeps the section's own column layout. */
+[data-ui='bold'] .bold-chat-info .bold-info-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-info-toggle:focus-visible {
+  outline: 2px solid var(--hi-bg);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+[data-ui='bold'] .bold-info-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+[data-ui='bold'] .bold-info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-body[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-info-needs {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 [data-ui='bold'] .bold-chat-meta code,
 [data-ui='bold'] .bold-chat-info code {
   font-family: var(--font-m);
@@ -383,7 +444,8 @@
     min-height: 32px;
   }
 
-  /* The chat gets the width: the Info panel is a 300px column and the chat's content a centred 860px column. */
+  /* The chat gets the width: the Info panel is a 300px column and the chat's content fills the rest (3.27.1, owner:
+     no centred 860px column; each message bubble keeps its own reading width). */
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
     flex: 1 1 0;
     max-width: none;
@@ -391,7 +453,7 @@
 
   [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
     width: 100%;
-    max-width: 860px;
+    max-width: none;
     margin-inline: auto;
     box-sizing: border-box;
   }
@@ -746,8 +808,22 @@
 /* Info › This topic (3.22.0): the old thread panel's status, run, report-back and tasks, compact for a 300px column. */
 [data-ui='bold'] .bold-topic-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* 3.27.1 (owner's Troubleshooting note): the Stop confirm takes its own row under the title, so a long title is not
+   squeezed to a letter per line and the confirm stays inside the panel. A long title shows three lines; the rest is in
+   its tooltip. */
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm {
+  flex: 1 0 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm > b {
+  overflow-wrap: anywhere;
 }
 
 [data-ui='bold'] .bold-topic-title {
@@ -757,6 +833,11 @@
   font-size: 16px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 [data-ui='bold'] .bold-topic-status {
@@ -924,25 +1005,26 @@
   overflow-x: auto;
 }
 
-/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows). */
+/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows).
+   `.jobmap` raises these over the map's narrow rules, which the panel always gets since 3.27.1. */
 [data-ui='bold'] .bold-topic-graph .jobmap-log {
   margin-top: 4px;
   padding: 12px 14px;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log li {
-  grid-template-columns: 78px minmax(0, 1fr);
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li {
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 0 10px;
   font-size: 13px;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log time {
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log time {
   grid-row: 1 / span 2;
   white-space: nowrap;
 }
 
-[data-ui='bold'] .bold-topic-graph .jobmap-log li > b,
-[data-ui='bold'] .bold-topic-graph .jobmap-log li > span {
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > b,
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > span {
   grid-column: 2;
 }
 

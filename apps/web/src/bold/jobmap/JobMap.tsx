@@ -1,5 +1,5 @@
 import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { usePrefersReducedMotion } from '../../motion/motion.ts'
@@ -153,6 +153,9 @@ function WorkerBox({
   )
 }
 
+/** The desktop top row's width plus room to breathe: you 260 + line 48 + lead 320, and + line 64 + advisor 320. */
+const TOP_ROW_WIDTH = { lead: 700, advisor: 1060 }
+
 export interface JobMapViewProps {
   run: OrchestrationDetail
   events: readonly OrchEvent[]
@@ -163,11 +166,27 @@ export interface JobMapViewProps {
 
 /** The graph for one job, from data already loaded (the live wrapper below fetches it). */
 export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) {
-  const phone = useMediaQuery(PHONE_QUERY)
+  const phoneScreen = useMediaQuery(PHONE_QUERY)
+  // 3.27.1 (owner's Troubleshooting note): the map stacks by its own width, not the screen's. In the chat's 420px Graph
+  // panel or a narrow sheet the side-by-side top row (you · lead · advisor, about 1020px) wrapped into a muddle.
+  const box = useRef<HTMLElement>(null)
+  const [width, setWidth] = useState(0)
+  // Measured before paint, so the panel never flashes the side-by-side row (3.27.1 review).
+  useLayoutEffect(() => {
+    const element = box.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const measure = () => setWidth(element.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const still = usePrefersReducedMotion()
   const frame = useFramed()
   const [selected, setSelected] = useState<LayerId | null>(null)
   const model: JobMapModel = useMemo(() => buildJobMap(run, events, agents), [run, events, agents])
+  const topRow = model.advisor ? TOP_ROW_WIDTH.advisor : TOP_ROW_WIDTH.lead
+  const phone = phoneScreen || (width > 0 && width < topRow)
   const has = (layer: LayerId) => model.layers.includes(layer)
   const pick = (layer: LayerId) => setSelected((current) => (current === layer ? null : layer))
   const agentOf = (id: string) => agents.find((agent) => agent.id === id)
@@ -207,6 +226,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
 
   return (
     <section
+      ref={box}
       className={`jobmap${phone ? ' jobmap--phone' : ''}${still ? ' jobmap--still' : ''}`}
       aria-label="Job map"
     >

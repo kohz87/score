@@ -11,6 +11,7 @@ import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
 import { runTopicCommand } from '../room/topic-commands.ts'
 import { TopicInfo } from './TopicInfo.tsx'
+import { InfoSection } from './InfoSection.tsx'
 import { FilesAndResults } from './FilesResults.tsx'
 
 function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string {
@@ -125,6 +126,11 @@ function TopicRow({
           />
         )}
         <span className="bold-chat-topic-title">{job.title}</span>
+        {job.state === 'waiting_on_you' && (
+          <span className="bold-info-needs" data-protected="inline-flex">
+            Needs you
+          </span>
+        )}
         {job.unread > 0 && (
           <span className="bold-unread" aria-label={`${job.unread} unread`}>
             {job.unread > 99 ? '99+' : job.unread}
@@ -143,6 +149,7 @@ export function ChatInfo({
   everyone,
   phone = false,
   visible = true,
+  openTopics = 0,
   onNavigate,
 }: {
   room: Room | null
@@ -153,6 +160,8 @@ export function ChatInfo({
   phone?: boolean
   /** False while the panel is out of sight (a closed phone sheet or panel): Files and results reads nothing then. */
   visible?: boolean
+  /** A counter: each increase (a `?jobs=1` landing) opens the Topics section. */
+  openTopics?: number
   /** A link or button here leaves the sheet (the phone closes it). */
   onNavigate?: () => void
 }) {
@@ -170,14 +179,16 @@ export function ChatInfo({
     : undefined
   const topics = jobs.filter((job) => !job.isDefault)
   const closedTopics = topics.filter((job) => job.state === 'closed')
-  const openTopics = topics.filter((job) => job.state !== 'closed')
+  const openTopicList = topics.filter((job) => job.state !== 'closed')
   const current = currentTopic(jobs, params.get('job'))
   return (
     <div className="sidebody bold-chat-info" aria-label={`${room.name}, chat info`}>
-      <section aria-labelledby="chat-info-members">
-        <h2 id="chat-info-members" className="bold-chat-kicker">
-          Members
-        </h2>
+      <InfoSection
+        kind="members"
+        headingId="chat-info-members"
+        title="Members"
+        summary={String(room.members.length)}
+      >
         <ul className="bold-chat-members">
           {room.members.map((id) => {
             const agent = agents.find((item) => item.id === id)
@@ -193,17 +204,19 @@ export function ChatInfo({
           })}
         </ul>
         {!room.leadAgentId && <p className="bold-chat-note">No owner yet.</p>}
-      </section>
-      <section aria-labelledby="chat-info-workspace">
-        <h2 id="chat-info-workspace" className="bold-chat-kicker">
-          Workspace
-        </h2>
+      </InfoSection>
+      <InfoSection
+        kind="workspace"
+        headingId="chat-info-workspace"
+        title="Workspace"
+        summary={room.workspaceId ? (workspace?.name ?? room.workspaceId) : 'none'}
+      >
         {room.workspaceId ? (
           <code>{workspace ? `${workspace.name} · ${workspace.path}` : room.workspaceId}</code>
         ) : (
           <p className="bold-chat-note">None set.</p>
         )}
-      </section>
+      </InfoSection>
       {current && !current.isDefault && (
         <TopicInfo roomId={room.id} job={current} agents={agents} />
       )}
@@ -217,16 +230,21 @@ export function ChatInfo({
             : []
         }
       />
-      <section aria-labelledby="chat-info-topics">
-        <h2 id="chat-info-topics" className="bold-chat-kicker" tabIndex={-1}>
-          Topics
-        </h2>
+      <InfoSection
+        kind="topics"
+        headingId="chat-info-topics"
+        title="Topics"
+        summary={`${openTopicList.length} open`}
+        forceOpen={openTopics}
+        // 3.27.1 review: a topic waiting on the person is a decision: Topics opens for it, or shows the badge folded.
+        needsYou={topics.some((job) => job.state === 'waiting_on_you')}
+      >
         {topics.length === 0 ? (
           <p className="bold-chat-note">Nothing yet.</p>
         ) : (
           <>
             <ul className="bold-chat-topics">
-              {openTopics.map((job) => (
+              {openTopicList.map((job) => (
                 <TopicRow
                   key={job.id}
                   room={room}
@@ -288,7 +306,7 @@ export function ChatInfo({
             </button>
           </div>
         )}
-      </section>
+      </InfoSection>
       <Link className="bold-chat-knowledge" to="/b/knowledge" onClick={onNavigate}>
         Open Knowledge
       </Link>

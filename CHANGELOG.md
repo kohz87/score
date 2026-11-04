@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.27.1] — 2026-11-04
+
+### Changed
+- **Chat Info sections fold.** Each section's heading opens and folds it, and a folded heading shows a short summary
+  ("Members · 4", "Topics · 3 open"). This topic and Files and results start open; the rest start folded, and Score
+  remembers your choice on this device. A section holding a decision opens by itself, and if you fold it again its
+  heading says "Needs you". A topic waiting on you is marked in the Topics list.
+- **Knowledge: folder actions in the left rail.** "+ New folder" sits under the folder list, and each folder has a ⋯
+  menu with Rename, Move and Delete (a bottom sheet on a phone). "Who can read it" is gone from the rail; each agent's
+  access stays on its own page.
+
+### Fixed
+- **The chat uses the whole width** beside Info instead of a centred column; each message keeps a readable width.
+- **A long topic title** shows three lines in Info › This topic, and its Stop confirm stays inside the panel.
+- **The job map fits its space**: in the chat's Graph panel and narrow views it stacks into one column instead of
+  breaking its top row; session-log times no longer wrap.
+
 ## [3.27.0] — 2026-11-04
 
 ### Added

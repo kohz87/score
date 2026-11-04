@@ -110,6 +110,11 @@
     background-color: #ececf1 !important;
     color: #12131a !important;
   }
+  /* 3.27.1: a folded Info section that holds a decision wears the same pill on its heading. */
+  html[data-look='custom'] .bold-info-needs[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
   html[data-look='custom'] .bold-chat-rail-item[data-protected] {
     box-shadow:
       0 0 0 2px #ececf1,

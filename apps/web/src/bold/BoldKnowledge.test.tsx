@@ -187,7 +187,9 @@ test('three columns: folders with counts, the note list and the first note open'
   expect(within(rail).getByRole('button', { name: /All notes\s*2/ })).toBeDefined()
   expect(within(rail).getByRole('button', { name: /Decisions\s*2/ })).toBeDefined()
   expect(within(rail).getByRole('button', { name: /Documents\s*0/ })).toBeDefined()
-  expect(await within(rail).findByText('reviewer')).toBeDefined()
+  // 3.27.1: no "Who can read it" list; the folder actions live in the rail.
+  expect(within(rail).queryByText('Who can read it')).toBeNull()
+  expect(within(rail).getByRole('button', { name: /New folder/ })).toBeDefined()
   expect(await screen.findByLabelText('Contents of Decisions/Event cursors.md')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Share to a chat' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Edit' })).toBeDefined()
