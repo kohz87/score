@@ -144,7 +144,9 @@ test('a wide editor gives text and tables its whole width, and a size set on one
   }
   const wide = await share()
   expect(wide).toBeLessThan(0.75)
-  await page.setViewportSize({ width: 1600, height: 1000 })
+  // 3.24.1: Knowledge follows the window now (no fixed cap), so the other screen is one where the note still has room
+  // for the table at that share (at 1600px the note column is about 600px and the columns' minimum widths win).
+  await page.setViewportSize({ width: 2000, height: 1000 })
   await expect.poll(async () => Math.abs((await share()) - wide)).toBeLessThan(0.03)
 })
 

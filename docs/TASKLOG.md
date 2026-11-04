@@ -2229,3 +2229,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   screenshot (owner's data, 1440 and 390): nothing above the conversation but the header, run cards in the stream, Info ›
   This topic with the orchestration card; the chat list's "needs you" on the team room comes from a topic waiting on the
   person (an agent's reply asked in prose; no card by design since stage 1).
+
+## 3.24.1 — Knowledge, Tasks and Agents follow the window (2026-11-04)
+- Owner (live): "look at troubleshooting.md, the text are overflowing and it's not align dynamically to windows size,
+  same goes for agents and tasks which clutter them together". Lead's live screenshots (owner's data, 6 widths): Knowledge
+  capped at ~1390px with a 180px note list (long names ran into the editor), shrink-wrapped side cards, a two-row
+  toolbar; Tasks clipped at 820 (Done column cut), squeezed columns at 1024, two rows of agent chips, a half-width detail
+  box; Agents jammed under the top bar with squeezed columns.
+- Sonnet coder: Knowledge fluid (folders 240, list 260–360, note the rest, side column 280–320 with full-width cards,
+  wide below 1320px of its own width), names wrap, one-row toolbar while it fits; Tasks columns ≥240px scrolling inside
+  the board with snap, one-row chips with a fade, a side sheet below 1280px; Agents with the pages' spacing and an
+  auto-fill grid. Lead caught "Don't allow" looking invisible in the coder's screenshot; checked a fresh build (readable
+  in both looks: the screenshot was stale). Review: none.
+- Gate: check green (web 3274, server 4972); e2e 31 failed: 26 baselines of the changed pages (regenerated, viewed),
+  a Knowledge editor test whose second screen (1600px) now leaves the note ~600px so the table's minimum widths win
+  (the second screen is 2000px now; the proportion assertion is unchanged), 2 load flakes passing alone (+ menu phone,
+  Workbench phone delete), the rest passing on re-run.

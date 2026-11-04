@@ -1,8 +1,10 @@
 /* 3.19.0: the Knowledge page. Three columns as docs/design/bold/mockups/16-knowledge.dc.html: folders, the note list,
    the open note. The Library's editor and dialogs inside keep their own rules (bold-library.css). */
 [data-ui='bold'] .bold-knowledge {
-  max-width: 1392px;
-  margin: 0 auto;
+  /* 3.24.1: no fixed cap; the columns follow the window (folders 240, list 260-360, note the rest, right column 280-320). */
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 [data-ui='bold'] .sidebody.bold-library.is-page {
@@ -19,7 +21,8 @@
 }
 
 [data-ui='bold'] .is-page > .bold-knowledge-rail {
-  flex: 0 0 260px;
+  flex: 0 0 240px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(4px * var(--bold-d, 1));
@@ -117,16 +120,19 @@
   margin: 6px 0 0;
 }
 
-[data-ui='bold'] .is-page > .bold-library-nav {
-  flex: 0 0 380px;
-  max-width: 380px;
+/* The panel's own mid/wide rule (bold-library.css, 200px) is more specific than `.is-page > nav`; `.sidebody` here makes
+   the page's list column win: it grows between 260 and 360px. */
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
+  flex: 1 1 300px;
+  min-width: 260px;
+  max-width: 360px;
   padding: calc(16px * var(--bold-d, 1));
   border-right: 1px solid var(--line);
   box-sizing: border-box;
   gap: calc(8px * var(--bold-d, 1));
 }
 
-[data-ui='bold'] .is-page > .bold-library-nav[hidden] {
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav[hidden] {
   display: none;
 }
 
@@ -149,6 +155,9 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
+  /* Long names wrap between words and break inside a long word; never past the column. */
+  overflow-wrap: anywhere;
   padding: 12px 14px;
   border: 0;
   border-radius: calc(16px * var(--bold-r, 1));
@@ -168,7 +177,12 @@
   font-size: 13px;
 }
 
-[data-ui='bold'] .is-page > .bold-library-main {
+[data-ui='bold'] .bold-knowledge-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-main {
   flex: 999 1 420px;
   min-width: 0;
   padding: calc(8px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
@@ -215,6 +229,21 @@
   margin-bottom: calc(8px * var(--bold-d, 1));
 }
 
+/* The right column (backlinks, links, properties, history) is 280-320px and every card spans it. The panel's `wide`
+   rule left `align-items: start` from its two-column grid, which shrank each card to its text. */
+[data-ui='bold'] .is-page[data-width='wide'] .kn-note {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+}
+
+[data-ui='bold'] .is-page[data-width='wide'] .kn-side {
+  align-items: stretch;
+}
+
+[data-ui='bold'] .is-page .kn-side > .kn-panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* 3.19.1: a mid-width window keeps two columns: the folders sit above the note list, the note takes the rest. */
 @media (min-width: 861px) and (max-width: 1180px) {
   [data-ui='bold'] .sidebody.bold-library.is-page {
@@ -242,7 +271,7 @@
     gap: 10px;
   }
 
-  [data-ui='bold'] .is-page > .bold-library-nav {
+  [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
     grid-column: 1;
     grid-row: 2;
     max-width: none;
@@ -291,7 +320,7 @@
     padding: 0;
   }
 
-  [data-ui='bold'] .is-page > .bold-library-nav {
+  [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
     flex: none;
     max-width: none;
     border-right: 0;

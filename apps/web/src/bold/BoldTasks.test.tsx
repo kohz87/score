@@ -79,6 +79,7 @@ const detailOf = (summary: Record<string, unknown>, patch: Record<string, unknow
 let tasks: ReturnType<typeof task>[]
 let details: Record<string, unknown>
 let rooms: ReturnType<typeof room>[]
+let narrow = false
 let phone = false
 let requests: { url: string; init?: RequestInit }[]
 const disposers: (() => void)[] = []
@@ -100,12 +101,13 @@ beforeEach(() => {
   details = {}
   rooms = [room('room-a', 'Feed team')]
   phone = false
+  narrow = false
   requests = []
   vi.stubGlobal(
     'matchMedia',
     (query: string) =>
       ({
-        matches: phone && query.includes('600px'),
+        matches: query.includes('1280px') ? !narrow : phone && query.includes('600px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},
@@ -260,6 +262,19 @@ test('Done lists the 20 newest and "Show older" the rest', async () => {
   expect(within(column('Done')).getAllByRole('button', { name: /^D\d\d/ })).toHaveLength(20)
   fireEvent.click(screen.getByRole('button', { name: 'Show older (3)' }))
   expect(within(column('Done')).getAllByRole('button', { name: /^D\d\d/ })).toHaveLength(23)
+})
+
+test('below 1280px a picked task opens as a side sheet, and no empty panel sits under the board', async () => {
+  narrow = true
+  tasks = [task('t1')]
+  details.t1 = detailOf(tasks[0]!)
+  mount()
+  await screen.findByRole('button', { name: 'T1 Task t1' })
+  expect(screen.queryByRole('complementary', { name: 'Task details' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'T1 Task t1' }))
+  const sheet = screen.getByRole('dialog', { name: 'Task details' })
+  expect(sheet.className).toContain('bold-tb-sheet--side')
+  await within(sheet).findByText('Reproduce it')
 })
 
 test('the panel shows the task, its steps and comments, and Comment posts', async () => {
