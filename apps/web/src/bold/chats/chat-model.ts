@@ -167,23 +167,42 @@ export function chatAddress(entry: Pick<ChatEntry, 'kind' | 'id' | 'everyone'>, 
   return `/b?room=${encodeURIComponent(entry.id)}`
 }
 
-/** The chat and topic a run belongs to (a job whose recipe ref is the run), or null when no loaded job links to it. */
+/** The chat entry and job a run belongs to (a job whose recipe ref is the run), or null when no loaded job links to it. */
+export function chatEntryForRun(
+  lists: ChatLists,
+  jobsByRoom: Record<string, Job[]>,
+  runId: string,
+): { entry: ChatEntry; job: Job } | null {
+  for (const entry of [...lists.groups, ...lists.directs]) {
+    if (!entry.room) continue
+    const job = (jobsByRoom[entry.room.id] ?? []).find((item) => item.recipe?.ref === runId)
+    if (job) return { entry, job }
+  }
+  return null
+}
+
+/**
+ * 3.29.0 gate: run links carry the run's brief id (`boldRunLink(briefId)`), while a chat job links to the run by its
+ * own id. The run whose brief or own id this is; the id itself when no loaded run claims it.
+ */
+export function runIdOf(linkId: string, runs: readonly { id: string; briefId: string }[]): string {
+  return runs.find((run) => run.briefId === linkId || run.id === linkId)?.id ?? linkId
+}
+
+/** The chat and topic a run belongs to, as an address, or null when no loaded job links to it. */
 export function chatForRun(
   lists: ChatLists,
   jobsByRoom: Record<string, Job[]>,
   runId: string,
 ): string | null {
-  for (const entry of [...lists.groups, ...lists.directs]) {
-    if (!entry.room) continue
-    const job = (jobsByRoom[entry.room.id] ?? []).find((item) => item.recipe?.ref === runId)
-    if (!job) continue
-    if (entry.kind === 'direct')
-      return `/b?with=${encodeURIComponent(entry.id)}&chat=${encodeURIComponent(job.id)}`
-    return entry.everyone
-      ? `/b?job=${encodeURIComponent(job.id)}`
-      : `/b?room=${encodeURIComponent(entry.id)}&job=${encodeURIComponent(job.id)}`
-  }
-  return null
+  const found = chatEntryForRun(lists, jobsByRoom, runId)
+  if (!found) return null
+  const { entry, job } = found
+  if (entry.kind === 'direct')
+    return `/b?with=${encodeURIComponent(entry.id)}&chat=${encodeURIComponent(job.id)}`
+  return entry.everyone
+    ? `/b?job=${encodeURIComponent(job.id)}`
+    : `/b?room=${encodeURIComponent(entry.id)}&job=${encodeURIComponent(job.id)}`
 }
 
 /** On a phone `/b` is the list; any of these says a chat (or one of its views) is open. */

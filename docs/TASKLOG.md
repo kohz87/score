@@ -2360,3 +2360,24 @@ One entry per completed task: what landed, review results, and any **rejected re
   be reopened there), and "Add someone" into a busy team room failed (now goes to the room's own thread). Load flakes
   passing alone: bold-room-chat ×2, live-feel, themes-bold, bold-workspace, bold-team-choice.
 - Accepted P3s: "Stopped…" disappears with the bar; legacy rooms with several active jobs show no job bar.
+
+## 3.29.0 — Recipes as a library; the old run pages retire (2026-11-04)
+- Owner: "the new recipe placement is awkward, do a new mock up, the old run and all run are looping back to old
+  structure which freezes, we don't really need old runs, just the graph and log from the chat group anyway?" (with two
+  Troubleshooting screenshots: the step settings under the recipe list; the run page) → mock-up approved (DECISIONS 165).
+- Sonnet coder (brief 3.29.0-recipes-library): the library (cards, Last run ›, Run in a chat…), the editor header and
+  right-hand step panel, one-line problems with Show it, `boldRunLink` → `/b?run=`, a read-only sheet for a chat-less
+  run, Run details in the chat's Graph; BoldRuns.tsx and its visual spec deleted.
+- Review P2s → fix round (Sonnet): Pause/Resume/Stop and the protected changed-agents warning were gone (now at the top
+  of the Graph tab and the sheet), the step panel stacked below the recipe at 600–860px (now a bottom sheet below 860px),
+  the sheet became a modal `<dialog>`, the delete notice. Re-review P2 fixed by the lead: the notice repeated on reload.
+- Gate: check green (a one-off SIGSEGV of a server test worker; the suite passed on rerun: server 4988); e2e 59 failed →
+  two triage coders. App bugs found and fixed by the lead: every run link landed on the no-chat sheet (the link carries
+  the brief id, the chat job the run id → `runIdOf`); a finished recipe run's outcome note wasn't shown in the Graph
+  tab; a lead-decides run's step diagram was reachable only from the retired page (restored behind "Show the step
+  diagram", one view with its log so selection filters it and Replay drives both). Baselines: 3 recipes, 5 phone
+  Settings (the Recipes subtitle), 2 run-page baselines removed. Load flakes passing alone: bold-room-menu ×8,
+  one-to-ones ×4, workspace, team choice, tablet width, orchestrations in a combined run (pre-start checks after the
+  coding specs).
+- Accepted P3s: cards fetch each recipe's detail (fine for a local server); only the first problem is named in the
+  one-line summary.

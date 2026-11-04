@@ -115,6 +115,7 @@ export const KNOWN_OVERLAYS = [
   '.bold-trigger-scrim',
   '.bold-rp-scrim',
   '.bold-rp-sheet',
+  '.bold-rp-aside',
   '.bold-tb-sheet',
   '.bold-tb-scrim',
   '.bold-viewer-sheet',

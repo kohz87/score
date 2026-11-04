@@ -25,7 +25,9 @@ import { TopicGraph } from './chats/TopicGraph.tsx'
 import { DirectViewerSheet, ViewerSheet } from './chats/ViewerSheet.tsx'
 import { isViewerWork } from './chats/files-model.ts'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
-import { chatForRun, chatIsOpen, currentTopic } from './chats/chat-model.ts'
+import { chatForRun, chatIsOpen, currentTopic, runIdOf } from './chats/chat-model.ts'
+import { orchestrationsQuery } from '../routes/orchestrations/orchestration-queries.ts'
+import { workflowRunsQuery } from '../routes/workflows/workflow-queries.ts'
 import { useChatLists, useOpenGroup } from './chats/chat-queries.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
 
@@ -68,6 +70,9 @@ export function BoldRoom() {
     }
   }
   const runId = params.get('run')
+  // A run link names the run by its brief (3.29.0 gate): the run lists turn it into the run's own id.
+  const orchestrations = useStreamQuery(orchestrationsQuery).data
+  const workflowRuns = useStreamQuery(workflowRunsQuery).data
   const navigationType = useNavigationType()
   const sideRef = useRef<HTMLElement>(null)
   const phoneOpenRef = useRef<HTMLButtonElement>(null)
@@ -195,7 +200,13 @@ export function BoldRoom() {
     } else if (runId) {
       // Wait for the chats' jobs: a run that belongs to a chat opens there, otherwise on the Recipes page.
       if (!chatLists.ready || !chatLists.jobsSettled) return
-      const chat = chatForRun(chatLists, chatLists.jobsByRoom, runId)
+      // The link names the run by its brief; the chat's job names it by its own id (3.29.0 gate).
+      if (!orchestrations || !workflowRuns) return
+      const chat = chatForRun(
+        chatLists,
+        chatLists.jobsByRoom,
+        runIdOf(runId, [...orchestrations, ...workflowRuns]),
+      )
       // 3.23.0: a run that belongs to a chat lands on its topic with the Graph tab open (a one-to-one has no graph).
       void navigate(
         chat
@@ -206,7 +217,7 @@ export function BoldRoom() {
         { replace: true },
       )
     }
-  }, [chatLists, libraryOpen, navigate, notePath, runId])
+  }, [chatLists, libraryOpen, navigate, notePath, orchestrations, runId, workflowRuns])
 
   const withoutDirect = (next: URLSearchParams) => {
     next.delete('with')

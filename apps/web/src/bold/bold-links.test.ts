@@ -11,6 +11,7 @@ import {
   boldNoteLink,
   boldOneToOneLink,
   boldRecipesLink,
+  boldRunLink,
   boldSettingsSectionLink,
   boldStartJobLink,
   boldWorkspaceLink,
@@ -31,6 +32,8 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   expect(boldNoteLink('Projects/Roadmap.md')).toBe('/b?note=Projects%2FRoadmap.md')
   expect(boldStartJobLink()).toBe('/b?start=job')
   expect(boldStartJobLink('wf 1')).toBe('/b?start=job&recipe=wf+1')
+  // 3.29.0: a run opens in its chat (BoldRoom resolves `?run=`); there is no run page.
+  expect(boldRunLink('brief 1')).toBe('/b?run=brief+1')
   expect(boldRecipesLink()).toBe('/b/settings/recipes')
   expect(boldRecipesLink('wf 1')).toBe('/b/settings/recipes/wf%201')
   expect(boldFirstRunLink()).toBe('/b?first=run')

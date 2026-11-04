@@ -93,9 +93,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await instruction.pressSequentially(' [fake:verdict:passed]')
 
   // Problems are shown on the node they are about while the rest is unfinished.
-  await expect(page.getByRole('region', { name: 'Problems' })).toContainText('no end', {
-    ignoreCase: true,
-  })
+  await expect(page.locator('.bold-rp-problem')).toContainText('should be an End')
 
   // Add a gate after it (connected from "when done"), then a branch after the gate.
   await addAfter(page, 'Add a gate')
@@ -134,7 +132,8 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(page.getByText('Saved as version 1.').first()).toBeVisible()
 
   // Start it from the editor: Run… opens Start a job with this recipe chosen.
-  await page.getByRole('button', { name: 'Run…' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('group', { name: 'More' }).getByRole('button', { name: 'Run…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await expect(dialog.getByRole('radio', { name: unique })).toBeChecked({ timeout: 30_000 })
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
@@ -158,15 +157,15 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
     timeout: 60_000,
   })
-  await expect(page.getByText('Workflow reached its end').first()).toBeVisible()
+  // 3.29.0: no run page; the chat's Graph tab says "Run · title Succeeded" and the log says the run ended.
+  await expect(page.getByRole('log', { name: 'Events' })).toContainText('The run ended')
   await expect(node(page, 'step2')).toHaveAttribute('data-state', 'skipped')
   await expect(node(page, 'end1')).toHaveAttribute('data-state', 'succeeded')
   await expect(node(page, 'end2')).toHaveAttribute('data-state', 'skipped')
   await expect(page.locator('[data-edge-state="skipped"]').first()).toBeAttached()
-  await tab(page, 'Log')
+  // The session log sits under the graph (no Log tab any more).
   const log = page.getByRole('log', { name: 'Events' })
   await expect(log).toContainText("Passed review? took 'verdict passed'")
-  await tab(page, 'Graph')
 
   // Clicking a node filters the log to it and shows what it read and its verdict.
   await node(page, 'step1').click()
@@ -176,7 +175,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(panel).toContainText('Branch')
 
   // Replay the finished run from its recorded events.
-  await page.getByRole('button', { name: 'Replay this run' }).click()
+  await page.getByRole('button', { name: 'Replay this run' }).first().click()
   const scrub = page.getByRole('slider', { name: 'Replay position' })
   await expect(scrub).toHaveValue('0')
   await expect(node(page, 'step1')).toHaveAttribute('data-state', 'waiting')
@@ -230,7 +229,9 @@ test('a failing step is routed to a repair step, and the run still reaches its e
   await expect(node(page, 'fix')).toHaveAttribute('data-state', 'succeeded', { timeout: 60_000 })
   await expect(node(page, 'good')).toHaveAttribute('data-state', 'skipped')
   await expect(node(page, 'fixed')).toHaveAttribute('data-state', 'succeeded')
-  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('log', { name: 'Events' })).toContainText('The run ended', {
+    timeout: 30_000,
+  })
   // The failure route is drawn as such, with its words on the edge.
   await expect(page.locator('[data-edge="e2"]')).toHaveClass(/orch-edge--failed/)
   await expect(page.locator('.orch-edge-label', { hasText: 'if it fails' })).toBeVisible()
@@ -267,7 +268,7 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await unknown.getByRole('checkbox').first().check()
   await unknown.getByRole('button', { name: 'Stop waiting for this' }).click()
   // Abandoning pauses the run; the step is unresolved and offers Retry once the run is resumed.
-  await expect(page.getByRole('region', { name: 'Paused' }).first()).toBeVisible({
+  await expect(page.getByRole('article', { name: 'Needs you: Paused' })).toBeVisible({
     timeout: 30_000,
   })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'abandoned')
@@ -282,13 +283,14 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
     await expect(retry).toBeHidden({ timeout: 4000 })
   }).toPass({ timeout: 45_000 })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'succeeded', { timeout: 60_000 })
-  await expect(page.getByText('Finished, not everything confirmed')).toBeVisible({
+  await expect(page.getByText('Finished, not everything confirmed').first()).toBeVisible({
     timeout: 60_000,
   })
   await expect(page.getByText('Workflow reached its end', { exact: true })).toBeVisible()
-  await expect(
-    page.getByText('Workflow reached its end — 1 step run not confirmed as ended'),
-  ).toBeVisible()
+  // 3.29.0: the outcome note is in the chat's Graph tab.
+  await expect(page.locator('.wf-pane-outcome')).toContainText(
+    'Workflow reached its end — 1 step run not confirmed as ended',
+  )
   // The retried attempt is the second of two logical attempts.
   await node(page, 'flaky').click()
   await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('2 of 2 used')
@@ -342,7 +344,9 @@ test('saved positions survive an edit in the layered view, and the run view draw
 
   // A run of this version draws the nodes at the stored coordinates.
   await startFromList(page, name)
-  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('log', { name: 'Events' })).toContainText('The run ended', {
+    timeout: 60_000,
+  })
   const inRun = (nodeId: string) =>
     node(page, nodeId).evaluate((el) => {
       const wrapper = el.closest<HTMLElement>('[style*="left"]')!

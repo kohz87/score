@@ -138,7 +138,7 @@ for (const size of sizes) {
         route.fulfill({ contentType: 'text/event-stream', body: hello }),
       )
       const { files } = await openResults(page, size)
-      await expect(files.getByText('Nothing made in this topic yet')).toBeVisible()
+      await expect(files.getByText('Nothing made in this job yet')).toBeVisible()
       await expect(files.getByRole('link')).toHaveCount(0)
     })
 

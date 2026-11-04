@@ -5,6 +5,7 @@ import {
   buildChatLists,
   chatAddress,
   chatForRun,
+  runIdOf,
   chatIsOpen,
   filterEntries,
   isChatGroup,
@@ -166,4 +167,15 @@ test('the current topic is the picked one, else the newest open one, else the ge
   expect(currentTopic(jobs, null)?.id).toBe('new')
   expect(currentTopic(jobs, 'done')?.id).toBe('done')
   expect(currentTopic(jobs.slice(0, 1), null)?.id).toBe('general')
+})
+
+test('3.29.0 gate: a run link names the run by its brief; the chat job by the run’s own id', () => {
+  const runs = [
+    { id: 'orc-1', briefId: 'orc-goal:orc-1' },
+    { id: 'wfr-1', briefId: 'brief-wfrun-1' },
+  ]
+  expect(runIdOf('orc-goal:orc-1', runs)).toBe('orc-1')
+  expect(runIdOf('brief-wfrun-1', runs)).toBe('wfr-1')
+  expect(runIdOf('orc-1', runs)).toBe('orc-1')
+  expect(runIdOf('unknown', runs)).toBe('unknown')
 })

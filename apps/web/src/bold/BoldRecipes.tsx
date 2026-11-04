@@ -1,4 +1,3 @@
-import { boldRunLink } from './bold-links.ts'
 import {
   type AgentSummary,
   type WorkflowDetail,
@@ -6,37 +5,25 @@ import {
   type WorkflowNodeKind,
   type WorkflowSummary,
 } from '@score/contract'
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useBlocker, useNavigate, useParams, useSearchParams } from 'react-router'
-import { BoldRuns } from './BoldRuns.tsx'
-import { statusLabel } from '../routes/orchestrations/orch-model.ts'
-import { graphOutcomeLabel } from '../routes/workflows/workflow-run-model.ts'
 import { ApiError } from '../data/api.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { clock } from '../live/resolved.ts'
 import { pairingProblem } from './bold-errors.ts'
-import { boldRecipesLink, boldStartJobLink } from './bold-links.ts'
+import {
+  boldRecipesLink,
+  boldRunLink,
+  boldSettingsSectionLink,
+  boldStartJobLink,
+} from './bold-links.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
-import { PHONE_QUERY, useMediaQuery } from '../data/use-media.ts'
+import { useMediaQuery } from '../data/use-media.ts'
 import { AddMenu, RecipeLayers, type InsertStep } from '../routes/workflows/RecipeLayers.tsx'
 import { layoutRecipe, placement } from '../routes/workflows/recipe-layers.ts'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
-import {
-  InputsEditor,
-  IssueList,
-  Outline,
-  type Selection,
-} from '../routes/workflows/EditorParts.tsx'
+import { InputsEditor, Outline, type Selection } from '../routes/workflows/EditorParts.tsx'
 import { NodeInspector } from '../routes/workflows/NodeInspector.tsx'
 import { WorkflowPreview } from '../routes/workflows/PreviewRun.tsx'
 import { useDraftHistory } from '../routes/workflows/use-draft-history.ts'
@@ -71,7 +58,6 @@ import {
   indexIssues,
   issuesForNode,
   shapeIssues,
-  summaryLine,
 } from '../routes/workflows/workflow-validation.ts'
 import {
   RECIPE_STEP_LABEL,
@@ -85,24 +71,31 @@ import {
   type RecipeProblem,
 } from './recipe-model.ts'
 import { RecipeInspector, RecipeStepRow } from './BoldRecipeText.tsx'
+import { RecipeLibrary } from './BoldRecipeLibrary.tsx'
+import { RunSheet } from './RunSheet.tsx'
 import '../routes/orchestrations/orchestrations.css'
 import '../routes/workflows/workflows.css'
 import { PlusIcon } from './BoldIcons.tsx'
 import './bold-recipes.css'
 
-// PLAN 11.10d, rebuilt as a page in 2.8.0 (decision 131, board C). A recipe is a 7.1 workflow: this page lists them
-// next to the built-in "lead decides", and edits one as a graph (the full editor: add, connect, move, delete, keyboard
-// on the canvas, preview, live states of a running copy) or "As text" (the step list). The step settings sit beside
-// both. docs/design/bold/prototype.html (mRecipe) is binding for colours and shapes; the page layout is the approved
-// mock-up's. Starting a run stays in Start a job (the editor's Run opens it with this recipe chosen).
+// PLAN 11.10d, rebuilt as a page in 2.8.0 (decision 131, board C) and as a library in 3.29.0 (decision 165, mock-ups
+// 23-recipes-*). A recipe is a 7.1 workflow: Settings > Recipes lists them as cards next to the built-in "lead decides"
+// (BoldRecipeLibrary.tsx); this file is the editor for one: a graph (the full editor: add, connect, move, delete,
+// keyboard on the canvas, preview, live states of a running copy) or "As text" (the step list). The step settings sit to
+// the right of both (a bottom sheet on a phone). Starting a run stays in Start a job (Run opens it with this recipe
+// chosen). A run is read in its chat; only one that belongs to no chat opens a read-only sheet over the library.
 
 const BUILT_IN = 'lead-decides'
+// The bold shell's narrow breakpoint: below it the step settings are a bottom sheet (a tablet gets it too).
+const NARROW_QUERY = '(width <= 860px)'
 
-function problemKey(problem: RecipeProblem): string {
+type Problem = RecipeProblem & { edgeId?: string | null }
+
+function problemKey(problem: Problem): string {
   return `${problem.code}|${problem.nodeId ?? ''}|${problem.message}`
 }
 
-function dedupeProblems(problems: RecipeProblem[]): RecipeProblem[] {
+function dedupeProblems(problems: Problem[]): Problem[] {
   const seen = new Set<string>()
   return problems.filter((problem) => {
     const key = problemKey(problem)
@@ -121,44 +114,48 @@ function describeError(error: unknown): string {
   if (error.code === 'quota_exhausted')
     return 'This recipe has as many saved versions as Score keeps (or there are too many recipes). Delete one you don’t use.'
   if (error.code === 'invalid_definition')
-    return 'Score found a problem with this recipe. The problem lines above say what.'
+    return 'Score found a problem with this recipe. The problem line above says what.'
   return error.message
 }
 
-/** The route: `/b/settings/recipes`, `/b/settings/recipes/new`, `/b/settings/recipes/lead-decides` or `/b/settings/recipes/:workflowId`. */
+/**
+ * The route: `/b/settings/recipes` is the library (with `?run=<brief id>` a chat-less run's read-only sheet over it),
+ * `/b/settings/recipes/new`, `/b/settings/recipes/lead-decides` or `/b/settings/recipes/:workflowId` is the editor.
+ */
 export function BoldRecipesPage() {
+  const { workflowId } = useParams()
+  const navigate = useNavigate()
   const [query, setQuery] = useSearchParams()
   const runBrief = query.get('run')
-  // 3.22.0: a run (`?run=<brief id>`) opens here, as the list of runs when none is named.
-  if (runBrief !== null)
-    return (
-      <div className="bold-run-page">
-        <BoldRuns
-          briefId={runBrief || null}
-          onOpen={(briefId) => setQuery({ run: briefId })}
-          onBack={() => setQuery({})}
-        />
-      </div>
-    )
-  return <BoldRecipesList />
+  if (workflowId) return <BoldRecipeRoute workflowId={workflowId} />
+  return (
+    <>
+      <RecipeLibrary onBack={() => void navigate(boldSettingsSectionLink('connections'))} />
+      {runBrief && <RunSheet briefId={runBrief} onClose={() => setQuery({}, { replace: true })} />}
+    </>
+  )
 }
 
-function BoldRecipesList() {
-  const { workflowId } = useParams()
+function BackToRecipes() {
+  return (
+    <Link className="bold-rp-back" to={boldRecipesLink()}>
+      ‹ Recipes
+    </Link>
+  )
+}
+
+function BoldRecipeRoute({ workflowId }: { workflowId: string }) {
   const navigate = useNavigate()
   const workflows = useWorkflows()
   const agentsQuery = useStreamQuery(taskAgentsQuery)
   const agents = agentsQuery.data ?? []
-  const [newKey, setNewKey] = useState(0)
+  // A new recipe is made once per visit, when the team is known (its first step needs an agent).
   const [notice, setNotice] = useState('')
   const recipes = useMemo(() => workflows.data?.items ?? [], [workflows.data])
-  // Archived recipes are not the page's default; an archived one still opens from a link.
-  const selected =
-    workflowId ??
-    recipes.find((recipe) => !recipe.archivedAt)?.id ??
-    (workflows.isPending ? null : 'new')
-  const isReal = selected !== null && selected !== 'new' && selected !== BUILT_IN
+  const selected = workflowId
+  const isReal = selected !== 'new' && selected !== BUILT_IN
   const detail = useWorkflow(isReal ? selected : undefined)
+  const teamKnown = agentsQuery.status === 'success'
   const newDraft = useMemo(() => {
     const starter = starterDraft(
       agents.find((agent) => !agent.runtime || agent.runtime === 'hermes')?.id ??
@@ -166,33 +163,15 @@ function BoldRecipesList() {
         '',
     )
     return { ...starter, name: 'Untitled recipe' }
-    // A new recipe is made once per press of "New recipe"; the agent list only seeds its first step.
+    // The agent list only seeds the first step, once it has loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newKey])
-
-  const choose = useCallback(
-    (id: string) => {
-      setNotice('')
-      void navigate(boldRecipesLink(id))
-    },
-    [navigate],
-  )
-  const startNew = useCallback(() => {
-    setNotice('')
-    setNewKey((value) => value + 1)
-    void navigate(boldRecipesLink('new'))
-  }, [navigate])
-
-  const list = (
-    <RecipeList recipes={recipes} selectedId={selected} onSelect={choose} onNew={startNew} />
-  )
-
-  if (selected === null || (isReal && !detail.data)) {
+  }, [teamKnown])
+  if (isReal && !detail.data) {
     return (
       <div className="bold-rp" data-ui-page="recipes">
-        {list}
+        <BackToRecipes />
         <section className="bold-rp-main" aria-label="Recipe editor">
-          {isReal && detail.isError ? (
+          {detail.isError ? (
             <p role="alert" className="bold-error">
               Couldn’t load this recipe. Try again or choose another.
             </p>
@@ -203,24 +182,35 @@ function BoldRecipesList() {
                 Try again
               </button>
             </p>
-          ) : agentsQuery.status === 'error' ? (
-            <p role="alert" className="bold-error">
-              Couldn’t load the team, so the recipe can’t choose agents.
-            </p>
           ) : (
             <p role="status" className="muted">
-              {selected === null ? 'Loading recipes…' : 'Loading the recipe…'}
+              Loading the recipe…
             </p>
           )}
         </section>
       </div>
     )
   }
+  if (selected === 'new' && agentsQuery.status !== 'success')
+    return (
+      <div className="bold-rp" data-ui-page="recipes">
+        <BackToRecipes />
+        {agentsQuery.status === 'error' ? (
+          <p role="alert" className="bold-error">
+            Couldn’t load the team, so the recipe can’t choose agents.
+          </p>
+        ) : (
+          <p role="status" className="muted">
+            Loading the team…
+          </p>
+        )}
+      </div>
+    )
 
   if (selected === BUILT_IN)
     return (
       <div className="bold-rp" data-ui-page="recipes">
-        {list}
+        <BackToRecipes />
         <section className="bold-rp-main" aria-label="Recipe editor">
           <h2 className="bold-rp-title">lead decides</h2>
           <p className="muted">
@@ -241,7 +231,6 @@ function BoldRecipesList() {
   }
   const common = {
     recipes,
-    list,
     agents,
     notice,
     onSaved: (id: string, version: number) => {
@@ -249,8 +238,8 @@ function BoldRecipesList() {
       if (selected === 'new') after(id)
     },
     onDeleted: () => {
-      setNotice('Deleted the recipe.')
-      void navigate(boldRecipesLink(), { replace: true })
+      // The library says so (router state, so a reload doesn't repeat it).
+      void navigate(boldRecipesLink(), { replace: true, state: { deletedRecipe: true } })
     },
     onDuplicated: (id: string) => {
       setNotice('Made a copy. It is saved as version 1.')
@@ -259,12 +248,7 @@ function BoldRecipesList() {
     onNotice: setNotice,
   }
   return selected === 'new' ? (
-    <BoldRecipeEditor
-      key={`new-${newKey}`}
-      detail={null}
-      initialDefinition={newDraft}
-      {...common}
-    />
+    <BoldRecipeEditor key="new" detail={null} initialDefinition={newDraft} {...common} />
   ) : (
     <BoldRecipeEditor
       key={detail.data!.id}
@@ -272,165 +256,6 @@ function BoldRecipesList() {
       initialDefinition={detail.data!.latest.definition}
       {...common}
     />
-  )
-}
-
-/** What each recipe is for at a glance: its version and how its runs are going. */
-function RecipeList({
-  recipes,
-  selectedId,
-  onSelect,
-  onNew,
-}: {
-  recipes: WorkflowSummary[]
-  selectedId: string | null
-  onSelect: (id: string) => void
-  onNew: () => void
-}) {
-  const runs = useStreamQuery(workflowRunsQuery).data
-  const [query, setQuery] = useState('')
-  const [showArchived, setShowArchived] = useState(false)
-  const archive = useArchiveWorkflow()
-  const searchId = useId()
-  const needle = query.trim().toLowerCase()
-  const archivedCount = recipes.filter((recipe) => recipe.archivedAt).length
-  // The recipe you have open stays in the list even when archived, so the page never loses its place.
-  const shown = recipes.filter(
-    (recipe) =>
-      recipe.name.toLowerCase().includes(needle) &&
-      (showArchived || !recipe.archivedAt || recipe.id === selectedId),
-  )
-  const showLead = 'lead decides'.includes(needle)
-  return (
-    <nav className="bold-rp-list" aria-label="Recipes">
-      <h2 className="bold-rp-h1">Recipes</h2>
-      <div className="row">
-        <label htmlFor={searchId} className="wf-visually-hidden">
-          Find a recipe
-        </label>
-        <input
-          id={searchId}
-          className="bold-field"
-          type="search"
-          placeholder="Find a recipe"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <button
-          type="button"
-          className="bold-rp-new"
-          aria-label="New recipe"
-          title="New recipe"
-          onClick={onNew}
-        >
-          <PlusIcon />
-        </button>
-      </div>
-      {archivedCount > 0 && (
-        <label className="small muted bold-rp-archived-toggle">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(event) => setShowArchived(event.target.checked)}
-          />{' '}
-          Archived ({archivedCount})
-        </label>
-      )}
-      {showLead && (
-        <button
-          type="button"
-          className="bold-rp-row"
-          aria-current={selectedId === BUILT_IN ? 'true' : undefined}
-          onClick={() => onSelect(BUILT_IN)}
-        >
-          <span className="row">
-            <b>lead decides</b>
-            <span className="bold-badge bold-badge--quiet">Built in</span>
-          </span>
-          <span className="small muted">No fixed steps: lead plans each job</span>
-        </button>
-      )}
-      {shown.map((recipe) => {
-        const count = runs?.filter((run) => run.workflowId === recipe.id).length ?? 0
-        const facts =
-          recipe.activeRuns > 0
-            ? 'running now'
-            : count > 0
-              ? `${count} ${count === 1 ? 'run' : 'runs'}`
-              : recipe.used
-                ? 'used by runs'
-                : 'not used yet'
-        const row = (
-          <button
-            key={recipe.id}
-            type="button"
-            className="bold-rp-row"
-            aria-current={selectedId === recipe.id ? 'true' : undefined}
-            onClick={() => onSelect(recipe.id)}
-          >
-            <span className="row">
-              <b>{recipe.name}</b>
-              {recipe.archivedAt && <span className="bold-badge bold-badge--quiet">Archived</span>}
-            </span>
-            <span className="small muted">
-              Version {recipe.latestVersion} · {facts}
-            </span>
-          </button>
-        )
-        if (!recipe.archivedAt) return row
-        return (
-          <div key={recipe.id} className="bold-rp-archived-row">
-            {row}
-            <button
-              type="button"
-              className="btn sm"
-              aria-label={`Unarchive ${recipe.name}`}
-              disabled={archive.isPending}
-              onClick={() => archive.mutate({ id: recipe.id, archived: false })}
-            >
-              Unarchive
-            </button>
-          </div>
-        )
-      })}
-      {recipes.length > 0 && shown.length === 0 && !showLead && (
-        <p className="small muted" role="status">
-          No recipe matches “{query}”.
-        </p>
-      )}
-      {recipes.length === 0 && (
-        <p className="small muted">
-          No saved recipes yet. Start with the plus: an agent step, a gate for your approval and an
-          end.
-        </p>
-      )}
-    </nav>
-  )
-}
-
-/** What only the classic workflow list showed: the runs going and the last run, linking to that run's page. */
-function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
-  const runs = useStreamQuery(workflowRunsQuery).data
-  if (!recipe) return null
-  // Newest first, as the classic list reads it.
-  const last = runs?.find((run) => run.workflowId === recipe.id)
-  return (
-    <span className="small muted bold-recipe-runs" aria-label="Runs of this recipe">
-      {recipe.activeRuns > 0 && (
-        <b className="bold-recipe-going">
-          {recipe.activeRuns} {recipe.activeRuns === 1 ? 'run' : 'runs'} going
-        </b>
-      )}
-      {last ? (
-        <>
-          {' '}
-          Last run: <Link to={boldRunLink(last.briefId)}>{statusLabel[last.status]}</Link>
-          {last.graphOutcome ? `, ${graphOutcomeLabel[last.graphOutcome].toLowerCase()}` : ''}
-        </>
-      ) : (
-        ' No runs yet'
-      )}
-    </span>
   )
 }
 
@@ -533,7 +358,6 @@ function BoldRecipeEditor({
   detail,
   initialDefinition,
   recipes,
-  list,
   agents,
   notice,
   onSaved,
@@ -544,7 +368,6 @@ function BoldRecipeEditor({
   detail: WorkflowDetail | null
   initialDefinition: Draft
   recipes: WorkflowSummary[]
-  list: ReactNode
   agents: AgentSummary[]
   notice: string
   onSaved: (id: string, version: number) => void
@@ -604,7 +427,12 @@ function BoldRecipeEditor({
     () =>
       (validation.data?.issues ?? [])
         .filter((issue) => issue.severity === 'error')
-        .map((issue) => ({ code: issue.code, message: issue.message, nodeId: issue.nodeId })),
+        .map((issue) => ({
+          code: issue.code,
+          message: issue.message,
+          nodeId: issue.nodeId,
+          edgeId: issue.edgeId,
+        })),
     [validation.data],
   )
   const problems = useMemo(
@@ -615,6 +443,7 @@ function BoldRecipeEditor({
           code: issue.code,
           message: issue.message,
           nodeId: issue.nodeId,
+          edgeId: issue.edgeId,
         })),
         ...serverErrors,
       ]),
@@ -957,16 +786,9 @@ function BoldRecipeEditor({
     })
   }
 
-  // A problem on a connection selects the step it leaves: the layered view has no connection to select.
-  const selectIssue = (selection: Selection) => {
-    if (selection?.kind === 'edge') {
-      const edge = graphDraft.edges.find((item) => item.id === selection.id)
-      selectNode(edge?.from ?? null)
-    } else selectNode(selection?.id ?? null)
-  }
-  const phone = useMediaQuery(PHONE_QUERY)
-  // On a phone the step's settings are a sheet from the bottom, as in the mock-up; only while a step is selected.
-  const sheet = graph && phone && previewing === null
+  const narrow = useMediaQuery(NARROW_QUERY)
+  // Below 860px (phone and tablet) the step's settings are a sheet from the bottom, as in the mock-up (both views); only while a step is selected.
+  const sheet = narrow && previewing === null
   const recipeLayout = useMemo(() => layoutRecipe(graphDraft), [graphDraft])
   const sheetOpen = sheet && graphNode !== undefined
   const graphId = graphNode?.id ?? null
@@ -1060,18 +882,29 @@ function BoldRecipeEditor({
     <span className="muted small">Add a step to edit it.</span>
   )
 
+  const problem = problems[0]
+  const problemTarget = problem
+    ? (problem.nodeId ??
+      (problem.edgeId
+        ? (graphDraft.edges.find((edge) => edge.id === problem.edgeId)?.from ?? null)
+        : null))
+    : null
+  const status = checkFailed ? 'bad' : problems.length > 0 ? 'bad' : 'ok'
+  // Everything one menu holds: the steps' history, running and exporting, and the rest of what a recipe can do.
+  const noRun = dirty || checking || viewing
   return (
-    <div className="bold-rp" data-ui-page="recipes">
-      {list}
-
+    <div className="bold-rp bold-re" data-ui-page="recipes">
       <section
         ref={root}
-        className={`bold-rp-main${sheet && graphNode ? ' bold-rp-main--sheet' : ''}`}
+        className={`bold-rp-editor${sheet && graphNode ? ' bold-rp-main--sheet' : ''}`}
         aria-label="Recipe editor"
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
         <div className="bold-rp-head">
+          <Link className="bold-rp-back" to={boldRecipesLink()}>
+            ‹ Recipes
+          </Link>
           <label className="wf-visually-hidden" htmlFor={nameId}>
             Recipe name
           </label>
@@ -1084,34 +917,13 @@ function BoldRecipeEditor({
             disabled={viewing}
             onChange={(event) => commit({ ...draft, name: event.target.value }, 'name')}
           />
-          <span
-            className={`bold-badge ${problems.length > 0 || checkFailed ? 'bold-badge--bad' : 'bold-badge--ok'}`}
-            role="status"
-          >
-            {badge}
-          </span>
-          <span className="small muted">
-            {saved.workflowId === null ? 'New recipe' : `Version ${saved.version}`}
+          <span className="bold-rp-meta">
+            {saved.workflowId === null ? 'New recipe' : `version ${saved.version}`}
             {loadedFrom !== null ? ` · editing version ${loadedFrom}` : ''}
-            {dirty || saved.workflowId === null ? ' · unsaved changes' : ''} · inputs:{' '}
-            {draft.inputs.length > 0 ? draft.inputs.map((input) => input.name).join(', ') : 'none'}
+            {dirty || saved.workflowId === null ? ' · unsaved changes' : ''}
           </span>
           {recipe?.archivedAt && <span className="bold-badge bold-badge--quiet">Archived</span>}
-          {saved.workflowId !== null && (
-            <RecipeRunStatus recipe={recipes.find((item) => item.id === saved.workflowId)} />
-          )}
-        </div>
-        {recipe?.archivedAt && (
-          <p className="small muted bold-rp-archived-note" role="status">
-            Archived: this recipe is hidden from the list and not offered in Start a job. Its past
-            runs still open.{' '}
-            <button type="button" className="bold-link" onClick={toggleArchive}>
-              Unarchive
-            </button>
-          </p>
-        )}
-
-        <div className="bold-rp-bar">
+          <span className="bold-rp-spacer" />
           <div className="bold-seg" role="tablist" aria-label="How to show the recipe">
             <button
               type="button"
@@ -1132,170 +944,215 @@ function BoldRecipeEditor({
               As text
             </button>
           </div>
-          <span className="row bold-recipes-actions" style={{ marginLeft: 'auto' }}>
+          <button
+            type="button"
+            className="bold-rp-pill"
+            aria-label="Preview, nothing runs"
+            disabled={previewing !== null || previewBlocked !== null || viewing}
+            aria-describedby={previewBlocked ? 'bold-rp-preview-why' : undefined}
+            title={previewBlocked ?? 'Play the recipe through without running anything'}
+            onClick={() => {
+              setPreviewing(draft)
+              setGraph(true)
+              setSel(null)
+            }}
+          >
+            Preview
+          </button>
+          {previewBlocked && (
+            <span id="bold-rp-preview-why" className="wf-visually-hidden">
+              {previewBlocked}
+            </span>
+          )}
+          <span className="bold-rp-more">
             <button
               type="button"
-              className="btn sm"
-              disabled={!history.canUndo || viewing || previewing !== null}
-              onClick={history.undo}
+              className="bold-rp-dots"
+              ref={moreButton}
+              aria-label="More"
+              aria-haspopup="true"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((value) => !value)}
             >
-              Undo
+              ⋯
             </button>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={!history.canRedo || viewing || previewing !== null}
-              onClick={history.redo}
-            >
-              Redo
-            </button>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={previewing !== null || previewBlocked !== null || viewing}
-              aria-describedby={previewBlocked ? 'bold-rp-preview-why' : undefined}
-              title={previewBlocked ?? 'Play the recipe through without running anything'}
-              onClick={() => {
-                setPreviewing(draft)
-                setGraph(true)
-                setSel(null)
-              }}
-            >
-              Preview, nothing runs
-            </button>
-            {previewBlocked && (
-              <span id="bold-rp-preview-why" className="wf-visually-hidden">
-                {previewBlocked}
-              </span>
-            )}
-            {saved.workflowId !== null && (
-              <button
-                type="button"
-                className="btn sm"
-                disabled={dirty || checking || viewing}
-                title={dirty ? 'Save first: a run uses a saved version' : undefined}
-                onClick={() => void navigate(boldStartJobLink(saved.workflowId!))}
-              >
-                Run…
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn sm"
-              disabled={!saved.workflowId || dirty}
-              title={
-                !saved.workflowId
-                  ? 'Save the recipe first: the export is a saved version.'
-                  : dirty
-                    ? 'Save first: the export is a saved version.'
-                    : undefined
-              }
-              onClick={() => setExporting(true)}
-            >
-              Export
-            </button>
-            <span className="bold-rp-more">
-              <button
-                type="button"
-                className="btn sm"
-                ref={moreButton}
-                aria-haspopup="true"
-                aria-expanded={moreOpen}
-                onClick={() => setMoreOpen((value) => !value)}
-              >
-                More
-              </button>
-              {moreOpen && (
-                <div className="bold-rp-morepanel" role="group" aria-label="More">
+            {moreOpen && (
+              <div className="bold-rp-morepanel" role="group" aria-label="More">
+                <div className="bold-rp-morerow">
                   <button
                     type="button"
                     className="btn sm"
-                    disabled={!saved.workflowId || dirty || save.isPending}
-                    title={dirty ? 'Save first: a copy is made from the saved version.' : undefined}
-                    onClick={duplicate}
+                    disabled={!history.canUndo || viewing || previewing !== null}
+                    onClick={history.undo}
                   >
-                    Duplicate
+                    Undo
                   </button>
-                  {versions.length > 0 && (
-                    <label className="bold-lab">
-                      View a saved version (read-only)
-                      <select
-                        className="bold-field"
-                        value={viewVersion ?? ''}
-                        onChange={(event) => {
-                          const value = Number(event.target.value)
-                          setViewVersion(value || null)
-                          setGraph(true)
-                          setSel(null)
-                          setPreviewing(null)
-                          setMoreOpen(false)
-                        }}
-                      >
-                        <option value="">Choose a version…</option>
-                        {[...versions].reverse().map((version) => (
-                          <option key={version.version} value={version.version}>
-                            Version {version.version}
-                            {version.used ? ' (used by runs)' : ''}, {version.nodes} steps
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {saved.workflowId && (
-                    <button
-                      type="button"
-                      className="btn sm"
-                      disabled={archive.isPending}
-                      onClick={toggleArchive}
-                    >
-                      {recipe?.archivedAt ? 'Unarchive' : 'Archive'}
-                    </button>
-                  )}
-                  {saved.workflowId && !recipe?.used && (
-                    <button
-                      type="button"
-                      className="btn sm bold-danger"
-                      disabled={remove.isPending}
-                      onClick={removeRecipe}
-                    >
-                      {remove.isPending ? 'Deleting…' : 'Delete recipe'}
-                    </button>
-                  )}
-                  {saved.workflowId && recipe?.used && (
-                    <button
-                      type="button"
-                      className="btn sm bold-danger"
-                      onClick={() => {
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={!history.canRedo || viewing || previewing !== null}
+                    onClick={history.redo}
+                  >
+                    Redo
+                  </button>
+                </div>
+                {saved.workflowId !== null && (
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={noRun}
+                    title={dirty ? 'Save first: a run uses a saved version' : undefined}
+                    onClick={() => void navigate(boldStartJobLink(saved.workflowId!))}
+                  >
+                    Run…
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn sm"
+                  disabled={!saved.workflowId || dirty}
+                  title={
+                    !saved.workflowId
+                      ? 'Save the recipe first: the export is a saved version.'
+                      : dirty
+                        ? 'Save first: the export is a saved version.'
+                        : undefined
+                  }
+                  onClick={() => {
+                    setMoreOpen(false)
+                    setExporting(true)
+                  }}
+                >
+                  Export
+                </button>
+                <button
+                  type="button"
+                  className="btn sm"
+                  disabled={!saved.workflowId || dirty || save.isPending}
+                  title={dirty ? 'Save first: a copy is made from the saved version.' : undefined}
+                  onClick={duplicate}
+                >
+                  Duplicate
+                </button>
+                {versions.length > 0 && (
+                  <label className="bold-lab">
+                    View a saved version (read-only)
+                    <select
+                      className="bold-field"
+                      value={viewVersion ?? ''}
+                      onChange={(event) => {
+                        const value = Number(event.target.value)
+                        setViewVersion(value || null)
+                        setGraph(true)
+                        setSel(null)
+                        setPreviewing(null)
                         setMoreOpen(false)
-                        setDeletingRuns(true)
                       }}
                     >
-                      Delete with runs…
-                    </button>
-                  )}
-                </div>
-              )}
-            </span>
-            <button
-              type="button"
-              className="btn sm primary"
-              disabled={!canSave}
-              title={
-                problems.length > 0
-                  ? 'Fix the problems first'
-                  : checkFailed
-                    ? "Score couldn't check this recipe. Try again before saving."
-                    : checking
-                      ? 'Score is still checking the recipe'
-                      : undefined
-              }
-              onClick={onSave}
-            >
-              {save.isPending ? 'Saving…' : `Save as version ${saved.version + 1}`}
-            </button>
+                      <option value="">Choose a version…</option>
+                      {[...versions].reverse().map((version) => (
+                        <option key={version.version} value={version.version}>
+                          Version {version.version}
+                          {version.used ? ' (used by runs)' : ''}, {version.nodes} steps
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {saved.workflowId && (
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={archive.isPending}
+                    onClick={toggleArchive}
+                  >
+                    {recipe?.archivedAt ? 'Unarchive' : 'Archive'}
+                  </button>
+                )}
+                {saved.workflowId && !recipe?.used && (
+                  <button
+                    type="button"
+                    className="btn sm bold-danger"
+                    disabled={remove.isPending}
+                    onClick={removeRecipe}
+                  >
+                    {remove.isPending ? 'Deleting…' : 'Delete recipe'}
+                  </button>
+                )}
+                {saved.workflowId && recipe?.used && (
+                  <button
+                    type="button"
+                    className="btn sm bold-danger"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setDeletingRuns(true)
+                    }}
+                  >
+                    Delete with runs…
+                  </button>
+                )}
+              </div>
+            )}
           </span>
+          <button
+            type="button"
+            className="bold-rp-save"
+            disabled={!canSave}
+            aria-label={save.isPending ? 'Saving…' : `Save as version ${saved.version + 1}`}
+            title={
+              problems.length > 0
+                ? 'Fix the problems first'
+                : checkFailed
+                  ? "Score couldn't check this recipe. Try again before saving."
+                  : checking
+                    ? 'Score is still checking the recipe'
+                    : undefined
+            }
+            onClick={onSave}
+          >
+            {save.isPending ? 'Saving…' : 'Save'}
+          </button>
         </div>
+        {recipe?.archivedAt && (
+          <p className="small muted bold-rp-archived-note" role="status">
+            Archived: this recipe is hidden from the library’s list and not offered in Start a job.
+            Its past runs still open.{' '}
+            <button type="button" className="bold-link" onClick={toggleArchive}>
+              Unarchive
+            </button>
+          </p>
+        )}
 
+        <p className="wf-visually-hidden" role="status">
+          {badge}
+        </p>
+        {(problems.length > 0 || checkFailed) && (
+          <p className="bold-rp-problem" data-status={status}>
+            <b>
+              {checkFailed && problems.length === 0
+                ? 'Score couldn’t check this recipe.'
+                : `${problems.length} ${problems.length === 1 ? 'thing' : 'things'} to fix before saving:`}
+            </b>{' '}
+            {problem?.message}
+            {problemTarget && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="bold-link"
+                  onClick={() => selectNode(problemTarget)}
+                >
+                  Show it
+                </button>
+              </>
+            )}
+          </p>
+        )}
+        {problems.length === 0 && warnings > 0 && (
+          <p className="small muted">
+            {warnings} {warnings === 1 ? 'warning' : 'warnings'} — saving is still allowed.
+          </p>
+        )}
         {notice && (
           <p className="small muted bold-recipes-notice" role="status">
             {notice}
@@ -1328,31 +1185,6 @@ function BoldRecipeEditor({
               )
             }
           />
-        )}
-
-        {!graph && problems.length > 0 && (
-          <div className="small bold-recipes-problems" role="status">
-            {problems.map((problem) => (
-              <div key={problemKey(problem)}>
-                {problem.nodeId ? (
-                  <button
-                    type="button"
-                    className="bold-link"
-                    onClick={() => selectNode(problem.nodeId)}
-                  >
-                    {problem.message}
-                  </button>
-                ) : (
-                  problem.message
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {!graph && warnings > 0 && (
-          <p className="small muted">
-            {warnings} {warnings === 1 ? 'warning' : 'warnings'} — saving is still allowed.
-          </p>
         )}
 
         {conflict !== null && (
@@ -1426,185 +1258,187 @@ function BoldRecipeEditor({
           </section>
         )}
 
-        {graph ? (
-          <div className="bold-rp-graph wf-editor">
-            {overlay && previewing === null && !viewing && (
-              <p className="wf-live small" role="status">
-                <span className="wf-live__dot" aria-hidden="true" />
-                Live: run started {clock(overlay.run.createdAt)}{' '}
-                <Link to={boldRunLink(overlay.run.briefId)}>Open the run ›</Link>
-              </p>
-            )}
-            {previewing !== null ? (
-              <WorkflowPreview
-                key="preview"
-                draft={previewing}
-                agents={agents}
-                onStop={() => setPreviewing(null)}
-              />
-            ) : viewing && !viewed.data ? (
-              <p role="status" className="muted">
-                Loading version {viewVersion}…
-              </p>
+        <div className="bold-rp-body">
+          <section className="bold-rp-main" aria-label="The recipe">
+            {graph ? (
+              <div className="bold-rp-graph wf-editor">
+                {overlay && previewing === null && !viewing && (
+                  <p className="wf-live small" role="status">
+                    <span className="wf-live__dot" aria-hidden="true" />
+                    Live: run started {clock(overlay.run.createdAt)}{' '}
+                    <Link to={boldRunLink(overlay.run.briefId)}>Open the run ›</Link>
+                  </p>
+                )}
+                {previewing !== null ? (
+                  <WorkflowPreview
+                    key="preview"
+                    draft={previewing}
+                    agents={agents}
+                    onStop={() => setPreviewing(null)}
+                  />
+                ) : viewing && !viewed.data ? (
+                  <p role="status" className="muted">
+                    Loading version {viewVersion}…
+                  </p>
+                ) : (
+                  <RecipeLayers
+                    readOnly={viewing}
+                    states={viewing ? null : overlay?.nodes}
+                    edges={viewing ? null : overlay?.edges}
+                    draft={graphDraft}
+                    agents={agents}
+                    issues={index}
+                    selected={selectedNodeId}
+                    onSelect={selectNode}
+                    onInsert={insertStep}
+                    onDeleteNode={deleteNode}
+                  />
+                )}
+                <details className="bold-rp-outline">
+                  <summary>Outline: the graph as text</summary>
+                  <Outline draft={graphDraft} issues={index} selected={sel} onSelect={setSel} />
+                </details>
+              </div>
             ) : (
-              <RecipeLayers
-                readOnly={viewing}
-                states={viewing ? null : overlay?.nodes}
-                edges={viewing ? null : overlay?.edges}
-                draft={graphDraft}
-                agents={agents}
-                issues={index}
-                selected={selectedNodeId}
-                onSelect={selectNode}
-                onInsert={insertStep}
-                onDeleteNode={deleteNode}
-              />
-            )}
-            <IssueList
-              issues={issues}
-              draft={graphDraft}
-              onSelect={selectIssue}
-              checking={checking}
-              headline={summaryLine(index, checking)}
-            />
-            <details className="bold-rp-outline">
-              <summary>Outline: the graph as text</summary>
-              <Outline draft={graphDraft} issues={index} selected={sel} onSelect={setSel} />
-            </details>
-          </div>
-        ) : (
-          <div className="bold-rp-text">
-            {analysis.listable ? null : (
-              <section className="bold-inner bold-recipes-graphnote" aria-label="Graph-only recipe">
-                <b>This recipe is easier to edit as a graph.</b>
-                <p>
-                  {analysis.graphOnlyReasons.join(' ')} The step list can’t show every path
-                  faithfully, so it is read-only here.
-                </p>
-                <button type="button" className="btn sm" onClick={() => setGraph(true)}>
-                  Open the graph
-                </button>
-              </section>
-            )}
-            <ol className="bold-recipes-list" aria-label="Steps">
-              {analysis.rows.map((row) => (
-                <RecipeStepRow
-                  key={row.node.id}
-                  row={row}
-                  analysis={analysis}
-                  agents={agents}
-                  editable={analysis.listable && !viewing}
-                  selected={selectedRow?.node.id === row.node.id}
-                  moveProblems={moveProblems.get(row.node.id) ?? { up: null, down: null }}
-                  onSelect={() => selectNode(row.node.id)}
-                  onMove={(direction) => move(row.node.id, direction)}
-                  onRemove={() => removeStep(row.node.id)}
-                  onTarget={point}
-                />
-              ))}
-            </ol>
-            {analysis.listable && !viewing && (
-              <div className="row wrap">
-                {(['agent', 'gate', 'branch', 'join', 'end'] as WorkflowNodeKind[]).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="btn sm ghost"
-                    data-add-step={kind}
-                    onClick={() => add(kind)}
+              <div className="bold-rp-text">
+                {analysis.listable ? null : (
+                  <section
+                    className="bold-inner bold-recipes-graphnote"
+                    aria-label="Graph-only recipe"
                   >
-                    <PlusIcon />
-                    {kind === 'agent' ? 'Agent step' : RECIPE_STEP_LABEL[kind].split(' ·')[0]}
-                  </button>
-                ))}
+                    <b>This recipe is easier to edit as a graph.</b>
+                    <p>
+                      {analysis.graphOnlyReasons.join(' ')} The step list can’t show every path
+                      faithfully, so it is read-only here.
+                    </p>
+                    <button type="button" className="btn sm" onClick={() => setGraph(true)}>
+                      Open the graph
+                    </button>
+                  </section>
+                )}
+                <ol className="bold-recipes-list" aria-label="Steps">
+                  {analysis.rows.map((row) => (
+                    <RecipeStepRow
+                      key={row.node.id}
+                      row={row}
+                      analysis={analysis}
+                      agents={agents}
+                      editable={analysis.listable && !viewing}
+                      selected={selectedRow?.node.id === row.node.id}
+                      moveProblems={moveProblems.get(row.node.id) ?? { up: null, down: null }}
+                      onSelect={() => selectNode(row.node.id)}
+                      onMove={(direction) => move(row.node.id, direction)}
+                      onRemove={() => removeStep(row.node.id)}
+                      onTarget={point}
+                    />
+                  ))}
+                </ol>
+                {analysis.listable && !viewing && (
+                  <div className="row wrap">
+                    {(['agent', 'gate', 'branch', 'join', 'end'] as WorkflowNodeKind[]).map(
+                      (kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          className="btn sm ghost"
+                          data-add-step={kind}
+                          onClick={() => add(kind)}
+                        >
+                          <PlusIcon />
+                          {kind === 'agent' ? 'Agent step' : RECIPE_STEP_LABEL[kind].split(' ·')[0]}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <details className="bold-inner bold-recipes-details">
-          <summary>Recipe details</summary>
-          <fieldset className="bold-recipes-details-fields" disabled={viewing}>
-            <label className="bold-lab">
-              Description (optional)
-              <textarea
-                className="bold-field"
-                rows={2}
-                maxLength={500}
-                value={draft.description ?? ''}
-                onChange={(event) => {
-                  const next = { ...draft }
-                  if (event.target.value === '') delete next.description
-                  else next.description = event.target.value
-                  commit(next, 'description')
-                }}
-              />
-            </label>
-            <div className="wf-editor bold-recipes-inputs">
-              <InputsEditor draft={draft} commit={commit} issues={shape} />
-            </div>
-          </fieldset>
-          {versions.length > 1 && (
-            <label className="bold-lab">
-              Start from an older version
-              <select
-                className="bold-field"
-                value=""
-                onChange={(event) => {
-                  const version = Number(event.target.value)
-                  if (version) void loadOlder(version)
-                }}
-              >
-                <option value="">Choose a version…</option>
-                {[...versions].reverse().map((version) => (
-                  <option key={version.version} value={version.version}>
-                    Version {version.version}
-                    {version.used ? ' (used by runs)' : ''}, {version.nodes} steps
-                  </option>
-                ))}
-              </select>
-            </label>
+            <details className="bold-inner bold-recipes-details">
+              <summary>Recipe details</summary>
+              <fieldset className="bold-recipes-details-fields" disabled={viewing}>
+                <label className="bold-lab">
+                  Description (optional)
+                  <textarea
+                    className="bold-field"
+                    rows={2}
+                    maxLength={500}
+                    value={draft.description ?? ''}
+                    onChange={(event) => {
+                      const next = { ...draft }
+                      if (event.target.value === '') delete next.description
+                      else next.description = event.target.value
+                      commit(next, 'description')
+                    }}
+                  />
+                </label>
+                <div className="wf-editor bold-recipes-inputs">
+                  <InputsEditor draft={draft} commit={commit} issues={shape} />
+                </div>
+              </fieldset>
+              {versions.length > 1 && (
+                <label className="bold-lab">
+                  Start from an older version
+                  <select
+                    className="bold-field"
+                    value=""
+                    onChange={(event) => {
+                      const version = Number(event.target.value)
+                      if (version) void loadOlder(version)
+                    }}
+                  >
+                    <option value="">Choose a version…</option>
+                    {[...versions].reverse().map((version) => (
+                      <option key={version.version} value={version.version}>
+                        Version {version.version}
+                        {version.used ? ' (used by runs)' : ''}, {version.nodes} steps
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </details>
+          </section>
+
+          {(!sheet || graphNode) && (
+            <aside
+              ref={aside}
+              className={`bold-inner bold-rp-aside bold-recipes-inspector wf-editor${sheet ? ' bold-rp-sheet' : ''}`}
+              aria-label="Selected step"
+              tabIndex={sheet ? -1 : undefined}
+            >
+              {sheet && (
+                <div className="bold-rp-sheet-head">
+                  <span className="bold-rp-sheet-grip" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="bold-rp-sheet-close"
+                    aria-label="Close step settings"
+                    onClick={() => selectNode(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {sheet && graph && graphNode ? (
+                <RecipeSheet
+                  key={graphNode.id}
+                  draft={graphDraft}
+                  node={graphNode}
+                  step={recipeLayout.stepOf.get(graphNode.id) ?? null}
+                  agents={agents}
+                  commit={commit}
+                  onDelete={() => deleteNode(graphNode.id)}
+                  readOnly={viewing}
+                  more={inspector}
+                />
+              ) : (
+                inspector
+              )}
+            </aside>
           )}
-        </details>
+        </div>
       </section>
-
-      {(!sheet || graphNode) && (
-        <aside
-          ref={aside}
-          className={`bold-inner bold-rp-aside bold-recipes-inspector wf-editor${sheet ? ' bold-rp-sheet' : ''}`}
-          aria-label="Selected step"
-          tabIndex={sheet ? -1 : undefined}
-        >
-          {sheet && (
-            <div className="bold-rp-sheet-head">
-              <span className="bold-rp-sheet-grip" aria-hidden="true" />
-              <button
-                type="button"
-                className="bold-rp-sheet-close"
-                aria-label="Close step settings"
-                onClick={() => selectNode(null)}
-              >
-                ×
-              </button>
-            </div>
-          )}
-          {sheet && graphNode ? (
-            <RecipeSheet
-              key={graphNode.id}
-              draft={graphDraft}
-              node={graphNode}
-              step={recipeLayout.stepOf.get(graphNode.id) ?? null}
-              agents={agents}
-              commit={commit}
-              onDelete={() => deleteNode(graphNode.id)}
-              readOnly={viewing}
-              more={inspector}
-            />
-          ) : (
-            inspector
-          )}
-        </aside>
-      )}
 
       {exporting && saved.workflowId && (
         <ExportDialog

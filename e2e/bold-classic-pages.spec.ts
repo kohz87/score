@@ -81,42 +81,36 @@ for (const size of sizes) {
   test.describe(size.name, () => {
     test.use({ viewport: { width: size.width, height: size.height } })
 
-    test(`Recipes shows a recipe's run status and opens the run at ${size.name}`, async ({
-      page,
-    }) => {
-      await page.goto('/b/settings/recipes/wf-release')
-      const editor = page.getByRole('region', { name: 'Recipe editor' })
-      await expect(editor).toBeVisible({ timeout: 20_000 })
-      const status = editor.getByLabel('Runs of this recipe')
-      await expect(status).toContainText('1 run going')
-      await status.getByRole('link', { name: 'Running' }).click()
-      await expect(page).toHaveURL(/\/b\/settings\/recipes\?run=brief-wfrun-1$/)
-      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
-      await page.goBack()
-      await expect(page).toHaveURL(/\/b\/settings\/recipes\/wf-release$/)
-      await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
+    test(`a recipe card shows its last run and opens the run at ${size.name}`, async ({ page }) => {
+      await page.goto('/b/settings/recipes')
+      const card = page.getByRole('listitem', { name: 'Release notes' })
+      await expect(card).toBeVisible({ timeout: 20_000 })
+      await expect(card).toContainText('1 run going')
+      // 3.29.0: no run page any more; the link goes to `/b?run=`, which opens the run's chat (or, for a run that belongs to
+      // no chat, a read-only sheet: the next test). The frozen fixtures have no team room, so the link is not followed here.
+      await expect(card.getByRole('link', { name: /Running/ })).toHaveAttribute(
+        'href',
+        '/b?run=brief-wfrun-1',
+      )
     })
 
-    test(`the Recipes page lists the recipes next to the graph editor at ${size.name}`, async ({
-      page,
-    }) => {
+    test(`the Recipes page is a library of recipe cards at ${size.name}`, async ({ page }) => {
       await page.goto('/b/settings/recipes')
       await inFrame(page)
-      const list = page.getByRole('navigation', { name: 'Recipes' })
-      await expect(list.getByRole('button', { name: /lead decides/ })).toBeVisible()
-      await expect(list.getByRole('button', { name: /Version 1/ }).first()).toBeVisible()
-      await expect(page.locator('[data-node]').first()).toBeVisible()
+      const list = page.getByRole('list', { name: 'Recipes', exact: true })
+      await expect(list.getByRole('listitem', { name: /lead decides/ })).toBeVisible()
+      await expect(list.getByText(/version 1/).first()).toBeVisible()
+      // Landing on the library never opens an editor.
+      await expect(page.getByRole('region', { name: 'Recipe editor' })).toHaveCount(0)
       await noSideScroll(page)
       await expect(page).toHaveScreenshot(`bold-recipes-${size.name}.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.01,
       })
-      // Choosing another recipe changes the address, not the frame.
-      await list
-        .getByRole('button', { name: /Version 1/ })
-        .nth(1)
-        .click()
+      // Edit opens that recipe's editor.
+      await list.getByRole('link', { name: /^Edit/ }).first().click()
       await expect(page).toHaveURL(/\/b\/settings\/recipes\/wf-[a-z-]+$/)
+      await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
       await inFrame(page)
     })
 
@@ -195,53 +189,19 @@ for (const size of sizes) {
       await expect.poll(() => posts).toContain(`/api/approvals/${watchApprovalFixture.id}/decision`)
     })
 
-    test(`a run opens on the Recipes page as a thread of steps at ${size.name}`, async ({
+    test(`a run opens as its Graph and session log, read-only, at ${size.name}`, async ({
       page,
     }) => {
+      // 3.29.0: the old run frame (Steps / Graph / Log tabs, All runs) is gone; /b/runs/<id> lands on `/b?run=`.
       await page.goto('/b/runs/brief-wfrun-1')
-      await expect(page).toHaveURL(/\/b\/settings\/recipes\?run=brief-wfrun-1$/)
-      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+      await expect(page).toHaveURL(/run=brief-wfrun-1$/)
+      const sheet = page.getByRole('dialog', { name: /^Run:/ })
+      await expect(sheet.locator('[data-node="approve"]')).toBeVisible()
       await noSideScroll(page)
-      await expect(page).toHaveScreenshot(`bold-run-${size.name}.png`, {
-        animations: 'disabled',
-        maxDiffPixelRatio: 0.01,
-      })
-      await page.getByRole('tab', { name: 'Graph' }).click()
-      await expect(page.locator('[data-node="approve"]')).toBeVisible()
-      await noSideScroll(page)
-      await page.getByRole('tab', { name: 'Log' }).click()
-      await expect(page.getByRole('log', { name: 'Events' })).toBeVisible()
+      await expect(sheet.getByRole('log', { name: 'Events' })).toBeVisible()
     })
-
-    test(`the Runs view lists every run and opens one at ${size.name}`, async ({ page }) => {
-      // 3.22.0: the side panel's Runs mode is gone; the same list is the Recipes page with an empty `?run=`.
-      await page.goto('/b/settings/recipes?run=')
-      const list = page.getByRole('list', { name: 'Runs' })
-      await expect(list.getByRole('listitem').first()).toBeVisible()
-      await page.getByRole('button', { name: 'Needs you', exact: true }).click()
-      await list.getByRole('button').first().click()
-      await expect(page).toHaveURL(/\/b\/settings\/recipes\?(.*&)?run=/)
-      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
-      // "All runs" leaves the run for the Recipes page (the list of runs is `?run=`).
-      await page.getByRole('button', { name: 'All runs' }).click()
-      await expect(page).toHaveURL(/\/b\/settings\/recipes$/)
-    })
-
-    test(`a run's needs-you card decides a gate inside /b at ${size.name}`, async ({ page }) => {
-      await page.goto('/runs/brief-wfrun-1')
-      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
-      const card = page.locator('.bold-run-classic .orch-decision[data-protected]').filter({
-        hasText: 'Approve the draft',
-      })
-      await card
-        .getByRole('checkbox')
-        .check({ timeout: 1000 })
-        .catch(() => undefined)
-      await card.getByRole('button', { name: 'Approve' }).click()
-      await expect
-        .poll(() => posts.some((path) => /\/gates\/[^/]+\/decision$/.test(path)))
-        .toBe(true)
-    })
+    // 3.29.0: deciding a gate moved to the chat's needs-you cards (a run sheet is read-only); workflows.spec approves a
+    // gate there on the real fake adapter.
   })
 }
 
@@ -251,7 +211,7 @@ test('the Recipes page in the light look', async ({ page }) => {
   await page.goto('/b/settings/recipes')
   await inFrame(page)
   await expect(page.locator('[data-ui="bold"]')).toHaveAttribute('data-look', 'light')
-  await expect(page.locator('[data-node]').first()).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Recipes', exact: true })).toBeVisible()
   await expect(page).toHaveScreenshot('bold-recipes-light-look.png', {
     animations: 'disabled',
     maxDiffPixelRatio: 0.01,
@@ -308,23 +268,13 @@ async function expectGuardKeptTheme(page: Page) {
 }
 
 for (const mode of ['light', 'dark'] as const) {
-  test(`a failing theme keeps the framed run and Watch decisions protected and readable (${mode})`, async ({
+  test(`a failing theme keeps Watch decisions protected and readable (${mode})`, async ({
     page,
   }) => {
     await page.addInitScript((value) => localStorage.setItem('score.theme', value), mode)
     const look: Look = { active: 'failing', mode }
     await mockThemes(page, [failing], look)
     await page.setViewportSize({ width: 1440, height: 900 })
-
-    await page.goto('/runs/brief-wfrun-1')
-    await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
-    await expectGuardKeptTheme(page)
-    const card = page.locator('.bold-run-classic .orch-decision[data-protected]').filter({
-      hasText: 'Approve the draft',
-    })
-    await expect(card.first()).toHaveAttribute('data-protected', /.+/)
-    await expectAA(card.first())
-    await expectAA(card.first().getByRole('button', { name: 'Approve' }))
 
     await page.goto('/b/screen/builder')
     await inFrame(page)

@@ -66,7 +66,9 @@ export function OrchestrationLive({
 }: {
   orchestrationId: string
   /** Inside the new shell's run view the header, decisions and tiles are its own: only the graph or only the log shows. */
-  pane?: 'graph' | 'log'
+  /** `both` (3.29.0, the chat's Graph tab): the diagram and its log in one instance, so selecting a step filters the log
+   * and Replay drives both, as the retired run page's tabs did. */
+  pane?: 'graph' | 'log' | 'both'
 }) {
   const run = useRun(orchestrationId)
   const agents = useStreamQuery(taskAgentsQuery).data ?? []

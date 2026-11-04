@@ -54,13 +54,8 @@ const screenReady: Ready = async (page) => {
 }
 
 const recipesReady: Ready = async (page) => {
-  await visible('.bold-rp-list')(page)
-  await expect(
-    page
-      .locator('.bold-rp-row')
-      .or(page.getByText(/No saved recipes yet/))
-      .first(),
-  ).toBeVisible({ timeout: 20_000 })
+  await visible('.bold-rl-grid')(page)
+  await expect(page.locator('.bold-rc').first()).toBeVisible({ timeout: 20_000 })
 }
 
 // 3.24.0: a portrait tablet opens a chat in its conversation; the job list screen (`?jobs=1`) is retired.

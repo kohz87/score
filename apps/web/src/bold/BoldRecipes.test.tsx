@@ -139,12 +139,6 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   mount()
   const steps = await showText()
   const dialog = screen.getByRole('region', { name: 'Recipe editor' })
-  // What only the classic list showed, a recipe's run status, sits in the editor.
-  const status = await within(dialog).findByLabelText('Runs of this recipe')
-  expect(status.textContent).toContain('1 run going')
-  expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
-    /^\/b\/settings\/recipes\?run=brief-/,
-  )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() =>
     expect(requests.some((request) => request.url === '/api/workflows/validate')).toBe(true),
@@ -165,7 +159,7 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   expect((title as HTMLInputElement).value).toBe('Typed, not undone')
 })
 
-test('a dirty draft asks before leaving for another recipe', async () => {
+test('a dirty draft asks before leaving for the library', async () => {
   const router = mount()
   await showText()
   fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
@@ -173,17 +167,15 @@ test('a dirty draft asks before leaving for another recipe', async () => {
   })
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
 
-  fireEvent.click(screen.getByRole('button', { name: /lead decides/ }))
+  fireEvent.click(screen.getByRole('link', { name: '‹ Recipes' }))
   await waitFor(() =>
     expect(confirm).toHaveBeenCalledWith('You have unsaved changes. Leave without saving?'),
   )
   expect(router.state.location.pathname).toBe('/b/settings/recipes/wf-release')
 
   confirm.mockReturnValue(true)
-  fireEvent.click(screen.getByRole('button', { name: /lead decides/ }))
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe('/b/settings/recipes/lead-decides'),
-  )
+  fireEvent.click(screen.getByRole('link', { name: '‹ Recipes' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
 })
 
 test('a failed validation check says so and keeps Save disabled', async () => {
@@ -266,31 +258,161 @@ test('a conflict offers both classic choices and keeps the draft', async () => {
   expect(await screen.findByRole('button', { name: 'Save as version 5' })).toBeTruthy()
 })
 
-test('the page lists the built-in recipe and the saved ones, and opens on the graph', async () => {
-  mount('/b/settings/recipes')
-  const list = await screen.findByRole('navigation', { name: 'Recipes' })
-  expect(within(list).getByRole('button', { name: /lead decides/ })).toBeTruthy()
-  expect(within(list).getByText('Built in')).toBeTruthy()
-  expect(
-    (await within(list).findAllByRole('button', { name: /Version 1/ })).length,
-  ).toBeGreaterThan(0)
-  // The first saved recipe is open, drawn as a graph with its own step settings beside it.
-  expect(await screen.findByRole('tab', { name: 'Graph', selected: true })).toBeTruthy()
-  expect(document.querySelector('[data-node]')).not.toBeNull()
-  expect(screen.getByRole('complementary', { name: 'Selected step' })).toBeTruthy()
+test('Recipes is a library of cards: the built-in one first, no editor open, each card with what it does and its links', async () => {
+  const router = mount('/b/settings/recipes')
+  expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeTruthy()
+  // Landing never opens an editor, and never makes an "Untitled recipe".
+  expect(screen.queryByRole('region', { name: 'Recipe editor' })).toBeNull()
+  expect(screen.queryByDisplayValue('Untitled recipe')).toBeNull()
+  const lead = await screen.findByRole('listitem', { name: 'lead decides' })
+  expect(within(lead).getByText('Built in')).toBeTruthy()
+  expect(within(lead).getByText('Not run yet')).toBeTruthy()
+  // Built in has no Edit.
+  expect(within(lead).queryByRole('link', { name: /^Edit/ })).toBeNull()
+  const card = await screen.findByRole('listitem', { name: 'Release notes' })
+  expect(within(card).getByText('version 1')).toBeTruthy()
+  // What it does: the steps, who does them, the approval, the inputs.
+  await waitFor(() => expect(card.textContent).toMatch(/\d+ steps? · .*builder.*reviewer/))
+  expect(card.textContent).toContain('input: topic')
+  expect(card.textContent).toContain('your approval')
+  // The last run opens in its chat (`/b?run=`), not on a run page.
+  const last = within(card).getByRole('link', { name: /Running/ })
+  expect(last.getAttribute('href')).toBe('/b?run=brief-wfrun-1')
+  expect(card.textContent).toContain('Last run ·')
+  expect(within(card).getByRole('link', { name: /^Edit/ }).getAttribute('href')).toBe(
+    '/b/settings/recipes/wf-release',
+  )
+  // Run in a chat… is Start a job with this recipe chosen.
+  fireEvent.click(within(card).getByRole('button', { name: /^Run in a chat…/ }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b'))
+  expect(router.state.location.search).toBe('?start=job&recipe=wf-release')
 })
 
-test('the list is searchable and lead decides is a page with a way to start a job', async () => {
-  const router = mount('/b/settings/recipes/lead-decides')
-  expect(await screen.findByRole('heading', { name: 'lead decides' })).toBeTruthy()
-  expect(screen.getByRole('link', { name: 'Start a job' }).getAttribute('href')).toBe(
-    '/b?start=job',
-  )
+test('the library is searchable, New recipe opens an editor, and lead decides is a page with a way to start a job', async () => {
+  const router = mount('/b/settings/recipes')
+  await screen.findByRole('listitem', { name: 'Release notes' })
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a recipe' }), {
     target: { value: 'zzz' },
   })
   expect(await screen.findByText('No recipe matches “zzz”.')).toBeTruthy()
-  expect(router.state.location.pathname).toBe('/b/settings/recipes/lead-decides')
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a recipe' }), {
+    target: { value: 'release' },
+  })
+  expect(screen.queryByRole('listitem', { name: 'lead decides' })).toBeNull()
+  expect(screen.getByRole('listitem', { name: 'Release notes' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'New recipe' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes/new'))
+  expect(await screen.findByDisplayValue('Untitled recipe')).toBeTruthy()
+  expect(screen.getByRole('link', { name: '‹ Recipes' }).getAttribute('href')).toBe(
+    '/b/settings/recipes',
+  )
+
+  cleanup()
+  mount('/b/settings/recipes/lead-decides')
+  expect(await screen.findByRole('heading', { name: 'lead decides' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Start a job' }).getAttribute('href')).toBe(
+    '/b?start=job',
+  )
+})
+
+test('archived recipes sit behind "Archived recipes · N" and can be unarchived', async () => {
+  const fetchMock = vi.mocked(fetch)
+  const original = fetchMock.getMockImplementation()!
+  const archivedAt = '2026-11-01T10:00:00.000Z'
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input) === '/api/workflows' && (init?.method ?? 'GET') === 'GET') {
+      const list = workflowFixtures['/api/workflows'] as {
+        items: { id: string; archivedAt: string | null }[]
+      }
+      return Promise.resolve(
+        json({
+          ...list,
+          items: list.items.map((item) =>
+            item.id === 'wf-draft' ? { ...item, archivedAt } : item,
+          ),
+        }),
+      )
+    }
+    return original(input, init)
+  })
+  mount('/b/settings/recipes')
+  await screen.findByRole('listitem', { name: 'Release notes' })
+  expect(screen.queryByRole('listitem', { name: 'Release checks (draft)' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Archived recipes · 1' }))
+  const card = await screen.findByRole('listitem', { name: 'Release checks (draft)' })
+  expect(
+    within(card).getByRole('button', { name: 'Unarchive Release checks (draft)' }),
+  ).toBeTruthy()
+  // An archived recipe is not offered in Start a job.
+  expect(within(card).queryByRole('button', { name: /^Run in a chat/ })).toBeNull()
+})
+
+test('a run that belongs to no chat opens a read-only sheet over the library, not a run page', async () => {
+  const router = mount('/b/settings/recipes?run=brief-wfrun-1')
+  const sheet = await screen.findByRole('dialog', { name: /Run: Release notes: the 2.4 release/ })
+  expect(within(sheet).getByText(/This run belongs to no chat/)).toBeTruthy()
+  expect(within(sheet).queryByText(/Read-only/)).toBeNull()
+  // A stuck chat-less run must still be stoppable: the controls are in the sheet.
+  expect(await within(sheet).findByRole('button', { name: 'Pause' })).toBeTruthy()
+  expect(within(sheet).getByRole('button', { name: 'Stop' })).toBeTruthy()
+  // The same parts as a chat's Graph tab: the graph, the session log and the folded Run details.
+  expect(await within(sheet).findByRole('region', { name: 'Session log' })).toBeTruthy()
+  expect(within(sheet).getByText('Run details')).toBeTruthy()
+  // The old run frame is gone.
+  expect(screen.queryByRole('button', { name: 'All runs' })).toBeNull()
+  expect(screen.queryByRole('tab', { name: 'Steps' })).toBeNull()
+  // The library is still there under it; closing returns to it.
+  expect(screen.getByRole('heading', { name: 'Recipes' })).toBeTruthy()
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Close the run' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(router.state.location.search).toBe('')
+})
+
+test('the sheet is a native modal dialog and Escape closes it', async () => {
+  const router = mount('/b/settings/recipes?run=brief-wfrun-1')
+  const sheet = (await screen.findByRole('dialog', { name: /Run: / })) as HTMLDialogElement
+  expect(sheet.tagName).toBe('DIALOG')
+  // jsdom has no showModal; the browser's own dialog supplies the focus trap, the inert page and Escape.
+  fireEvent(sheet, new Event('close'))
+  await waitFor(() => expect(router.state.location.search).toBe(''))
+})
+
+test('a recipe run that has agents changed says so above the graph, protected, with the run controls', async () => {
+  const fixtures = workflowFixtures as Record<string, unknown>
+  const original = fixtures['/api/workflow-runs/wfrun-1'] as {
+    run: { agentMap: unknown[] }
+  }
+  fixtures['/api/workflow-runs/wfrun-1'] = {
+    ...original,
+    run: {
+      ...original.run,
+      agentMap: [
+        { agentId: 'builder', incarnation: 'new-builder', status: 'changed' },
+        { agentId: 'reviewer', incarnation: 'old-reviewer', status: 'removed' },
+      ],
+    },
+  }
+  try {
+    mount('/b/settings/recipes?run=brief-wfrun-1')
+    const sheet = await screen.findByRole('dialog', { name: /Run: / })
+    const warning = await within(sheet).findByRole('list', { name: 'Agents that changed' })
+    expect(warning.getAttribute('data-protected')).toBe('block')
+    expect(warning.textContent).toContain('builder was replaced since this run started')
+    expect(warning.textContent).toContain('reviewer was removed since this run started')
+    expect(await within(sheet).findByRole('button', { name: 'Pause' })).toBeTruthy()
+  } finally {
+    fixtures['/api/workflow-runs/wfrun-1'] = original
+  }
+})
+
+test('a run that is not there says so, and an empty ?run= is just the library', async () => {
+  mount('/b/settings/recipes?run=brief-gone')
+  expect(await screen.findByText('That run isn’t available.')).toBeTruthy()
+  cleanup()
+  mount('/b/settings/recipes?run=')
+  await screen.findByRole('listitem', { name: 'Release notes' })
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
 
 test('a + between two layers adds a step on that connection, and the draft is saved with it', async () => {
@@ -347,32 +469,38 @@ test('Run opens Start a job with this recipe, and a saved version can be viewed 
     ).toBe(false),
   )
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'More' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Run…' }))
   await waitFor(() => expect(router.state.location.search).toBe('?start=job&recipe=wf-release'))
 })
 
 // ---- The graph editor (ported from the classic workflow editor's tests)
 
-test('the editor shows every server problem on the node it is about, with words for what to do', async () => {
+test('problems are one line under the header, with a way to the step, and every problem shows on its step', async () => {
   mount('/b/settings/recipes/wf-draft')
-  const problems = await screen.findByRole('region', { name: 'Problems' })
-  await within(problems).findAllByText(/nothing is connected to "when it fails"/)
-  expect(within(problems).getByText(/The workflow has no end/)).toBeTruthy()
-  expect(
-    within(problems).getAllByText(/Connect it, or choose|Add an End node/).length,
-  ).toBeGreaterThan(0)
+  const line = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('.bold-rp-problem')
+    if (!found) throw new Error('no problem line yet')
+    return found
+  })
+  // One line: how many, and the first one; the big problem boxes are gone.
+  expect(line.textContent).toMatch(/^\d+ things? to fix before saving:/)
+  expect(screen.queryByRole('region', { name: 'Problems' })).toBeNull()
   // The node carries a flag and its label says how many problems it has.
   expect(
-    screen.getByRole('button', { name: /Agent step Build it, reviewer, 1 problem/ }),
+    await screen.findByRole('button', { name: /Agent step Build it, reviewer, 1 problem/ }),
   ).toBeTruthy()
   expect(screen.getByRole('button', { name: /Agent step Fix it, builder, 1 problem/ })).toBeTruthy()
   // Save is blocked while there are problems.
   expect(
     (screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement).disabled,
   ).toBe(true)
-  // Selecting the node shows the same problem in the inspector.
-  fireEvent.click(within(problems).getAllByRole('button', { name: 'Build it' })[0]!)
+  // Show it selects a step; its settings carry that step's own problem.
+  fireEvent.click(within(line).getByRole('button', { name: 'Show it' }))
   const inspector = screen.getByRole('complementary', { name: 'Selected step' })
+  expect(within(inspector).getAllByText('Problem').length).toBeGreaterThan(0)
+  // Every step shows its own problems in its settings.
+  fireEvent.click(screen.getByRole('button', { name: /Agent step Build it, reviewer, 1 problem/ }))
   expect(
     within(inspector).getAllByText(/nothing is connected to "when it fails"/).length,
   ).toBeGreaterThan(0)
@@ -516,8 +644,31 @@ test('Delete on a selected card asks first; a no keeps the step, a yes removes i
   )
   expect(screen.getByText(/unsaved changes/)).toBeTruthy()
   // Undo brings it back.
+  fireEvent.click(screen.getByRole('button', { name: 'More' }))
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
   expect(await screen.findByRole('button', { name: /Agent step Review the draft/ })).toBeTruthy()
+})
+
+test('the step settings sit to the right of the recipe in both Graph and As text, never below the list', async () => {
+  mount('/b/settings/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Gate Approve the draft/ })
+  fireEvent.click(card)
+  const beside = () => {
+    const body = document.querySelector('.bold-rp-body')!
+    // The recipe first, the settings after it, in the same row: not under the list.
+    expect([...body.children].map((child) => child.getAttribute('aria-label'))).toEqual([
+      'The recipe',
+      'Selected step',
+    ])
+    expect(body.querySelector('[aria-label="The recipe"] [aria-label="Selected step"]')).toBeNull()
+  }
+  beside()
+  const steps = await showText()
+  fireEvent.click(within(steps).getByRole('button', { name: /^2.*Review the draft/ }))
+  beside()
+  const panel = screen.getByRole('complementary', { name: 'Selected step' })
+  expect(within(panel).getByRole('textbox', { name: 'Title' })).toBeTruthy()
+  expect(steps.closest('.bold-rp-body')).toBe(panel.closest('.bold-rp-body'))
 })
 
 test('a card is a button: Enter or a click selects it, and the settings open beside it', async () => {
@@ -538,7 +689,7 @@ test('on a phone the step settings are a sheet that closes with its button', asy
     'matchMedia',
     (query: string) =>
       ({
-        matches: query.includes('width < 600px'),
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},
@@ -555,6 +706,53 @@ test('on a phone the step settings are a sheet that closes with its button', asy
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
 })
 
+test('on a tablet (600 to 860px) the step settings are a bottom sheet too, in both views, not a block under the recipe', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('width <= 860px'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+  mount('/b/settings/recipes/wf-release')
+  const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  fireEvent.click(card)
+  expect(screen.getByRole('complementary', { name: 'Selected step' }).className).toContain(
+    'bold-rp-sheet',
+  )
+  const steps = await showText()
+  fireEvent.click(within(steps).getByRole('button', { name: /^2.*Review the draft/ }))
+  expect(screen.getByRole('complementary', { name: 'Selected step' }).className).toContain(
+    'bold-rp-sheet',
+  )
+})
+
+test('on a phone the step settings are a bottom sheet in As text too, opening when a step is chosen', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+  mount('/b/settings/recipes/wf-release')
+  const steps = await showText()
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+  fireEvent.click(within(steps).getByRole('button', { name: /^2.*Review the draft/ }))
+  const sheet = screen.getByRole('complementary', { name: 'Selected step' })
+  expect(sheet.className).toContain('bold-rp-sheet')
+  expect(within(sheet).getByRole('textbox', { name: 'Title' })).toBeTruthy()
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Close step settings' }))
+  expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
+})
+
 test('the editor draws a run of the version on screen over the cards, and links to it', async () => {
   mount('/b/settings/recipes/wf-release')
   const live = await screen.findByText(/Live: run started/)
@@ -562,7 +760,7 @@ test('the editor draws a run of the version on screen over the cards, and links 
     within(live.closest('p')!)
       .getByRole('link', { name: /Open the run/ })
       .getAttribute('href'),
-  ).toBe('/b/settings/recipes?run=brief-wfrun-1')
+  ).toBe('/b?run=brief-wfrun-1')
   // The gate of the running run waits for you; the steps before it are done. The draft is untouched.
   expect(
     await screen.findByRole('button', { name: /Gate Approve the draft.*needs you/ }),
@@ -593,7 +791,6 @@ test('Preview is disabled while the draft has problems, and says why', async () 
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
   })) as HTMLButtonElement
-  await screen.findByRole('region', { name: 'Problems' })
   await waitFor(() => expect(preview.disabled).toBe(true))
   expect(preview.title).toMatch(/Fix the problems first/)
   expect(preview.getAttribute('aria-describedby')).toBeTruthy()
@@ -663,6 +860,11 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     fireEvent.click(confirm)
     await waitFor(() => expect(body).toEqual({ confirm: releaseDetail.name }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+    // The library says what happened.
+    expect((await screen.findByText('Deleted the recipe.')).getAttribute('role')).toBe('status')
+    // The history entry no longer carries it, so a reload or a later visit doesn't repeat it (3.29.0 review).
+    await waitFor(() => expect(router.state.location.state).toBeNull())
+    expect(screen.getByText('Deleted the recipe.')).toBeDefined()
   } finally {
     fixtures['/api/workflows'] = original
   }
@@ -692,18 +894,13 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
 })
 
 // The run links (`?run=`) now land on the Recipes page, so the page itself must show a run's list rather than the recipes.
-test('/b/settings/recipes?run= shows the list of runs instead of the recipes', async () => {
-  mount('/b/settings/recipes?run=')
-  expect(await screen.findByRole('list', { name: 'Runs' })).toBeDefined()
-  expect(screen.queryByRole('navigation', { name: 'Recipes' })).toBeNull()
-})
 
 const phoneMedia = () =>
   vi.stubGlobal(
     'matchMedia',
     (query: string) =>
       ({
-        matches: query.includes('width < 600px'),
+        matches: query.includes('width < 600px') || query.includes('width <= 860px'),
         media: query,
         addEventListener() {},
         removeEventListener() {},
@@ -722,6 +919,7 @@ test('deleting a middle step joins the step before to the step after, says so, a
     ),
   )
   // One undo brings back the step and its connections together.
+  fireEvent.click(screen.getByRole('button', { name: 'More' }))
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
   expect(await screen.findByRole('button', { name: /Agent step Review the draft/ })).toBeTruthy()
 })

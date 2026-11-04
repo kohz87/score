@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { pair } from './pair.ts'
+import { openFrozenRunInChat } from './recipe-run.ts'
 import { from, openRoom, say } from './coding-helpers.ts'
 import { acquireLock } from './locks.ts'
-import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
 // PLAN 8.6: the quota guard in the browser, against the fake adapter. No model is called and no real CLI is started.
 // The coding agent's setting runs against the real server and the fake CLI's own rate-limit record; the held step's card
@@ -74,36 +74,21 @@ async function serveHeldRun(page: Page): Promise<{ answers: { url: string; body:
   const { snapshot, list } = heldRun()
   const answers: { url: string; body: unknown }[] = []
   await page.clock.setFixedTime(new Date(fixtureNow))
-  await page.route('**/api/**', async (route) => {
-    const request = route.request()
-    const url = new URL(request.url())
-    if (url.pathname === '/api/stream') {
-      await route.fulfill({
-        contentType: 'text/event-stream',
-        body: `event: stream.hello\ndata: ${JSON.stringify(visualHello)}\n\n`,
-      })
-      return
-    }
-    if (request.method() === 'POST' && url.pathname.endsWith('/quota')) {
-      answers.push({ url: url.pathname, body: request.postDataJSON() })
-      await route.fulfill({ json: list.items[0] as unknown })
-      return
-    }
-    url.searchParams.delete('tz')
-    const key = `${url.pathname}${url.search}`
-    const fixture =
-      key === '/api/orchestrations/orch-1'
-        ? snapshot
-        : key === '/api/orchestrations'
-          ? list
-          : { ...visualFixtures, ...orchestrationFixtures }[key]
-    if (fixture === undefined) {
-      await route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'none' } } })
-      return
-    }
-    await route.fulfill({ json: fixture })
-  })
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  // 3.29.0: the run is read in its chat (no run page): the card is a needs-you card there.
+  await openFrozenRunInChat(page, {
+    recipe: { kind: 'orchestration', ref: 'orch-1' },
+    posted: answers,
+    reads: {
+      ...Object.fromEntries(
+        Object.entries(orchestrationFixtures).filter(([key]) =>
+          key.startsWith('/api/orchestrations/'),
+        ),
+      ),
+      '/api/orchestrations': list,
+      '/api/orchestrations/orch-1': snapshot,
+    },
+  })
   return { answers }
 }
 
@@ -115,21 +100,21 @@ test.describe('a step held for a low limit', () => {
   }) => {
     const { answers } = await serveHeldRun(page)
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/b/recipes?run=brief-orch-1')
-    // The decision is on the Steps tab (2.5.0), the diagram on the Graph tab.
     const card = page.getByRole('region', { name: 'reviewer’s limit is low' })
     await expect(card).toBeVisible()
     await expect(card).toContainText('s3 is held:')
     await expect(card).toContainText(/has 6% of its 5-hour limit left, and it resets at [^.]+\./)
-    await page.getByRole('tab', { name: 'Graph' }).click()
-    // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+    await page
+      .getByRole('region', { name: 'Current job' })
+      .getByRole('button', { name: 'Graph' })
+      .click()
+    // 3.29.0: the Graph tab opens on the Job map; the step diagram is one click away.
     await page.getByRole('button', { name: 'Show the step diagram' }).click()
     const node = page.locator('[data-node="s3"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText(/Held: limit low \(6% left, resets [^)]+\)/)
     await page.evaluate(() => document.fonts.ready)
     await shot(page, 'held', '.orch-live')
-    await page.getByRole('tab', { name: 'Steps' }).click()
     await card.getByRole('button', { name: 'Wait until it resets' }).click()
     await expect.poll(() => answers.length).toBe(1)
     await card.getByRole('button', { name: 'Use it anyway' }).click()

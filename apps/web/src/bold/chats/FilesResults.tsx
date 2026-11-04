@@ -116,7 +116,7 @@ export function FilesAndResults({
       testId="files-results"
     >
       {jobId === null || (rows.length === 0 && !pending && !failed) ? (
-        <p className="bold-chat-note">Nothing made in this topic yet</p>
+        <p className="bold-chat-note">Nothing made in this job yet</p>
       ) : rows.length === 0 && failed ? (
         <p className="bold-chat-note" role="alert">
           Couldn’t load the files and results.{' '}

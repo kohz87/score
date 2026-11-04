@@ -55,8 +55,9 @@ export async function openRunOf(page: Page, workflowId: string) {
     expect(run).toBeTruthy()
     briefId = run!.briefId
   }).toPass({ timeout: 20_000 })
-  // A run opens in the Runs side panel (2.5.0); its diagram is the Graph tab (callers open it where they need it).
-  await page.goto(`/b/recipes?run=${encodeURIComponent(briefId)}`)
+  // 3.29.0: a run is read in its chat (no run page): `/b?run=` lands on the chat with the Graph tab open, where the run
+  // card, the graph, the session log and the needs-you cards are.
+  await page.goto(`/b?run=${encodeURIComponent(briefId)}`)
 }
 
 /** Starts a saved recipe by its id from its page and lands on the run. */
@@ -68,7 +69,9 @@ export async function startRecipe(
 ) {
   await page.goto(`/b/recipes/${id}`)
   await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
-  await page.getByRole('button', { name: 'Run…' }).click()
+  // 3.29.0: Run… is in the editor's ⋯ menu.
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('group', { name: 'More' }).getByRole('button', { name: 'Run…' }).click()
   await finishStartJob(page, inputs, options)
   await openRunOf(page, id)
 }
@@ -163,4 +166,62 @@ export async function openCodingRecipeStart(page: Page, label: string) {
  */
 export function uniqueRecipeName(prefix: string): string {
   return `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}
+
+/**
+ * 3.29.0: a frozen run read in its chat. The old run page (Steps tab with the decision cards, Graph tab) is gone; a
+ * run's decisions are the needs-you cards of its chat and its diagram is the chat's Graph tab. This opens the team room
+ * with one job linked to the run and answers every other read from `reads` (path + query -> body). Every POST is recorded
+ * into `posted` and answered 500 ("stop here"), as the frozen pages did.
+ */
+export async function openFrozenRunInChat(
+  page: Page,
+  options: {
+    recipe: { kind: 'orchestration' | 'workflow'; ref: string }
+    reads: Record<string, unknown>
+    posted: { url: string; body: unknown }[]
+  },
+) {
+  const at = '2026-10-24T10:00:00.000Z'
+  const job = (id: string, title: string, extra: Record<string, unknown>) => ({
+    id,
+    roomId: 'team-room',
+    title,
+    state: 'working',
+    holderAgentId: 'lead',
+    isDefault: false,
+    exchangeBudget: 8,
+    jobTurnLimit: 40,
+    unread: 0,
+    activeAgents: [],
+    lastMessageAt: null,
+    messageCount: 0,
+    summary: null,
+    source: null,
+    reportBack: null,
+    spendCapUsd: null,
+    recipe: null,
+    createdAt: at,
+    updatedAt: at,
+    ...extra,
+  })
+  const { openBoldRoom } = await import('./bold-room-fixtures.ts')
+  await openBoldRoom(page, {
+    jobs: [
+      job('job-default', 'Team room', { isDefault: true }),
+      job('job-run', 'The run', { state: 'waiting_on_you', recipe: options.recipe }),
+    ],
+    approvals: [],
+    exchanges: [],
+    handle: (request) => {
+      if (request.method === 'POST') {
+        options.posted.push({ url: request.path, body: request.body })
+        return { status: 500, body: { error: { code: 'x', message: 'stop here' } } }
+      }
+      const query = request.search.toString()
+      const key = query ? `${request.path}?${query}` : request.path
+      const found = options.reads[key] ?? options.reads[request.path]
+      return found === undefined ? undefined : { body: found }
+    },
+  })
 }

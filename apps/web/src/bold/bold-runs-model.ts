@@ -1,91 +1,9 @@
-import type {
-  OrchestrationDetail,
-  OrchestrationSummary,
-  WorkflowRunDetail,
-  WorkflowRunSummary,
-} from '@score/contract'
-import {
-  isRunOver,
-  leadSteps,
-  pauseReasonText,
-  stepVisual,
-  statusLabel,
-  type NodeVisual,
-} from '../routes/orchestrations/orch-model.ts'
+import type { OrchestrationDetail, WorkflowRunDetail } from '@score/contract'
+import { leadSteps, stepVisual, type NodeVisual } from '../routes/orchestrations/orch-model.ts'
 import { nodeVisual } from '../routes/workflows/workflow-run-model.ts'
 
-// The Runs side panel (decision 131, boards A and B): one list of every run, and a run as a thread of its steps.
+// A run as a thread of its steps (the chat's run card, decision 131). The Runs list is gone (3.29.0).
 // Pure; the server's snapshots are the only input.
-
-export type RunKind = 'orchestration' | 'workflow'
-
-export interface RunRow {
-  kind: RunKind
-  id: string
-  briefId: string
-  title: string
-  /** The recipe or workflow a run came from; null for a lead-decides run. */
-  source: string | null
-  statusText: string
-  over: boolean
-  needs: number
-  /** "3 of 5 steps done". */
-  progress: string
-  createdAt: string
-}
-
-export type RunFilter = 'all' | 'needs' | 'running' | 'done'
-
-function orchestrationStatusText(run: OrchestrationSummary): string {
-  return run.status === 'paused' ? pauseReasonText(run.pauseReason) : statusLabel[run.status]
-}
-
-export function runRows(
-  orchestrations: readonly OrchestrationSummary[],
-  workflows: readonly WorkflowRunSummary[],
-): RunRow[] {
-  const rows: RunRow[] = [
-    ...orchestrations.map((run): RunRow => ({
-      kind: 'orchestration',
-      id: run.id,
-      briefId: run.briefId,
-      title: run.title,
-      source: null,
-      statusText: orchestrationStatusText(run),
-      over: isRunOver(run.status),
-      needs: run.needsYou.length,
-      progress: `${run.steps.succeeded} of ${run.steps.total} steps done`,
-      createdAt: run.createdAt,
-    })),
-    ...workflows.map((run): RunRow => ({
-      kind: 'workflow',
-      id: run.id,
-      briefId: run.briefId,
-      title: run.title,
-      source: run.workflowName,
-      statusText:
-        run.status === 'paused' ? pauseReasonText(run.pauseReason) : statusLabel[run.status],
-      over: isRunOver(run.status),
-      needs: run.needsYou.length,
-      progress: `${run.nodes.succeeded} of ${run.nodes.total} steps done`,
-      createdAt: run.createdAt,
-    })),
-  ]
-  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
-}
-
-export function filterRuns(rows: readonly RunRow[], filter: RunFilter): RunRow[] {
-  switch (filter) {
-    case 'needs':
-      return rows.filter((row) => row.needs > 0)
-    case 'running':
-      return rows.filter((row) => !row.over)
-    case 'done':
-      return rows.filter((row) => row.over)
-    default:
-      return [...rows]
-  }
-}
 
 /** One entry of the thread. */
 export interface ThreadStep {

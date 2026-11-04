@@ -65,7 +65,7 @@ export const SETTINGS_SECTIONS: readonly SettingsItem[] = [
   {
     id: 'recipes',
     title: 'Recipes',
-    description: 'Saved plans agents run, and their runs',
+    description: 'Saved plans agents run',
   },
   { id: 'rules', title: 'Rules', description: 'What agents may do alone', phase: '11.9b' },
   {
@@ -140,6 +140,8 @@ export function BoldSettings() {
   const customizing = /^\/b\/settings\/look\/customize(\/|$)/.test(location.pathname)
   // 3.27.0: /b/settings/recipes/:workflowId is a recipe in the Recipes section (that route has no :section).
   const recipe = /^\/b\/settings\/recipes(\/|$)/.test(location.pathname)
+  // 3.29.0: the editor (a recipe, or a new one) fills the page without the Settings list; the library steps the list aside on a phone.
+  const recipeEditor = /^\/b\/settings\/recipes\/[^/]+/.test(location.pathname)
   const section = customizing
     ? 'look'
     : recipe
@@ -158,8 +160,13 @@ export function BoldSettings() {
   if (params.section !== undefined && !isSettingsSection(params.section))
     return <Navigate to="/b/settings/usage" replace />
   return (
-    <div className="page bold-settings-page">
-      <div className="setgrid" data-section-page={customizing || undefined}>
+    <div className={`page bold-settings-page${recipeEditor ? ' page--wide' : ''}`}>
+      <div
+        className="setgrid"
+        data-section-page={
+          customizing ? true : recipeEditor ? 'editor' : recipe ? 'library' : undefined
+        }
+      >
         <nav className="setnav" aria-label="Settings">
           <h1>Settings</h1>
           {SETTINGS_SECTIONS.map((item) => (
