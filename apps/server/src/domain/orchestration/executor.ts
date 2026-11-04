@@ -911,7 +911,11 @@ export class Orchestrator {
     // checks skip them (until_stopped), and its spend cap is required (the contract refuses one without).
     if (body.untilStopped) {
       if (body.budgetUsd === undefined)
-        throw new HttpError(400, 'bad_request', 'A run that goes on until you stop it needs a spend cap.')
+        throw new HttpError(
+          400,
+          'bad_request',
+          'A run that goes on until you stop it needs a spend cap.',
+        )
       body = { ...body, maxSteps: ORCH_LIMITS.maxSteps, maxLeadTurns: ORCH_LIMITS.maxLeadTurns }
     }
     // 3.14–3.15: the advisor and helpers are checked (served, coding consent) like the agents the lead may assign to.
