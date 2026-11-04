@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.25.0] — 2026-11-04
+
+### Changed
+- **Results fold into Info.** The chat's side panel is Info and Graph, as the mock-up. Info lists the topic's **Files
+  and results** (drafts, changed files, previews, agents' screens; one-to-ones too); opening one shows the Workbench
+  viewer over the conversation, and the viewer says when a decision waits in the chat ("1 needs you · Back to the
+  chat"). Old Results and Workbench links open there.
+
 ## [3.24.1] — 2026-11-04
 
 ### Fixed

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { Link } from 'react-router'
 import { createPortal } from 'react-dom'
 import { FOLLOW_SLACK } from './follow-end.ts'
+import { goToCard, waitingCards } from './needs-jump-dom.ts'
 import { CHIP_MIN_HEIGHT, chipClearance, jumpTarget, type Jump } from './needs-jump.ts'
 import { NeedsSlot, NeedsSlotsProvider, slotIds, useNeedsSlotsOuter } from './needs-slots.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -650,12 +651,7 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
     const scroller = document.getElementById('bold-room-stream')
     if (!scroller) return setJump(null)
     const view = scroller.getBoundingClientRect()
-    // A card that takes no room (display: none, hidden) is neither counted nor a place to take the person to.
-    const cards = [...scroller.querySelectorAll<HTMLElement>('[data-pin-key]')].flatMap((card) => {
-      const rect = card.getBoundingClientRect()
-      if (rect.height === 0) return []
-      return [{ key: card.getAttribute('data-pin-key') ?? '', top: rect.top, bottom: rect.bottom }]
-    })
+    const cards = waitingCards(scroller)
     const next = jumpTarget({ top: view.top, bottom: view.bottom }, cards, clearance.current)
     setJump((previous) =>
       previous?.key === next?.key &&
@@ -718,12 +714,7 @@ function NeedsJumpChip({ cardKeys }: { cardKeys: string[] }) {
     }
   }, [pending, showing, jump?.count, measure])
   if (!jump || !slot) return null
-  const go = () => {
-    const card = document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(jump.key)}]`)
-    if (!card) return
-    card.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-    card.focus({ preventScroll: true })
-  }
+  const go = () => void goToCard(jump.key)
   const arrow = jump.direction === 'up' ? '↑' : '↓'
   return createPortal(
     <button

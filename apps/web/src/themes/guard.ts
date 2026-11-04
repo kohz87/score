@@ -115,6 +115,7 @@ export const KNOWN_OVERLAYS = [
   '.bold-trigger-scrim',
   '.bold-rp-scrim',
   '.bold-tb-sheet',
+  '.bold-viewer-sheet',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =

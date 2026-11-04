@@ -22,7 +22,7 @@ import { useBoldWorkbench } from './bold-workbench-queries.ts'
 import './bold-workbench.css'
 
 type BenchTab = Extract<WorkbenchTab, 'code' | 'screen' | 'draft'>
-type JobFace = Pick<Job, 'id' | 'title' | 'state'>
+export type JobFace = Pick<Job, 'id' | 'title' | 'state'>
 
 const COMMENT_LABEL: Record<WorkbenchComment['kind'], string> = {
   review: 'Review note',
@@ -610,7 +610,16 @@ export function BoldWorkbenchView({
   )
 }
 
-export function BoldWorkbench({ agents, hidden }: { agents: AgentSummary[]; hidden: boolean }) {
+export function BoldWorkbench({
+  agents,
+  hidden,
+  fallbackJob,
+}: {
+  agents: AgentSummary[]
+  hidden: boolean
+  /** The topic's face when the team room doesn't list it (a one-to-one's chat). */
+  fallbackJob?: JobFace | undefined
+}) {
   const [search, setSearchParams] = useSearchParams()
   const room = useStreamQuery(teamRoomQuery(null))
   const jobs = room.data?.jobs ?? []
@@ -620,7 +629,12 @@ export function BoldWorkbench({ agents, hidden }: { agents: AgentSummary[]; hidd
   // The room list leaves closed jobs out. Their Workbench is still readable by id, so show it with a neutral heading
   // until a `job.upserted` event supplies the real title.
   const jobFace: JobFace | null =
-    job ?? (selectedId ? { id: selectedId, title: 'Closed job', state: 'closed' } : null)
+    job ??
+    (selectedId
+      ? fallbackJob?.id === selectedId
+        ? fallbackJob
+        : { id: selectedId, title: 'Closed job', state: 'closed' }
+      : null)
   const work = search.get('work')
   const data = useBoldWorkbench(
     jobFace?.id ?? null,

@@ -13,9 +13,7 @@ import {
   boldRecipesLink,
   boldSettingsSectionLink,
   boldStartJobLink,
-  boldResultsLink,
   boldWorkspaceLink,
-  boldWorkbenchLink,
   workbenchHref,
 } from './bold-links.ts'
 
@@ -39,14 +37,6 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   expect(boldCommandLink('assign')).toBe('/b?command=assign')
   expect(boldAddAgentLink()).toBe('/b/agents?add=agent')
   expect(boldSettingsSectionLink('look')).toBe('/b/settings/look')
-  expect(boldWorkbenchLink('?job=job+1&note=Projects%2FRoadmap.md')).toBe(
-    '/b?job=job+1&note=Projects%2FRoadmap.md&work=workbench',
-  )
-  expect(boldWorkbenchLink('?job=job+1&work=code&file=api%2Fevents.py')).toBe(
-    '/b?job=job+1&work=workbench',
-  )
-  expect(boldResultsLink('?job=job+1&work=code&file=api%2Fevents.py')).toBe('/b?job=job+1')
-  expect(boldResultsLink('?work=screen')).toBe('/b')
   expect(workbenchHref('job 1', 'code', 'api/events.py')).toBe(
     '/b?job=job+1&work=code&file=api%2Fevents.py',
   )

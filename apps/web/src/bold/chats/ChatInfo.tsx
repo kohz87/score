@@ -11,6 +11,7 @@ import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
 import { runTopicCommand } from '../room/topic-commands.ts'
 import { TopicInfo } from './TopicInfo.tsx'
+import { FilesAndResults } from './FilesResults.tsx'
 
 function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string {
   const params = new URLSearchParams()
@@ -141,6 +142,7 @@ export function ChatInfo({
   jobs,
   everyone,
   phone = false,
+  visible = true,
   onNavigate,
 }: {
   room: Room | null
@@ -149,6 +151,8 @@ export function ChatInfo({
   everyone: boolean
   /** On a phone the Info sheet is also the way to Start a job (the composer's + menu has it on a desktop too). */
   phone?: boolean
+  /** False while the panel is out of sight (a closed phone sheet or panel): Files and results reads nothing then. */
+  visible?: boolean
   /** A link or button here leaves the sheet (the phone closes it). */
   onNavigate?: () => void
 }) {
@@ -203,6 +207,16 @@ export function ChatInfo({
       {current && !current.isDefault && (
         <TopicInfo roomId={room.id} job={current} agents={agents} />
       )}
+      <FilesAndResults
+        jobId={current?.id ?? null}
+        agents={agents}
+        visible={visible}
+        agentIds={
+          current
+            ? [...(current.holderAgentId ? [current.holderAgentId] : []), ...current.activeAgents]
+            : []
+        }
+      />
       <section aria-labelledby="chat-info-topics">
         <h2 id="chat-info-topics" className="bold-chat-kicker" tabIndex={-1}>
           Topics

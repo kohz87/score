@@ -166,6 +166,11 @@
     background-color: #ececf1 !important;
     color: #12131a !important;
   }
+  /* 3.25.0: the viewer sheet's cue that a decision waits under it is a light object of Score's own. */
+  html[data-look='custom'] .bold-viewer-needs[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
   /* 3.23.0: the run card's "waiting for you" line is a light object of Score's own, as the mock-up draws it. */
   html[data-look='custom'] .bold-run-needs[data-protected] {
     background-color: #ececf1 !important;

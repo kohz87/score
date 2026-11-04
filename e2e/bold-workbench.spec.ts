@@ -65,20 +65,13 @@ async function workbenchData(page: Page, job: Job): Promise<WorkbenchData> {
 async function openPanel(page: Page, size: Size, path: string) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  // 3.21.0: the side panel opens on Info by default. On desktop a `?work=` link asks for Work; on a phone Chat info opens
-  // the sheet on Info and the mode menu switches it to Work (the address keeps its `work=` tab).
-  const phone = size.width < 861
-  await page.goto(phone || path.includes('work=') ? path : `${path}&work=results`)
+  // 3.25.0: a `?work=` Workbench address opens the viewer sheet (dialog "Workbench viewer") over the conversation, on a
+  // phone too (full screen); the old side-panel Work tab is gone.
+  await page.goto(path)
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
-  const panel = page.getByRole('complementary', { name: 'Side panel' })
-  if (phone) {
-    await page.getByRole('button', { name: 'Chat info' }).click()
-    // 3.22.0: the panel's tabs are Info | Results (no mode menu); the `work=` address already asks for Results.
-    const results = panel.getByRole('tab', { name: 'Results' })
-    if ((await results.getAttribute('aria-selected')) !== 'true') await results.click()
-  }
-  await expect(panel).toBeVisible()
-  return panel
+  const sheet = page.getByRole('dialog', { name: 'Workbench viewer' })
+  await expect(sheet).toBeVisible()
+  return sheet
 }
 
 for (const size of sizes) {
@@ -152,45 +145,56 @@ for (const size of sizes) {
       })
     })
 
-    test('every Results card link opens its matching Workbench tab', async ({ page }) => {
+    test('every Files and results row opens its matching Workbench tab in the viewer sheet', async ({
+      page,
+    }) => {
       await pair(page)
+      await page.setViewportSize({ width: size.width, height: size.height })
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      const phone = size.width < 861
+      const openInfo = async (path: string) => {
+        await page.goto(path)
+        await expect(page.locator('[data-ui="bold"]')).toBeVisible()
+        if (phone) await page.getByRole('button', { name: 'Chat info' }).click()
+        const panel = page.getByRole('complementary', { name: 'Side panel' })
+        await expect(panel).toBeVisible()
+        const files = panel.getByTestId('files-results')
+        await expect(files).toBeVisible()
+        return files
+      }
       const job = await activityFeedJob(page)
-      const panel = await openPanel(page, size, `/b?job=${encodeURIComponent(job.id)}`)
-      await expect(panel.getByTestId('bold-results')).toBeVisible()
+      const files = await openInfo(`/b?job=${encodeURIComponent(job.id)}`)
 
-      const change = panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' })
-      const codeLink = change.getByRole('link', { name: 'See the code · 2 files' })
-      await expect(codeLink).toHaveAttribute('href', /^\/b\?job=.+&work=code$/)
-      await codeLink.click()
+      const codeRow = files.locator('[data-files-row="code:api/events.py"]')
+      await expect(codeRow).toHaveAttribute('href', /^\/b\?.*work=code/)
+      await codeRow.click()
       await expect.poll(() => new URL(page.url()).searchParams.get('work')).toBe('code')
+      const sheet = page.getByRole('dialog', { name: 'Workbench viewer' })
+      await expect(sheet).toBeVisible()
       await expect(
-        panel.getByTestId('bold-workbench').getByRole('region', { name: 'Code in api/events.py' }),
+        sheet.getByTestId('bold-workbench').getByRole('region', { name: 'Code in api/events.py' }),
       ).toBeVisible()
 
-      await panel
-        .getByRole('navigation', { name: 'How to see the work' })
-        .getByRole('link', { name: 'Results' })
-        .click()
-      const preview = panel.locator('[data-card="preview"]')
-      const screenLink = preview.getByRole('link', { name: 'Open Activity feed in the Workbench' })
-      await expect(screenLink).toHaveAttribute('href', /^\/b\?job=.+&work=screen$/)
-      await screenLink.click()
+      await page.keyboard.press('Escape')
+      await expect(sheet).toHaveCount(0)
+      // Escape closed only the viewer: Info (a phone's sheet too) is still under it.
+      await expect(files).toBeVisible()
+      const screenRow = files.locator('[data-files-row^="screen:"]').first()
+      await expect(screenRow).toHaveAttribute('href', /work=screen/)
+      await screenRow.click()
       await expect.poll(() => new URL(page.url()).searchParams.get('work')).toBe('screen')
       await expect(
-        panel.getByTestId('bold-workbench').getByRole('region', { name: /builder.s screen/ }),
+        sheet.getByTestId('bold-workbench').getByRole('region', { name: /builder.s screen/ }),
       ).toBeVisible()
 
-      // Results follow the selected job (11.5): the draft belongs to another seeded job, so open that one.
+      // Files and results follow the selected job: the draft belongs to another seeded job, so open that one.
       const draftJob = await jobWithDraft(page, 'Announcement image.md')
-      const draftPanel = await openPanel(page, size, `/b?job=${encodeURIComponent(draftJob.id)}`)
-      const draft = draftPanel
-        .locator('[data-card="draft"]')
-        .filter({ hasText: 'Announcement image.md' })
-      const draftLink = draft.getByRole('link', { name: 'Open the draft' })
-      await expect(draftLink).toHaveAttribute('href', /^\/b\?job=.+&work=draft$/)
-      await draftLink.click()
+      const draftFiles = await openInfo(`/b?job=${encodeURIComponent(draftJob.id)}`)
+      const draftRow = draftFiles.getByRole('link', { name: /Announcement image\.md/ })
+      await expect(draftRow).toHaveAttribute('href', /work=draft/)
+      await draftRow.click()
       await expect.poll(() => new URL(page.url()).searchParams.get('work')).toBe('draft')
-      const workbench = panel.getByTestId('bold-workbench')
+      const workbench = sheet.getByTestId('bold-workbench')
       await expect(workbench.getByRole('heading', { name: 'Announcement image.md' })).toBeVisible()
       await expect(workbench.getByText('Attached document')).toBeVisible()
     })
