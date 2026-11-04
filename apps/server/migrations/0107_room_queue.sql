@@ -14,3 +14,18 @@ CREATE TABLE room_queue (
 );
 -- Oldest first is the insert order (rowid): calls in the same millisecond keep their order.
 CREATE INDEX room_queue_room ON room_queue (room_id);
+
+-- A run's job now closes when its run ends. Jobs of runs that ended before this release close too, so a chat isn't
+-- held by a run that is already over.
+UPDATE jobs
+SET state = 'closed',
+    closed_at = COALESCE(closed_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    version = version + 1
+WHERE is_default = 0
+  AND deleted_at IS NULL
+  AND state != 'closed'
+  AND recipe_ref IN (
+    SELECT id FROM orchestrations
+    WHERE status IN ('succeeded', 'finished_with_unresolved', 'stopped', 'failed')
+  );
