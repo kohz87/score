@@ -13,6 +13,7 @@ import { chatDay, currentChat, listedChats, matchesChat } from './direct-model.t
 import { createDirectChat, directChatsQuery } from './direct-queries.ts'
 import { ScreenShortcut, hasScreen } from './DirectHeader.tsx'
 import { AddSomeone } from './direct-parts.tsx'
+import { FilesAndResults } from '../chats/FilesResults.tsx'
 import './bold-direct.css'
 
 /**
@@ -108,6 +109,7 @@ export function DirectInfo({
           Open {name}’s workspace files
         </Link>
       </section>
+      <FilesAndResults jobId={current?.id ?? null} agents={agents} />
       <section aria-labelledby="dm-info-chats">
         <h2 id="dm-info-chats" className="bold-chat-kicker">
           Chats

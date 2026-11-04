@@ -1,7 +1,6 @@
 import type { OutsideSession } from '@score/contract'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Link,
   useLocation,
   useNavigate,
   useNavigationType,
@@ -11,10 +10,7 @@ import {
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { BoldResults } from './BoldResults.tsx'
 import { CloseIcon } from './BoldIcons.tsx'
-import { BoldWorkbench } from './BoldWorkbench.tsx'
-import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from './bold-agents.ts'
@@ -26,6 +22,8 @@ import { roomJobsQuery } from './room/room-queries.ts'
 import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
 import { ChatInfo } from './chats/ChatInfo.tsx'
 import { TopicGraph } from './chats/TopicGraph.tsx'
+import { DirectViewerSheet, ViewerSheet } from './chats/ViewerSheet.tsx'
+import { isViewerWork } from './chats/files-model.ts'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
 import { chatForRun, chatIsOpen, currentTopic } from './chats/chat-model.ts'
 import { useChatLists, useOpenGroup } from './chats/chat-queries.ts'
@@ -35,7 +33,7 @@ const PHONE = '(max-width: 860px)'
 /** Below this the Graph tab is 340px wide and the chat list folds to its rail while it is open. */
 const NARROW_GRAPH = '(max-width: 1279px)'
 
-type SideMode = 'work' | 'info' | 'elsewhere' | 'graph'
+type SideMode = 'info' | 'elsewhere' | 'graph'
 
 /** The room column and the switchable side panel (PLAN 11.3), with the one-to-one as its agent mode (11.7). */
 export function BoldRoom() {
@@ -57,14 +55,15 @@ export function BoldRoom() {
   // 3.22.0: the side panel is chat info only. The old Library, Runs and Thread addresses open their new homes.
   const notePath = params.get('note')
   const libraryOpen = params.get('library') === '1'
-  // 3.21.0 review: the panel opens on Info by default, so a Workbench or Results link (`?work=…`) asks for Work itself.
+  // 3.25.0: Results folded into Info. `?work=results` opens Info at Files and results; a Workbench address (`?work=draft`,
+  // `code`, `screen`, `workbench`) opens the viewer sheet on that item; `?work=graph` opens the Graph tab. No old link
+  // lands on a dead tab.
   const workRequest = params.get('work')
   const [seenWorkRequest, setSeenWorkRequest] = useState<string | null>(null)
   if (workRequest !== seenWorkRequest) {
     setSeenWorkRequest(workRequest)
     if (workRequest) {
-      // 3.23.0: `?work=graph` (a run's link, Show graph) opens the Graph tab; the rest ask for Results or the Workbench.
-      setMode(workRequest === 'graph' ? 'graph' : 'work')
+      setMode(workRequest === 'graph' ? 'graph' : 'info')
       setPanelShut(false)
     }
   }
@@ -80,10 +79,7 @@ export function BoldRoom() {
   const directAgent = directId ? agents.find((item) => item.id === directId) : undefined
   const directMode = directId !== null
   const chatId = params.get('chat')
-  const workbenchVisible =
-    !directMode &&
-    mode === 'work' &&
-    ['workbench', 'code', 'screen', 'draft'].includes(params.get('work') ?? '')
+  const viewerOpen = isViewerWork(workRequest)
   const openGroup = useOpenGroup(params.get('room'))
   const openGroupJobs = useStreamQuery(
     useMemo(() => roomJobsQuery(openGroup?.id ?? null), [openGroup?.id]),
@@ -236,7 +232,7 @@ export function BoldRoom() {
       )
   }
   const broughtIntoJob = (jobId: string) => {
-    setMode('work')
+    setMode('info')
     setSheetOpen(false)
     void navigate(`/b?job=${encodeURIComponent(jobId)}`)
     if (phone) requestAnimationFrame(() => phoneOpenRef.current?.focus())
@@ -378,7 +374,23 @@ export function BoldRoom() {
             }}
           />
         )}
+        {viewerOpen &&
+          !phone &&
+          (directMode ? (
+            directAgent && (
+              <DirectViewerSheet agents={agents} agentId={directAgent.id} phone={false} />
+            )
+          ) : (
+            <ViewerSheet agents={agents} phone={false} fallbackJob={currentJob} />
+          ))}
       </section>
+      {viewerOpen &&
+        phone &&
+        (directMode ? (
+          directAgent && <DirectViewerSheet agents={agents} agentId={directAgent.id} phone />
+        ) : (
+          <ViewerSheet agents={agents} phone fallbackJob={currentJob} />
+        ))}
 
       <div
         className={`bold-sidecol${phone && sheetOpen ? ' open' : ''}`}
@@ -414,17 +426,6 @@ export function BoldRoom() {
                 >
                   Info
                 </button>
-                {!directMode && (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={shownMode === 'work'}
-                    className={shownMode === 'work' ? 'on' : undefined}
-                    onClick={() => choose('work')}
-                  >
-                    Results
-                  </button>
-                )}
                 {graphJob && (
                   <button
                     type="button"
@@ -437,24 +438,6 @@ export function BoldRoom() {
                   </button>
                 )}
               </div>
-            )}
-            {shownMode === 'work' && !directMode && (
-              <nav className="seg bold-work-tabs" aria-label="How to see the work">
-                <Link
-                  className={workbenchVisible ? undefined : 'on'}
-                  aria-current={workbenchVisible ? undefined : 'page'}
-                  to={boldResultsLink(location.search)}
-                >
-                  Results
-                </Link>
-                <Link
-                  className={workbenchVisible ? 'on' : undefined}
-                  aria-current={workbenchVisible ? 'page' : undefined}
-                  to={boldWorkbenchLink(location.search)}
-                >
-                  Workbench
-                </Link>
-              </nav>
             )}
             {phone && (
               <button
@@ -506,11 +489,6 @@ export function BoldRoom() {
               onBroughtIn={broughtIntoJob}
             />
           ) : null}
-          <BoldResults
-            agents={agents}
-            hidden={directMode || shownMode !== 'work' || workbenchVisible}
-          />
-          <BoldWorkbench agents={agents} hidden={directMode || !workbenchVisible} />
         </aside>
       </div>
     </div>

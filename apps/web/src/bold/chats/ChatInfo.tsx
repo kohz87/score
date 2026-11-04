@@ -11,6 +11,7 @@ import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
 import { runTopicCommand } from '../room/topic-commands.ts'
 import { TopicInfo } from './TopicInfo.tsx'
+import { FilesAndResults } from './FilesResults.tsx'
 
 function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string {
   const params = new URLSearchParams()
@@ -203,6 +204,7 @@ export function ChatInfo({
       {current && !current.isDefault && (
         <TopicInfo roomId={room.id} job={current} agents={agents} />
       )}
+      <FilesAndResults jobId={current?.id ?? null} agents={agents} />
       <section aria-labelledby="chat-info-topics">
         <h2 id="chat-info-topics" className="bold-chat-kicker" tabIndex={-1}>
           Topics
