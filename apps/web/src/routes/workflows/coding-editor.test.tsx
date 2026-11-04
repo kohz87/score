@@ -168,12 +168,21 @@ test('Validate’s coding issue shows on the step it is about, with words for wh
     ),
   }
   mountEditor()
-  const problems = await screen.findByRole('region', { name: 'Problems' })
-  await within(problems).findByText(
+  // The problem is one line under the header (3.29.0), with a way to the step it is about.
+  const line = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('.bold-rp-problem')
+    if (!found) throw new Error('no problem line yet')
+    return found
+  })
+  expect(line.textContent).toMatch(
     /coder-c is an Antigravity agent, which can’t take workflow steps/,
   )
+  fireEvent.click(within(line).getByRole('button', { name: 'Show it' }))
+  // The step's settings say what to do.
   expect(
-    within(problems).getByText(/Open the step and pick one of those from the Agent list\./),
+    within(screen.getByRole('complementary', { name: 'Selected step' })).getByText(
+      /Open the step and pick one of those from the Agent list\./,
+    ),
   ).toBeTruthy()
   expect(
     await screen.findByRole('button', {
@@ -183,10 +192,9 @@ test('Validate’s coding issue shows on the step it is about, with words for wh
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
   await waitFor(() => expect(save.disabled).toBe(true))
   // Choosing an agent that can take the step clears it.
-  fireEvent.click(within(problems).getByRole('button', { name: 'Draft the notes' }))
   const inspector = screen.getByRole('complementary', { name: 'Selected step' })
   fireEvent.change(within(inspector).getByRole('combobox', { name: /^Agent/ }), {
     target: { value: 'coder-b' },
   })
-  await waitFor(() => expect(within(problems).getByText('Nothing to fix.')).toBeTruthy())
+  await waitFor(() => expect(document.querySelector('.bold-rp-problem')).toBeNull())
 })

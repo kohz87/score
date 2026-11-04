@@ -821,6 +821,15 @@ test('a topic that holds a run shows the run card after its divider, and Show gr
   expect(
     screen.getByText('Run · Review and ship', { selector: '.bold-topic-graph-head span' }),
   ).toBeDefined()
+  // 3.29.0: what only the old run page showed is folded under the log, and the Graph tab has no link to a run page.
+  expect(
+    within(screen.getByLabelText('Graph of Review and ship')).getByText('Run details'),
+  ).toBeDefined()
+  expect(
+    within(screen.getByLabelText('Graph of Review and ship')).queryByRole('link', {
+      name: 'Open the run',
+    }),
+  ).toBeNull()
   // Back to Info and the graph leaves.
   fireEvent.click(within(tabs).getByRole('tab', { name: 'Info' }))
   expect(screen.queryByLabelText('Graph of Review and ship')).toBeNull()
@@ -1050,11 +1059,11 @@ test('Info lists what the current topic made: icon, name, who made it, newest fi
   expect(within(section).queryByRole('button', { name: /Show all/ })).toBeNull()
 })
 
-test('Info says so quietly when nothing was made in the topic', async () => {
+test('Info says so quietly when nothing was made in the job', async () => {
   runJobs = [{ ...fullTopic(plainTopic as unknown as typeof runTopic), recipe: null }]
   open('/b?job=job-plain', [plainTopic])
   const section = await screen.findByTestId('files-results')
-  expect(await within(section).findByText('Nothing made in this topic yet')).toBeDefined()
+  expect(await within(section).findByText('Nothing made in this job yet')).toBeDefined()
   expect(within(section).queryByRole('link')).toBeNull()
 })
 

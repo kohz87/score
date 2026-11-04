@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recipes library</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:80px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600">
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Chats</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Agents</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Tasks</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a>
+    </nav>
+  </header>
+  <div style="flex:1;display:flex;min-height:0">
+    <nav aria-label="Settings" style="width:250px;flex:none;box-sizing:border-box;padding:24px 16px;display:flex;flex-direction:column;gap:4px">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;margin:0 0 14px 12px">Settings</div>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Connections</a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Workspaces</a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Tools and triggers</a>
+      <a href="#" aria-current="page" style="display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:16px;text-decoration:none;background:#1A1C23"><span style="font-weight:600">Recipes</span><span style="font-size:12px;color:#A6A8B4">Saved plans agents run</span></a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Rules</a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Notifications</a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Look</a>
+      <a href="#" style="padding:10px 14px;border-radius:16px;text-decoration:none;font-weight:600">Usage</a>
+    </nav>
+    <main style="flex:1;min-width:0;box-sizing:border-box;padding:28px 40px;display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <h1 style="flex:1;margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px">Recipes</h1>
+        <input aria-label="Find a recipe" placeholder="Find a recipe" style="width:260px;height:40px;box-sizing:border-box;border-radius:999px;border:0;background:#1A1C23;color:#ECECF1;padding:0 16px;font:inherit;font-size:14px">
+        <button type="button" style="display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 16px 0 14px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:14px;font-weight:700;line-height:1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span>New recipe</span></button>
+      </div>
+      <p style="margin:0;font-size:14px;color:#A6A8B4">Saved plans a chat's lead can run with <b style="color:#ECECF1;font-family:monospace">/run</b>. A run shows in its chat: the run card, the Graph and the session log.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:14px">
+        <div style="padding:18px 20px;border-radius:22px;background:#1A1C23;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px"><b style="font-size:17px;flex:1">lead decides</b><span style="font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:#262833;color:#C9CBD6">Built in</span></div>
+          <div style="font-size:14px;color:#A6A8B4">No fixed steps: the chat's lead plans each job.</div>
+          <div style="font-size:13px;color:#A6A8B4;margin-top:4px">Last run · <a href="#" style="color:#ECECF1">Team room · Stopped ›</a></div>
+          <div style="display:flex;gap:8px;margin-top:6px"><button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Run in a chat…</button></div>
+        </div>
+        <div style="padding:18px 20px;border-radius:22px;background:#1A1C23;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px"><b style="font-size:17px;flex:1">Write and review</b><span style="font-size:12px;color:#A6A8B4">version 3</span></div>
+          <div style="font-size:14px;color:#A6A8B4">3 steps · builder → reviewer, your approval before it ends</div>
+          <div style="font-size:13px;color:#A6A8B4;margin-top:4px">Last run · <a href="#" style="color:#ECECF1">Design crew · Succeeded ›</a></div>
+          <div style="display:flex;gap:8px;margin-top:6px"><button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button><button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Run in a chat…</button></div>
+        </div>
+        <div style="padding:18px 20px;border-radius:22px;background:#1A1C23;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px"><b style="font-size:17px;flex:1">Release notes</b><span style="font-size:12px;color:#A6A8B4">version 1</span></div>
+          <div style="font-size:14px;color:#A6A8B4">2 steps · input: version</div>
+          <div style="font-size:13px;color:#A6A8B4;margin-top:4px">Not run yet</div>
+          <div style="display:flex;gap:8px;margin-top:6px"><button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button><button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Run in a chat…</button></div>
+        </div>
+      </div>
+      <a href="#" style="align-self:flex-start;font-size:14px;color:#A6A8B4">Archived recipes · 2</a>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

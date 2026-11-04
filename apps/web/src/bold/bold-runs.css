@@ -1,106 +1,6 @@
-/* The Runs side panel (decision 131, boards A, B and F). Values come from docs/design/bold/prototype.html: panels
+/* Run details and the classic cards' token set (decision 131, boards A, B and F; the Runs page is gone, 3.29.0). Values come from docs/design/bold/prototype.html: panels
    #1A1C23, fields #23252E, 20-30px radii, pills. The decisions, graph and log are the classic components wearing
    their own token set inside `.bold-run-classic` (the light one for anything that asks the person to decide). */
-[data-ui='bold'] .bold-runs {
-  gap: calc(14px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-runs-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-[data-ui='bold'] .bold-runs-link {
-  border: 0;
-  background: none;
-  color: var(--ink2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  font: inherit;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* ---- the list ---- */
-[data-ui='bold'] .bold-runs-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(12px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-runs-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(6px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-runs-chip {
-  border: 0;
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 calc(14px * var(--bold-d, 1));
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  background: var(--panel);
-  color: var(--ink2);
-  cursor: pointer;
-}
-
-[data-ui='bold'] .bold-runs-chip.on {
-  background: var(--hi-bg);
-  color: var(--hi-ink);
-}
-
-[data-ui='bold'] .bold-runs-rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-runs-row {
-  width: 100%;
-  min-height: 56px;
-  display: flex;
-  align-items: center;
-  gap: calc(10px * var(--bold-d, 1));
-  border: 0;
-  border-radius: calc(20px * var(--bold-r, 1));
-  padding: calc(10px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-[data-ui='bold'] .bold-runs-row:hover {
-  background: var(--field);
-}
-
-[data-ui='bold'] .bold-runs-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-[data-ui='bold'] .bold-runs-row-main b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-[data-ui='bold'] .bold-runs-row-sub {
-  font-size: 12px;
-  color: var(--muted);
-}
-
 /* "Waits for you" / "Needs you": the amber pill, carries data-protected. */
 [data-ui='bold'] .bold-run-wait {
   border-radius: 999px;
@@ -112,75 +12,7 @@
   white-space: nowrap;
 }
 
-/* ---- one run ---- */
-[data-ui='bold'] .bold-run {
-  display: flex;
-  flex-direction: column;
-  gap: calc(14px * var(--bold-d, 1));
-  min-width: 0;
-}
-
-[data-ui='bold'] .bold-run-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(10px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-tabs {
-  display: inline-flex;
-  gap: calc(4px * var(--bold-d, 1));
-  background: var(--field);
-  border-radius: 999px;
-  padding: calc(4px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-tabs button {
-  border: 0;
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 calc(14px * var(--bold-d, 1));
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  background: transparent;
-  color: var(--ink2);
-  cursor: pointer;
-}
-
-[data-ui='bold'] .bold-run-tabs button.on {
-  background: var(--hi-bg);
-  color: var(--hi-ink);
-}
-
-[data-ui='bold'] .bold-run-actions {
-  margin-left: auto;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(8px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-head h2 {
-  margin: 0;
-  font-family: var(--font-d);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  overflow-wrap: anywhere;
-}
-
-[data-ui='bold'] .bold-run-sub {
-  margin: 4px 0 0;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-[data-ui='bold'] .bold-run-status {
-  color: var(--ink);
-  font-weight: 700;
-}
-
+/* ---- a run's details (Run details in the chat's Graph tab) ---- */
 [data-ui='bold'] .bold-run-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -249,180 +81,6 @@
   overflow-wrap: anywhere;
 }
 
-/* ---- the thread ---- */
-[data-ui='bold'] .bold-run-panel {
-  display: flex;
-  flex-direction: column;
-  gap: calc(14px * var(--bold-d, 1));
-  min-width: 0;
-}
-
-[data-ui='bold'] .bold-run-thread {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-[data-ui='bold'] .bold-run-step {
-  display: flex;
-  gap: calc(14px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-step[data-future='true'] {
-  opacity: 0.6;
-}
-
-[data-ui='bold'] .bold-run-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-[data-ui='bold'] .bold-run-rail::after {
-  content: '';
-  flex: 1;
-  width: 2px;
-  background: var(--line);
-  margin: 4px 0;
-}
-
-[data-ui='bold'] .bold-run-step:last-child .bold-run-rail::after {
-  display: none;
-}
-
-[data-ui='bold'] .bold-run-num {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 700;
-  flex: none;
-  background: var(--field);
-  color: var(--ink2);
-}
-
-[data-ui='bold'] .bold-run-num--succeeded {
-  background: var(--ok);
-  color: #12131a;
-}
-
-[data-ui='bold'] .bold-run-num--failed,
-[data-ui='bold'] .bold-run-num--rejected,
-[data-ui='bold'] .bold-run-num--blocked {
-  background: var(--bad);
-  color: #12131a;
-}
-
-[data-ui='bold'] .bold-run-num--gate {
-  background: var(--hi-bg);
-  color: var(--hi-ink);
-}
-
-[data-ui='bold'] .bold-run-num--running,
-[data-ui='bold'] .bold-run-num--admitting {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-[data-ui='bold'] .bold-run-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--bold-d, 1));
-  padding: calc(3px * var(--bold-d, 1)) 0 calc(18px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-who {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(8px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-run-title {
-  color: var(--ink2);
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-[data-ui='bold'] .bold-run-state,
-[data-ui='bold'] .bold-run-tries {
-  border-radius: 999px;
-  padding: 2px calc(10px * var(--bold-d, 1));
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--field);
-  color: var(--ink2);
-}
-
-[data-ui='bold'] .bold-run-state--failed,
-[data-ui='bold'] .bold-run-state--rejected,
-[data-ui='bold'] .bold-run-state--blocked {
-  color: var(--bad);
-}
-
-[data-ui='bold'] .bold-run-state--succeeded {
-  color: var(--ok);
-}
-
-[data-ui='bold'] .bold-run-note {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-[data-ui='bold'] .bold-run-reply {
-  background: var(--field);
-  border-radius: 20px 20px 20px 6px;
-  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
-[data-ui='bold'] .bold-run-reply p {
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-[data-ui='bold'] .bold-run-reply pre {
-  margin: 8px 0 0;
-  white-space: pre-wrap;
-  font-family: var(--font-m);
-  font-size: 12.5px;
-}
-
-[data-ui='bold'] .bold-run-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(14px * var(--bold-d, 1));
-  font-size: 13px;
-}
-
-[data-ui='bold'] .bold-run-links a {
-  color: var(--muted);
-}
-
-[data-ui='bold'] .bold-run-more summary,
-[data-ui='bold'] .bold-run-budget summary {
-  font-size: 13px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-[data-ui='bold'] .bold-run-foot {
-  margin: 0;
-  font-size: 13px;
-}
-
-[data-ui='bold'] .bold-run-foot a {
-  color: var(--muted);
-}
-
 /* ---- the kept classic parts ---- */
 [data-ui='bold'] .bold-run-classic {
   color: var(--ink);
@@ -463,39 +121,10 @@
 }
 
 @media (max-width: 860px) {
-  [data-ui='bold'] .bold-run-head h2 {
-    font-size: 22px;
-  }
-  [data-ui='bold'] .bold-run-actions {
-    margin-left: 0;
-  }
-  [data-ui='bold'] .bold-run-step {
-    gap: calc(10px * var(--bold-d, 1));
-  }
   [data-ui='bold'] .bold-run-classic[data-tone='surface'] {
     padding: calc(12px * var(--bold-d, 1));
     border-radius: calc(20px * var(--bold-r, 1));
   }
-}
-
-[data-ui='bold'] .bold-run-goal {
-  margin: 6px 0 0;
-  font-size: 15px;
-  color: var(--ink2);
-  overflow-wrap: anywhere;
-}
-
-[data-ui='bold'] .bold-run-warnings {
-  list-style: none;
-  margin: 0;
-  padding: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
-  border-radius: calc(20px * var(--bold-r, 1));
-  background: rgba(255, 201, 77, 0.12);
-  color: var(--warn);
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--bold-d, 1));
 }
 
 /* ---- the kept classic parts, in the new shell's look (decision 131) ----
@@ -620,4 +249,25 @@
 [data-ui='bold'] .bold-run-classic .orch-diagram,
 [data-ui='bold'] .bold-run-classic .orch-log {
   background: var(--flow-canvas);
+}
+
+/* 3.29.0: the folded "Run details" under a run's log in the chat's Graph tab. */
+[data-ui='bold'] .bold-run-details > :not(summary) + * {
+  margin-top: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-run-details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-run-details[open] > summary {
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-topic-graph .bold-run-tiles {
+  grid-template-columns: minmax(0, 1fr);
 }

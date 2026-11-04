@@ -53,10 +53,12 @@ export function boldNoteLink(path: string): string {
   return boldQuery({ note: path })
 }
 
-/** 2.5.0 Runs: open a run (by its brief id) in the side panel's Runs view. */
+/**
+ * Open a run (by its brief id). 3.29.0: the run's chat opens with its Graph tab (BoldRoom resolves `?run=`); a run that
+ * belongs to no chat opens as a read-only sheet over Settings > Recipes. There is no run page any more.
+ */
 export function boldRunLink(briefId: string): string {
-  // 3.22.0: a run opens on the Recipes page (the side panel is chat info only).
-  return `/b/settings/recipes?run=${encodeURIComponent(briefId)}`
+  return boldQuery({ run: briefId })
 }
 
 /** 11.10c Start a job: open its dialog, optionally with a saved recipe already chosen (2.8.0). */
