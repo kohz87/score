@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { QuotaLowCard } from './CodingCards.tsx'
-import { buildGraph, needsYouText, orchCoding } from './orch-model.ts'
+import { needsYouText, orchCoding } from './orch-model.ts'
 import { heldCaption, heldLine } from './quota-text.ts'
 import { LimitsCard } from './RunDecisions.tsx'
 import { BudgetBlock } from './RunPanel.tsx'
@@ -75,7 +75,7 @@ test('a pending answer disables the buttons; a group names the limit', () => {
     expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
 })
 
-test('plain words for a held step: its line, its Needs you text and its place on the diagram', () => {
+test('plain words for a held step: its line, and its Needs you text', () => {
   const when = new Date('2026-10-17T07:40:00.000Z')
   expect(
     heldCaption({ leftPercent: 6, resetsAt: '2026-10-17T07:40:00.000Z', state: 'held' }, when),
@@ -89,19 +89,6 @@ test('plain words for a held step: its line, its Needs you text and its place on
   expect(needsYouText({ kind: 'quota_low', stepId: 's3', ...hold })).toBe(
     's3 is held: builder’s limit is low',
   )
-  const { nodes } = buildGraph({
-    leadAgentId: 'lead',
-    stepsList: [
-      {
-        id: 's3',
-        agentId: 'builder',
-        after: [],
-        replaces: null,
-        quotaHold: { ...hold, state: 'held' },
-      },
-    ],
-  } as never)
-  expect(nodes.find((node) => node.id === 's3')?.caption).toMatch(/^Held: limit low \(6% left/)
 })
 
 const budgetRun = {

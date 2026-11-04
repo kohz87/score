@@ -24,7 +24,6 @@ export type ThemePackage = {
 }
 
 export const LICENSE_FILES = THEME_LICENSE_FILES
-export const MAX_LICENSE_BYTES = THEME_PACKAGE_LIMITS.licenseBytes
 export type ReadResult = { ok: true; pkg: ThemePackage } | { ok: false; reasons: string[] }
 
 /** A plain sentence for the person: the shared rules' messages, with a full stop. */

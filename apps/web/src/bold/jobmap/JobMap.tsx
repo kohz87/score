@@ -1,6 +1,7 @@
 import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { usePrefersReducedMotion } from '../../motion/motion.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
@@ -125,6 +126,7 @@ function WorkerBox({
     counts.set(visualLabel[chip.visual], (counts.get(visualLabel[chip.visual]) ?? 0) + 1)
   const states = [...counts].map(([label, n]) => `${n} ${label}`)
   const asked = worker.asked
+  const program = runtimeLabel(agent?.runtime)
   return (
     <div className="jobmap-worker" data-asked={asked ? '' : undefined}>
       <Node
@@ -133,11 +135,13 @@ function WorkerBox({
         onPick={onPick}
         tone="work"
         pulse={worker.running}
-        label={`Workers layer: ${worker.name}, steps ${states.join(', ')}${asked ? `, asked its advisor ${asked.count} times` : ''}`}
+        label={`Workers layer: ${worker.name}${program ? ` (${program})` : ''}, steps ${states.join(', ')}${asked ? `, asked its advisor ${asked.count} times` : ''}`}
       >
         <span className="jobmap-kicker">
           {agent && <AgentGlyph agent={agent} size="xs" bare decorative />}
           Worker · {worker.name}
+          {/* 3.29.1: which program a coding worker runs (the retired step diagram showed it). */}
+          {program && <span className="jobmap-program"> · {program}</span>}
         </span>
         <span className="jobmap-chips">
           {hidden > 0 && <Pill tone="muted">+{hidden} earlier</Pill>}

@@ -140,3 +140,21 @@ test('a map narrower than its top row stacks; a plain map needs less room than o
   expect(view(plainRun).container.querySelector('.jobmap--phone')).toBeTruthy()
   vi.restoreAllMocks()
 })
+
+test('3.29.1: a coding worker’s card names its program; a Hermes worker’s doesn’t', () => {
+  const coding = agents.map((agent) =>
+    agent.id === agents[1]!.id ? { ...agent, runtime: 'claude-code' as const } : agent,
+  )
+  render(
+    <JobMapView
+      run={fullRun}
+      events={events}
+      agents={coding}
+      stop={stop as unknown as Parameters<typeof JobMapView>[0]['stop']}
+      now={now}
+    />,
+  )
+  const named = screen.getAllByRole('button', { name: /^Workers layer: .*\(Claude Code\)/ })
+  expect(named.length).toBeGreaterThan(0)
+  expect(named[0]!.textContent).toContain('· Claude Code')
+})

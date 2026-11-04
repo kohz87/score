@@ -17,7 +17,6 @@ import { AgentGlyph, agentTint } from '../../components/AgentGlyph.tsx'
 import { apiFetch, apiUpload, ApiError, type UploadProgress as Progress } from '../../data/api.ts'
 import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { agentTextColor } from './agent-text-color.ts'
-import { mentionInsertion, onMention } from './composer-mention.ts'
 import {
   insertMention,
   loadDraft,
@@ -400,28 +399,6 @@ export function Composer({
     setActive(0)
     setClosed(false)
   }
-  // A click on a member of the room stage (PLAN 10.10) writes "@id " at the caret; the caret is placed once React has
-  // written the value.
-  const pendingCaret = useRef<number | null>(null)
-  useEffect(
-    () =>
-      onMention(roomId, (agentId) => {
-        const area = textarea.current
-        const current = live.current.text
-        const next = mentionInsertion(current, area?.selectionStart ?? current.length, agentId)
-        pendingCaret.current = next.caret
-        edit(next.text, next.caret)
-      }),
-    // `edit` only calls state setters, which are stable.
-    [roomId],
-  )
-  useLayoutEffect(() => {
-    const area = textarea.current
-    if (pendingCaret.current === null || !area) return
-    area.focus()
-    area.setSelectionRange(pendingCaret.current, pendingCaret.current)
-    pendingCaret.current = null
-  })
   // After a pick the caret goes to the end of what was inserted, once React has written the value. A frame later the
   // person may already have typed on (the next "@" of a fast typist): then the text differs and the caret is theirs.
   function restoreCaret(area: HTMLTextAreaElement | null, expected: string, position: number) {
