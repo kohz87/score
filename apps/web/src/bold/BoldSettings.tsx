@@ -138,11 +138,15 @@ export function BoldSettings() {
   const location = useLocation()
   // Decision 131 E: /b/settings/look/customize[/:themeId] is the Customizer, framed by Settings with Look selected.
   const customizing = /^\/b\/settings\/look\/customize(\/|$)/.test(location.pathname)
+  // 3.27.0: /b/settings/recipes/:workflowId is a recipe in the Recipes section (that route has no :section).
+  const recipe = /^\/b\/settings\/recipes(\/|$)/.test(location.pathname)
   const section = customizing
     ? 'look'
-    : isSettingsSection(params.section)
-      ? params.section
-      : 'usage'
+    : recipe
+      ? 'recipes'
+      : isSettingsSection(params.section)
+        ? params.section
+        : 'usage'
   // A section is a page of its own: moving to another one starts at its top (a #hash link keeps its anchor).
   const shown = useRef(section)
   useEffect(() => {

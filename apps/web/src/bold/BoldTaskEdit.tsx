@@ -59,7 +59,7 @@ export function NewTaskDialog({
   agents: AgentSummary[]
   rooms: Room[]
   onClose: () => void
-  onCreated: (task: TaskDetail) => void
+  onCreated: (task: TaskDetail & { startFailed?: boolean }) => void
 }) {
   const ref = useDialogFocus(onClose)
   const ids = { title: useId(), body: useId(), who: useId(), room: useId() }

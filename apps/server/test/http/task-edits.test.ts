@@ -104,3 +104,39 @@ test('PATCH /api/tasks/:taskId changes the title, description or agent; an empty
   })
   expect(empty.statusCode).toBe(400)
 })
+
+test('a start that fails after the task was made still answers 201 with the task, so a retry never makes a second', async () => {
+  const create = vi.spyOn(port, 'createTask').mockResolvedValue(detail())
+  vi.spyOn(port, 'taskAction').mockRejectedValue(new Error('promote failed'))
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    headers: headers('k-start-fails'),
+    payload: { title: 'Ship it', start: 'now' },
+  })
+  expect(response.statusCode).toBe(201)
+  expect(response.json()).toMatchObject({ id: 't_new', column: 'planned', startFailed: true })
+  expect(create).toHaveBeenCalledTimes(1)
+})
+
+test('a create that failed on the server can be retried with the same key', async () => {
+  const create = vi
+    .spyOn(port, 'createTask')
+    .mockRejectedValueOnce(new Error('Hermes timed out'))
+    .mockResolvedValueOnce(detail())
+  const first = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    headers: headers('k-retry'),
+    payload: { title: 'Write the changelog' },
+  })
+  expect(first.statusCode).toBe(500)
+  const second = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    headers: headers('k-retry'),
+    payload: { title: 'Write the changelog' },
+  })
+  expect(second.statusCode).toBe(201)
+  expect(create).toHaveBeenCalledTimes(2)
+})

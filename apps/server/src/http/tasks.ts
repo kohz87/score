@@ -48,6 +48,13 @@ export function registerTaskRoutes(
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
   }
+  // 3.27.0 review: a create reconciles with Hermes' own idempotency key (command intents), so a retry after a server
+  // error or a crash may run again instead of replaying the failure for a day.
+  const createReceipts = requestIdempotency(db, clock, 512 * 1024, { rerunUncertain: true })
+  const creates = {
+    preHandler: [humanGuard(app.pairing), createReceipts.preHandler],
+    onSend: createReceipts.onSend,
+  }
   const ParamsSchema = z.object({ taskId: z.string().min(1).max(256) })
   app.get('/api/tasks', async (request) => {
     const query = z
@@ -104,7 +111,7 @@ export function registerTaskRoutes(
       : task
   })
   // Creating a task: the idempotency key is passed to Hermes too, so a retried create never makes a second task.
-  app.post('/api/tasks', mutation, async (request, reply) => {
+  app.post('/api/tasks', creates, async (request, reply) => {
     const req = TaskCreateRequestSchema.parse(request.body)
     if (db && req.assignee) assertAgentAdmits(db.sqlite, req.assignee)
     if (db && req.roomId) {
@@ -120,11 +127,21 @@ export function registerTaskRoutes(
       .parse(request.headers['idempotency-key'] ?? randomUUID())
     const { start, ...fields } = req
     let created = await port.createTask(fields, key)
+    // The task exists once Hermes made it: a failed start leaves it Planned (with its Start button) and the answer is
+    // still 201, so a retry never makes a second task.
+    let startFailed = false
     if (start === 'now') {
-      await port.taskAction(TaskActionRequestSchema.parse({ taskId: created.id, action: 'start' }))
-      created = await port.getTask(created.id)
+      try {
+        await port.taskAction(
+          TaskActionRequestSchema.parse({ taskId: created.id, action: 'start' }),
+        )
+        created = await port.getTask(created.id)
+      } catch {
+        startFailed = true
+      }
     }
-    return reply.code(201).send(db ? db.read((sqlite) => withRunLinks(sqlite, created)) : created)
+    const body = db ? db.read((sqlite) => withRunLinks(sqlite, created)) : created
+    return reply.code(201).send(startFailed ? { ...body, startFailed: true } : body)
   })
   app.patch('/api/tasks/:taskId', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)

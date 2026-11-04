@@ -597,6 +597,7 @@ export function BoldTasksPage() {
   // An archived task leaves the board at once; the stream and the refetch then agree.
   const [archivedIds, setArchivedIds] = useState<string[]>([])
   const [making, setMaking] = useState(false)
+  const [createdNote, setCreatedNote] = useState<string | null>(null)
   const all = useMemo(
     () =>
       (tasksState.data?.tasks ?? []).filter(
@@ -682,9 +683,15 @@ export function BoldTasksPage() {
           onCreated={(made) => {
             setMaking(false)
             setSelectedId(made.id)
+            setCreatedNote(
+              made.startFailed
+                ? `Created “${made.title}”. It couldn’t start yet: press Start in its panel.`
+                : null,
+            )
           }}
         />
       )}
+      {createdNote && <p role="status">{createdNote}</p>}
 
       {loading && <p role="status">Reading tasks…</p>}
       {failed && <p role="alert">Couldn’t read the tasks. Try again in a moment.</p>}

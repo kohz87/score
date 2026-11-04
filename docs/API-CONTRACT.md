@@ -1121,7 +1121,9 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
   (**restored in 3.27.0**, DECISIONS 162: the Tasks page's New task; the same as `/assign`). The `Idempotency-Key` goes to
   Hermes too, so a retried create never makes a second task. `start: 'now'` promotes it (`start`) and answers the task
   after that. An agent that can't take work (removed, setting up) → the lifecycle error; a `roomId` that doesn't exist →
-  `400`. Removed in 11.11b (historical:)
+  `400`. If the start fails after Hermes made the task, the answer is still `201` with the task (Planned) and
+  `startFailed: true`, so a retry never makes a second task. A server error or a crash-pending receipt may be retried
+  with the same key (it reconciles through Hermes' own idempotency). Removed in 11.11b (historical:)
   `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
 - **H** `PATCH /api/tasks/:taskId` `TaskPatchRequest` `{ title?; body?; assignee? }` (at least one) → `TaskDetail`
   (**restored in 3.27.0**: the task sheet's Edit; Hermes' `kanban edit` and `kanban assign`). Removed in 11.11b (historical).

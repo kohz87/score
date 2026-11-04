@@ -622,3 +622,18 @@ test('Recipes is a Settings section: its list and editor sit inside the frame', 
     }),
   ).toBeNull()
 })
+
+test('a recipe’s own address opens the Recipes section, not Usage (3.27.0 review)', async () => {
+  open('/b/settings/recipes/wf-1')
+  const nav = screen.getByRole('navigation', { name: 'Settings' })
+  expect(
+    within(nav)
+      .getByRole('button', { name: /^Recipes/ })
+      .getAttribute('aria-current'),
+  ).toBe('page')
+  expect(
+    within(nav)
+      .getByRole('button', { name: /^Usage/ })
+      .getAttribute('aria-current'),
+  ).toBeNull()
+})
