@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   agents,
   disposeRoomTest,
@@ -11,8 +11,13 @@ import {
   room as teamRoom,
 } from '../room/room-test-utils.tsx'
 import { DirectInfo } from './DirectInfo.tsx'
+import { openAllInfoSections, resetInfoFolds } from '../chats/info-test-utils.ts'
+
+// The sections start folded or open by kind (3.27.1); these tests read inside all of them.
+beforeEach(openAllInfoSections)
 
 afterEach(() => {
+  resetInfoFolds()
   disposeRoomTest()
   vi.unstubAllGlobals()
 })

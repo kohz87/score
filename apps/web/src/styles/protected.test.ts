@@ -383,6 +383,7 @@ test('the top bar’s Needs-you count and the chat list’s needs-you marks wear
   for (const cls of [
     'bold-nav-count',
     'bold-chat-needs',
+    'bold-info-needs',
     'bold-needs-jump',
     'bold-viewer-needs',
     'bold-run-needs',

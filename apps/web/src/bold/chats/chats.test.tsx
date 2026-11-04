@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from '../../App.tsx'
+import { openAllInfoSections, resetInfoFolds } from './info-test-utils.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
@@ -176,6 +177,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetInfoFolds()
   cleanup()
   disposers.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
@@ -287,6 +289,7 @@ test('a folded list stays folded on the next visit, and a blocked storage does n
 })
 
 test('the chat bar names the owner, members and workspace; Info is the panel by default and Chat info closes it', async () => {
+  openAllInfoSections()
   open('/b?room=feed')
   const header = await screen.findByRole('group', { name: 'Feed crew, chat header' })
   expect(header.textContent).toContain('Owner lead')
@@ -342,6 +345,7 @@ test('on a phone the list is the first screen; a chat opens full screen and Back
 })
 
 test('a one-to-one is the chat view: the agent’s header in the chat column and its Info in the panel', async () => {
+  openAllInfoSections()
   open('/b?with=builder')
   await screen.findByPlaceholderText('Message builder privately')
   const heading = await screen.findByRole('heading', { name: 'builder' })
@@ -417,4 +421,6 @@ test('on a phone, an old ?jobs=1 link lands on the chat with Info open at Topics
   expect(screen.queryByRole('region', { name: 'All topics' })).toBeNull()
   expect(document.getElementById('bold-side-panel')?.hasAttribute('hidden')).toBe(false)
   expect(screen.getByRole('button', { name: 'New topic' })).toBeDefined()
+  // 3.27.1: the Topics section is folded by default; the landing opens it.
+  expect(screen.getByRole('button', { name: /Topics/ }).getAttribute('aria-expanded')).toBe('true')
 })

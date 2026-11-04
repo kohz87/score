@@ -13,6 +13,7 @@ import { chatDay, currentChat, listedChats, matchesChat } from './direct-model.t
 import { createDirectChat, directChatsQuery } from './direct-queries.ts'
 import { ScreenShortcut, hasScreen } from './DirectHeader.tsx'
 import { AddSomeone } from './direct-parts.tsx'
+import { InfoSection } from '../chats/InfoSection.tsx'
 import { FilesAndResults } from '../chats/FilesResults.tsx'
 import './bold-direct.css'
 
@@ -72,10 +73,7 @@ export function DirectInfo({
 
   return (
     <div className="sidebody bold-chat-info bold-dm-info" aria-label={`${name}, chat info`}>
-      <section aria-labelledby="dm-info-agent">
-        <h2 id="dm-info-agent" className="bold-chat-kicker">
-          Agent
-        </h2>
+      <InfoSection kind="agent" headingId="dm-info-agent" title="Agent" summary={name}>
         <ul className="bold-chat-members">
           <li>
             <AgentGlyph agent={agent} size="sm" bare decorative mood={agentMood(agent)} />
@@ -94,11 +92,13 @@ export function DirectInfo({
           </Link>
           {hasScreen(agent) && <ScreenShortcut agent={agent} />}
         </div>
-      </section>
-      <section aria-labelledby="dm-info-workspace">
-        <h2 id="dm-info-workspace" className="bold-chat-kicker">
-          Workspace
-        </h2>
+      </InfoSection>
+      <InfoSection
+        kind="workspace"
+        headingId="dm-info-workspace"
+        title="Workspace"
+        summary={room?.workspaceId ? (workspace?.name ?? room.workspaceId) : 'none'}
+      >
         {room?.workspaceId ? (
           <code>{workspace ? `${workspace.name} · ${workspace.path}` : room.workspaceId}</code>
         ) : (
@@ -111,17 +111,19 @@ export function DirectInfo({
         >
           Open {name}’s workspace files
         </Link>
-      </section>
+      </InfoSection>
       <FilesAndResults
         jobId={current?.id ?? null}
         agents={agents}
         visible={visible}
         agentIds={[agent.id]}
       />
-      <section aria-labelledby="dm-info-chats">
-        <h2 id="dm-info-chats" className="bold-chat-kicker">
-          Chats
-        </h2>
+      <InfoSection
+        kind="chats"
+        headingId="dm-info-chats"
+        title="Chats"
+        summary={String(listedChats(allChats).length)}
+      >
         <label className="bold-sr-only" htmlFor={`dm-search-${agent.id}`}>
           Search chats
         </label>
@@ -194,12 +196,9 @@ export function DirectInfo({
             See its memory
           </Link>
         </p>
-      </section>
+      </InfoSection>
       {current && (
-        <section aria-labelledby="dm-info-add">
-          <h2 id="dm-info-add" className="bold-chat-kicker">
-            Bring someone in
-          </h2>
+        <InfoSection kind="add" headingId="dm-info-add" title="Bring someone in">
           <button type="button" className="btn sm" onClick={() => setAdding(true)}>
             Add someone
           </button>
@@ -219,7 +218,7 @@ export function DirectInfo({
               />
             </div>
           )}
-        </section>
+        </InfoSection>
       )}
       <Link className="bold-chat-knowledge" to="/b/knowledge" onClick={onNavigate}>
         Open Knowledge

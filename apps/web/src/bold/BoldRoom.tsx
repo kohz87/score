@@ -267,12 +267,14 @@ export function BoldRoom() {
 
   // 3.24.0: the All topics screen is gone. An old `?jobs=1` link opens the chat with Info on its Topics.
   const jobsLink = params.get('jobs') === '1'
+  const [topicsLanding, setTopicsLanding] = useState(0)
   useEffect(() => {
     if (!jobsLink || directMode) return
     // Not cancelled by the cleanup: the replace below re-runs this effect, and the focus is still wanted.
     requestAnimationFrame(() => {
       const next = new URLSearchParams(params)
       next.delete('jobs')
+      setTopicsLanding((count) => count + 1)
       setMode('info')
       setPanelShut(false)
       setSheetOpen(true)
@@ -495,6 +497,7 @@ export function BoldRoom() {
               everyone={everyoneOpen}
               phone={phone}
               visible={filesVisible}
+              openTopics={topicsLanding}
               onNavigate={() => setSheetOpen(false)}
             />
           ) : shownMode === 'elsewhere' && elsewhere ? (

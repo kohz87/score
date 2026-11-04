@@ -252,6 +252,67 @@
 }
 
 [data-ui='bold'] .bold-chat-meta code,
+/* 3.27.1: every Info section folds. The heading is the toggle; its body keeps the section's own column layout. */
+[data-ui='bold'] .bold-chat-info .bold-info-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-info-toggle:focus-visible {
+  outline: 2px solid var(--hi-bg);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+[data-ui='bold'] .bold-info-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+[data-ui='bold'] .bold-info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-body[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-info-needs {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 [data-ui='bold'] .bold-chat-info code {
   font-family: var(--font-m);
   color: var(--ink2);

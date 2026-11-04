@@ -28,6 +28,7 @@ export const protectedClasses = [
   'bold-nav-count',
   // 3.21.0: the chat list's "needs you" pill and a folded-rail tile of a chat that needs you
   'bold-chat-needs',
+  'bold-info-needs',
   'bold-chat-rail-item',
   // 3.24.0: the jump chip ("2 need you ↑") above the composer; replaces the pinned box's "N more below" cue
   'bold-needs-jump',
