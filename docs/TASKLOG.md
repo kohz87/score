@@ -2300,3 +2300,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   Settings; it also found an older keyboard bug (focus return after the Share menu hit the message's hidden action row)
   → the lead made the dialog hand focus to the message row when its opener can't take it; 14 load flakes passing alone.
 - Accepted P3s: the New task dialog has no focus trap; the phone task sheet is full screen (the mock-up's bottom sheet).
+- **v3.26.0 live** (~03:55 UTC, backup score-pre-3.26.0-20261104.db) and **v3.27.0 live** (~05:29 UTC, backup
+  score-pre-3.27.0-20261104.db, migration 0106, health ok, fence off); both pushed. Live: the top bar is Chats, Agents,
+  Knowledge, Tasks, Screens; Tasks has + New task; Settings › Recipes holds the layered editor.
