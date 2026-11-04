@@ -661,3 +661,258 @@
   border-color: currentColor;
   background: transparent;
 }
+
+/* 3.27.0: New task, edit, moves, archive. Mock-ups: docs/design/bold/mockups/20-tasks*.dc.html. */
+[data-ui='bold'] .bold-tb-h1row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-tb-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-new {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-tb-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-y: auto;
+  background: rgb(5 6 9 / 0.62);
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .bold-tb-dialog {
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  margin: auto;
+  padding: calc(28px * var(--bold-d, 1));
+  border-radius: calc(28px * var(--bold-r, 1));
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.55);
+}
+
+[data-ui='bold'] .bold-tb-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-dialog-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+[data-ui='bold'] .bold-tb-dialog-head h2 {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 26px;
+}
+
+[data-ui='bold'] .bold-tb-x {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-tb-label {
+  font-size: 13px;
+  color: var(--ink2);
+  margin-top: 6px;
+}
+
+[data-ui='bold'] .bold-tb-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--ink);
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-tb-field--title {
+  min-height: 48px;
+  font-size: 16px;
+}
+
+[data-ui='bold'] .bold-tb-edit .bold-tb-field--title {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-field--area {
+  padding: 12px 14px;
+  resize: none;
+}
+
+[data-ui='bold'] .bold-tb-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-two .bold-tb-label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+[data-ui='bold'] .bold-tb-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 6px 0 0;
+}
+
+[data-ui='bold'] .bold-tb-start legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-tb-start label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-start label[data-on='true'] {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+[data-ui='bold'] .bold-tb-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-hint code {
+  font-family: var(--font-m);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-tb-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .bold-tb-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-edit .bold-tb-actions {
+  margin-top: 6px;
+}
+
+[data-ui='bold'] .bold-tb-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-archive,
+[data-ui='bold'] .bold-tb-confirm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: calc(18px * var(--bold-r, 1));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-tb-archive p,
+[data-ui='bold'] .bold-tb-confirm p {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-confirm {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-tb-danger-ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bad);
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-tb-danger {
+  background: var(--bad);
+  color: var(--bg, #12131a);
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-tb-new {
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-tb-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-tb-moves .bold-tb-actions,
+  [data-ui='bold'] .bold-tb-panel-body > .bold-tb-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-ui='bold'] .bold-tb-moves .btn,
+  [data-ui='bold'] .bold-tb-panel-body > .bold-tb-actions .btn,
+  [data-ui='bold'] .bold-tb-archive .btn {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-tb-scrim {
+    align-items: flex-start;
+  }
+}

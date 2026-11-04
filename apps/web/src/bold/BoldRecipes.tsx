@@ -125,7 +125,7 @@ function describeError(error: unknown): string {
   return error.message
 }
 
-/** The route: `/b/recipes`, `/b/recipes/new`, `/b/recipes/lead-decides` or `/b/recipes/:workflowId`. */
+/** The route: `/b/settings/recipes`, `/b/settings/recipes/new`, `/b/settings/recipes/lead-decides` or `/b/settings/recipes/:workflowId`. */
 export function BoldRecipesPage() {
   const [query, setQuery] = useSearchParams()
   const runBrief = query.get('run')
@@ -303,7 +303,7 @@ function RecipeList({
   const showLead = 'lead decides'.includes(needle)
   return (
     <nav className="bold-rp-list" aria-label="Recipes">
-      <h1 className="bold-rp-h1">Recipes</h1>
+      <h2 className="bold-rp-h1">Recipes</h2>
       <div className="row">
         <label htmlFor={searchId} className="wf-visually-hidden">
           Find a recipe

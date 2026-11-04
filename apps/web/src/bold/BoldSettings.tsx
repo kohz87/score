@@ -11,6 +11,7 @@ import { BoldSecurity } from './BoldSecurity.tsx'
 import { BoldConnections } from './BoldConnections.tsx'
 import { BoldLook } from './BoldLook.tsx'
 import { BoldSystem } from './BoldSystem.tsx'
+import { BoldRecipesPage } from './BoldRecipes.tsx'
 import { BoldTools } from './BoldTools.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
 import { BoldWorkspaces } from './BoldWorkspaces.tsx'
@@ -26,6 +27,7 @@ type SettingsSection =
   | 'connections'
   | 'workspaces'
   | 'tools'
+  | 'recipes'
   | 'rules'
   | 'notifications'
   | 'look'
@@ -59,6 +61,11 @@ export const SETTINGS_SECTIONS: readonly SettingsItem[] = [
     title: 'Tools and triggers',
     description: 'Apps agents use; webhooks that start jobs',
     phase: '11.9a',
+  },
+  {
+    id: 'recipes',
+    title: 'Recipes',
+    description: 'Saved plans agents run, and their runs',
   },
   { id: 'rules', title: 'Rules', description: 'What agents may do alone', phase: '11.9b' },
   {
@@ -98,6 +105,8 @@ function Section({
       return <BoldWorkspaces agents={agents} rooms={rooms} />
     case 'tools':
       return <BoldTools agents={agents} />
+    case 'recipes':
+      return <BoldRecipesPage />
     case 'look':
       return <BoldLook />
     case 'rules':
@@ -129,11 +138,15 @@ export function BoldSettings() {
   const location = useLocation()
   // Decision 131 E: /b/settings/look/customize[/:themeId] is the Customizer, framed by Settings with Look selected.
   const customizing = /^\/b\/settings\/look\/customize(\/|$)/.test(location.pathname)
+  // 3.27.0: /b/settings/recipes/:workflowId is a recipe in the Recipes section (that route has no :section).
+  const recipe = /^\/b\/settings\/recipes(\/|$)/.test(location.pathname)
   const section = customizing
     ? 'look'
-    : isSettingsSection(params.section)
-      ? params.section
-      : 'usage'
+    : recipe
+      ? 'recipes'
+      : isSettingsSection(params.section)
+        ? params.section
+        : 'usage'
   // A section is a page of its own: moving to another one starts at its top (a #hash link keeps its anchor).
   const shown = useRef(section)
   useEffect(() => {

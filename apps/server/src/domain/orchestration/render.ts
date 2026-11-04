@@ -100,7 +100,9 @@ export function renderLeadInput(args: LeadInputArgs): string {
   const limit = ORCH_LIMITS.leadInputBytes
   const lines: string[] = []
   lines.push(
-    `You are the lead of a Score orchestration (run ${o.id}). This is lead turn ${args.turn} of at most ${o.max_lead_turns}.`,
+    o.until_stopped === 1
+      ? `You are the lead of a Score orchestration (run ${o.id}). This is lead turn ${args.turn}; the run has no turn or step limit and goes on until the work is done, the person stops it, or its spend cap is reached.`
+      : `You are the lead of a Score orchestration (run ${o.id}). This is lead turn ${args.turn} of at most ${o.max_lead_turns}.`,
     'You work in short turns: look at the state below, call the orch.* tools to act, then end your turn with a brief reply. Do not wait for anything inside a turn: Score starts a new turn for you when something you asked for resolves.',
     '',
     `Capability (pass it as the "capability" argument of every orch.* call this turn; keep it private, never put it in an instruction or note): ${ORC_CAPABILITY_PLACEHOLDER}`,
@@ -114,7 +116,9 @@ export function renderLeadInput(args: LeadInputArgs): string {
     '',
     `Allowed agents: ${o.allowed_agents.join(', ')}.`,
     `Gate policy: ${{ 'every-step': 'the person approves each assignment before it starts', 'lead-asks': 'a step needs the person only if you call orch.requestApproval for it', none: 'steps start without approval' }[o.gate_policy]}.`,
-    `Steps used: ${o.steps_created} of ${o.max_steps}. Lead turns used (including this one): ${args.turn} of ${o.max_lead_turns}.`,
+    o.until_stopped === 1
+      ? `Steps used: ${o.steps_created} (no limit). Lead turns used (including this one): ${args.turn} (no limit). Finish when the goal is met: the run doesn't end by itself.`
+      : `Steps used: ${o.steps_created} of ${o.max_steps}. Lead turns used (including this one): ${args.turn} of ${o.max_lead_turns}.`,
     budget.limitUsd === null
       ? 'Budget: none set.'
       : `Budget: $${budget.limitUsd.toFixed(2)}, about $${(budget.remainingUsd ?? 0).toFixed(2)} left after reservations${budget.unknownSpend ? ' (some spend is unknown)' : ''}.`,

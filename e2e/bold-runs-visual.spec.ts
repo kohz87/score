@@ -56,7 +56,7 @@ for (const run of runs) {
   for (const width of run.widths) {
     test(`the ${run.name} run, steps and graph, at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
-      await page.goto(`/b/recipes?run=${run.brief}`)
+      await page.goto(`/b/settings/recipes?run=${run.brief}`)
       await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
       await expect(page.getByText(/^Loading the run/)).toHaveCount(0)
       await page.evaluate(() => document.fonts.ready)
@@ -89,7 +89,7 @@ for (const run of runs) {
 // The kept classic cards' buttons must be the shell's pills, not square classic buttons.
 test('the run page buttons (Pause, Stop, Approve, Reject) are pills', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/b/recipes?run=brief-orch-1')
+  await page.goto('/b/settings/recipes?run=brief-orch-1')
   await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
   const buttons = page.locator(
     '.bold-run-classic .orch-controls button, .bold-run-classic .orch-actions button',

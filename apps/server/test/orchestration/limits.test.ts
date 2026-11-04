@@ -317,6 +317,7 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     deadline_at: null,
     max_steps: 30,
     max_lead_turns: 40,
+    until_stopped: 0,
     max_concurrent_steps: 3,
     lead_turn_estimate_usd: 0.25,
     step_estimate_usd: 0.5,

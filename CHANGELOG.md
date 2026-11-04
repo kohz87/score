@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.27.0] — 2026-11-04
+
+### Added
+- **Tasks: make, change, move and archive.** "+ New task" by the Tasks heading (what, details, who, which chat, start
+  now or later); Edit in a task's panel; the moves that fit its column (Start, Ask for review, Block, Mark done); and
+  **Archive…** with a confirm — Hermes keeps no hard delete, so an archived task leaves the board and keeps its history.
+- **Runs keep going until you stop them.** Start a run (lead decides) has "Keep going until I stop it", on by
+  default: no step or turn limit, the lead keeps working until it's done or you press Stop. A spend cap is required.
+
+### Changed
+- **Recipes moved into Settings** (Settings › Recipes). The top bar is Chats, Agents, Knowledge, Tasks, Screens;
+  `/run <recipe>` in a chat still starts one, and old links open the new place.
+
 ## [3.26.0] — 2026-11-04
 
 ### Changed

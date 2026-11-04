@@ -352,6 +352,9 @@ for (const { name, viewport } of sizes) {
       const share = await shareAction(page)
       await share.click()
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toBeVisible()
+      // The row's buttons show only while the message is hovered; opening the menu can move the message under or away
+      // from the pointer, so rest the pointer on it again before Escape.
+      await shareAction(page)
       await page.keyboard.press('Escape')
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toHaveCount(0)
       await expect(share).toBeFocused()

@@ -463,8 +463,9 @@ function OrchestrationRun({
               {detail.deadlineAt ? `Deadline ${clock(detail.deadlineAt)}` : 'No deadline'}
             </span>
             <span className="bold-run-tile-sub">
-              Steps {detail.steps.total} of {detail.maxSteps} · lead turns {detail.leadTurnsUsed} of{' '}
-              {detail.maxLeadTurns}
+              {detail.untilStopped
+                ? `Steps ${detail.steps.total} · lead turns ${detail.leadTurnsUsed} · until you stop it`
+                : `Steps ${detail.steps.total} of ${detail.maxSteps} · lead turns ${detail.leadTurnsUsed} of ${detail.maxLeadTurns}`}
               {coding ? ` · coding steps up to ${coding.codingSteps}` : ''}
             </span>
           </Tile>

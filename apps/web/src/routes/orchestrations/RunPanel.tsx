@@ -160,7 +160,8 @@ export function RunStatus({
       )}
       {run.endReason && <span>{run.endReason}</span>}
       <span className="orch-muted">
-        Lead turn <LiveCount value={run.leadTurnsUsed} /> of {run.maxLeadTurns},{' '}
+        Lead turn <LiveCount value={run.leadTurnsUsed} />
+        {run.untilStopped ? ' (until you stop it)' : ` of ${run.maxLeadTurns}`},{' '}
         <LiveCount value={counts.succeeded} /> of {counts.total} steps done
       </span>
       <RunSpend budget={run.budget} />

@@ -566,7 +566,8 @@ const HANDLERS: Record<ToolName, Handler> = {
         },
       }
     }
-    if (o.steps_created >= o.max_steps)
+    // 3.27.0: a run that goes on until the person stops it has no step cap (its spend cap still holds).
+    if (o.until_stopped !== 1 && o.steps_created >= o.max_steps)
       return refuse('step_limit', `The run is limited to ${o.max_steps} steps`)
     // 3.14: no work starts before the advisor has seen the plan.
     const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
