@@ -7,8 +7,6 @@ import { pair } from './pair.ts'
 
 test.describe.configure({ mode: 'serial' })
 
-const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click()
-
 async function start(page: Page, goal: string, policy: 'plan' | 'handoff' | 'risky' = 'plan') {
   await page.goto('/b?start=job')
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
@@ -95,11 +93,9 @@ async function wasSeen(page: Page, selector: string) {
 }
 
 async function openLive(page: Page, goal: string) {
-  // The run opens in the Runs side panel, addressed by its brief id; its Graph and Log tabs carry the diagram and the
-  // log. Selection and replay carry over between them; the decisions are above every tab.
-  await page.goto(`/b/recipes?run=${encodeURIComponent(await runBriefId(page, goal))}`)
-  await tab(page, 'Graph')
-  // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+  // 3.29.0: no run page. `/b?run=` opens the run's chat with the Graph tab; the decisions are its needs-you cards, the
+  // step diagram is one click from the Job map and carries its Session log under it.
+  await page.goto(`/b?run=${encodeURIComponent(await runBriefId(page, goal))}`)
   await page.getByRole('button', { name: 'Show the step diagram' }).click()
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
@@ -143,23 +139,20 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   })
 
   // The log carries the lead's calls with Score's verdicts, the gates and the results.
-  await tab(page, 'Log')
   const log = page.getByRole('log', { name: 'Events' })
   await expect(log).toContainText('Assigned s1 to builder')
   await expect(log).toContainText('You approved s1')
   await expect(log).toContainText('s1 succeeded')
   // Clicking a node filters the log to it and opens its output.
-  await tab(page, 'Graph')
   await page.locator('[data-node="s2"]').click()
   await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('Result')
-  await tab(page, 'Log')
+  // The diagram and its log are one view in the chat's Graph tab (3.29.0): the selection filters the log.
   await expect(page.getByText('Showing s2')).toBeVisible()
   await expect(log).not.toContainText('Assigned s1')
   await page.getByRole('button', { name: 'Show everything' }).click()
-  await tab(page, 'Graph')
 
   // Replay: the scrubber starts at the beginning and the diagram and log follow it.
-  await page.getByRole('button', { name: 'Replay this run' }).click()
+  await page.getByRole('button', { name: 'Replay this run' }).first().click()
   const scrub = page.getByRole('slider', { name: 'Replay position' })
   await expect(scrub).toHaveValue('0')
   await expect(page.locator('[data-node="s1"]')).toHaveCount(0)
@@ -176,10 +169,9 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   for (let i = 0; i < 12 && (await page.locator('[data-node="s1"]').count()) === 0; i++)
     await page.getByRole('button', { name: 'Step forward' }).click()
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'queued')
-  await tab(page, 'Log')
+  // …and the log follows the replay.
   await expect(log).toContainText('Assigned s1')
   await expect(log).not.toContainText('s1 succeeded')
-  await tab(page, 'Graph')
   await page.getByRole('button', { name: 'Step forward' }).click()
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
 })
@@ -235,10 +227,10 @@ test('the lead asks a question: it appears on the run, the answer reaches the le
   await pair(page)
   await start(page, 'Ask first [fake:ask] e2e-d', 'risky')
   await openLive(page, 'Ask first [fake:ask] e2e-d')
-  // The run page carries the question inside its protected Needs-you wrapper.
-  const needs = page.locator('.orch-needs[aria-label="Needs you"]')
-  await expect(needs).toHaveAttribute('data-protected', 'grid')
-  const question = needs.getByRole('region', { name: 'Question from the lead' })
+  // 3.29.0: the question is a protected needs-you card in the chat.
+  const needs = page.getByRole('article', { name: 'Needs you: The lead asks' })
+  await expect(needs).toHaveAttribute('data-protected', /.+/)
+  const question = page.getByRole('region', { name: 'Question from the lead' })
   await expect(question).toContainText('Which audience is this for?', { timeout: 30_000 })
   await question.getByLabel(/Your answer/).fill('ANSWER q1: engineers')
   await question.getByRole('button', { name: 'Send answer' }).click()
@@ -255,8 +247,8 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'running', {
     timeout: 60_000,
   })
-  // The room's own strip also has a Stop for this run; this is the run view's.
-  const panel = page.locator('.bold-run')
+  // The Graph tab's own Pause / Resume / Stop (3.29.0), above the diagram.
+  const panel = page.locator('.bold-topic-graph')
   await panel.getByRole('button', { name: 'Stop', exact: true }).click()
   await panel.getByRole('button', { name: 'Stop the run' }).click()
   // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
@@ -264,10 +256,10 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'unknown', {
     timeout: 30_000,
   })
-  await tab(page, 'Steps')
-  await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed as ended')
+  // 3.29.0: the old run page's "Finish" summary is gone; the chat's needs-you cards say it.
   // Abandoning is a separate, acknowledged human decision.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
+  await expect(card.first()).toBeVisible({ timeout: 30_000 })
   await expect(async () => {
     const before = await card.count()
     if (before > 0) {

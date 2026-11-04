@@ -22,15 +22,27 @@ async function showText(page: Page) {
 }
 
 async function openRecipes(page: Page, id = 'new') {
-  await page.goto(id ? `/b/recipes/${id}` : '/b/recipes')
+  await page.goto(`/b/recipes/${id}`)
   await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
 }
 
-/** Opens a saved recipe from the list and switches to its step list. */
+/** Opens a saved recipe from the library and switches to its step list. */
 async function openRecipeText(page: Page, name: string) {
-  await openRecipes(page, 'new')
-  await page.getByRole('navigation', { name: 'Recipes' }).getByRole('button', { name }).click()
+  // 3.29.0: Settings > Recipes is a library of cards; Edit opens one.
+  await page.goto('/b/recipes')
+  await page
+    .getByRole('listitem', { name, exact: true })
+    .getByRole('link', { name: /^Edit/ })
+    .click()
+  await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
   await showText(page)
+}
+
+/** The ⋯ menu (3.29.0: Undo, Redo, Run…, Export, Duplicate, View a version, Archive, Delete): opens it once. */
+async function openMore(page: Page) {
+  const dots = page.getByRole('button', { name: 'More' })
+  if ((await dots.getAttribute('aria-expanded')) !== 'true') await dots.click()
+  return page.getByRole('group', { name: 'More' })
 }
 
 async function openDetails(page: Page) {
@@ -181,7 +193,11 @@ test('build a gate and branch as a step list, save, run and approve it', async (
     if (await gate.isVisible()) await gate.getByRole('button', { name: 'Approve' }).click()
     await expect(gate).toBeHidden({ timeout: 4000 })
   }).toPass({ timeout: 45_000 })
-  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
+  // 3.29.0: the chat's Graph tab says how the run ended (no run page): its state line and the End step reached.
+  await expect(page.locator('p', { hasText: /Run · .*Succeeded/ }).first()).toBeVisible({
+    timeout: 60_000,
+  })
+  await expect(page.getByRole('button', { name: /^End Published, reached/ })).toBeVisible()
 })
 
 test('retries and a failure path, and a join that waits for both paths', async ({ page }) => {
@@ -232,7 +248,9 @@ test('retries and a failure path, and a join that waits for both paths', async (
   await page.getByRole('button', { name: 'Save as version 2' }).click()
   await expect(page.getByText('Saved as version 2.')).toBeVisible({ timeout: 20_000 })
   await startRecipe(page, failureId)
-  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('log', { name: 'Events' })).toContainText('The run ended', {
+    timeout: 60_000,
+  })
 
   const joinName = uniqueRecipeName('Wait for both')
   await createViaApi(page, {
@@ -528,7 +546,7 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
   await page.getByRole('button', { name: 'Save as version 5' }).click()
   await expect(page.getByText('Saved as version 5.')).toBeVisible({ timeout: 20_000 })
 
-  await page.getByRole('button', { name: 'Export' }).click()
+  await (await openMore(page)).getByRole('button', { name: 'Export' }).click()
   const exported = page.getByRole('dialog', { name: new RegExp(`Export ${name}`) })
   await expect(exported).toBeVisible({ timeout: 20_000 })
   await expect(exported).toContainText('Version 5 as JSON')
@@ -536,8 +554,7 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
   await exported.getByRole('button', { name: 'Close' }).click()
 
   page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'More' }).click()
-  await page.getByRole('button', { name: 'Delete recipe' }).click()
+  await (await openMore(page)).getByRole('button', { name: 'Delete recipe' }).click()
   await expect(page.getByText('Deleted the recipe.')).toBeVisible({ timeout: 20_000 })
   expect((await workflows(page)).some((workflow) => workflow.id === id)).toBe(false)
 })
@@ -554,7 +571,12 @@ test("a failed live check says it couldn't check the recipe and keeps Save disab
   )
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page, '')
+  await openRecipes(page, 'new')
+  // 3.29.0: a new recipe starts with its first step unfinished (the one-line problem), and Score only asks the server once
+  // the recipe has no problems of its own.
+  await page.locator('[data-node="step1"]').click()
+  await inspector(page).getByLabel('Agent').selectOption({ label: 'builder' })
+  await inspector(page).getByRole('combobox', { name: 'Instruction' }).fill('Write a short note.')
   await expect(page.getByText("Couldn't check this recipe", { exact: true })).toBeVisible({
     timeout: 20_000,
   })
@@ -574,14 +596,20 @@ test('leaving a dirty recipe asks first, and the old addresses land on the page'
 
   let accept = false
   page.on('dialog', (prompt) => void (accept ? prompt.accept() : prompt.dismiss()))
-  await page.getByRole('button', { name: /lead decides/ }).click()
+  // 3.29.0: "‹ Recipes" is the way back to the library; a dirty draft asks first.
+  await page.getByRole('link', { name: '‹ Recipes' }).click()
   await expect(page).toHaveURL(/\/b\/settings\/recipes\/new$/)
   await expect(inspector(page).getByLabel('Title')).toHaveValue('Changed, not saved')
 
   accept = true
-  await page.getByRole('button', { name: /lead decides/ }).click()
-  await expect(page).toHaveURL(/\/b\/settings\/recipes\/lead-decides$/)
-  await expect(page.getByRole('heading', { name: 'lead decides' })).toBeVisible()
+  // The library replaces the page as the click lands, so Playwright's own waits for a stable link would race it.
+  await page.getByRole('link', { name: '‹ Recipes' }).click({ noWaitAfter: true, force: true })
+  await expect(page).toHaveURL(/\/b\/settings\/recipes$/)
+  await expect(page.getByRole('list', { name: 'Recipes', exact: true })).toBeVisible()
+  await page
+    .getByRole('listitem', { name: /lead decides/ })
+    .getByRole('button', { name: /Run in a chat/ })
+    .waitFor()
 
   for (const [from, to] of [
     ['/b?recipes=1', /\/b\/settings\/recipes$/],
@@ -594,7 +622,9 @@ test('leaving a dirty recipe asks first, and the old addresses land on the page'
   ] as const) {
     await page.goto(from)
     await expect(page).toHaveURL(to)
-    await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
+    if (/lead-decides/.test(String(to)))
+      await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
+    else await expect(page.getByRole('list', { name: 'Recipes', exact: true })).toBeVisible()
   }
 })
 
@@ -637,16 +667,17 @@ test('the graph editor adds, connects and removes steps, keeps keyboard use, and
   })
 
   // Undo takes the gate's question away, redo brings it back.
-  await page.getByRole('button', { name: 'Undo' }).click()
-  await expect(page.getByRole('button', { name: 'Redo' })).toBeEnabled()
-  await page.getByRole('button', { name: 'Redo' }).click()
+  const more = await openMore(page)
+  await more.getByRole('button', { name: 'Undo' }).click()
+  await expect(more.getByRole('button', { name: 'Redo' })).toBeEnabled()
+  await more.getByRole('button', { name: 'Redo' }).click()
 
   // A step is deleted from the keyboard; undo returns it.
   const gate = page.locator('[data-kind="gate"]')
   await gate.focus()
   await page.keyboard.press('Delete')
   await expect(nodes).toHaveCount(2)
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await (await openMore(page)).getByRole('button', { name: 'Undo' }).click()
   await expect(nodes).toHaveCount(3)
 
   // The outline is the graph as text.
@@ -692,7 +723,7 @@ test('a saved version opens read-only, Preview plays without running, and Run op
   await openRecipes(page, id)
   await expect(page.getByRole('textbox', { name: 'Recipe name' })).toHaveValue(name)
 
-  await page.getByRole('button', { name: 'More' }).click()
+  await openMore(page)
   await page.getByLabel('View a saved version (read-only)').selectOption('1')
   await expect(page.getByText('Version 1 (read-only)')).toBeVisible()
   await expect(page.getByRole('button', { name: /Save as version/ })).toBeDisabled()
@@ -704,22 +735,29 @@ test('a saved version opens read-only, Preview plays without running, and Run op
   await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.locator('[data-node]').first()).toBeVisible()
 
-  await page.getByRole('button', { name: 'Run…' }).click()
+  await (await openMore(page)).getByRole('button', { name: 'Run…' }).click()
   await expect(page).toHaveURL(new RegExp(`start=job&recipe=${id}`))
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await expect(dialog.getByRole('radio', { name })).toBeChecked()
 })
 
-test('a phone stacks the list, the recipe and the step settings without sideways scrolling', async ({
+test('a phone shows the library as one column, the recipe full width and the step settings as a bottom sheet', async ({
   page,
 }) => {
   await pair(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  // 3.29.0: the library is a column of cards; the editor has no list above it.
+  await page.goto('/b/recipes')
+  const cards = page.getByRole('list', { name: 'Recipes', exact: true }).getByRole('listitem')
+  await expect(cards.first()).toBeVisible()
+  const first = await cards.first().boundingBox()
+  expect(first!.x + first!.width).toBeLessThanOrEqual(390)
   await openRecipes(page, 'new')
-  const list = await page.getByRole('navigation', { name: 'Recipes' }).boundingBox()
+  await expect(page.getByRole('navigation', { name: 'Recipes' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '‹ Recipes' })).toBeVisible()
   const main = await page.getByRole('region', { name: 'Recipe editor' }).boundingBox()
-  expect(main!.y).toBeGreaterThan(list!.y + list!.height - 1)
+  expect(main!.x + main!.width).toBeLessThanOrEqual(390)
   // The step's settings are a sheet from the bottom, only while a card is selected.
   await expect(inspector(page)).toHaveCount(0)
   await page.locator('[data-node="step1"]').click()

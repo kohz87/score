@@ -101,8 +101,8 @@ test('the editor draws a run of the version on screen over the cards and links t
     if (await gate.isVisible()) await gate.getByRole('button', { name: 'Approve' }).click()
     await expect(gate).toBeHidden({ timeout: 4000 })
   }).toPass({ timeout: 45_000 })
-  // The decided gate stays where it was, as a chip.
-  await expect(
-    page.getByRole('list', { name: 'Just decided' }).locator('.live-chip--ok'),
-  ).toContainText('Approved by you')
+  // 3.29.0: the chat's Graph tab keeps the decision (no "Just decided" chip): the gate node reads approved and the log
+  // says who decided.
+  await expect(page.getByRole('button', { name: `Gate ${gateTitle}, approved` })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Events' })).toContainText(`You approved ${gateTitle}`)
 })

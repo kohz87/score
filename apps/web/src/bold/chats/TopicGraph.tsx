@@ -37,17 +37,12 @@ export function RunGraph({ recipe }: { recipe: JobRecipe }) {
         </p>
       )}
       {recipe.kind === 'orchestration' && diagram ? (
-        <>
+        // One instance for the diagram and its log: selecting a step filters the log, Replay drives both.
+        <section className="bold-topic-graph-log" aria-label="Session log">
           <ClassicPaper>
-            <OrchestrationLive orchestrationId={recipe.ref} pane="graph" />
+            <OrchestrationLive orchestrationId={recipe.ref} pane="both" />
           </ClassicPaper>
-          <section className="bold-topic-graph-log" aria-label="Session log">
-            <h3>Session log</h3>
-            <ClassicPaper>
-              <OrchestrationLive orchestrationId={recipe.ref} pane="log" />
-            </ClassicPaper>
-          </section>
-        </>
+        </section>
       ) : recipe.kind === 'orchestration' ? (
         // The job map carries its own Session log under the graph.
         <JobMap orchestrationId={recipe.ref} />

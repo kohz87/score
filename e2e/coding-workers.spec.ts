@@ -6,7 +6,8 @@ import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { holdLockPerTest } from './locks.ts'
 import { makeTeam } from './one-job-helpers.ts'
 import { pair } from './pair.ts'
-import { visualFixtures, visualHello } from './visual-fixtures.ts'
+import { openFrozenRunInChat } from './recipe-run.ts'
+import { visualFixtures } from './visual-fixtures.ts'
 
 // PLAN 7.7b, coding agents as workers, in the browser against the fake adapter. No real coding agent is started and no
 // model is called. Fake mode has no supervised units and the team has no coding agent, so each test puts one in front of
@@ -201,73 +202,61 @@ test.describe('a coding step in the live diagram', () => {
       currentPolicyId: policy,
     })
     snapshot.orchestration.coding = { stepLimit: 10, acceptedUnknownCost: [], workers: [] }
-    await page.route('**/api/**', async (route) => {
-      const url = new URL(route.request().url())
-      if (url.pathname === '/api/stream') {
-        await route.fulfill({
-          contentType: 'text/event-stream',
-          body: `event: stream.hello\ndata: ${JSON.stringify(visualHello)}\n\n`,
-        })
-        return
-      }
-      url.searchParams.delete('tz')
-      if (url.pathname === '/api/orchestrations/preflight') {
-        await route.fulfill({
-          json: {
-            ...readyPreflight,
-            workers: [
-              {
-                ...readyPreflight.workers[0],
-                agentId: 'reviewer',
-                runtime: 'claude-code',
-                reach: 'Reads and edits files in /home/example/site.',
-                reachBeyondWorkspace: false,
-              },
-            ],
-          },
-        })
-        return
-      }
-      const key = `${url.pathname}${url.search}`
-      const fixture =
-        key === '/api/agents'
-          ? agents
-          : key === '/api/orchestrations/orch-1'
-            ? snapshot
-            : { ...visualFixtures, ...orchestrationFixtures }[key]
-      if (fixture === undefined) {
-        await route.fulfill({
-          status: 404,
-          json: { error: { code: 'not_found', message: 'none' } },
-        })
-        return
-      }
-      await route.fulfill({ json: fixture })
-    })
+    const list = structuredClone(orchestrationFixtures['/api/orchestrations']) as {
+      items: { needsYou: unknown[] }[]
+    }
+    list.items[0]!.needsYou = snapshot.orchestration.needsYou
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/b/recipes?run=brief-orch-1')
-    // The decision is on the Steps tab (2.5.0); the diagram and the log are their own tabs.
+    // 3.29.0: the run is read in its chat (no run page): the decision is a needs-you card there, the diagram and the log
+    // are the Graph tab.
+    await openFrozenRunInChat(page, {
+      recipe: { kind: 'orchestration', ref: 'orch-1' },
+      posted: [],
+      reads: {
+        ...Object.fromEntries(
+          Object.entries(orchestrationFixtures).filter(([key]) =>
+            key.startsWith('/api/orchestrations/'),
+          ),
+        ),
+        '/api/agents': agents,
+        '/api/orchestrations': list,
+        '/api/orchestrations/orch-1': snapshot,
+        '/api/orchestrations/preflight': {
+          ...readyPreflight,
+          workers: [
+            {
+              ...readyPreflight.workers[0],
+              agentId: 'reviewer',
+              runtime: 'claude-code',
+              reach: 'Reads and edits files in /home/example/site.',
+              reachBeyondWorkspace: false,
+            },
+          ],
+        },
+      },
+    })
     const card = page.getByRole('region', { name: 'New settings for reviewer' })
     await expect(card).toBeVisible()
     await expect(card.getByRole('button', { name: 'Use the new settings' })).toBeEnabled()
-    await page.getByRole('tab', { name: 'Graph' }).click()
-    // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+    await page
+      .getByRole('region', { name: 'Current job' })
+      .getByRole('button', { name: 'Graph' })
+      .click()
+    // 3.29.0: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
     await page.getByRole('button', { name: 'Show the step diagram' }).click()
     const node = page.locator('[data-node="s2"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText('Claude Code')
     await expect(node).toHaveAttribute('aria-label', /reviewer \(Claude Code\)/)
     await expect(page.locator('[data-node="s1"]')).not.toContainText('Claude Code')
-    await page.getByRole('tab', { name: 'Log' }).click()
     await expect(
       page.getByRole('log', { name: 'Events' }).getByText('Claude Code').first(),
     ).toBeVisible()
-    await page.getByRole('tab', { name: 'Graph' }).click()
     await page.evaluate(() => document.fonts.ready)
     if (shots) {
       mkdirSync(shots, { recursive: true })
-      await page.locator('.orch-live').screenshot({ path: `${shots}/flow-coding-step.png` })
+      await page.locator('.bold-topic-graph').screenshot({ path: `${shots}/flow-coding-step.png` })
     }
   })
 })

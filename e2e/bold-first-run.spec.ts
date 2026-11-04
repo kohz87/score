@@ -196,7 +196,7 @@ for (const [index, size] of [
       clearTeamLead(home)
       await pair(page, origin, pairingToken)
       await page.goto(`${origin}/b/recipes`)
-      const recipes = page.getByRole('region', { name: 'Recipe editor' })
+      const recipes = page.getByRole('heading', { name: 'Recipes', level: 2 })
       await expect(recipes).toBeVisible()
       // First run is the room's page: it does not sit over or inside Recipes.
       await expect(page.getByRole('heading', { name: 'Hermes found' })).toHaveCount(0)

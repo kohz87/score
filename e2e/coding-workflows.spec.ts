@@ -2,8 +2,13 @@ import { mkdirSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { pair } from './pair.ts'
-import { openCodingRecipeStart, startPolicyA, startPolicyB } from './recipe-run.ts'
-import { visualFixtures, visualHello } from './visual-fixtures.ts'
+import {
+  openCodingRecipeStart,
+  openFrozenRunInChat,
+  startPolicyA,
+  startPolicyB,
+} from './recipe-run.ts'
+import { visualFixtures } from './visual-fixtures.ts'
 import {
   codingPolicyB,
   codingPreflight,
@@ -104,7 +109,8 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
   await expect(page.locator('[data-node="step1"]')).toContainText('Codex')
   await shot(page, 'editor-agent-picker')
   // Validate: the problem is on the step, with words for what to do.
-  const problems = page.getByRole('region', { name: 'Problems' })
+  // 3.29.0: the problems are one line under the header (the first problem, with Show it).
+  const problems = page.locator('.bold-rp-problem')
   await expect(problems).toContainText(
     'Coding agents can take workflow steps only where Score runs them',
     {
@@ -120,7 +126,8 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
   await expect(page.locator('[data-node="step1"]')).not.toHaveAttribute('aria-label', /1 problem/, {
     timeout: 20_000,
   })
-  await expect(problems).not.toContainText('Coding agents can take workflow steps')
+  // The one-line problem is gone altogether once nothing is wrong.
+  await expect(problems).toHaveCount(0)
 })
 
 test('Start a job shows the reach of a coding recipe, asks once, sends policies and options, and asks again when a policy changed', async ({
@@ -168,55 +175,41 @@ test('Start a job shows the reach of a coding recipe, asks once, sends policies 
 test.describe('a coding step in the live workflow view', () => {
   test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 
-  /** The real page over frozen fixtures, the coding run being the one the page reads. */
-  async function liveView(page: Page, snapshot: unknown, posted: { url: string; body: unknown }[]) {
+  /** The run read in its chat over frozen fixtures (3.29.0: the old run page is gone): cards in the chat, graph in its Graph tab. */
+  async function liveView(
+    page: Page,
+    snapshot: ReturnType<typeof codingRunSnapshot>,
+    posted: { url: string; body: unknown }[],
+  ) {
     await page.clock.setFixedTime(new Date(fixtureNow))
     const agents = structuredClone(visualFixtures['/api/agents']) as {
       items: Record<string, unknown>[]
     }
     for (const agent of codingTeam)
       agents.items.push({ activity: null, model: null, served: true, ...agent })
-    await page.route('**/api/**', async (route) => {
-      const url = new URL(route.request().url())
-      if (url.pathname === '/api/stream') {
-        await route.fulfill({
-          contentType: 'text/event-stream',
-          body: `event: stream.hello\ndata: ${JSON.stringify(visualHello)}\n\n`,
-        })
-        return
-      }
-      if (route.request().method() === 'POST') {
-        posted.push({ url: url.pathname, body: route.request().postDataJSON() })
-        await route.fulfill({ status: 500, json: { error: { code: 'x', message: 'stop here' } } })
-        return
-      }
-      url.searchParams.delete('tz')
-      const key = `${url.pathname}${url.search}`
-      const fixture =
-        key === '/api/agents'
-          ? agents
-          : key === '/api/workflow-runs/wfrun-1'
-            ? snapshot
-            : key === '/api/workflow-runs/preflight?workflowId=wf-release&version=1'
-              ? codingPreflight
-              : { ...visualFixtures, ...workflowFixtures }[key]
-      if (fixture === undefined) {
-        await route.fulfill({
-          status: 404,
-          json: { error: { code: 'not_found', message: 'none' } },
-        })
-        return
-      }
-      await route.fulfill({ json: fixture })
-    })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1300 })
-    await page.goto('/runs/brief-wfrun-1')
-    // 2.5.0: the diagram is the Graph tab of the run; the decisions are on the Steps tab it opens on.
-    await page.getByRole('tab', { name: 'Graph' }).click()
+    await openFrozenRunInChat(page, {
+      recipe: { kind: 'workflow', ref: 'wfrun-1' },
+      posted,
+      reads: {
+        '/api/agents': agents,
+        '/api/workflow-runs': { asOfSeq: 1, items: [snapshot.run] },
+        '/api/workflow-runs/wfrun-1': snapshot,
+        '/api/workflow-runs/preflight?workflowId=wf-release&version=1': codingPreflight,
+        ...Object.fromEntries(
+          Object.entries(workflowFixtures).filter(([key]) =>
+            key.startsWith('/api/workflow-runs/wfrun-1/'),
+          ),
+        ),
+      },
+    })
+    await page
+      .getByRole('region', { name: 'Current job' })
+      .getByRole('button', { name: 'Graph' })
+      .click()
     await expect(page.locator('[data-node="draft"]')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    await page.getByRole('tab', { name: 'Steps' }).click()
   }
 
   test('8.6: a coding step below its agent’s limit floor waits, and the card sends the three answers', async ({
@@ -280,17 +273,15 @@ test.describe('a coding step in the live workflow view', () => {
       ),
       posted,
     )
-    await page.getByRole('tab', { name: 'Graph' }).click()
     const node = page.locator('[data-node="draft"]')
     await expect(node).toContainText('Codex')
     await expect(node).toHaveAttribute('aria-label', /coder-a \(Codex\)/)
     await expect(page.locator('[data-node="review"]')).toContainText('Claude Code')
-    await page.getByRole('tab', { name: 'Steps' }).click()
     const card = page.getByRole('region', { name: 'New settings for coder-a' })
     await expect(card).toContainText('With the new settings: Reads any file you can read')
     await card.getByRole('checkbox', { name: /I understand what it can read now/ }).check()
     await expect(page.getByRole('region', { name: 'Coding step limit' })).toBeVisible()
-    await page.locator('.orch-needs').scrollIntoViewIfNeeded()
+    await card.scrollIntoViewIfNeeded()
     await shot(page, 'live-workflow-coding')
     await card.getByRole('button', { name: 'Use the new settings' }).click()
     await expect.poll(() => posted.length).toBeGreaterThan(0)
