@@ -181,6 +181,14 @@ export function chatEntryForRun(
   return null
 }
 
+/**
+ * 3.29.0 gate: run links carry the run's brief id (`boldRunLink(briefId)`), while a chat job links to the run by its
+ * own id. The run whose brief or own id this is; the id itself when no loaded run claims it.
+ */
+export function runIdOf(linkId: string, runs: readonly { id: string; briefId: string }[]): string {
+  return runs.find((run) => run.briefId === linkId || run.id === linkId)?.id ?? linkId
+}
+
 /** The chat and topic a run belongs to, as an address, or null when no loaded job links to it. */
 export function chatForRun(
   lists: ChatLists,
