@@ -184,9 +184,7 @@ it('a custom look keeps the stream’s top fade as a theme-token gradient under 
   expect(rule).toContain('position: sticky')
   expect(rule).toContain('height: 22px')
   expect(rule).toContain('pointer-events: none')
-  expect(rule).toMatch(
-    /linear-gradient\(to bottom, var\(--stream-fade, var\(--bg\)\), transparent\)/,
-  )
+  expect(rule).toMatch(/linear-gradient\(to bottom, var\(--bg\), transparent\)/)
   // Lifted decision cards sit at z-index 100 (protected.css): the fade stays below.
   expect(Number(/z-index: (\d+)/.exec(rule)?.[1])).toBeLessThan(100)
 })

@@ -82,5 +82,5 @@
   margin-top: calc(-14px * var(--bold-d, 1));
   margin-bottom: calc(4px * var(--bold-d, 1) - 22px);
   pointer-events: none;
-  background: linear-gradient(to bottom, var(--stream-fade, var(--bg)), transparent);
+  background: linear-gradient(to bottom, var(--bg), transparent);
 }

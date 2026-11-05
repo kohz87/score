@@ -212,7 +212,11 @@ describe('the list of Score’s own fixed and sticky things', () => {
       const text = readFileSync(file, 'utf8')
       for (const rule of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         if (!/position:\s*(fixed|sticky)/.test(rule[2]!)) continue
+        // A pseudo-element that takes no clicks can never be the hit-test target, so it needs no exemption (3.30.0
+        // review: listing its element instead would have exempted everything inside it).
+        const unhittable = /pointer-events:\s*none/.test(rule[2]!)
         for (const selector of rule[1]!.split(',')) {
+          if (unhittable && /::(before|after)\s*$/.test(selector.trim())) continue
           const classes = selector.match(/\.[a-z][\w-]*/g) ?? []
           if (classes.length > 0 && !classes.some((name) => known.has(name)))
             missing.push(`${file}: ${selector.trim()}`)
