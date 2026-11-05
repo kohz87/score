@@ -118,6 +118,8 @@ export const KNOWN_OVERLAYS = [
   '.bold-rp-aside',
   '.bold-tb-sheet',
   '.bold-tb-scrim',
+  // The conversation: only its top-fade pseudo-element is sticky (bold-theme.css); the stream itself is static.
+  '.stream',
   '.bold-viewer-sheet',
   '.bold-knowledge-menu',
   '.bold-knowledge-scrim',

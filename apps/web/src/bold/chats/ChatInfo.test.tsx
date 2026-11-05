@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { agents, disposeRoomTest, makeJob, renderInRoom, room } from '../room/room-test-utils.tsx'
 import { ChatInfo } from './ChatInfo.tsx'
@@ -100,6 +100,28 @@ test('an older chat that still holds several active jobs lists them under Open j
   const past = screen.getByRole('heading', { name: /Past jobs/ }).closest('section')!
   expect(past.textContent).toContain('Old import')
   expect(past.textContent).not.toContain('Activity feed')
+})
+
+test('the bar’s “+N more open” (openTopics) opens Info’s Open jobs', () => {
+  renderInRoom(
+    <ChatInfo
+      room={room}
+      agents={agents}
+      jobs={[
+        defaultJob,
+        makeJob({ id: 'job-1', title: 'Activity feed', state: 'working' }),
+        makeJob({ id: 'job-2', title: 'Release notes', state: 'working' }),
+      ]}
+      everyone
+      openTopics={1}
+    />,
+  )
+  const open = screen.getByRole('heading', { name: /Open jobs/ }).closest('section')!
+  expect(
+    within(open)
+      .getByRole('button', { name: /Open jobs/ })
+      .getAttribute('aria-expanded'),
+  ).toBe('true')
 })
 
 test('on a phone, Info keeps Start a job beside the sections', () => {

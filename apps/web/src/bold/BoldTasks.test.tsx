@@ -586,3 +586,51 @@ test('Archive asks first, in a protected confirm, then archives and the task lea
   expect(JSON.parse(String(posts()[0]!.init!.body))).toEqual({ action: 'archive' })
   await waitFor(() => expect(screen.queryByRole('button', { name: 'T1 Task t1' })).toBeNull())
 })
+
+test('New task is a native modal dialog: showModal on open, Escape (cancel) closes it, focus returns to + New task', async () => {
+  const proto = HTMLDialogElement.prototype as { showModal?: () => void }
+  const original = proto.showModal
+  const shown = vi.fn(function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  })
+  proto.showModal = shown
+  try {
+    tasks = [task('t1')]
+    mount()
+    const opener = await screen.findByRole('button', { name: 'New task' })
+    opener.focus()
+    fireEvent.click(opener)
+    const dialog = screen.getByRole('dialog', { name: 'New task' })
+    expect(dialog.tagName).toBe('DIALOG')
+    expect(shown).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(within(dialog).getByLabelText('What needs doing'))
+    fireEvent(dialog, new Event('cancel', { cancelable: true }))
+    expect(screen.queryByRole('dialog', { name: 'New task' })).toBeNull()
+    expect(document.activeElement).toBe(opener)
+  } finally {
+    proto.showModal = original
+  }
+})
+
+test('the Archive confirm takes focus, Escape keeps the task, and focus returns to Archive…', async () => {
+  const panel = await openTask()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Archive…' }))
+  const confirm = within(panel).getByRole('alertdialog', { name: 'Archive this task?' })
+  expect(document.activeElement).toBe(confirm)
+  fireEvent.keyDown(confirm, { key: 'Escape' })
+  expect(within(panel).queryByRole('alertdialog')).toBeNull()
+  expect(document.activeElement).toBe(within(panel).getByRole('button', { name: 'Archive…' }))
+  expect(posts()).toHaveLength(0)
+})
+
+test('on a phone a task opens as a bottom sheet with a grip', async () => {
+  phone = true
+  tasks = [task('t1')]
+  details.t1 = detailOf(tasks[0]!)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'T1 Task t1' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Task details' })
+  expect(sheet.className).toContain('bold-tb-sheet')
+  expect(sheet.className).not.toContain('bold-tb-sheet--side')
+  expect(sheet.querySelector('.bold-tb-sheet-grip')?.getAttribute('aria-hidden')).toBe('true')
+})

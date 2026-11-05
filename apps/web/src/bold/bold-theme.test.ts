@@ -171,3 +171,22 @@ shapeIt(
     shapeExpect(shape).toMatch(/data-density='airy'\]\s*\{\s*--bold-d: 1\.2/)
   },
 )
+
+// 3.30.0: the conversation's 22px top fade survives a custom look. protected.css drops the stream's mask there (it would
+// cap the decision cards' lift), so the fade is a sticky gradient from theme tokens that takes no clicks.
+it('a custom look keeps the stream’s top fade as a theme-token gradient under the lifted cards', () => {
+  expect(protectedCss).toMatch(
+    /html\[data-look='custom'\] \[data-ui='bold'\] \.stream \{ mask-image: none !important;/,
+  )
+  const rule =
+    /:root\[data-look='custom'\] \[data-ui='bold'\] \.stream::before \{([^}]*)\}/.exec(css)?.[1] ??
+    ''
+  expect(rule).toContain('position: sticky')
+  expect(rule).toContain('height: 22px')
+  expect(rule).toContain('pointer-events: none')
+  expect(rule).toMatch(
+    /linear-gradient\(to bottom, var\(--stream-fade, var\(--bg\)\), transparent\)/,
+  )
+  // Lifted decision cards sit at z-index 100 (protected.css): the fade stays below.
+  expect(Number(/z-index: (\d+)/.exec(rule)?.[1])).toBeLessThan(100)
+})

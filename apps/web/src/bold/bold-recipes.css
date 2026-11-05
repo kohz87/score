@@ -554,6 +554,17 @@
   font-size: 14px;
 }
 
+[data-ui='bold'] .bold-rp-problem p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-rp-problem ul {
+  margin: calc(8px * var(--bold-d, 1)) 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: calc(4px * var(--bold-d, 1));
+}
+
 [data-ui='bold'] .bold-rp-problem b {
   color: var(--bad);
 }

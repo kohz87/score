@@ -277,7 +277,9 @@ export function BoldRoom() {
   }, [phone, workRequest, graphJobId, setSheetOpen])
 
   // 3.24.0: the All topics screen is gone. An old `?jobs=1` link opens the chat with Info on its Topics.
-  const jobsLink = params.get('jobs') === '1'
+  const jobsLink = params.get('jobs') === '1' || params.get('jobs') === 'open'
+  // `?jobs=open` (the job bar's "+N more open") lands on Info's Open jobs; `?jobs=1` on Past jobs.
+  const jobsLandOnOpen = params.get('jobs') === 'open'
   const [topicsLanding, setTopicsLanding] = useState(0)
   useEffect(() => {
     if (!jobsLink || directMode) return
@@ -291,12 +293,14 @@ export function BoldRoom() {
       setSheetOpen(true)
       setParams(next, { replace: true, state: location.state })
       requestAnimationFrame(() => {
-        const heading = document.getElementById('chat-info-topics')
+        const heading =
+          (jobsLandOnOpen ? document.getElementById('chat-info-open-jobs') : null) ??
+          document.getElementById('chat-info-topics')
         heading?.scrollIntoView?.({ block: 'start' })
         heading?.focus()
       })
     })
-  }, [directMode, jobsLink, location.state, params, setParams, setSheetOpen])
+  }, [directMode, jobsLandOnOpen, jobsLink, location.state, params, setParams, setSheetOpen])
 
   const closeSheet = () => {
     setSheetOpen(false)

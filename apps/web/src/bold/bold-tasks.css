@@ -623,21 +623,42 @@
   gap: 10px;
 }
 
+/* On a phone a task opens as a bottom sheet (mock-up 20-tasks-phone): a grip, the panel, the page dimmed behind. */
 [data-ui='bold'] .bold-tb-sheet {
   position: fixed;
-  inset: 0;
+  inset: auto 0 0 0;
   z-index: 80;
+  max-height: 88dvh;
   overflow-y: auto;
+  box-sizing: border-box;
+  border-radius: calc(24px * var(--bold-r, 1)) calc(24px * var(--bold-r, 1)) 0 0;
   background: var(--panel);
   color: var(--ink);
-  padding: max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 32px
-    max(16px, env(safe-area-inset-left, 0px));
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.5);
+  clip-path: inset(-100vmax 0 0 0);
+  padding: 12px max(16px, env(safe-area-inset-right, 0px))
+    max(22px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .bold-tb-sheet-grip {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 2px;
+  background: var(--line, #3a3d4a);
+}
+
+[data-ui='bold'] .bold-tb-sheet--side .bold-tb-sheet-grip {
+  display: none;
 }
 
 /* The side sheet (601-1279px): the details panel slides over the board's right edge; the dim is its own shadow, so no
    extra fixed element exists for a theme to hide. */
 [data-ui='bold'] .bold-tb-sheet--side {
   inset: 0 0 0 auto;
+  max-height: none;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
   width: min(440px, 100%);
   box-sizing: border-box;
   border-radius: calc(28px * var(--bold-r, 1)) 0 0 calc(28px * var(--bold-r, 1));
@@ -692,24 +713,20 @@
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
-[data-ui='bold'] .bold-tb-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-y: auto;
+/* The New task dialog is a native modal <dialog>: the browser makes the page behind it inert, keeps focus inside and
+   dims with ::backdrop (no fixed element of ours to hide). */
+[data-ui='bold'] .bold-tb-dialog::backdrop {
   background: rgb(5 6 9 / 0.62);
-  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px
-    max(16px, env(safe-area-inset-left, 0px));
 }
 
 [data-ui='bold'] .bold-tb-dialog {
   width: 100%;
   max-width: 560px;
   box-sizing: border-box;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
   margin: auto;
+  border: 0;
   padding: calc(28px * var(--bold-d, 1));
   border-radius: calc(28px * var(--bold-r, 1));
   background: var(--panel);
@@ -912,7 +929,7 @@
     min-height: 44px;
   }
 
-  [data-ui='bold'] .bold-tb-scrim {
-    align-items: flex-start;
+  [data-ui='bold'] .bold-tb-dialog {
+    margin-top: max(24px, env(safe-area-inset-top, 0px));
   }
 }

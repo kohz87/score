@@ -380,6 +380,8 @@ function BoldRecipeEditor({
   const history = useDraftHistory<Draft>(initialDefinition)
   const { draft, commit } = history
   const analysis = useMemo(() => analyzeRecipe(draft), [draft])
+  const [allProblems, setAllProblems] = useState(false)
+  const allProblemsId = useId()
   const [sel, setSel] = useState<Selection>(null)
   const selectedNodeId = sel?.kind === 'node' ? sel.id : null
   const [saved, setSaved] = useState(() => ({
@@ -883,12 +885,10 @@ function BoldRecipeEditor({
   )
 
   const problem = problems[0]
-  const problemTarget = problem
-    ? (problem.nodeId ??
-      (problem.edgeId
-        ? (graphDraft.edges.find((edge) => edge.id === problem.edgeId)?.from ?? null)
-        : null))
-    : null
+  const targetOf = (item: (typeof problems)[number]) =>
+    item.nodeId ??
+    (item.edgeId ? (graphDraft.edges.find((edge) => edge.id === item.edgeId)?.from ?? null) : null)
+  const problemTarget = problem ? targetOf(problem) : null
   const status = checkFailed ? 'bad' : problems.length > 0 ? 'bad' : 'ok'
   // Everything one menu holds: the steps' history, running and exporting, and the rest of what a recipe can do.
   const noRun = dirty || checking || viewing
@@ -1127,26 +1127,66 @@ function BoldRecipeEditor({
           {badge}
         </p>
         {(problems.length > 0 || checkFailed) && (
-          <p className="bold-rp-problem" data-status={status}>
-            <b>
-              {checkFailed && problems.length === 0
-                ? 'Score couldn’t check this recipe.'
-                : `${problems.length} ${problems.length === 1 ? 'thing' : 'things'} to fix before saving:`}
-            </b>{' '}
-            {problem?.message}
-            {problemTarget && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  className="bold-link"
-                  onClick={() => selectNode(problemTarget)}
-                >
-                  Show it
-                </button>
-              </>
+          <div className="bold-rp-problem" data-status={status}>
+            <p>
+              <b>
+                {checkFailed && problems.length === 0
+                  ? 'Score couldn’t check this recipe.'
+                  : `${problems.length} ${problems.length === 1 ? 'thing' : 'things'} to fix before saving:`}
+              </b>{' '}
+              {problem?.message}
+              {problemTarget && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="bold-link"
+                    onClick={() => selectNode(problemTarget)}
+                  >
+                    Show it
+                  </button>
+                </>
+              )}
+              {problems.length > 1 && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="bold-link"
+                    aria-expanded={allProblems}
+                    aria-controls={allProblemsId}
+                    onClick={() => setAllProblems((open) => !open)}
+                  >
+                    {allProblems ? 'Hide' : 'Show all'}
+                  </button>
+                </>
+              )}
+            </p>
+            {allProblems && problems.length > 1 && (
+              <ul id={allProblemsId} aria-label="All problems">
+                {problems.map((item, index) => {
+                  const target = targetOf(item)
+                  return (
+                    <li key={`${item.code}-${item.nodeId ?? item.edgeId ?? ''}-${index}`}>
+                      {item.message}
+                      {target && (
+                        <>
+                          {' '}
+                          <button
+                            type="button"
+                            className="bold-link"
+                            onClick={() => selectNode(target)}
+                          >
+                            Show it
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
             )}
-          </p>
+          </div>
         )}
         {problems.length === 0 && warnings > 0 && (
           <p className="small muted">

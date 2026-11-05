@@ -1,5 +1,5 @@
 import type { OrchestrationSummary, WorkflowRunSummary, WorkflowSummary } from '@score/contract'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { orchestrationsQuery } from '../routes/orchestrations/orchestration-queries.ts'
@@ -74,12 +74,32 @@ function RecipeCard({
 }) {
   const navigate = useNavigate()
   const archive = useArchiveWorkflow()
-  const detail = useWorkflow(recipe.id)
+  // The facts line needs the recipe's detail; fetch it only once the card has scrolled into view (a cached one shows
+  // at once). Without an IntersectionObserver (tests, old engines) the card counts as seen.
+  const [seen, setSeen] = useState(false)
+  const card = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (seen) return
+    const node = card.current
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setSeen(true)
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setSeen(true)
+        observer.disconnect()
+      }
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [seen])
+  const detail = useWorkflow(recipe.id, seen)
   const facts = detail.data
     ? recipeFacts(detail.data.latest.definition)
     : (recipe.description ?? '')
   return (
-    <li className="bold-rc" aria-label={recipe.name}>
+    <li ref={card} className="bold-rc" aria-label={recipe.name}>
       <div className="bold-rc-head">
         <b>{recipe.name}</b>
         {recipe.archivedAt ? (

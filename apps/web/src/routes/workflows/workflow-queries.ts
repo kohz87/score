@@ -50,10 +50,10 @@ export function useWorkflows() {
   })
 }
 
-export function useWorkflow(id: string | undefined) {
+export function useWorkflow(id: string | undefined, enabled = true) {
   return useQuery({
     queryKey: workflowKey(id ?? ''),
-    enabled: id !== undefined,
+    enabled: id !== undefined && enabled,
     queryFn: async ({ signal }) =>
       WorkflowDetailSchema.parse(
         await apiFetch(`workflows/${encodeURIComponent(id!)}`, { signal }),

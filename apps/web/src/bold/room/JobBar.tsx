@@ -13,6 +13,7 @@ import { jobStateLabel } from './room-model.ts'
 import { useStopJob } from './StopJob.tsx'
 import { recipeRun } from './thread-model.ts'
 import { jobDot } from './job-dot.ts'
+import { goToNearestCard } from './needs-jump-dom.ts'
 
 const money = (usd: number) => `$${usd.toFixed(2)}`
 
@@ -60,12 +61,20 @@ export function JobBar({
   agents,
   onShowGraph,
   menu,
+  moreOpen = 0,
+  onShowMore,
+  onStopped,
 }: {
   job: Job
   agents: AgentSummary[]
   onShowGraph?: (jobId: string) => void
   /** The job's ⋯ menu (rename, close, share, export, delete): the dividers that carried it are gone with one job. */
   menu?: ReactNode
+  /** An older chat that still holds several open jobs: the bar is the newest one's, and "+N more open" opens Info. */
+  moreOpen?: number
+  onShowMore?: () => void
+  /** Stop job finished: the bar is about to go, so the chat shows the result where it was. */
+  onStopped?: (job: Job) => void
 }) {
   const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
   const workflows = useStreamQuery(workflowRunsQuery).data ?? []
@@ -97,6 +106,9 @@ export function JobBar({
         line={jobBarLine(job, agents, step, spent)}
         onShowGraph={job.recipe ? onShowGraph : undefined}
         menu={menu}
+        moreOpen={moreOpen}
+        onShowMore={onShowMore}
+        onStopped={onStopped}
       />
     </section>
   )
@@ -155,13 +167,19 @@ function JobBarBody({
   line,
   onShowGraph,
   menu,
+  moreOpen,
+  onShowMore,
+  onStopped,
 }: {
   job: Job
   line: string
   onShowGraph: ((jobId: string) => void) | undefined
   menu: ReactNode
+  moreOpen: number
+  onShowMore: (() => void) | undefined
+  onStopped: ((job: Job) => void) | undefined
 }) {
-  const stop = useStopJob(job)
+  const stop = useStopJob(job, { onStopped: () => onStopped?.(job) })
   return (
     <>
       <div className="bold-job-bar-row">
@@ -176,7 +194,23 @@ function JobBarBody({
             {job.title}
           </b>
           <span className="bold-job-bar-line">{line}</span>
+          {moreOpen > 0 && onShowMore && (
+            <button type="button" className="bold-job-bar-more" onClick={onShowMore}>
+              +{moreOpen} more open
+            </button>
+          )}
         </div>
+        {job.state === 'waiting_on_you' && (
+          <button
+            type="button"
+            className="bold-job-bar-needs"
+            data-protected="inline-flex"
+            aria-label="This job needs you. Go to the card."
+            onClick={() => goToNearestCard()}
+          >
+            Needs you
+          </button>
+        )}
         {onShowGraph && (
           <button
             type="button"
