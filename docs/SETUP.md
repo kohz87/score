@@ -418,7 +418,20 @@ only gets the new group after the user's systemd manager restarts: log out and i
 "Docker isn't installed or running on this machine". Hermes pulls `nousresearch/hermes-sandbox:desktop` (≈ 4.4 GB) on
 first use. What Docker does and doesn't separate is shown on the agent page and in ARCHITECTURE D7.1.
 
+### An agent's Bot Desktop (3.3.0 screen, 3.17.0 take over; optional)
+Hermes gives each profile its own headless Xfce screen (TigerVNC on a private socket) that the agent's `computer_use`
+and headed browser act on. Score shows it on Screens and lets you take it over behind the security password. It needs
+these system packages once (Hermes' own list, about 54 packages; the owner runs it, it needs sudo):
+
+```bash
+sudo apt-get install -y --no-install-recommends tigervnc-standalone-server xfce4-panel xfwm4 xfdesktop4 xfce4-settings xfce4-terminal dbus-x11 x11-xserver-utils x11-utils x11-xkb-utils xauth fonts-dejavu-core
+```
+
+Then start a profile's screen with `hermes -p <profile> computer-use screen start` (`status` / `stop` likewise). First
+installed and started for `gem38` on 2026-11-05.
+
 ## Changelog of this file
+- 2026-11-05: an agent's Bot Desktop: the packages and how to start a profile's screen.
 - 2026-10-12: no production switch for the process-group engine; the pass is saved before any unit launch (decision 70).
 - 2026-10-12: supervised services are the only engine once an installation has passed the check; a later failure pauses coding (decision 69).
 - 2026-10-12: coding runs as supervised services, capability check, `SCORE_CODING_BACKEND` (PLAN 7.7a part 3).
