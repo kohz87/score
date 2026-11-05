@@ -18,8 +18,6 @@ export const RoomProjectBodySchema = z
   .object({ name: z.string().trim().min(1).max(64), color: ProjectColorSchema })
   .strict()
 
-export const RoomProjectEventSchema = z.object({ id: z.string().min(1) })
-
 /** Where a room's history came from when it was imported from a Hermes session Score did not start. */
 export const RoomImportSchema = z.object({
   agentId: AgentIdSchema,

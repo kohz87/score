@@ -57,7 +57,6 @@ const eventData = {
     updatedAt: '2026-10-24T00:00:00.000Z',
   },
   'room-project.upserted': f.roomProject,
-  'room-project.deleted': { id: 'project-1' },
   'message.created': f.message,
   'message.delta': f.delta,
   'message.completed': f.completed,

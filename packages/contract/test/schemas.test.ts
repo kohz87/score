@@ -520,7 +520,6 @@ const cases = [
   ],
   ['SummaryEditBodySchema', { text: 'Edited summary' }, { text: '  ' }],
   ['RoomProjectBodySchema', { name: 'Launch', color: '#4A2FD9' }, { name: '', color: '#4A2FD9' }],
-  ['RoomProjectEventSchema', { id: 'project-1' }, { id: '' }],
   ['RoomTagSchema', 'q4', 'Q 4'],
   ['ProjectColorSchema', '#4A2FD9', 'purple'],
   [
