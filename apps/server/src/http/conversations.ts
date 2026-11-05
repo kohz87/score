@@ -26,7 +26,6 @@ const SearchQuerySchema = z
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict()
-const IdParams = z.object({ id: z.string().min(1).max(200) })
 const RoomParams = z.object({ roomId: z.string().min(1).max(256) })
 
 // Chat conversations beyond the thread itself (PLAN 5.26): projects, message search, export.

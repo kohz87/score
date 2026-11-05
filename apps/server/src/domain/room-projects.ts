@@ -3,7 +3,6 @@ import { RoomProjectSchema, type RoomProject } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
-import { readRoom, roomChanged, roomIds, roomRow } from './rooms.ts'
 
 const RowSchema = z.object({ id: z.string(), name: z.string(), color: z.string() })
 

@@ -1500,3 +1500,16 @@ test('with no job running, Start a run… goes straight to Start a job', async (
   await waitFor(() => expect(opened).toEqual([{ roomId: 'room-1' }]))
   expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
 })
+
+test('3.30.0 gate: an older chat’s bar follows the job you’re in, as Info and the composer do', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', createdAt: '2026-10-24T09:00:00.000Z' }),
+    makeJob({ id: 'job-2', title: 'Release notes', createdAt: '2026-10-24T09:30:00.000Z' }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-1'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  await waitFor(() => expect(within(bar).getByText('Activity feed')).toBeDefined())
+  expect(within(bar).getByRole('button', { name: '+1 more open' })).toBeDefined()
+  expect(screen.getByLabelText('Where this message goes').textContent).toContain('in Activity feed')
+})

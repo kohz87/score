@@ -213,7 +213,13 @@ function LoadedTeamRoom({
   const activeJob = theActiveJob(allJobs)
   // An older chat that still holds several open jobs shows the newest one's bar, with "+N more open" (3.30.0).
   const openJobList = activeJobs(allJobs)
-  const barJob = activeJob ?? openJobList[0] ?? null
+  // An older chat with several open jobs shows the job you're in: the one Info and the composer use, the picked one
+  // else the newest (3.30.0 gate: the bar named one job while Info and the composer named another).
+  const barJob =
+    activeJob ??
+    (currentJob && openJobList.some((job) => job.id === currentJob.id) ? currentJob : null) ??
+    openJobList[0] ??
+    null
   const moreOpen = Math.max(0, openJobList.length - 1)
   // After Stop job the bar unmounts; its result stays here for a few seconds, or until the next job starts.
   const [stoppedNote, setStoppedNote] = useState<{ jobId: string; text: string } | null>(null)

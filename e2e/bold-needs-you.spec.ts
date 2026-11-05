@@ -635,13 +635,19 @@ for (const viewport of sizes) {
       await chip.click()
       await expect(approvalCard).toBeFocused()
       await expect(approvalCard).toBeInViewport()
-      if (viewport.width <= 860) {
+      // 3.30.0: the job bar takes height, so whether the other card still shows depends on the view, not the width.
+      const reviewShown = await reviewCard.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const view = document.querySelector('#bold-room-stream')!.getBoundingClientRect()
+        return box.bottom > view.top && box.top < view.bottom
+      })
+      if (!reviewShown) {
         // The one left is still earlier: the chip now counts it alone and goes to it.
         await expect(chip).toHaveText('1 needs you ↑')
         await chip.click()
         await expect(reviewCard).toBeFocused()
       } else {
-        // A tall view already shows both cards, so nothing is out of view and the chip leaves.
+        // The view already shows both cards, so nothing is out of view and the chip leaves.
         await expect(reviewCard).toBeInViewport()
         await expect(chip).toHaveCount(0)
       }
