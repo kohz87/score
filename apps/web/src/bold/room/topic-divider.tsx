@@ -7,7 +7,7 @@ export type SystemLine = { id: string; at: string; text: string }
 
 /** What a divider says about a topic: its state in the words the mock-up uses. */
 export function topicStateText(job: Job): string {
-  return job.state === 'waiting_on_you' ? 'waiting on you' : jobStateLabel(job).toLowerCase()
+  return job.needsYou ? 'needs you' : jobStateLabel(job).toLowerCase()
 }
 
 /**

@@ -795,7 +795,7 @@ test('"+N more open" on an older chat’s bar asks for Info’s Open jobs', asyn
 test('a job waiting on you says so in its bar with a protected Needs you pill', async () => {
   stubRoom([
     makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
-    makeJob({ id: 'job-1', title: 'Activity feed', state: 'waiting_on_you' }),
+    makeJob({ id: 'job-1', title: 'Activity feed', state: 'waiting_on_you', needsYou: true }),
   ])
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
   const bar = await screen.findByRole('region', { name: 'Current job' })

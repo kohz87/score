@@ -88,7 +88,7 @@ test('an older chat that still holds several active jobs lists them under Open j
       jobs={[
         defaultJob,
         makeJob({ id: 'job-1', title: 'Activity feed', state: 'working' }),
-        makeJob({ id: 'job-2', title: 'Release notes', state: 'waiting_on_you' }),
+        makeJob({ id: 'job-2', title: 'Release notes', state: 'waiting_on_you', needsYou: true }),
         makeJob({ id: 'job-old', title: 'Old import', state: 'closed' }),
       ]}
       everyone

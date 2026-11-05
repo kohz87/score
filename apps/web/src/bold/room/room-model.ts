@@ -1,7 +1,8 @@
 import type { Approval, Exchange, ExchangeOption, Job, Room } from '@score/contract'
 
 export function jobStateLabel(job: Job): string {
-  if (job.state === 'waiting_on_you') return 'Needs you'
+  // 3.30.1: the agents are done and it is the person's move; a decision is `needsYou`, not this state.
+  if (job.state === 'waiting_on_you') return job.needsYou ? 'Needs you' : 'Your turn'
   if (job.state === 'open') return 'Open'
   if (job.state === 'working') return 'Working'
   if (job.state === 'done') return 'Done'

@@ -729,6 +729,11 @@ title }` (`JobRunningDetails`, the running one). Rooms that already held several
   - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
+  - **`Job.needsYou?: boolean`** (3.30.1): a decision waits on the person in this job — an exchange paused for them
+    (`paused_budget` / `waiting_on_you` with a pause), or a report-back that asks for an OK or wasn't confirmed. The
+    server always sends it; readers treat absent as false. `state: 'waiting_on_you'` alone only says it is the person's
+    turn (the agents are done), and the UI calls that "Your turn", not "Needs you". An exchange change re-sends its
+    job's `job.upserted`, so `needsYou` stays current.
   - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
 exchangeBudget (8); jobTurnLimit (40); spendCapUsd: number | null; recipe: { kind; ref } | null; createdAt;
 updatedAt }`; `Exchange { id; jobId; roomId; kind:

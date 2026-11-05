@@ -134,7 +134,7 @@ test('This job opens by itself for a paused exchange that needs the person, and 
 test('an older chat’s waiting job opens Open jobs and is marked in its row (3.27.1 review, 3.28.0)', () => {
   const waiting = [
     ...jobs,
-    makeJob({ id: 'job-3', title: 'Pricing page', state: 'waiting_on_you' }),
+    makeJob({ id: 'job-3', title: 'Pricing page', state: 'waiting_on_you', needsYou: true }),
   ]
   renderInRoom(<ChatInfo room={room} agents={agents} jobs={waiting} everyone />, ['/b?job=job-1'])
   const open = toggle(/Open jobs/)

@@ -89,6 +89,7 @@ export function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
       "SELECT DISTINCT agent_id FROM message_runs WHERE job_id = ? AND state = 'active' AND purpose IS NULL ORDER BY agent_id",
     )
     .all(row.id) as { agent_id: string }[]
+  const reportBack = row.source === null ? null : reportBackOf(sqlite, row.id)
   return JobSchema.parse({
     id: row.id,
     roomId: row.room_id,
@@ -107,7 +108,18 @@ export function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
     messageCount: counts.n,
     summary: jobSummaryLine(sqlite, row),
     source: row.source === null ? null : JobSourceSchema.parse(JSON.parse(row.source)),
-    reportBack: row.source === null ? null : reportBackOf(sqlite, row.id),
+    reportBack,
+    needsYou:
+      Boolean(
+        sqlite
+          .prepare(
+            `SELECT 1 FROM exchanges WHERE job_id = ? AND pause_reason IS NOT NULL
+               AND state IN ('paused_budget', 'waiting_on_you') LIMIT 1`,
+          )
+          .get(row.id),
+      ) ||
+      reportBack?.state === 'needs_ok' ||
+      reportBack?.state === 'not_confirmed',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
@@ -340,7 +352,12 @@ export function updateExchange(
       `UPDATE exchanges SET ${sets.join(', ')}, updated_at = ?, version = version + 1 WHERE id = ?`,
     )
     .run(...Object.values(change), now, id)
-  return exchangeEvent(sqlite, id)
+  // 3.30.1: the job's `needsYou` follows its exchanges, so the job is sent again with them.
+  const jobId = (
+    sqlite.prepare('SELECT job_id FROM exchanges WHERE id = ?').get(id) as
+      { job_id: string } | undefined
+  )?.job_id
+  return [...exchangeEvent(sqlite, id), ...(jobId ? jobEvent(sqlite, jobId) : [])]
 }
 
 export function openExchange(

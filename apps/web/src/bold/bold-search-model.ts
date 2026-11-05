@@ -96,7 +96,7 @@ export const RESULT_LIMIT = 30
 const stateLabel: Record<Job['state'], string> = {
   open: 'open',
   working: 'working',
-  waiting_on_you: 'needs you',
+  waiting_on_you: 'your turn',
   done: 'done',
   closed: 'closed',
 }

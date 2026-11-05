@@ -465,3 +465,14 @@ test('a hold without a turn never erases the held turn or its reason (review)', 
   })
   expect(h.exchanges()[0]!.pause!.droppedAgents).toBeUndefined()
 })
+
+test('3.30.1: a paused exchange is a decision (the job needsYou); deciding clears it, and a finished turn is only the person’s turn', () => {
+  const review = reviewUntilPaused()
+  expect(h.jobView()).toMatchObject({ state: 'waiting_on_you', needsYou: true })
+  h.decide(review.id, { option: 'more_turns', turns: 4 })
+  expect(h.jobView().needsYou).toBe(false)
+  // The reviewer passes it: the exchange ends, the agents are done, and it is the person's turn — no decision.
+  h.turn('reviewer', { action: 'approve', note: 'Good.' })
+  for (let i = 0; i < 5 && h.pending().length; i++) h.turn(h.pending()[0]!.agent_id)
+  expect(h.jobView()).toMatchObject({ state: 'waiting_on_you', needsYou: false })
+})

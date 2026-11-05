@@ -36,8 +36,12 @@ export function jobBarLine(
   const parts: string[] = []
   const who =
     job.activeAgents.length > 0 ? job.activeAgents : job.holderAgentId ? [job.holderAgentId] : []
-  if (job.state === 'waiting_on_you')
+  if (job.needsYou)
     parts.push(who.length > 0 ? `${names(who.slice(0, 1), agents)} needs you` : 'Needs you')
+  else if (job.state === 'waiting_on_you')
+    parts.push(
+      who.length > 0 ? `${names(who.slice(0, 1), agents)} is done · your turn` : 'Your turn',
+    )
   else if (who.length > 0)
     parts.push(
       `${names(who, agents)} ${job.state === 'open' ? 'is up next' : who.length > 1 ? 'are working' : 'is working'}`,
@@ -138,7 +142,7 @@ export function PastJobBar({
         <span
           className="bold-job-bar-dot"
           aria-hidden="true"
-          style={{ background: jobDot(job.state) }}
+          style={{ background: jobDot(job.state, job.needsYou) }}
         />
         <div className="bold-job-bar-text">
           <span className="bold-job-bar-eyebrow">PAST JOB</span>
@@ -186,7 +190,7 @@ function JobBarBody({
         <span
           className="bold-job-bar-dot"
           aria-hidden="true"
-          style={{ background: jobDot(job.state) }}
+          style={{ background: jobDot(job.state, job.needsYou) }}
         />
         <div className="bold-job-bar-text">
           <span className="bold-job-bar-eyebrow">JOB</span>
@@ -200,7 +204,7 @@ function JobBarBody({
             </button>
           )}
         </div>
-        {job.state === 'waiting_on_you' && (
+        {job.needsYou && (
           <button
             type="button"
             className="bold-job-bar-needs"

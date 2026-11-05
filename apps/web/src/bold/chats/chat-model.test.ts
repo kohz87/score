@@ -77,7 +77,12 @@ test('groups and directs are each ordered newest activity first and describe the
     agents: [agent('lead'), agent('builder', 'working'), agent('reviewer', 'waiting')],
     jobsByRoom: {
       team: [job('old job', 'team', '2026-11-01T10:00:00.000Z')],
-      feed: [job('Socket', 'feed', '2026-11-03T10:00:00.000Z', { state: 'waiting_on_you' })],
+      feed: [
+        job('Socket', 'feed', '2026-11-03T10:00:00.000Z', {
+          state: 'waiting_on_you',
+          needsYou: true,
+        }),
+      ],
       'd-builder': [job('chat', 'd-builder', '2026-11-02T10:00:00.000Z')],
     },
     approvals: [],
@@ -178,4 +183,19 @@ test('3.29.0 gate: a run link names the run by its brief; the chat job by the ru
   expect(runIdOf('brief-wfrun-1', runs)).toBe('wfr-1')
   expect(runIdOf('orc-1', runs)).toBe('orc-1')
   expect(runIdOf('unknown', runs)).toBe('unknown')
+})
+
+test('3.30.1: a chat whose job only waits for the person’s next message is their turn, not a needs-you', () => {
+  const lists = buildChatLists({
+    rooms: [room('feed', { name: 'Feed crew' })],
+    teamRooms: [],
+    directRooms: [],
+    agents: [agent('lead')],
+    jobsByRoom: {
+      feed: [job('Socket', 'feed', '2026-11-03T10:00:00.000Z', { state: 'waiting_on_you' })],
+    },
+    approvals: [],
+    questions: [],
+  })
+  expect(lists.groups[0]).toMatchObject({ line: 'Socket · your turn', needsYou: false })
 })
