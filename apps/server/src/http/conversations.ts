@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { buildRoomExport, roomExportMarkdown } from '../domain/room-export.ts'
-import { createProject, deleteProject, updateProject } from '../domain/room-projects.ts'
+import { createProject } from '../domain/room-projects.ts'
 import { searchMessages } from '../domain/room-search.ts'
 import { roomRow } from '../domain/rooms.ts'
 import type { HermesPort } from '../hermes/index.ts'
@@ -48,32 +48,6 @@ export function registerConversationRoutes(
     })
     return RoomProjectSchema.parse(project)
   })
-  app.patch('/api/room-projects/:id', guard, async (request) => {
-    const { id } = IdParams.parse(request.params)
-    const body = RoomProjectBodySchema.partial()
-      .refine((value) => Object.keys(value).length > 0)
-      .parse(request.body)
-    await ingest.submit({
-      source: 'rooms',
-      identity: randomUUID(),
-      apply: ({ sqlite }) => updateProject(sqlite, id, body),
-    })
-    return db.read((sqlite) =>
-      RoomProjectSchema.parse(
-        sqlite.prepare('SELECT id, name, color FROM room_projects WHERE id = ?').get(id),
-      ),
-    )
-  })
-  app.delete('/api/room-projects/:id', guard, async (request, reply) => {
-    const { id } = IdParams.parse(request.params)
-    await ingest.submit({
-      source: 'rooms',
-      identity: randomUUID(),
-      apply: ({ sqlite, now }) => deleteProject(sqlite, id, now),
-    })
-    return reply.code(204).send()
-  })
-
   app.get('/api/search/messages', async (request) => {
     const { q, roomId, jobId, jobs, limit } = SearchQuerySchema.parse(request.query)
     return MessageSearchResponseSchema.parse({

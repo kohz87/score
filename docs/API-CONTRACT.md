@@ -963,10 +963,9 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
 - `GET /api/rooms` also returns `projects: RoomProject[]` (`{ id; name; color: '#RRGGBB' }`, by name).
 - `PATCH /api/rooms/:roomId` also takes `pinned?`, `archived?`, `projectId?: string | null` (`404` for an unknown project),
   `tags?: string[] | null` (`null` = follow the name's tags again; at most 12, `^[a-z0-9][a-z0-9-]{0,31}$`).
-- **H** `POST /api/room-projects` `{ name; color }` → `RoomProject` (`409 conflict` on a name already used, case-insensitive) ·
-  **H** `PATCH /api/room-projects/:id` `{ name?; color? }` → `RoomProject` · **H** `DELETE /api/room-projects/:id` → `204`
-  (its rooms leave the project). Stream: `room-project.upserted` (the project) and `room-project.deleted` (`{ id }`); a
-  deleted project also emits `room.upserted` for each room that was in it.
+- **H** `POST /api/room-projects` `{ name; color }` → `RoomProject` (`409 conflict` on a name already used, case-insensitive).
+  Stream: `room-project.upserted` (the project). (3.30.0: renaming and deleting a project — `PATCH` / `DELETE
+  /api/room-projects/:id` and `room-project.deleted` — were removed: no screen used them since 3.29.1, decision 167.)
 - **Rename** (PLAN 5.36): `PATCH /api/rooms/:roomId { name }` is the rename (the same name rules as creating a room: `#`-prefixed
   slug, then optional `#tag` words; `409 conflict` for a name another room uses). Renaming is an organising action like
   pinning and tags: it is allowed while an orchestration or workflow run owns the room (it does not touch the run's

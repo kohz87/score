@@ -39,35 +39,6 @@ export function createProject(
   return [{ type: 'room-project.upserted', data: project }]
 }
 
-export function updateProject(
-  sqlite: DatabaseSync,
-  id: string,
-  patch: { name?: string | undefined; color?: string | undefined },
-): DomainEventDraft[] {
-  const current = projectRow(sqlite, id)
-  const next = { id, name: patch.name ?? current.name, color: patch.color ?? current.color }
-  if (next.name !== current.name) assertNameFree(sqlite, next.name, id)
-  sqlite
-    .prepare('UPDATE room_projects SET name = ?, color = ? WHERE id = ?')
-    .run(next.name, next.color, id)
-  return [{ type: 'room-project.upserted', data: RoomProjectSchema.parse(next) }]
-}
-
-/** Rooms in a deleted project simply leave it. */
-export function deleteProject(sqlite: DatabaseSync, id: string, now: string): DomainEventDraft[] {
-  projectRow(sqlite, id)
-  const members = roomIds(sqlite).filter((roomId) => roomRow(sqlite, roomId).project_id === id)
-  const events: DomainEventDraft[] = []
-  for (const roomId of members) {
-    const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
-    sqlite.prepare('UPDATE rooms SET project_id = NULL WHERE id = ?').run(roomId)
-    events.push(...roomChanged(sqlite, roomId, now, before))
-  }
-  sqlite.prepare('DELETE FROM room_projects WHERE id = ?').run(id)
-  events.push({ type: 'room-project.deleted', data: { id } })
-  return events
-}
-
 export function assertProject(sqlite: DatabaseSync, id: string): void {
   projectRow(sqlite, id)
 }
