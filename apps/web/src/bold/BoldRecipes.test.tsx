@@ -288,6 +288,35 @@ test('Recipes is a library of cards: the built-in one first, no editor open, eac
   expect(router.state.location.search).toBe('?start=job&recipe=wf-release')
 })
 
+test('a library card fetches its recipe only once it scrolls into view', async () => {
+  const watched = new Map<
+    Element,
+    { cb: IntersectionObserverCallback; self: IntersectionObserver }
+  >()
+  class FakeObserver {
+    constructor(private cb: IntersectionObserverCallback) {}
+    observe(node: Element) {
+      watched.set(node, { cb: this.cb, self: this as unknown as IntersectionObserver })
+    }
+    disconnect() {}
+    unobserve() {}
+    takeRecords() {
+      return []
+    }
+  }
+  vi.stubGlobal('IntersectionObserver', FakeObserver)
+  mount('/b/settings/recipes')
+  const card = await screen.findByRole('listitem', { name: 'Release notes' })
+  const detailCalls = () => requests.filter((item) => item.url === '/api/workflows/wf-release')
+  // Give the list a moment: nothing was fetched for a card nobody has seen.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(detailCalls()).toHaveLength(0)
+  const { cb, self } = watched.get(card)!
+  cb([{ isIntersecting: true, target: card } as unknown as IntersectionObserverEntry], self)
+  await waitFor(() => expect(detailCalls()).toHaveLength(1))
+  await waitFor(() => expect(card.textContent).toMatch(/\d+ steps?/))
+})
+
 test('the library is searchable, New recipe opens an editor, and lead decides is a page with a way to start a job', async () => {
   const router = mount('/b/settings/recipes')
   await screen.findByRole('listitem', { name: 'Release notes' })
@@ -504,6 +533,25 @@ test('problems are one line under the header, with a way to the step, and every 
   expect(
     within(inspector).getAllByText(/nothing is connected to "when it fails"/).length,
   ).toBeGreaterThan(0)
+})
+
+test('Show all lists every problem, each with its Show it; Hide folds the list', async () => {
+  mount('/b/settings/recipes/wf-draft')
+  const line = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('.bold-rp-problem')
+    if (!found) throw new Error('no problem line yet')
+    return found
+  })
+  const count = Number(/^(\d+)/.exec(line.textContent ?? '')?.[1])
+  expect(count).toBeGreaterThan(1)
+  expect(within(line).queryByRole('list', { name: 'All problems' })).toBeNull()
+  fireEvent.click(within(line).getByRole('button', { name: 'Show all' }))
+  const list = within(line).getByRole('list', { name: 'All problems' })
+  expect(within(list).getAllByRole('listitem')).toHaveLength(count)
+  fireEvent.click(within(list).getAllByRole('button', { name: 'Show it' })[0]!)
+  expect(screen.getByRole('complementary', { name: 'Selected step' })).toBeTruthy()
+  fireEvent.click(within(line).getByRole('button', { name: 'Hide' }))
+  expect(within(line).queryByRole('list', { name: 'All problems' })).toBeNull()
 })
 
 test('typing {{ in an instruction offers the inputs and the earlier steps, and Enter inserts the choice', async () => {

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useSearchParams } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Approval, OutsideSession, Room } from '@score/contract'
@@ -765,9 +765,54 @@ test('an older chat that still holds several active jobs keeps choosing: the con
       'in Release notes',
     ),
   )
-  // No single job to show on a bar: the dividers stay, and the bar does not.
-  expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull()
+  // 3.30.0: the bar is the newest active job's, with "+N more open"; the dividers stay for the rest.
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  expect(within(bar).getByText('Release notes')).toBeDefined()
+  expect(within(bar).getByRole('button', { name: '+1 more open' })).toBeDefined()
   expect(screen.getAllByRole('separator').length).toBeGreaterThan(1)
+})
+
+test('"+N more open" on an older chat’s bar asks for Info’s Open jobs', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', createdAt: '2026-10-24T09:00:00.000Z' }),
+    makeJob({ id: 'job-2', title: 'Release notes', createdAt: '2026-10-24T09:30:00.000Z' }),
+    makeJob({ id: 'job-3', title: 'Docs', createdAt: '2026-10-24T09:40:00.000Z' }),
+  ])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <ParamsProbe />
+    </>,
+    ['/b'],
+  )
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  expect(within(bar).getByText('Docs')).toBeDefined()
+  fireEvent.click(within(bar).getByRole('button', { name: '+2 more open' }))
+  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('jobs=open'))
+})
+
+test('a job waiting on you says so in its bar with a protected Needs you pill', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', state: 'waiting_on_you' }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  const pill = within(bar).getByRole('button', { name: /needs you/i })
+  expect(pill.getAttribute('data-protected')).toBe('inline-flex')
+  expect(pill.textContent).toBe('Needs you')
+  // Tapping with no card in view does nothing and breaks nothing.
+  fireEvent.click(pill)
+  expect(screen.getByRole('region', { name: 'Current job' })).toBeDefined()
+  cleanup()
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', state: 'working' }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  const working = await screen.findByRole('region', { name: 'Current job' })
+  expect(within(working).queryByText('Needs you')).toBeNull()
 })
 
 test('the job bar shows only with an active job, with its title, state line and Stop job', async () => {
@@ -835,8 +880,10 @@ test('Stop job on the bar asks first, then ends the job; Keep going leaves it ru
   fireEvent.click(within(bar).getByRole('button', { name: 'Stop job' }))
   fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Stop job' }))
   await waitFor(() => expect(lastRequest(fetchMock, '/api/jobs/job-1/end', 'POST')).toBeDefined())
-  // The job is closed: its bar goes.
+  // The job is closed: its bar goes, and the result stays where it was.
   await waitFor(() => expect(screen.queryByRole('region', { name: 'Current job' })).toBeNull())
+  const note = await screen.findByText('Stopped “Activity feed”. It’s in Past jobs.')
+  expect(note.getAttribute('role')).toBe('status')
 })
 
 test('Next up shows a queued trigger call under the bar, and Skip drops it', async () => {
@@ -1452,4 +1499,17 @@ test('with no job running, Start a run… goes straight to Start a job', async (
   fireEvent.click(await screen.findByRole('button', { name: 'Start a run…' }))
   await waitFor(() => expect(opened).toEqual([{ roomId: 'room-1' }]))
   expect(screen.queryByRole('dialog', { name: 'Team room already has a job' })).toBeNull()
+})
+
+test('3.30.0 gate: an older chat’s bar follows the job you’re in, as Info and the composer do', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true }),
+    makeJob({ id: 'job-1', title: 'Activity feed', createdAt: '2026-10-24T09:00:00.000Z' }),
+    makeJob({ id: 'job-2', title: 'Release notes', createdAt: '2026-10-24T09:30:00.000Z' }),
+  ])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-1'])
+  const bar = await screen.findByRole('region', { name: 'Current job' })
+  await waitFor(() => expect(within(bar).getByText('Activity feed')).toBeDefined())
+  expect(within(bar).getByRole('button', { name: '+1 more open' })).toBeDefined()
+  expect(screen.getByLabelText('Where this message goes').textContent).toContain('in Activity feed')
 })

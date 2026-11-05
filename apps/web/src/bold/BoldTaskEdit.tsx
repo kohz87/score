@@ -22,15 +22,18 @@ function failureText(failure: unknown, verb: string): string {
   return `Couldn’t ${verb}. Try again.`
 }
 
-/** Escape closes a dialog; focus goes back to what opened it. */
+/** A native modal dialog (inert page behind, focus kept inside); Escape closes it and focus goes back to what opened it. */
 function useDialogFocus(onClose: () => void) {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLDialogElement>(null)
   const close = useRef(onClose)
   useEffect(() => {
     close.current = onClose
   }, [onClose])
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
+    const dialog = ref.current
+    // Without showModal (old engines, jsdom) the dialog is rendered `open` and only the Escape handler applies.
+    if (dialog && typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal()
     ref.current?.querySelector<HTMLElement>('input, textarea, select')?.focus()
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
@@ -108,129 +111,130 @@ export function NewTaskDialog({
   }
 
   return (
-    <div className="bold-tb-scrim">
-      <div
-        ref={ref}
-        className="bold-tb-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="New task"
+    <dialog
+      ref={ref}
+      className="bold-tb-dialog"
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      aria-label="New task"
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          void submit()
+        }}
       >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit()
-          }}
-        >
-          <div className="bold-tb-dialog-head">
-            <h2>New task</h2>
-            <button type="button" className="bold-tb-x" aria-label="Close" onClick={onClose}>
-              ×
-            </button>
-          </div>
-          <label htmlFor={ids.title} className="bold-tb-label">
-            What needs doing
-          </label>
-          <input
-            id={ids.title}
-            className="bold-tb-field bold-tb-field--title"
-            value={title}
-            maxLength={1000}
-            placeholder="A short title"
-            required
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <label htmlFor={ids.body} className="bold-tb-label">
-            Details (optional)
-          </label>
-          <textarea
-            id={ids.body}
-            className="bold-tb-field bold-tb-field--area"
-            rows={4}
-            value={body}
-            maxLength={32000}
-            placeholder="What done looks like, links, constraints"
-            onChange={(event) => setBody(event.target.value)}
-          />
-          <div className="bold-tb-two">
-            <div>
-              <label htmlFor={ids.who} className="bold-tb-label">
-                Who does it
-              </label>
-              <select
-                id={ids.who}
-                className="bold-tb-field"
-                value={assignee}
-                disabled={choices.length === 0}
-                onChange={(event) => setAssignee(event.target.value)}
-              >
-                {choices.length === 0 && <option value="">No agent is ready</option>}
-                {choices.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agentDisplayName(agent)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor={ids.room} className="bold-tb-label">
-                In which chat
-              </label>
-              <select
-                id={ids.room}
-                className="bold-tb-field"
-                value={roomId}
-                onChange={(event) => setRoomId(event.target.value)}
-              >
-                <option value="">No chat</option>
-                {rooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {room.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <fieldset className="bold-tb-start">
-            <legend className="bold-tb-label">Start</legend>
-            <label data-on={start === 'now'}>
-              <input
-                type="radio"
-                name="start"
-                checked={start === 'now'}
-                onChange={() => setStart('now')}
-              />{' '}
-              Now
+        <div className="bold-tb-dialog-head">
+          <h2>New task</h2>
+          <button type="button" className="bold-tb-x" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <label htmlFor={ids.title} className="bold-tb-label">
+          What needs doing
+        </label>
+        <input
+          id={ids.title}
+          className="bold-tb-field bold-tb-field--title"
+          value={title}
+          maxLength={1000}
+          placeholder="A short title"
+          required
+          onChange={(event) => setTitle(event.target.value)}
+        />
+        <label htmlFor={ids.body} className="bold-tb-label">
+          Details (optional)
+        </label>
+        <textarea
+          id={ids.body}
+          className="bold-tb-field bold-tb-field--area"
+          rows={4}
+          value={body}
+          maxLength={32000}
+          placeholder="What done looks like, links, constraints"
+          onChange={(event) => setBody(event.target.value)}
+        />
+        <div className="bold-tb-two">
+          <div>
+            <label htmlFor={ids.who} className="bold-tb-label">
+              Who does it
             </label>
-            <label data-on={start === 'later'}>
-              <input
-                type="radio"
-                name="start"
-                checked={start === 'later'}
-                onChange={() => setStart('later')}
-              />{' '}
-              Plan it for later
+            <select
+              id={ids.who}
+              className="bold-tb-field"
+              value={assignee}
+              disabled={choices.length === 0}
+              onChange={(event) => setAssignee(event.target.value)}
+            >
+              {choices.length === 0 && <option value="">No agent is ready</option>}
+              {choices.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agentDisplayName(agent)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor={ids.room} className="bold-tb-label">
+              In which chat
             </label>
-          </fieldset>
-          <p className="bold-tb-hint">
-            The same as typing <code>/assign @{who?.id ?? 'agent'} …</code> in a chat.
+            <select
+              id={ids.room}
+              className="bold-tb-field"
+              value={roomId}
+              onChange={(event) => setRoomId(event.target.value)}
+            >
+              <option value="">No chat</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <fieldset className="bold-tb-start">
+          <legend className="bold-tb-label">Start</legend>
+          <label data-on={start === 'now'}>
+            <input
+              type="radio"
+              name="start"
+              checked={start === 'now'}
+              onChange={() => setStart('now')}
+            />{' '}
+            Now
+          </label>
+          <label data-on={start === 'later'}>
+            <input
+              type="radio"
+              name="start"
+              checked={start === 'later'}
+              onChange={() => setStart('later')}
+            />{' '}
+            Plan it for later
+          </label>
+        </fieldset>
+        <p className="bold-tb-hint">
+          The same as typing <code>/assign @{who?.id ?? 'agent'} …</code> in a chat.
+        </p>
+        {error && (
+          <p className="bold-request-error" role="alert">
+            {error}
           </p>
-          {error && (
-            <p className="bold-request-error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="bold-tb-dialog-foot">
-            <button type="button" className="btn ghost" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn primary" disabled={busy}>
-              {busy ? 'Creating…' : 'Create task'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        )}
+        <div className="bold-tb-dialog-foot">
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn primary" disabled={busy}>
+            {busy ? 'Creating…' : 'Create task'}
+          </button>
+        </div>
+      </form>
+    </dialog>
   )
 }
 
@@ -418,6 +422,15 @@ export function ArchiveBox({ taskId, onArchived }: { taskId: string; onArchived:
   const [error, setError] = useState<string | null>(null)
   const key = useRef(newId())
   const refresh = useTaskRefresh()
+  const confirmRef = useRef<HTMLDivElement>(null)
+  const openRef = useRef<HTMLButtonElement>(null)
+  const wasAsking = useRef(false)
+  // The confirm takes focus when it appears; Escape or Keep it hands focus back to Archive…
+  useEffect(() => {
+    if (asking) confirmRef.current?.focus()
+    else if (wasAsking.current) openRef.current?.focus()
+    wasAsking.current = asking
+  }, [asking])
   async function archive() {
     if (busy) return
     setBusy(true)
@@ -437,6 +450,14 @@ export function ArchiveBox({ taskId, onArchived }: { taskId: string; onArchived:
   if (asking)
     return (
       <div
+        ref={confirmRef}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || busy) return
+          event.preventDefault()
+          event.stopPropagation()
+          setAsking(false)
+        }}
         className="bold-tb-confirm"
         data-protected="flex"
         role="alertdialog"
@@ -472,7 +493,12 @@ export function ArchiveBox({ taskId, onArchived }: { taskId: string; onArchived:
   return (
     <div className="bold-tb-archive">
       <p>Archive takes it off the board. Hermes keeps its history.</p>
-      <button type="button" className="btn sm bold-tb-danger-ghost" onClick={() => setAsking(true)}>
+      <button
+        ref={openRef}
+        type="button"
+        className="btn sm bold-tb-danger-ghost"
+        onClick={() => setAsking(true)}
+      >
         Archive…
       </button>
     </div>

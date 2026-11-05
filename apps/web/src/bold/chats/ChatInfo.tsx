@@ -161,6 +161,7 @@ export function ChatInfo({
           title="Open jobs"
           summary={String(openJobs.length)}
           needsYou={openJobs.some((job) => job.state === 'waiting_on_you')}
+          forceOpen={openTopics}
         >
           <ul className="bold-chat-topics">
             {openJobs.map((job) => (

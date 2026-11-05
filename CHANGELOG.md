@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.30.0] — 2026-11-05
+
+### Changed
+- **A job waiting on you says so in its bar** ("Needs you", which jumps to the card).
+- **"Stopped …" stays** where the job bar was after Stop job, so you see what happened.
+- **Older chats with several open jobs get a job bar too**, for the newest one, with **+N more open**.
+- **Recipes:** "Show all" lists every problem to fix, each with Show it; the library loads a recipe's details only when
+  its card comes into view.
+- **Tasks:** the New task dialog and the Archive confirm keep keyboard focus inside; on a phone a task opens as a bottom
+  sheet.
+
+### Fixed
+- Custom looks keep the fade at the top of the conversation.
+
+### Removed
+- Renaming and deleting a room project (no screen used them), and a few unused pieces of server code.
+
 ## [3.29.1] — 2026-11-04
 
 ### Changed

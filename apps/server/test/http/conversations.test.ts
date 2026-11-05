@@ -138,15 +138,11 @@ test('pin, archive, project and tags are stored, emitted and validated', async (
   expect(listed.projects).toEqual([project])
   expect((await send('PATCH', `/api/rooms/${a.id}`, { projectId: 'nope' })).statusCode).toBe(404)
   expect((await send('PATCH', `/api/rooms/${a.id}`, { tags: ['Bad Tag'] })).statusCode).toBe(400)
-  // Rename the project, then delete it: the room leaves it and everyone is told.
-  await send('PATCH', `/api/room-projects/${project.id}`, { name: 'Ship' })
+  // 3.30.0: renaming and deleting a project were removed (no screen used them); the routes answer 404.
   expect(
-    events().some((event) => event.type === 'room-project.upserted' && event.data.name === 'Ship'),
-  ).toBe(true)
-  expect((await send('DELETE', `/api/room-projects/${project.id}`)).statusCode).toBe(204)
-  const after = (await get(`/api/rooms/${a.id}`)).json().room
-  expect(after.projectId).toBeNull()
-  expect(events().some((event) => event.type === 'room-project.deleted')).toBe(true)
+    (await send('PATCH', `/api/room-projects/${project.id}`, { name: 'Ship' })).statusCode,
+  ).toBe(404)
+  expect((await send('DELETE', `/api/room-projects/${project.id}`)).statusCode).toBe(404)
   // Unpin / explicit tags back to name tags.
   const reset = await send('PATCH', `/api/rooms/${a.id}`, { pinned: false, tags: null })
   expect(RoomSchema.parse(reset.json())).toMatchObject({ pinned: false, tags: [] })
@@ -161,11 +157,7 @@ test('tags are parsed from the room name unless set explicitly', async () => {
 
 test('organising calls need a paired browser', async () => {
   const unpaired = { 'x-score-client': 'web' }
-  for (const [method, url] of [
-    ['POST', '/api/room-projects'],
-    ['PATCH', '/api/room-projects/x'],
-    ['DELETE', '/api/room-projects/x'],
-  ] as const) {
+  for (const [method, url] of [['POST', '/api/room-projects']] as const) {
     const response = await app.inject({ method, url, headers: unpaired, payload: {} })
     expect(response.statusCode).toBe(401)
   }

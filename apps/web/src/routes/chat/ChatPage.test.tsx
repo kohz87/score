@@ -421,13 +421,6 @@ test('project events keep the rooms list and its projects current', () => {
   })
   expect(moved.rooms[0]).toMatchObject({ projectId: 'p1', pinned: true })
   expect(moved.projects).toEqual([project])
-  const deleted = roomsQuery.reduce(moved, {
-    type: 'room-project.deleted',
-    seq: 4,
-    ts: message.createdAt,
-    data: { id: 'p1' },
-  })
-  expect(deleted.projects).toEqual([])
 })
 
 test('your own message arriving on the stream replaces its "sending" copy, so it never shows twice', () => {

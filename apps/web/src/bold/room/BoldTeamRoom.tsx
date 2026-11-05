@@ -43,7 +43,14 @@ import {
 } from './RoomMenus.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
-import { holdsSeveralJobs, isActiveJob, isEveryoneRoom, theActiveJob } from './room-model.ts'
+import {
+  activeJobs,
+  holdsSeveralJobs,
+  isActiveJob,
+  isEveryoneRoom,
+  theActiveJob,
+} from './room-model.ts'
+
 import { BusyDialog, type BusyStart } from './BusyDialog.tsx'
 import { JobBar, NextUp, PastJobBar } from './JobBar.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
@@ -124,6 +131,9 @@ function StartedBy({ job }: { job: Job }) {
   )
 }
 
+/** How long "Stopped …" stays where the job bar was. */
+const STOPPED_NOTE_MS = 8000
+
 function LoadedTeamRoom({
   room,
   agents,
@@ -201,6 +211,25 @@ function LoadedTeamRoom({
   // still holds several active jobs keeps choosing (the picked one, else the newest).
   const severalJobs = holdsSeveralJobs(allJobs)
   const activeJob = theActiveJob(allJobs)
+  // An older chat that still holds several open jobs shows the newest one's bar, with "+N more open" (3.30.0).
+  const openJobList = activeJobs(allJobs)
+  // An older chat with several open jobs shows the job you're in: the one Info and the composer use, the picked one
+  // else the newest (3.30.0 gate: the bar named one job while Info and the composer named another).
+  const barJob =
+    activeJob ??
+    (currentJob && openJobList.some((job) => job.id === currentJob.id) ? currentJob : null) ??
+    openJobList[0] ??
+    null
+  const moreOpen = Math.max(0, openJobList.length - 1)
+  // After Stop job the bar unmounts; its result stays here for a few seconds, or until the next job starts.
+  const [stoppedNote, setStoppedNote] = useState<{ jobId: string; text: string } | null>(null)
+  useEffect(() => {
+    if (!stoppedNote) return
+    const timer = window.setTimeout(() => setStoppedNote(null), STOPPED_NOTE_MS)
+    return () => window.clearTimeout(timer)
+  }, [stoppedNote])
+  // The next job starting clears it (adjusted while rendering, not in an effect).
+  if (stoppedNote && barJob && barJob.id !== stoppedNote.jobId) setStoppedNote(null)
   const sendJob = severalJobs ? currentJob : (activeJob ?? undefined)
   const composerJobId = sendJob && !sendJob.isDefault ? sendJob.id : null
   const baseMessagesDefinition = useMemo(
@@ -402,6 +431,13 @@ function LoadedTeamRoom({
   // A finished job opened from Past jobs shows its own bar (the menu to reopen, rename or delete it lives there).
   const pastPicked = picked && !picked.isDefault && !isActiveJob(picked) ? picked : null
 
+  // "+N more open" opens Info on Open jobs (BoldRoom reads `?jobs=open`).
+  function showOpenJobs() {
+    const next = new URLSearchParams(params)
+    next.set('jobs', 'open')
+    setParams(next, { replace: true, state: location.state })
+  }
+
   const clearSeek = useCallback(() => {
     const next = new URLSearchParams(params)
     if (!next.has('message')) return
@@ -487,15 +523,28 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
-      {(activeJob || pastPicked || room.role === 'team') && (
+      {(barJob || stoppedNote || pastPicked || room.role === 'team') && (
         <div className="bold-job-strip">
-          {activeJob && (
+          {barJob && (
             <JobBar
-              job={activeJob}
+              job={barJob}
               agents={agents}
               onShowGraph={onShowGraph}
-              menu={barMenu(activeJob)}
+              menu={barMenu(barJob)}
+              moreOpen={moreOpen}
+              onShowMore={showOpenJobs}
+              onStopped={(stopped) =>
+                setStoppedNote({
+                  jobId: stopped.id,
+                  text: `Stopped “${stopped.title}”. It’s in Past jobs.`,
+                })
+              }
             />
+          )}
+          {!barJob && stoppedNote && (
+            <p className="bold-thread-status-line bold-job-stopped" role="status">
+              {stoppedNote.text}
+            </p>
           )}
           {pastPicked && (
             <PastJobBar job={pastPicked} onShowGraph={onShowGraph} menu={barMenu(pastPicked)} />

@@ -68,3 +68,19 @@
 :root[data-backdrop] [data-ui='bold'].bold-shell {
   background: transparent;
 }
+
+/* The conversation's top fade under a custom look. the protected stylesheet removes the stream's mask there (a mask would make the
+   stream a stacking context and cap the decision cards' lift), so the 22px fade is a sticky gradient over the stream's
+   first edge instead, drawn from the theme's own ground; it takes no clicks and sits below every lifted card. */
+:root[data-look='custom'] [data-ui='bold'] .stream::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  height: 22px;
+  margin-top: calc(-14px * var(--bold-d, 1));
+  margin-bottom: calc(4px * var(--bold-d, 1) - 22px);
+  pointer-events: none;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+}

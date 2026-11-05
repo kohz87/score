@@ -112,6 +112,7 @@ export const protectedClasses = [
   // 3.28.0 (decision 164): one job per chat. The job bar (Stop job), the queued trigger call (Next up, Skip) and the
   // dialog that asks what to do when work starts in a chat that already has a job
   'bold-job-bar',
+  'bold-job-bar-needs',
   'bold-next-up',
   'bold-busy-dialog',
   // 3.17.0: taking over the agent's desktop (the confirm card, the red control pill, the status lines, Hand back)

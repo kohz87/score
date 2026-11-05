@@ -2398,3 +2398,21 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Gate: check green (contract 1619, web 3360, server 4988); e2e 17 failed, all passing on a fresh server or alone
   (bold-room-menu ×8 depend on state other specs leave; one-to-ones, room-chat, team choice, terminal, workspace; the
   recipes leave-dirty test failed only on a reused server and passed on 3.29.0 and 3.29.1 alike when fresh).
+
+## 3.30.0 — the small open items; server cleanup (2026-11-05)
+- Owner: "clear all the small open items and server-side cleanup" (DECISIONS 167).
+- Sonnet coder (web, brief 3.30.0-small-items): the eight items. Sonnet coder (server, brief 3.30.0-server-cleanup):
+  three unused exports removed; every `NONE`/e2e-only route checked by reading the web helpers, the plugin and the
+  share page — only project rename/delete had no caller. Lead: removed those two routes, `room-project.deleted`,
+  `RoomProjectEventSchema`, their domain functions, contract doc lines, the web reducer branch and their tests.
+- Review P2s fixed by the lead: `.stream` in KNOWN_OVERLAYS was a guard loophole (removed; the overlay test now skips
+  unhittable `::before`/`::after` rules), the custom-look fade is drawn from `--bg` only. Re-review: none.
+- Gate: lint caught two leftover imports of the removed project code (fixed); e2e 39 failed → 21 Room baselines (the
+  fake team room holds two open jobs, so it now has a job bar; viewed), needs-you desktop (the bar's height pushed the
+  second card out of view; the test now checks whichever the view shows, both branches kept), load flakes passing
+  alone (room-menu ×8, one-to-ones, team choice, workspace, tablet, + menu, recipes leave-dirty). Found on the
+  baselines and fixed by the lead: the phone bar ran out of room with Needs you, Stop job, ⋯ and +1 more open (title
+  cut to a word: the buttons now wrap under the title when they don't fit), the Needs you pill's text sat at its top,
+  and an older chat's bar named a different job than Info and the composer (it now follows the job you're in).
+  Note: `--update-snapshots` only rewrites failing baselines; a small text change under the 0.5% tolerance kept a stale
+  baseline — use `--update-snapshots=all` when re-baselining a view.

@@ -114,8 +114,6 @@ const ports = (node: WorkflowNode): string[] => {
       return []
   }
 }
-export const portsOf = ports
-
 function reachable(start: Iterable<string>, next: (id: string) => string[]): Set<string> {
   const seen = new Set<string>()
   const stack = [...start]

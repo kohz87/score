@@ -36,11 +36,6 @@ export function pidfdSupport(candidate = process.env.SCORE_PYTHON || 'python3'):
   return found
 }
 
-/** Test hook: forget the probe result. */
-export function resetPidfdSupport(): void {
-  cached = undefined
-}
-
 function run(python: string | null, args: string[]): PidSignalResult {
   if (python === null) return 'unavailable'
   try {

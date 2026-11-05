@@ -496,6 +496,7 @@ function Sheet({
       aria-label="Task details"
       tabIndex={-1}
     >
+      <span className="bold-tb-sheet-grip" aria-hidden="true" />
       {children}
     </div>
   )

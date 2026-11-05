@@ -3,7 +3,6 @@ import { RoomProjectSchema, type RoomProject } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
-import { readRoom, roomChanged, roomIds, roomRow } from './rooms.ts'
 
 const RowSchema = z.object({ id: z.string(), name: z.string(), color: z.string() })
 
@@ -37,35 +36,6 @@ export function createProject(
     .prepare('INSERT INTO room_projects (id, name, color, created_at) VALUES (?, ?, ?, ?)')
     .run(project.id, project.name, project.color, now)
   return [{ type: 'room-project.upserted', data: project }]
-}
-
-export function updateProject(
-  sqlite: DatabaseSync,
-  id: string,
-  patch: { name?: string | undefined; color?: string | undefined },
-): DomainEventDraft[] {
-  const current = projectRow(sqlite, id)
-  const next = { id, name: patch.name ?? current.name, color: patch.color ?? current.color }
-  if (next.name !== current.name) assertNameFree(sqlite, next.name, id)
-  sqlite
-    .prepare('UPDATE room_projects SET name = ?, color = ? WHERE id = ?')
-    .run(next.name, next.color, id)
-  return [{ type: 'room-project.upserted', data: RoomProjectSchema.parse(next) }]
-}
-
-/** Rooms in a deleted project simply leave it. */
-export function deleteProject(sqlite: DatabaseSync, id: string, now: string): DomainEventDraft[] {
-  projectRow(sqlite, id)
-  const members = roomIds(sqlite).filter((roomId) => roomRow(sqlite, roomId).project_id === id)
-  const events: DomainEventDraft[] = []
-  for (const roomId of members) {
-    const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
-    sqlite.prepare('UPDATE rooms SET project_id = NULL WHERE id = ?').run(roomId)
-    events.push(...roomChanged(sqlite, roomId, now, before))
-  }
-  sqlite.prepare('DELETE FROM room_projects WHERE id = ?').run(id)
-  events.push({ type: 'room-project.deleted', data: { id } })
-  return events
 }
 
 export function assertProject(sqlite: DatabaseSync, id: string): void {

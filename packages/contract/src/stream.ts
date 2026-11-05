@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AgentQuestionSchema } from './questions.ts'
-import { RoomProjectEventSchema, RoomProjectSchema } from './conversations.ts'
+import { RoomProjectSchema } from './conversations.ts'
 import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
 import { RoomVersionSchema } from './versions.ts'
@@ -141,10 +141,6 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({
     type: z.literal('room-project.upserted'),
     data: RoomProjectSchema,
-  }),
-  StreamEnvelopeSchema.extend({
-    type: z.literal('room-project.deleted'),
-    data: RoomProjectEventSchema,
   }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.created'), data: MessageSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.delta'), data: MessageDeltaSchema }),
