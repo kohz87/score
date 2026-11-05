@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.30.1] — 2026-11-05
+
+### Fixed
+- **"Needs you" now means a decision is waiting.** A chat or job showed "needs you" whenever its agents had simply
+  finished and it was your turn to reply, with nothing to answer. Now "Needs you" (the chat list, the job bar, Info)
+  appears only when something needs your decision — a paused exchange, an approval, a question, a report-back to OK —
+  and a job whose agents are done says **Your turn**.
+
 ## [3.30.0] — 2026-11-05
 
 ### Changed

@@ -41,11 +41,11 @@ function TopicRow({
             className="bold-job-dot"
             role="img"
             aria-label={jobStateLabel(job)}
-            style={{ background: jobDot(job.state) }}
+            style={{ background: jobDot(job.state, job.needsYou) }}
           />
         )}
         <span className="bold-chat-topic-title">{job.title}</span>
-        {job.state === 'waiting_on_you' && (
+        {job.needsYou && (
           <span className="bold-info-needs" data-protected="inline-flex">
             Needs you
           </span>
@@ -160,7 +160,7 @@ export function ChatInfo({
           headingId="chat-info-open-jobs"
           title="Open jobs"
           summary={String(openJobs.length)}
-          needsYou={openJobs.some((job) => job.state === 'waiting_on_you')}
+          needsYou={openJobs.some((job) => job.needsYou === true)}
           forceOpen={openTopics}
         >
           <ul className="bold-chat-topics">

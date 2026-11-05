@@ -60,7 +60,8 @@ test('a topic nobody has written in yet still gets its divider, and states read 
   expect(
     emptyTopics([fresh, job('old')], [message('m1', 'old', '2026-11-03T10:01:00.000Z')]),
   ).toEqual([fresh])
-  expect(topicStateText(job('a', { state: 'waiting_on_you' }))).toBe('waiting on you')
+  expect(topicStateText(job('a', { state: 'waiting_on_you' }))).toBe('your turn')
+  expect(topicStateText(job('a2', { state: 'waiting_on_you', needsYou: true }))).toBe('needs you')
   expect(topicStateText(job('b', { state: 'done' }))).toBe('done')
   expect(topicStateText(job('c', { state: 'closed' }))).toBe('closed')
 })

@@ -56,7 +56,8 @@ export function groupNeedsYou(
   questions: AgentQuestion[],
 ): boolean {
   return (
-    jobs.some((job) => job.state === 'waiting_on_you') ||
+    // 3.30.1: a decision waiting in a job, not merely the person's turn (the agents finished).
+    jobs.some((job) => job.needsYou === true) ||
     approvals.some((approval) => approvalNeedsYou(approval) && approvalInRoom(approval, room.id)) ||
     questions.some(
       (question) =>

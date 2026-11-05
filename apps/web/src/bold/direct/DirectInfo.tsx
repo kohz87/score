@@ -156,7 +156,7 @@ export function DirectInfo({
                       className="bold-job-dot"
                       role="img"
                       aria-label={jobStateLabel(chat)}
-                      style={{ background: jobDot(chat.state) }}
+                      style={{ background: jobDot(chat.state, chat.needsYou) }}
                     />
                   )}
                   <span className="bold-chat-topic-title">

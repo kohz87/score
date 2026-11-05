@@ -7,7 +7,7 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { stageAction, turnForCapability } from '../../src/domain/exchanges/actions.ts'
 import { hashXtc, mintXtc } from '../../src/domain/exchanges/capability.ts'
 import { decideExchange, stopJob } from '../../src/domain/exchanges/decisions.ts'
-import { listExchanges } from '../../src/domain/exchanges/store.ts'
+import { jobFromRow, jobRow, listExchanges } from '../../src/domain/exchanges/store.ts'
 import { defaultJobId } from '../../src/domain/job-sessions.ts'
 import {
   attachRunMessage,
@@ -156,6 +156,8 @@ export function exchangeHarness() {
         job_turn_limit: number
         spend_cap_usd: number | null
       },
+    /** The job as lists read it (3.30.1: `needsYou`). */
+    jobView: () => jobFromRow(db.sqlite, jobRow(db.sqlite, job())!),
   }
   return h
 }

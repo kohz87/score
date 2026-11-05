@@ -190,6 +190,12 @@ export const JobSchema = z.object({
   source: JobSourceSchema.nullable(),
   /** PLAN 11.1d: its report-back to the app; null for jobs without one. */
   reportBack: JobReportBackSchema.nullable(),
+  /**
+   * 3.30.1: a decision waits on the person in this job — an exchange paused for them, or a report-back asking for an
+   * OK or not confirmed. `state: 'waiting_on_you'` alone only says it is the person's turn (the agents are done).
+   */
+  // Optional for readers of older servers and recorded fixtures: absent means false. The server always sends it.
+  needsYou: z.boolean().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

@@ -20,7 +20,9 @@ import { makeExchange, makeJob } from './room-test-utils.tsx'
 const job = (state: Job['state']) => makeJob({ state })
 
 test('job state labels name the four states and closed', () => {
-  expect(jobStateLabel(job('waiting_on_you'))).toBe('Needs you')
+  // 3.30.1: waiting on the person is their turn; a decision waiting is `needsYou`.
+  expect(jobStateLabel(job('waiting_on_you'))).toBe('Your turn')
+  expect(jobStateLabel(makeJob({ state: 'waiting_on_you', needsYou: true }))).toBe('Needs you')
   expect(jobStateLabel(job('open'))).toBe('Open')
   expect(jobStateLabel(job('working'))).toBe('Working')
   expect(jobStateLabel(job('done'))).toBe('Done')
