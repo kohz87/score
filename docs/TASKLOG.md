@@ -2416,3 +2416,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   and an older chat's bar named a different job than Info and the composer (it now follows the job you're in).
   Note: `--update-snapshots` only rewrites failing baselines; a small text change under the 0.5% tolerance kept a stale
   baseline — use `--update-snapshots=all` when re-baselining a view.
+
+## 3.30.1 — "Needs you" means a decision (2026-11-05)
+- Owner: "i get a few needs me but I cannot find where to check the prompt that requires my response?" Live had no
+  pending approval or question and every agent idle; the Team room's own thread was `waiting_on_you`, which only means
+  the agents are done and it is the person's turn — the web had shown it as Needs you (and 3.30.0's bar pill).
+- Lead: `Job.needsYou` (contract, optional for older readers; server: an exchange paused for the person, or a
+  report-back `needs_ok`/`not_confirmed`), `updateExchange` re-sends the job; web: Needs you only from `needsYou`
+  (chat list, bar pill and line, Info marks, dots, dividers), "Your turn" for a plain waiting job. Tests updated where
+  a decision was meant (`needsYou: true`), new server and web tests for "your turn".
+- Sonnet review: no P1; P2 accepted as a known edge — a report-back reads `not_confirmed` until the bridge's tool-call
+  row lands, which in normal order is before the turn completes (no event re-sends the job if it came later).
+- Gate: check green (contract 1614, web 3371, server 4989); e2e 16 failed, all passing on a fresh server (room-menu ×8,
+  one-to-ones ×4, take-over, agent faces, team choice, workspace).
