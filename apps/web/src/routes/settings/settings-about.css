@@ -1,0 +1,47 @@
+/* Settings › About (decision 79). */
+.about-version {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+}
+.about-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px var(--space-5);
+  margin: 0;
+}
+.about-facts dt {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.about-facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.about-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.about-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.about-links {
+  display: flex;
+  gap: 18px;
+}
+.about-steps {
+  display: block;
+  white-space: pre-wrap;
+}
+.settings-command a {
+  color: var(--on-dark);
+}
+.about-links a,
+#about > p > a {
+  color: var(--ink);
+  font-weight: 600;
+}

@@ -1,0 +1,221 @@
+/* Dark "Rules and approvals" card: colors and spacing from docs/design/html/settings.html. */
+.settings-card.rules-card {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-dark);
+}
+.rules-lead {
+  margin: 2px 0 0;
+  color: var(--rules-muted);
+}
+.rules-card h2 {
+  margin-bottom: 0;
+}
+.rules-style {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rules-style legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 20px;
+}
+.rules-option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-16);
+  background: var(--rules-panel);
+  color: var(--rules-text);
+  cursor: pointer;
+}
+.rules-option input {
+  margin-top: 4px;
+  accent-color: var(--rules-go);
+}
+.rules-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rules-option strong {
+  color: var(--on-dark);
+}
+.rules-option small {
+  font-size: 13px;
+  color: var(--rules-muted);
+}
+.rules-note {
+  font-size: 13px;
+  color: var(--rules-muted);
+}
+.rules-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.rules-column {
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-20);
+  background: var(--rules-panel);
+  padding: var(--space-4) 18px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--rules-text);
+  font-size: 14px;
+}
+.rules-heading {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--on-dark);
+}
+.rules-column[data-kind='go'] .rules-heading {
+  color: var(--rules-go);
+}
+.rules-column[data-kind='ask'] .rules-heading {
+  color: var(--rules-ask);
+}
+.rules-column[data-kind='never'] .rules-heading {
+  color: var(--rules-never);
+}
+.rules-empty {
+  color: var(--rules-muted);
+  font-size: 13px;
+}
+.rules-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.rules-item code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.rules-item small {
+  color: var(--rules-muted);
+}
+.rules-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rules-details ul {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 13px;
+}
+.rules-link,
+.rules-remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--on-dark);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.rules-link {
+  align-self: flex-start;
+}
+.rules-remove {
+  font-size: 13px;
+}
+.rules-pill,
+.rules-primary {
+  height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--on-dark);
+  background: transparent;
+  color: var(--on-dark);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.rules-primary {
+  background: #fff;
+  color: var(--ink);
+}
+.rules-pill:disabled,
+.rules-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.rules-card :focus-visible {
+  outline-color: var(--on-dark);
+}
+.rules-forms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.rules-forms form {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px var(--space-4);
+  border-radius: var(--radius-16);
+  background: var(--rules-panel);
+}
+.rules-forms label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rules-forms input,
+.rules-forms select {
+  height: 40px;
+  border: 1px solid var(--chat-dark-border);
+  border-radius: var(--radius-14);
+  background-color: var(--ink);
+  color: var(--on-dark);
+}
+.rules-forms input {
+  padding: 0 var(--space-3);
+}
+.rules-forms .score-select {
+  --select-focus: var(--card);
+}
+@media (width < 900px) {
+  .rules-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rules-save {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px var(--space-4);
+  border-radius: var(--radius-16);
+  background: var(--rules-panel);
+}
+.rules-save pre {
+  margin: 0;
+  max-width: 100%;
+  overflow: auto;
+  font-size: 12px;
+  color: var(--rules-text);
+}
+.rules-drift {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

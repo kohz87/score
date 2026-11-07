@@ -89,7 +89,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/pair/` — pairing and sign-in page.
 - `apps/web/src/routes/reports/` — reports pages and journey chart.
 - `apps/web/src/routes/runs/` — helpers for opening a brief as a run.
-- `apps/web/src/routes/settings/` — settings sections for providers, logs, backup and notifications.
+- `apps/web/src/routes/settings/` — settings sections for providers, logs, backup and notifications, and their split area stylesheets.
 - `apps/web/src/routes/team/` — team and agent pages, coding agent, model and workspace tabs, and ordered stylesheets.
 - `apps/web/src/routes/terminal/` — browser terminal page and key handling.
 - `apps/web/src/routes/watch/` — watch replay timeline, stage, panes, approval and ordered stylesheets.
@@ -436,6 +436,18 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/orchestrations/orchestrations-log-cards.css` — event log, replay bar, step cards, room header and fence list.
 - `apps/web/src/routes/orchestrations/orchestrations-workflow.css` — workflow shapes, edge labels, node transitions and summary slot.
 - `apps/web/src/routes/orchestrations/orchestrations-run-cards.css` — coding, check, stuck-step, advisor, helper and vote cards.
+- `apps/web/src/routes/settings/settings.css` — Settings style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/routes/settings/settings-card.css` — shared Settings cards, rows, status, buttons, forms and command blocks.
+- `apps/web/src/routes/settings/settings-advanced.css` — Advanced search, results, staged values, tray and diff.
+- `apps/web/src/routes/settings/settings-rules.css` — Rules mode, columns, forms and save surfaces.
+- `apps/web/src/routes/settings/settings-check.css` — check banners, comparison tables, actions and command text.
+- `apps/web/src/routes/settings/settings-signin.css` — browser sign-in, inline key/check fields and field stacks.
+- `apps/web/src/routes/settings/settings-knowledge.css` — Settings › Knowledge facts, usage and origin controls.
+- `apps/web/src/routes/settings/settings-logs.css` — log controls, scrolling table and error rows.
+- `apps/web/src/routes/settings/settings-currency.css` — display-currency card field and save control.
+- `apps/web/src/routes/settings/settings-log-fields.css` — log-control field label layout.
+- `apps/web/src/routes/settings/settings-responsive.css` — narrow Settings card spacing.
+- `apps/web/src/routes/settings/settings-about.css` — About facts, result, links and update-check surfaces.
 - `apps/web/src/routes/workflows/NodeAgentSettings.tsx` — agent step settings: agent, instruction, retries, estimate and failure route.
 - `apps/web/src/routes/workflows/NodeBranchSettings.tsx` — branch subject and first-match rules settings.
 - `apps/web/src/routes/workflows/NodeGateSettings.tsx` — gate question and rejection-route settings.
