@@ -15,16 +15,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/exchanges/apply.ts",
-    "lines": 631,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/exchanges/store.ts",
-    "lines": 483,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/message-runs.ts",
     "lines": 969,
     "reason": "split in CS.2 wave 1"

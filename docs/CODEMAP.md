@@ -360,7 +360,22 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/journal-folds.ts` — generation and coding-record folds used by compaction.
 - `apps/server/src/domain/orchestration/journal-compaction.ts` — compaction planning and permanent tombstones.
 - `apps/server/src/domain/orchestration/journal-paths.ts` — journal file names and the size-alarm constant.
-- `apps/server/src/domain/exchanges/apply.ts` — applies accepted exchange results.
+- `apps/server/src/domain/exchanges/apply.ts` — re-exports the exchange turn settlement, job state and stop entry points.
+- `apps/server/src/domain/exchanges/agent-quote.ts` — quotes and redacts agent text handed to another agent.
+- `apps/server/src/domain/exchanges/give.ts` — queues or holds the next turn of an exchange.
+- `apps/server/src/domain/exchanges/settle-turn.ts` — settles a completed exchange turn and its staged actions.
+- `apps/server/src/domain/exchanges/job-state.ts` — derives a job's working or waiting-on-you state.
+- `apps/server/src/domain/exchanges/lead-decision.ts` — applies the room lead's decision on a budget pause.
+- `apps/server/src/domain/exchanges/exchange-answers.ts` — answers, reviews, hand-offs and questions between agents.
+- `apps/server/src/domain/exchanges/exchange-stops.ts` — stops exchanges and their queued or running turns.
+- `apps/server/src/domain/exchanges/store.ts` — re-exports job and exchange rows, views, events, writes and lifecycle helpers.
+- `apps/server/src/domain/exchanges/row-schemas.ts` — job and exchange row schemas and inferred types.
+- `apps/server/src/domain/exchanges/row-reads.ts` — single job and exchange row reads.
+- `apps/server/src/domain/exchanges/job-view.ts` — contract-shaped job views and job events.
+- `apps/server/src/domain/exchanges/exchange-view.ts` — contract-shaped exchange views, pause options and exchange events.
+- `apps/server/src/domain/exchanges/row-lists.ts` — job and exchange list queries.
+- `apps/server/src/domain/exchanges/row-writes.ts` — job updates, exchange updates and exchange creation.
+- `apps/server/src/domain/exchanges/job-store.ts` — active-job rules, job creation and latest-message lookup.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
