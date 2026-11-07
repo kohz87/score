@@ -120,11 +120,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/recipe-model.ts",
-    "lines": 710,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/room/bold-thread.css",
     "lines": 555,
     "reason": "split in CS.2 wave 1"

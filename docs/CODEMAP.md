@@ -180,6 +180,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldRecipeText.tsx` — text recipe step settings and the compatibility export for its rows.
 - `apps/web/src/bold/RecipeStepRow.tsx` — one text recipe step, its route controls and move/remove actions.
 - `apps/web/src/bold/bold-recipe-inspector-model.ts` — branch-condition and runtime-refusal helpers for step settings.
+- `apps/web/src/bold/recipe-model.ts` — stable recipe-model entry: re-exports analysis, move, edit helpers and public types.
+- `apps/web/src/bold/recipe-model-types.ts` — recipe step labels and marks, plus row, analysis, move-plan and problem types.
+- `apps/web/src/bold/recipe-analysis.ts` — topological ordering, route labels, graph-only reasons and client problems.
+- `apps/web/src/bold/recipe-move.ts` — safe step-move planning, straight-run relinking and disabled-move reasons.
+- `apps/web/src/bold/recipe-edits.ts` — port targets, failure/reject modes, and adding or removing steps.
+- `apps/web/src/bold/recipe-reorder.ts` — reorders a draft's stored nodes to a given list.
 - `apps/web/src/bold/DeleteWithRunsDialog.tsx` — name-confirmed recipe and runs deletion dialog.
 - `apps/web/src/bold/bold-recipe-editor-model.ts` — editor props, problem types, deduplication and error copy.
 - `apps/web/src/bold/use-bold-recipe-editor-state.ts` — editor draft, queries, validation, history and derived state.
