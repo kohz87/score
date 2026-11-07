@@ -6,6 +6,7 @@ import {
   openLibrary,
   setupLibrary,
   sizes,
+  unfold,
   unique,
 } from './bold-library-helpers.ts'
 

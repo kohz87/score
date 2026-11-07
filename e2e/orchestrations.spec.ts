@@ -14,11 +14,19 @@ async function start(page: Page, goal: string, policy: 'plan' | 'handoff' | 'ris
   await dialog.getByLabel('What should the team do?').fill(goal)
   // Only the seeded agents are team members for the lead's preflight (other specs add agents to the shared server).
   const picker = dialog.getByRole('group', { name: 'Agents allowed' })
-  for (const box of await picker.getByRole('checkbox').all()) {
-    const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
-    if (['builder', 'reviewer'].includes(name)) await box.check()
-    else await box.uncheck()
-  }
+  // The list re-renders while the team loads, so a snapshot of its boxes can go stale mid-loop; setting every box is
+  // idempotent, so the whole pass is retried as one interaction.
+  await expect(picker.getByRole('checkbox').first()).toBeVisible()
+  await expect(async () => {
+    const labels = picker.locator('label')
+    for (let i = 0; i < (await labels.count()); i++) {
+      const label = labels.nth(i)
+      const name = (await label.innerText({ timeout: 2_000 })).trim()
+      const box = label.getByRole('checkbox')
+      if (['builder', 'reviewer'].includes(name)) await box.check({ timeout: 2_000 })
+      else await box.uncheck({ timeout: 2_000 })
+    }
+  }).toPass({ timeout: 20_000 })
   const ask = { plan: 'The plan starts', handoff: 'Every hand-off', risky: 'Only risky actions' }
   await dialog.getByRole('radio', { name: ask[policy] }).check()
   // The acknowledgement and the preflight are on the start screen.

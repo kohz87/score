@@ -149,9 +149,8 @@ test.describe('the seeded fake team', () => {
 
   test('library', async ({ page }) => {
     await page.setViewportSize(desktop)
-    await openBold(page)
-    await page.locator('button.side-toggle').click()
-    await page.getByRole('button', { name: /^Library/ }).click()
+    // 3.22.0: the Library side-panel mode is gone; the same editor is the Knowledge page.
+    await openBold(page, '/b/knowledge')
     await expect(page.getByTestId('bold-library')).toBeVisible()
     await shot(page, 'library')
   })

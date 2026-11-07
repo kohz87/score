@@ -68,7 +68,12 @@ test('a trigger starts jobs in the second team, and a one-to-one reply is shared
     const menu = page.getByRole('dialog', { name: 'Share to a team' })
     await expect(menu).toHaveAttribute('data-protected', 'block')
     await menu.getByLabel('Team').selectOption({ label: teamName })
+    // The confirmation appears once the share is answered; wait for that answer, then point at the reply again.
+    const answered = page.waitForResponse(
+      (response) => /\/api\/messages\/[^/]+\/share$/.test(response.url()) && response.ok(),
+    )
     await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
+    await answered
     // The confirmation sits in the reply's hover row, and the menu's job buttons are not under the reply: point at it again.
     await seeded.reply.hover()
     await expect(
