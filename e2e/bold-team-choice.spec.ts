@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { clickAction, seededReply } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
 // 3.6.0 (decision 137): with a second team room, a trigger and a one-to-one share can name the team the work goes to.
@@ -56,19 +57,20 @@ test('a trigger starts jobs in the second team, and a one-to-one reply is shared
     triggerId = saved!.id
 
     // A one-to-one: the share menu offers the team choice and that team's jobs.
-    await page.goto('/b?with=reviewer')
+    // The seeded chat and its reply by name: the latest reviewer chat, and the last reply on the merged page, are
+    // whatever other specs touched last.
+    const seeded = await seededReply(page, 'reviewer', 'How strict to be on docs')
+    await page.goto(`/b?with=reviewer&chat=${seeded.chatId}`)
     const side = page.locator('#bold-room-stream') // 3.22.0: a one-to-one is the chat's one conversation (no side-panel thread)
-    await expect(side.locator('.bold-message').first()).toBeVisible()
+    await expect(seeded.reply).toBeVisible()
     // The hover row appears over the reply; Share is one of its actions.
-    await side.locator('.bold-message').last().hover()
-    await side
-      .getByRole('button', { name: /^Share message from .* to the team room/ })
-      .last()
-      .click()
+    await clickAction(seeded.reply, /^Share message from .* to the team room/)
     const menu = page.getByRole('dialog', { name: 'Share to a team' })
     await expect(menu).toHaveAttribute('data-protected', 'block')
     await menu.getByLabel('Team').selectOption({ label: teamName })
     await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
+    // The confirmation sits in the reply's hover row, and the menu's job buttons are not under the reply: point at it again.
+    await seeded.reply.hover()
     await expect(
       side.getByRole('status').filter({ hasText: 'Shared to the team room' }),
     ).toBeVisible()

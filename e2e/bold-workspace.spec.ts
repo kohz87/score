@@ -6,7 +6,7 @@ import { composerOf, makeRoom, openBoldRoomById, streamOf } from './bold-chat-he
 import { pair } from './pair.ts'
 
 // 3.0.0: the classic workspace spec on the new shell's agent page (More › Workspace › Browse all files). The fake adapter
-// gives each agent a small temp-dir workspace. `lead` stays untouched; `reviewer` is edited; `designer` has a remote
+// gives each agent a small temp-dir workspace. `lead`'s folder is pinned for the screenshot (Settings › Workspaces moves it); `reviewer` is edited; `designer` has a remote
 // terminal backend.
 test.describe.configure({ mode: 'serial' })
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
@@ -18,6 +18,60 @@ async function openWorkspace(page: Page, agent: string) {
   const panel = page.locator('#agent-files')
   await expect(panel.getByRole('tree', { name: 'Files' })).toBeVisible()
   return panel
+}
+
+/** Settings › Workspaces can move lead's shared root; the screenshot reads a fixed fake workspace instead. */
+async function pinLeadWorkspace(page: Page) {
+  const mtime = '2026-10-24T10:00:00.000Z'
+  const entry = (name: string, kind: 'file' | 'dir') => ({
+    name,
+    kind,
+    size: kind === 'dir' ? 0 : 1,
+    mtime,
+    hidden: name.startsWith('.'),
+  })
+  await page.route(
+    (url) => url.pathname.startsWith('/api/agents/lead/workspace'),
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      const url = new URL(route.request().url())
+      if (url.pathname === '/api/agents/lead/workspace')
+        return route.fulfill({
+          json: {
+            root: '/tmp/score-e2e-6381/tmp/score-fake-ws-AbCdEf/lead',
+            available: true,
+            reason: null,
+          },
+        })
+      if (url.pathname.endsWith('/git')) return route.fulfill({ json: null })
+      if (url.pathname.endsWith('/tree')) {
+        const path = url.searchParams.get('path') ?? ''
+        const entries =
+          path === ''
+            ? [
+                entry('.git', 'dir'),
+                entry('notes', 'dir'),
+                entry('src', 'dir'),
+                entry('.gitignore', 'file'),
+                entry('logo.png', 'file'),
+                entry('README.md', 'file'),
+              ]
+            : path === 'src'
+              ? [entry('index.ts', 'file')]
+              : path === 'notes'
+                ? [entry('todo.md', 'file')]
+                : []
+        return route.fulfill({ json: { entries } })
+      }
+      if (url.searchParams.get('path') === 'README.md')
+        return route.fulfill({
+          contentType: 'text/plain; charset=utf-8',
+          headers: { ETag: '"lead-readme"' },
+          body: '# lead workspace\n\nExample project files.\n',
+        })
+      return route.fallback()
+    },
+  )
 }
 
 // The editor is CodeMirror (a contenteditable), so it is typed into rather than filled.
@@ -142,6 +196,7 @@ test('a remote terminal backend makes the workspace unavailable, with the reason
 })
 
 test('looks right at desktop and phone width', async ({ page }) => {
+  await pinLeadWorkspace(page)
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 })
     const panel = await openWorkspace(page, 'lead')
@@ -196,8 +251,9 @@ test('the header shows the git branch and the changed-file count for a repositor
   await expect(badge).toBeVisible()
   await expect(badge).toContainText('e2e-branch')
   // A folder that is no repository shows no badge.
-  const lead = await openWorkspace(page, 'lead')
-  await expect(lead.getByLabel(/^Git branch/)).toHaveCount(0)
+  // Builder, not lead: Settings > Workspaces gives lead another folder (an empty one) while this spec runs.
+  const builder = await openWorkspace(page, 'builder')
+  await expect(builder.getByLabel(/^Git branch/)).toHaveCount(0)
 })
 
 test("a workspace:// link in chat opens the file in the agent's Files panel", async ({ page }) => {

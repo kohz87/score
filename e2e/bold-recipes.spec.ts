@@ -593,17 +593,17 @@ test('leaving a dirty recipe asks first, and the old addresses land on the page'
   await openRecipes(page, 'new')
   await showText(page)
   await inspector(page).getByLabel('Title').fill('Changed, not saved')
-
-  let accept = false
-  page.on('dialog', (prompt) => void (accept ? prompt.accept() : prompt.dismiss()))
-  // 3.29.0: "‹ Recipes" is the way back to the library; a dirty draft asks first.
-  await page.getByRole('link', { name: '‹ Recipes' }).click()
+  // 3.29.0: "‹ Recipes" leads back to the library; a dirty draft asks first. Each answer is awaited with its own click.
+  const back = page.getByRole('link', { name: '‹ Recipes' })
+  const askedToStay = page.waitForEvent('dialog').then((prompt) => prompt.dismiss())
+  await back.click({ noWaitAfter: true })
+  await askedToStay
   await expect(page).toHaveURL(/\/b\/settings\/recipes\/new$/)
   await expect(inspector(page).getByLabel('Title')).toHaveValue('Changed, not saved')
-
-  accept = true
   // The library replaces the page as the click lands, so Playwright's own waits for a stable link would race it.
-  await page.getByRole('link', { name: '‹ Recipes' }).click({ noWaitAfter: true, force: true })
+  const askedToLeave = page.waitForEvent('dialog').then((prompt) => prompt.accept())
+  await back.click({ noWaitAfter: true, force: true })
+  await askedToLeave
   await expect(page).toHaveURL(/\/b\/settings\/recipes$/)
   await expect(page.getByRole('list', { name: 'Recipes', exact: true })).toBeVisible()
   await page

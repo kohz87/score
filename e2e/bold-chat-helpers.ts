@@ -3,6 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // Helpers for the team-room specs that run against the real fake server (the 3.0.0 port of the classic Chat specs).
 const web = { 'x-score-client': 'web' }
 
+export type DirectChat = { id: string; roomId: string; title: string }
+
 /** A room of its own with a short unique name: specs share one server and the seeded rooms move over time. */
 export async function makeRoom(
   page: Page,
@@ -24,6 +26,31 @@ export async function say(page: Page, roomId: string, text: string) {
   const response = await page.request.post(`/api/rooms/${roomId}/messages`, {
     headers: web,
     data: { text, to: ['lead'] },
+  })
+  expect(response.ok()).toBe(true)
+}
+
+/** A direct chat owned by this test, optionally with its first message (which starts the agent's reply). */
+export async function makeDirectChat(
+  page: Page,
+  agent: string,
+  title: string,
+  text?: string,
+): Promise<DirectChat> {
+  const response = await page.request.post(`/api/agents/${agent}/chats`, {
+    headers: web,
+    data: { title },
+  })
+  expect(response.status()).toBe(201)
+  const chat = (await response.json()) as DirectChat
+  if (text !== undefined) await postToChat(page, chat.roomId, chat.id, text)
+  return chat
+}
+
+export async function postToChat(page: Page, roomId: string, chatId: string, text: string) {
+  const response = await page.request.post(`/api/rooms/${roomId}/messages`, {
+    headers: web,
+    data: { text, jobId: chatId },
   })
   expect(response.ok()).toBe(true)
 }
@@ -83,3 +110,38 @@ export async function openAllInfoSections(scope: Page | Locator) {
   const folded = scope.getByRole('heading').getByRole('button', { expanded: false })
   while ((await folded.count()) > 0) await folded.first().click()
 }
+
+/**
+ * Hovers a message and clicks a button in its action row. The row shows only while the pointer is over the message, and
+ * cards that other specs' approvals and questions put in the shared stream can shift the message away from a pointer that
+ * is already resting, so the hover and the click are repeated together until the click lands.
+ */
+export async function clickAction(message: Locator, name: string | RegExp) {
+  await expect(async () => {
+    await message.hover()
+    await message.getByRole('button', { name }).click({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+}
+
+/**
+ * A seeded one-to-one's chat id and its newest agent reply, found by title. The one-to-one view merges every chat of the
+ * agent, so "the last reply on the page" is whichever chat other specs touched last; a test that acts on a reply names it.
+ */
+export async function seededReply(page: Page, agent: string, title: string) {
+  const direct = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
+    chats: { id: string; roomId: string; title: string }[]
+  }
+  const chat = direct.chats.find((item) => item.title === title)
+  expect(chat, `seeded chat ${title}`).toBeDefined()
+  const body = (await (
+    await page.request.get(`/api/rooms/${chat!.roomId}/messages?jobId=${chat!.id}`)
+  ).json()) as { items: { id: string; author: { kind: string } }[] }
+  const replies = body.items.filter((item) => item.author.kind === 'agent')
+  expect(replies.length, `a reply in ${title}`).toBeGreaterThan(0)
+  const reply = replies[replies.length - 1]!
+  return { chatId: chat!.id, replyId: reply.id, reply: messageById(page, reply.id) }
+}
+
+/** One message of the conversation, by its id (stable while other chats' messages arrive). */
+export const messageById = (page: Page, id: string) =>
+  streamOf(page).locator(`[data-message-id="${id}"]`)

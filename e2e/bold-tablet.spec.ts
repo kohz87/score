@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { makeDirectChat } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
 // 3.7.0: the bold shell on tablets. Portrait tablets (744-834) use the phone shell but must use the width; landscape
@@ -171,7 +172,18 @@ for (const size of sizes) {
 
         // The one-to-one's messages and composer fill the sheet: the agent's glyph and the composer share a left edge,
         // the person's bubble, the composer and the header tools a right edge.
-        await open(page, '/b?with=builder', visible('.bold-dm-bar'))
+        // Own chat with a message of mine: the builder's "latest chat" is whatever other specs made last (maybe empty).
+        const chat = await makeDirectChat(
+          page,
+          'builder',
+          `Tablet layout ${size.name}`,
+          'How wide is this tablet?',
+        )
+        await open(page, `/b?with=builder&chat=${chat.id}`, visible('.bold-dm-bar'))
+        await expect(page.locator('#bold-room-stream .chat-message--you').first()).toBeVisible()
+        await expect(page.locator('#bold-room-stream .agent-glyph').first()).toBeVisible({
+          timeout: 30_000,
+        })
         const dm = await page.evaluate(() => {
           const rect = (el: Element | null) => el!.getBoundingClientRect()
           const you = document.querySelector(

@@ -15,6 +15,53 @@ export async function makeTeam(page: Page, tag: string, members = ['lead', 'buil
   return { ...room, label: `#${name}` }
 }
 
+/**
+ * Keeps the page's team list to the teams a test owns (plus the seeded team room). Other specs add teams to the shared
+ * server at any moment, and two or more teams change what the share and hand-off menus show ("Share to a team", a team
+ * select). Both the list read and the live room.upserted events that would add a team afterwards are filtered; the server
+ * and everything else stay real.
+ */
+export async function onlyTeams(page: Page, keep: readonly string[]) {
+  await page.addInitScript(
+    (ids: string[]) => {
+      const add = EventSource.prototype.addEventListener
+      EventSource.prototype.addEventListener = function (
+        this: EventSource,
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+      ) {
+        if (type !== 'room.upserted' || typeof listener !== 'function')
+          return add.call(this, type, listener, options)
+        const wrapped = (event: Event) => {
+          try {
+            const room = (JSON.parse((event as MessageEvent<string>).data) as { data?: unknown })
+              .data as { id?: string; role?: string } | undefined
+            if (room?.role === 'team' && !ids.includes(room.id ?? '')) return
+          } catch {
+            // Not JSON: pass it on and let the app decide.
+          }
+          listener.call(this, event)
+        }
+        return add.call(this, type, wrapped, options)
+      }
+    },
+    [...keep],
+  )
+  await page.route(
+    (url) => url.pathname === '/api/team-rooms',
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      const response = await route.fetch()
+      const body = (await response.json()) as { items: { id: string }[] }
+      await route.fulfill({
+        response,
+        json: { ...body, items: body.items.filter((room) => keep.includes(room.id)) },
+      })
+    },
+  )
+}
+
 export async function roomJobs(page: Page, roomId: string) {
   const response = await page.request.get(`/api/rooms/${roomId}/jobs`)
   expect(response.ok()).toBe(true)

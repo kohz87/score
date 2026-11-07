@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   actsOf,
+  clickAction,
   composerOf,
   makeRoom,
   messageWith,
@@ -48,8 +49,7 @@ test('Copy, Edit (replaces, Cancel first) and Try another work from the action r
   const mine = await sendAndWait(page, first)
 
   // Copy: the text lands on the clipboard.
-  await mine.hover()
-  await actsOf(mine).getByRole('button', { name: 'Copy message from You' }).click()
+  await clickAction(mine, 'Copy message from You')
   await expect(actsOf(mine).getByRole('button', { name: 'Copy message from You' })).toHaveText(
     'Copied',
   )
@@ -57,14 +57,12 @@ test('Copy, Edit (replaces, Cancel first) and Try another work from the action r
 
   // Edit: Cancel first, then send a correction.
   const composer = composerOf(page)
-  await mine.hover()
-  await actsOf(mine).getByRole('button', { name: 'Edit message from You' }).click()
+  await clickAction(mine, 'Edit message from You')
   await expect(page.getByText('Editing your message')).toBeVisible()
   await expect(composer).toHaveValue(first)
   await page.getByRole('button', { name: 'Cancel' }).click()
   await expect(composer).toHaveValue('')
-  await mine.hover()
-  await actsOf(mine).getByRole('button', { name: 'Edit message from You' }).click()
+  await clickAction(mine, 'Edit message from You')
   const fixed = `Please check the room context, corrected ${stamp}`
   await composer.fill(fixed)
   await composer.press('Enter')
@@ -84,15 +82,15 @@ test('Copy, Edit (replaces, Cancel first) and Try another work from the action r
   const reply = streamOf(page)
     .locator('.bold-message', { hasText: 'I have reviewed the room context' })
     .last()
-  await reply.hover()
   const retried = page.waitForResponse(
     (response) => response.url().endsWith('/retry') && response.status() === 202,
   )
-  await actsOf(reply)
-    .getByRole('button', { name: /^Try another reply from/ })
-    .click()
+  await clickAction(reply, /^Try another reply from/)
   await retried
-  await expect(streamOf(page).getByText('2 / 2')).toBeVisible({ timeout: 40_000 })
+  // The reply's own pager: an edited message above it shows a "2 / 2" pager of its own.
+  await expect(
+    streamOf(page).getByRole('group', { name: 'Versions of this reply' }).getByText('2 / 2'),
+  ).toBeVisible({ timeout: 40_000 })
 })
 
 test('the composer sends a message that gets a streamed reply, and an /assign that creates a task', async ({
@@ -162,10 +160,7 @@ test('Delete on an agent reply hides it with an Undo window, then removes it for
   const reply = streamOf(page).locator(`[id="${id}"]`)
 
   const row = streamOf(page).locator('.bold-message', { has: page.locator(`[id="${id}"]`) })
-  await row.hover()
-  await actsOf(row)
-    .getByRole('button', { name: /^Delete message from (?!You)/ })
-    .click()
+  await clickAction(row, /^Delete message from (?!You)/)
   await expect(reply).toHaveCount(0)
   const toast = page.getByRole('status').filter({ hasText: 'Message deleted' })
   await expect(
@@ -177,10 +172,7 @@ test('Delete on an agent reply hides it with an Undo window, then removes it for
   const deleted = page.waitForResponse(
     (response) => response.request().method() === 'DELETE' && response.status() === 204,
   )
-  await row.hover()
-  await actsOf(row)
-    .getByRole('button', { name: /^Delete message from (?!You)/ })
-    .click()
+  await clickAction(row, /^Delete message from (?!You)/)
   await deleted
   await page.reload()
   await expect(composerOf(page)).toBeEnabled({ timeout: 15_000 })
@@ -284,8 +276,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await sendAndWait(page, `Keep this ${Date.now()}`)
   const text = `Rewind this ${Date.now()}`
   const mine = await sendAndWait(page, text, 'I have reviewed the room context')
-  await mine.hover()
-  await actsOf(mine).getByRole('button', { name: 'Delete message from You' }).click()
+  await clickAction(mine, 'Delete message from You')
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
   await expect(dialog.getByText(/Agents rewound:.*lead −\d+ exchanges?/)).toBeVisible()
   await expect(dialog.getByText(/Long-term memory .* isn’t rewound/)).toBeVisible()
@@ -316,8 +307,7 @@ test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is 
   const stamp = Date.now()
   const text = `First wording ${stamp}`
   const mine = await sendAndWait(page, text)
-  await mine.hover()
-  await actsOf(mine).getByRole('button', { name: 'Edit message from You' }).click()
+  await clickAction(mine, 'Edit message from You')
   const fixed = `Second wording ${stamp}`
   const composer = composerOf(page)
   await composer.fill(fixed)
@@ -358,8 +348,7 @@ test('An agent that cannot be rewound is named, and Hide in Score only still wor
   await expect(mine.last()).toBeVisible()
   await expect(streamOf(page).getByText('I have reviewed').first()).toBeVisible({ timeout: 40_000 })
   await expect(streamOf(page).getByRole('button', { name: /^Stop reply/ })).toHaveCount(0)
-  await mine.last().hover()
-  await actsOf(mine.last()).getByRole('button', { name: 'Delete message from You' }).click()
+  await clickAction(mine.last(), 'Delete message from You')
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
   await expect(dialog.getByText(/These agents can’t be rewound/)).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Rewind and delete' })).toBeDisabled()

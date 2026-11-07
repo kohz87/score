@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeDirectChat } from './bold-chat-helpers.ts'
+import { makeTeam } from './one-job-helpers.ts'
 
 // 2.0.13: the composer's + menu opens inside the viewport, anchored to the + button, with readable items.
 test.use({ reducedMotion: 'reduce' })
@@ -76,14 +78,18 @@ for (const { name, viewport } of sizes) {
     })
 
     test('team room', async ({ page }) => {
-      await page.goto('/b?open=1')
+      // `/b?open=1` is the shared team room, whose jobs and messages other specs change; any chat uses the same + menu.
+      const room = await makeTeam(page, 'plus')
+      await page.goto(`/b?room=${room.id}`)
       const composer = page.locator('.chat-composer-box--room').first()
       await expect(composer).toBeVisible({ timeout: 20_000 })
       await checkMenu(page, composer)
     })
 
     test('one to one', async ({ page }) => {
-      await page.goto('/b?with=builder')
+      // The latest live one-to-one is shared state; open this test's own chat so the composer is the same and stable.
+      const chat = await makeDirectChat(page, 'builder', `+ menu ${Date.now().toString(36)}`)
+      await page.goto(`/b?with=builder&chat=${chat.id}`)
       const composer = page.locator('.chat-composer-box--room').first() // 3.22.0: a one-to-one's composer is in the chat
       await expect(composer).toBeVisible({ timeout: 20_000 })
       await checkMenu(page, composer)

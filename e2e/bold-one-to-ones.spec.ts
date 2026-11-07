@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
-import { openAllInfoSections } from './bold-chat-helpers.ts'
+import { clickAction, openAllInfoSections, seededReply } from './bold-chat-helpers.ts'
 import { openBoldJob } from './bold-room-fixtures.ts'
+import { onlyTeams } from './one-job-helpers.ts'
 
 // PLAN 11.7: one-to-ones in the bold shell, against the fake adapter's seeded direct chats (builder: "Websockets or
 // server-sent events", "The cursor bug", "Working in the Docker sandbox"; reviewer: "How strict to be on docs").
@@ -42,15 +43,8 @@ async function openInfo(page: Page) {
   return panel
 }
 
-/** The share action of the newest agent reply; the action row shows on hover (always on touch), so hover its message. */
-async function shareAction(page: Page) {
-  const share = 'button[aria-label^="Share message from "][aria-label$=" to the team room"]'
-  const message = messages(page)
-    .filter({ has: page.locator(share) })
-    .last()
-  await message.hover()
-  return message.locator(share)
-}
+/** The share action in a reply's hover row (always shown on touch). */
+const SHARE = /^Share message from .* to the team room$/
 
 /** The agent's chats in Info, found by title. Picking one makes it the current topic. */
 async function openChatFromInfo(page: Page, title: RegExp) {
@@ -267,7 +261,8 @@ for (const { name, viewport } of sizes) {
     }) => {
       // 3.28.0: the team room already has two active jobs, so a new one is refused (409 job_running); share into the
       // seeded Activity feed job instead.
-      await teamRoomId(page)
+      // Other specs add teams; with two the share menu is "Share to a team", so this page sees the team room only.
+      await onlyTeams(page, [await teamRoomId(page)])
       const jobTitle = 'Activity feed'
       const team = (await (await page.request.get('/api/team-room')).json()) as {
         jobs: { id: string; title: string }[]
@@ -275,20 +270,21 @@ for (const { name, viewport } of sizes) {
       const target = team.jobs.find((item) => item.title === jobTitle)
       expect(target).toBeTruthy()
       const made = { id: target!.id }
-      await page.goto('/b?with=reviewer')
+      // The seeded chat by title: "the latest reviewer chat" moves when other specs talk to reviewer.
+      const seeded = await seededReply(page, 'reviewer', 'How strict to be on docs')
+      await page.goto(`/b?with=reviewer&chat=${seeded.chatId}`)
       await expectPrivacy(page, 'reviewer')
       await expect(
         messages(page).filter({ hasText: 'I’ll block only when steps are missing or wrong' }),
       ).toHaveCount(1)
+      await expect(seeded.reply).toContainText('I’ll block only when steps are missing or wrong')
       const posts = recordPosts(page)
-      await (await shareAction(page)).click()
+      await clickAction(seeded.reply, SHARE)
       const menu = page.getByRole('dialog', { name: 'Share to the team room' })
       await expect(menu).toHaveAttribute('data-protected', 'block')
       await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
       // The confirmation sits in the message's hover row: the menu's job buttons are not under the message, so point at it again.
-      await messages(page)
-        .filter({ hasText: 'I’ll block only when steps are missing or wrong' })
-        .hover()
+      await seeded.reply.hover()
       await expect(
         stream(page).getByRole('status').filter({ hasText: 'Shared to the team room' }),
       ).toBeVisible()
@@ -313,6 +309,7 @@ for (const { name, viewport } of sizes) {
     test('Add someone says what leaves, then moves the talk to the team room with the chat referenced', async ({
       page,
     }) => {
+      await onlyTeams(page, [await teamRoomId(page)])
       const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
       await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
@@ -354,16 +351,17 @@ for (const { name, viewport } of sizes) {
       page,
     }) => {
       // 3.22.0: the "Earlier chats" popover is gone (the chats are Info's list), so only the dialogs remain.
-      const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
-      await page.goto(`/b?with=builder&chat=${chat}`)
+      await onlyTeams(page, [await teamRoomId(page)])
+      const seeded = await seededReply(page, 'builder', 'Websockets or server-sent events')
+      await page.goto(`/b?with=builder&chat=${seeded.chatId}`)
       await expectPrivacy(page, 'builder')
 
-      const share = await shareAction(page)
-      await share.click()
+      await clickAction(seeded.reply, SHARE)
+      const share = seeded.reply.getByRole('button', { name: SHARE })
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toBeVisible()
       // The row's buttons show only while the message is hovered; opening the menu can move the message under or away
       // from the pointer, so rest the pointer on it again before Escape.
-      await shareAction(page)
+      await seeded.reply.hover()
       await page.keyboard.press('Escape')
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toHaveCount(0)
       await expect(share).toBeFocused()
