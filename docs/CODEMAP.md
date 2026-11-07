@@ -222,6 +222,26 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-security.css` — Remote access and security lists, password and customize link.
 - `apps/web/src/bold/bold-settings-system.css` — System cards, logs, pause and about facts.
 - `apps/web/src/bold/bold-settings-usage.css` — Usage summary, charts, tables and spending bars.
+- `apps/web/src/bold/BoldUsage.tsx` — Usage screen entry: view switch, range controls and report layout.
+- `apps/web/src/bold/bold-usage-model.ts` — Usage ranges, chart tones, agent fallbacks and date labels.
+- `apps/web/src/bold/use-bold-usage-money.ts` — Reports display-currency hook.
+- `apps/web/src/bold/BoldUsageCustomRangeForm.tsx` — custom report range form.
+- `apps/web/src/bold/BoldUsageAgentTable.tsx` — Usage by-agent table.
+- `apps/web/src/bold/BoldUsageTaskFigure.tsx` — jobs done per day chart and its accessible table.
+- `apps/web/src/bold/BoldUsageSpendFigure.tsx` — spend by agent bars, note and accessible table.
+- `apps/web/src/bold/BoldUsageSpeedTable.tsx` — per-agent first-token and tokens-per-second table.
+- `apps/web/src/bold/BoldUsageHeadline.tsx` — Usage headline stat card.
+- `apps/web/src/bold/BoldWorkbench.tsx` — Workbench entry: job pick, tab list and view composition.
+- `apps/web/src/bold/bold-workbench-model.ts` — Workbench types, comment labels, authorship and cursor helpers.
+- `apps/web/src/bold/BoldWorkbenchAgentName.tsx` — Workbench agent name and glyph.
+- `apps/web/src/bold/BoldWorkbenchTabDot.tsx` — Workbench tab colour dot.
+- `apps/web/src/bold/BoldWorkbenchCodeText.tsx` — highlighted code text.
+- `apps/web/src/bold/BoldWorkbenchCommentCard.tsx` — review, approval and send-back note card.
+- `apps/web/src/bold/BoldWorkbenchCursorMark.tsx` — an agent cursor and its caret.
+- `apps/web/src/bold/BoldWorkbenchCodeView.tsx` — file lines, authorship, cursors and comments.
+- `apps/web/src/bold/BoldWorkbenchLooseComments.tsx` — notes on files the job did not change.
+- `apps/web/src/bold/BoldWorkbenchScreenView.tsx` — read-only agent screen frame and replay link.
+- `apps/web/src/bold/BoldWorkbenchDraftView.tsx` — draft preview and workspace link.
 - `apps/web/src/bold/bold-settings-connections.css` — Connection lists, statuses, local models and phone pairing.
 - `apps/web/src/bold/BoldConnections.tsx` — Settings › Connections composition.
 - `apps/web/src/bold/connections/HermesCard.tsx` — Hermes reachability, version, gateway and agent-count card.

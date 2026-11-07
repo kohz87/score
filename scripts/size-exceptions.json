@@ -105,16 +105,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldUsage.tsx",
-    "lines": 793,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldWorkbench.tsx",
-    "lines": 665,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/direct/DirectChat.test.tsx",
     "lines": 656,
     "reason": "split in CS.2 wave 1"
