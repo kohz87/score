@@ -277,7 +277,7 @@ likely to be the entry point for a change.
 - `apps/server/src/db/` — Score SQLite open, migrate, lock, FTS and epochs.
 - `apps/server/src/domain/` — room, task, approval, report, profile and other domain rules.
 - `apps/server/src/domain/exchanges/` — exchange requests, budgets, results and workbench state.
-- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
+- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, lead commands, human decisions, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, queue and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
@@ -387,6 +387,23 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/watch-tool-frames.ts` — pure tool-hook frame derivation and captions.
 - `apps/server/src/domain/watch-store.ts` — redacted frame persistence, call keys and media references.
 - `apps/server/src/domain/watch-read.ts` — replay frame, marker and liveness reads.
+- `apps/server/src/domain/orchestration/command-args.ts` — `orch.*` tool names, argument schemas, parsing and canonical payload hashes.
+- `apps/server/src/domain/orchestration/command-assign.ts` — step and helper assignment rules, quota holds, gates and votes.
+- `apps/server/src/domain/orchestration/command-finish.ts` — check, finish and receipt command handlers.
+- `apps/server/src/domain/orchestration/command-handlers.ts` — tool-name to handler registry.
+- `apps/server/src/domain/orchestration/command-plan.ts` — plan command and the advisor's first-plan consult.
+- `apps/server/src/domain/orchestration/command-steps.ts` — shared step cancellation plus approval-request and cancel commands.
+- `apps/server/src/domain/orchestration/command-support.ts` — shared command receipts, handler types, policy fields and storage refusal.
+- `apps/server/src/domain/orchestration/command-talk.ts` — question and note command handlers.
+- `apps/server/src/domain/orchestration/command-vote.ts` — helper vote command.
+- `apps/server/src/domain/orchestration/commands.ts` — public command facade: capability admission, deduplication and receipt commit.
+- `apps/server/src/domain/orchestration/decision-gates.ts` — gate and inquiry decisions.
+- `apps/server/src/domain/orchestration/decision-guards.ts` — revision and live-run guards shared by human decisions.
+- `apps/server/src/domain/orchestration/decision-limits.ts` — run limit changes and coding reserve growth.
+- `apps/server/src/domain/orchestration/decision-quota.ts` — held-step quota answers and suspended-step resumption.
+- `apps/server/src/domain/orchestration/decision-remap.ts` — agent and policy remap decisions for coding workers.
+- `apps/server/src/domain/orchestration/decision-run-controls.ts` — pause, resume, stop, waiver and abandonment decisions.
+- `apps/server/src/domain/orchestration/decisions.ts` — public human-decision facade.
 - `apps/server/src/domain/orchestration/executor.ts` — public Orchestrator facade, constructor state and re-exports.
 - `apps/server/src/domain/orchestration/executor-admission.ts` — choosing queued work and admitting runs.
 - `apps/server/src/domain/orchestration/executor-capacity.ts` — capacity and storage usage reads.
