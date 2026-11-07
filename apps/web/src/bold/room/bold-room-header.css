@@ -1,0 +1,116 @@
+/* The bold team room, rebuilt from docs/design/bold/prototype.html (`vRoom`, `vMsg`, `vRequest`, `vTop`) and board 09.
+   The classic message parts, versions and composer stay the machinery; these rules give the room column its own look. */
+
+[data-ui='bold'] .bold-room-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-job-tabs,
+[data-ui='bold'] .bold-job-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-job-tab,
+[data-ui='bold'] .bold-filter {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-size: 0.87em;
+  font-weight: 700;
+  background: var(--panel);
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--bold-d, 1));
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-job-tab.on,
+[data-ui='bold'] .bold-filter.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-job-name {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-job-dot,
+[data-ui='bold'] .bold-unread {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-job-dot {
+  width: 8px;
+  height: 8px;
+}
+
+[data-ui='bold'] .bold-unread {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 calc(5px * var(--bold-d, 1));
+  background: var(--bad);
+  /* The ground colour: white on the dark look's pale coral is 2:1. */
+  color: var(--bg);
+  font-size: 11px;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-job-tab.on .bold-unread,
+[data-ui='bold'] .bold-filter.on .bold-unread {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-job-tab .bold-unread + .bold-unread {
+  margin-left: 1px;
+}
+
+[data-ui='bold'] .bold-job-filters {
+  padding-left: 2px;
+}
+
+[data-ui='bold'] .bold-filter {
+  background: transparent;
+  color: var(--muted);
+  min-height: 30px;
+  padding-inline: calc(11px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-filter.on {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-room-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--bold-d, 1));
+  min-height: 24px;
+  margin-top: -6px;
+}
+
+[data-ui='bold'] .bold-deleted-toggle {
+  background: transparent;
+  color: var(--muted);
+  min-height: 24px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

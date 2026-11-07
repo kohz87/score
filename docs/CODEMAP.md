@@ -39,7 +39,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
-- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus and room state.
+- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state and split room styles.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
 - `apps/web/src/components/flow-layout/` — workflow node placement helpers.
@@ -81,7 +81,16 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
 - `apps/web/src/bold/room/RoomMenus.tsx` — room and message action menus.
 - `apps/web/src/bold/room/use-needs-you.ts` — needs-you selection and state.
-- `apps/web/src/bold/room/bold-room.css` — team-room styles.
+- `apps/web/src/bold/room/bold-room.css` — team-room style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/room/bold-room-header.css` — room tabs, job filters, tools and the deleted toggle.
+- `apps/web/src/bold/room/bold-room-needs.css` — needs-you slots, jump chip, request cards, source and report-back.
+- `apps/web/src/bold/room/bold-room-run-cards.css` — classic run request cards and run capsules.
+- `apps/web/src/bold/room/bold-room-messages.css` — message stream, bubbles, actions, history, versions and results.
+- `apps/web/src/bold/room/bold-room-states.css` — read-only agent chats and the empty-team-room onboarding.
+- `apps/web/src/bold/room/bold-room-composer.css` — room composer shell, attachments, send controls and editing notice.
+- `apps/web/src/bold/room/bold-room-responsive.css` — phone and narrow-screen room layout and touch targets.
+- `apps/web/src/bold/room/bold-room-job-controls.css` — knowledge backdrop, job fold, questions, reply versions and team pickers.
+- `apps/web/src/bold/room/bold-room-job-bar.css` — job bar, Next up, busy dialog and job-strip states.
 - `apps/web/src/data/api.ts` — API request wrapper and session handling.
 - `apps/web/src/data/stream.ts` — resumable browser SSE client.
 - `apps/web/src/data/query-client.ts` — query client and stream context.

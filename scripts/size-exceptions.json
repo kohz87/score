@@ -695,11 +695,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/room/bold-room.css",
-    "lines": 2231,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/room/bold-thread.css",
     "lines": 555,
     "reason": "split in CS.2 wave 1"

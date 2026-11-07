@@ -1,0 +1,177 @@
+/* "Save to Knowledge" is portaled to the shell (the stream's fade mask would clip a fixed dialog); lift its backdrop
+   above the side panel and the phone tab bar like the Library's dialogs. */
+[data-ui='bold'] > .kn-backdrop {
+  z-index: 70;
+}
+
+[data-ui='bold'] .bold-job-fold {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-job-fold-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.35;
+}
+
+[data-ui='bold'] .bold-job-fold-copy b {
+  font-family: var(--font-d);
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-job-fold-copy span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-job-fold-last {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-job-fold > button,
+[data-ui='bold'] .bold-job-hide > button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: calc(6px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-job-hide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--bold-d, 1));
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 2.3.0 (decision 128): an agent's question. The card is the needs-you object (light on the dark ground); the
+   question reads as plain text with its line breaks, the options as pills, a free answer in the form box. */
+[data-ui='bold'] .bold-question-text {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 18px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+[data-ui='bold'] .bold-question-options {
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-question-pill[aria-pressed='true'] {
+  outline: 2px solid currentcolor;
+  outline-offset: 1px;
+}
+
+[data-ui='bold'] .bold-question-form textarea {
+  min-height: 52px;
+  max-height: 240px;
+  resize: none;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-question-deadline {
+  align-self: flex-start;
+}
+
+/* The ended question stays in the stream as one quiet line where it was asked. */
+[data-ui='bold'] .bold-question-note {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 2.4.0 Try another reply: the pager (prototype `.vers`) and the memory note under a group's bubble. */
+[data-ui='bold'] .bold-reply-group {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-reply-versions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(4px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
+  padding-left: calc(36px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-vers {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--bold-d, 1));
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-vers button {
+  border: 0;
+  background: var(--panel);
+  color: var(--ink);
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-vers button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-vers button:focus-visible {
+  outline: 2px solid var(--hi-bg);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-vers-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  [data-ui='bold'] .bold-vers button {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* 3.4.0: the New team / Members checklists (chips as in Start a job). */
+[data-ui='bold'] .bold-team-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+[data-ui='bold'] .bold-new-team-dialog select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  font: inherit;
+}
+
+/* 3.7.0: on a portrait tablet the room's title and its actions share one row, flush with the content below (on a phone
+   the actions drop to a second row). */
+@media (min-width: 601px) and (max-width: 860px) {
+}
