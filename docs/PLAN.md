@@ -755,6 +755,13 @@ http/rooms, BoldTriggers, BoldLibrary, journal, bold.css). Wave 3, the large tes
 lines (about 100 source, 70 tests), batched by folder (two to four related files per task), so the exception list ends
 empty except for the long declarative lists the rule allows (schemas, fixtures, data tables).
 
+**CS.4 Test cleanup, before wave 3** (owner 2026-11-07, decision 170). Remove what no longer earns its place before the
+test files are split: screenshot baselines no spec uses, fixtures nothing loads, helpers nothing imports, skipped tests
+(fixed or deleted with a reason), tests of removed features (step diagram, old run pages, retired routes), and duplicate
+coverage where another test keeps the behaviour. A read-only audit lists each candidate with proof; the lead approves
+item by item; DeepSeek removes the approved list. No test that guards live behaviour is deleted or weakened. Done when
+`pnpm check` and a full e2e run are green and the TASKLOG lists every removal with its reason.
+
 **CS.3 Independent e2e specs.** The specs that pass alone but fail in a full run (bold-room-menu, one-to-ones,
 room-chat, team choice, workspace, tablet, + menu, take-over) stop depending on what other specs leave on the shared
 fake server: their own rooms, agents and state. Done when three full runs in a row have no such failure.
