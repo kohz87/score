@@ -505,11 +505,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/bold-settings.css",
-    "lines": 2039,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/bold-tasks.css",
     "lines": 935,
     "reason": "split in CS.2 wave 1"

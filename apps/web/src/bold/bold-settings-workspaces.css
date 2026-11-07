@@ -1,0 +1,107 @@
+/* Workspaces (3.20.0), from docs/design/bold/mockups/17-workspaces.dc.html. */
+.bold-settings-page .bold-workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-ws-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-ws-top h2 {
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin: 0 0 6px;
+}
+
+.bold-settings-page .bold-ws-top p {
+  margin: 0;
+  max-width: 640px;
+}
+
+.bold-settings-page .bold-ws-card,
+.bold-settings-page .bold-ws-new {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-ws-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-ws-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bold-settings-page .bold-ws-title h3 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.bold-settings-page .bold-ws-path {
+  font-family: var(--font-m);
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-ws-agents {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-ws-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-ws-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bold-settings-page .bold-ws-chip[aria-pressed='true'] {
+  border-color: var(--ok);
+  background: var(--field);
+}
+
+.bold-settings-page .bold-ws-mark {
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-ws-chip[aria-pressed='true'] .bold-ws-mark {
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-ws-its-folder {
+  color: var(--muted);
+  font-weight: 600;
+}
