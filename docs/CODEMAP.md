@@ -233,7 +233,16 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/fake/fake-port-tasks.ts` — fake task board reads, writes and actions.
 - `apps/server/src/hermes/fake/fake-port-runs.ts` — fake run start, streaming, questions and transitions.
 - `apps/server/src/hermes/fake/fake-port-run-control.ts` — stop, MCP, bot screen, rewind, compaction, context and decisions.
-- `apps/server/src/knowledge/vault.ts` — knowledge vault operations.
+- `apps/server/src/knowledge/vault.ts` — public vault facade: construction, fields, getters and method installation.
+- `apps/server/src/knowledge/vault-types.ts` — vault options, row and move schemas, shared types and history outcomes.
+- `apps/server/src/knowledge/vault-runtime.ts` — vault method-module runtime shape, public typing and installation.
+- `apps/server/src/knowledge/vault-lifecycle.ts` — vault lock, publication, startup, watcher, timers and close.
+- `apps/server/src/knowledge/vault-files.ts` — containment-checked path lookup, atomic writes, reads, hashes and streams.
+- `apps/server/src/knowledge/vault-index.ts` — SQLite note index, scans, link updates, memory indexes and rebuild.
+- `apps/server/src/knowledge/vault-reads.ts` — knowledge settings, info, tree, note reads, search and history reads.
+- `apps/server/src/knowledge/vault-writes.ts` — git commits, note writes, moves, deletes and restores.
+- `apps/server/src/knowledge/vault-move-plan.ts` — crash-safe move plans, recovery, retries and move issues.
+- `apps/server/src/knowledge/vault-folders.ts` — folder creation, moving, pruning and deletion.
 - `apps/server/src/runtimes/coding/service.ts` — public coding runtime import path and re-export facade.
 - `apps/server/src/runtimes/coding/service-types.ts` — coding runtime dependencies, run/attempt types, row schemas and shared helpers.
 - `apps/server/src/runtimes/coding/service-base.ts` — shared runtime state, backend status, accessors and shutdown assertion.
