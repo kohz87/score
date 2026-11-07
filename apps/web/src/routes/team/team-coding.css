@@ -1,0 +1,164 @@
+/* Coding agents (PLAN 7.2): radio groups read as rows, not as stacked form fields. */
+.team-coding-permission {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.team-coding-permission legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 4px;
+}
+.team-routine-form .team-coding-permission label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 400;
+}
+.team-routine-form .team-coding-permission input {
+  width: auto;
+}
+
+/* Antigravity's limits left: one plain line per model group, no bullets (the facts column is right-aligned). */
+
+/* The quota floor field (PLAN 8.6). */
+.team-quota-floor {
+  text-align: left;
+}
+.team-quota-floor label {
+  /* .team-routine-form label is a column; align-items: center on it is what centred the field (8.9). */
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.team-quota-floor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.team-quota-floor-input input {
+  width: 4.5rem;
+}
+.team-quota-floor p {
+  margin: 4px 0 0;
+}
+
+/* CLI quota meters (PLAN 8.1): a bar per window; the figure beside it always says the same thing as the fill. */
+.quota {
+  text-align: left;
+}
+.quota-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+/* One limit per block: name and "% left" on a line, the bar under them, the reset time under that (owner
+   2026-10-20: the four-column row read as cluttered). */
+.quota-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  row-gap: 6px;
+  column-gap: var(--space-3);
+  text-align: left;
+}
+.quota-name {
+  grid-row: 1;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.quota-left {
+  grid-row: 1;
+  grid-column: 2;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.quota-bar {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+.quota-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+}
+.quota-floor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--agent-coral);
+  box-shadow: 0 0 0 1px var(--card);
+}
+.quota-fill[data-level='low'] {
+  background: var(--agent-saffron);
+}
+.quota-fill[data-level='out'] {
+  background: var(--agent-coral);
+}
+.quota-reset {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+}
+.quota-reset:empty {
+  display: none;
+}
+/* What the marks mean and when Score read the numbers: set apart, smaller. */
+.quota-notes {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  gap: 4px;
+}
+.quota-seen {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* What a coding agent can read: two short lines (owner 2026-10-11). */
+.coding-reach p {
+  margin: 0 0 4px;
+}
+.coding-reach p:last-child {
+  margin-bottom: 0;
+}
+
+/* A coding agent's personality card (PLAN 8.8): the role as a line, the instructions rendered below it. */
+.team-routine-form .team-file-text {
+  font-family: var(--font-code);
+  font-size: 13px;
+  min-height: 260px;
+}
+.coding-role {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+.coding-instructions {
+  padding: 14px var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  max-height: 160px;
+  overflow: auto;
+}
