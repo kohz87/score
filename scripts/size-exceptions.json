@@ -5,16 +5,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/orchestration/helpers.ts",
-    "lines": 595,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/orchestration/ops.ts",
-    "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/triggers/triggers.ts",
     "lines": 454,
     "reason": "split in CS.2 wave 1"
