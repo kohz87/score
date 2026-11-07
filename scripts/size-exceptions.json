@@ -465,21 +465,6 @@
     "reason": "data list"
   },
   {
-    "path": "scripts/compare/11.10a.mjs",
-    "lines": 604,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "scripts/compare/11.4d.mjs",
-    "lines": 507,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "scripts/compare/11.6b.mjs",
-    "lines": 547,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "scripts/load-test.ts",
     "lines": 585,
     "reason": "split in CS.2 wave 1"
