@@ -902,6 +902,8 @@ likely to be the entry point for a change.
 - `e2e/customizer-saves.spec.ts` — save conflicts, in-use state, replaced pictures and unsaved edits.
 - `e2e/customizer-package-versions.spec.ts` — copies, package revisions, exports, cached looks and replaced assets.
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
+- `e2e/bold-needs-you-helpers.ts` — shared needs-you room jobs, approvals, exchanges and orchestration/workflow run fixtures.
+- `e2e/bold-recipes-helpers.ts` — shared Recipes page navigation, step selection, validation and workflow API helpers.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
 - `e2e/visual-fixtures.ts` — shared visual-test setup.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.

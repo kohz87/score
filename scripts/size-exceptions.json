@@ -365,16 +365,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/bold-needs-you.spec.ts",
-    "lines": 845,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "e2e/bold-recipes.spec.ts",
-    "lines": 777,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "e2e/bold-room-fixtures.ts",
     "lines": 630,
     "reason": "data list"
