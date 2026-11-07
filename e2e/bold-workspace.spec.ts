@@ -20,6 +20,55 @@ async function openWorkspace(page: Page, agent: string) {
   return panel
 }
 
+/** Settings › Workspaces can move lead's shared root; the screenshot reads a fixed fake workspace instead. */
+async function pinLeadWorkspace(page: Page) {
+  const mtime = '2026-10-24T10:00:00.000Z'
+  const entry = (name: string, kind: 'file' | 'dir') => ({
+    name,
+    kind,
+    size: kind === 'dir' ? 0 : 1,
+    mtime,
+    hidden: name.startsWith('.'),
+  })
+  await page.route(
+    (url) => url.pathname.startsWith('/api/agents/lead/workspace'),
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      const url = new URL(route.request().url())
+      if (url.pathname === '/api/agents/lead/workspace')
+        return route.fulfill({
+          json: { root: '/home/lead/workspace', available: true, reason: null },
+        })
+      if (url.pathname.endsWith('/git')) return route.fulfill({ json: null })
+      if (url.pathname.endsWith('/tree')) {
+        const path = url.searchParams.get('path') ?? ''
+        const entries =
+          path === ''
+            ? [
+                entry('notes', 'dir'),
+                entry('src', 'dir'),
+                entry('.gitignore', 'file'),
+                entry('README.md', 'file'),
+                entry('logo.png', 'file'),
+              ]
+            : path === 'src'
+              ? [entry('index.ts', 'file')]
+              : path === 'notes'
+                ? [entry('todo.md', 'file')]
+                : []
+        return route.fulfill({ json: { entries } })
+      }
+      if (url.searchParams.get('path') === 'README.md')
+        return route.fulfill({
+          contentType: 'text/plain; charset=utf-8',
+          headers: { ETag: '"lead-readme"' },
+          body: '# lead workspace\n\nExample project files.\n',
+        })
+      return route.fallback()
+    },
+  )
+}
+
 // The editor is CodeMirror (a contenteditable), so it is typed into rather than filled.
 async function replaceText(page: Page, label: string, text: string) {
   const editor = page.getByLabel(label)
@@ -142,6 +191,7 @@ test('a remote terminal backend makes the workspace unavailable, with the reason
 })
 
 test('looks right at desktop and phone width', async ({ page }) => {
+  await pinLeadWorkspace(page)
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 })
     const panel = await openWorkspace(page, 'lead')

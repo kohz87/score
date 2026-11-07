@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import {
+  makeDirectChat,
+  onlyChatMessages,
+  onlyDirectChats,
+  waitForChatReply,
+} from './bold-chat-helpers.ts'
 
 // 3.6.0 (decision 137): with a second team room, a trigger and a one-to-one share can name the team the work goes to.
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
@@ -55,8 +61,18 @@ test('a trigger starts jobs in the second team, and a one-to-one reply is shared
     expect(saved?.teamRoomId).toBe(team.id)
     triggerId = saved!.id
 
-    // A one-to-one: the share menu offers the team choice and that team's jobs.
-    await page.goto('/b?with=reviewer')
+    // A one-to-one: the share menu offers the team choice and that team's jobs. The seeded reviewer chats are shared
+    // (and move as other specs write), so start from a reply this test owns.
+    const chat = await makeDirectChat(
+      page,
+      'reviewer',
+      tag('Crew review'),
+      tag('Please review this'),
+    )
+    await waitForChatReply(page, chat.roomId, chat.id)
+    await onlyDirectChats(page, 'reviewer', [chat.id])
+    await onlyChatMessages(page, chat.roomId, [chat.id])
+    await page.goto(`/b?with=reviewer&chat=${chat.id}`)
     const side = page.locator('#bold-room-stream') // 3.22.0: a one-to-one is the chat's one conversation (no side-panel thread)
     await expect(side.locator('.bold-message').first()).toBeVisible()
     // The hover row appears over the reply; Share is one of its actions.

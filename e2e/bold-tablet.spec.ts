@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeDirectChat, postToChat } from './bold-chat-helpers.ts'
+import { makeJob, makeTeam } from './one-job-helpers.ts'
+import { visualFixtures } from './visual-fixtures.ts'
 
 // 3.7.0: the bold shell on tablets. Portrait tablets (744-834) use the phone shell but must use the width; landscape
 // ones use the desktop shell. Touch screens have no hover, so nothing may be reachable only by hovering.
@@ -133,7 +136,11 @@ for (const size of sizes) {
     test('layout uses the width', async ({ page }) => {
       await pair(page)
       const portrait = size.width < 861
-      await open(page, roomPath(), roomReady)
+      // The shared team room and builder chat move as other specs run; measure owned conversations instead.
+      const team = await makeTeam(page, `tablet-${size.width}`)
+      const job = await makeJob(page, team.id, `Tablet layout ${Date.now().toString(36)}`)
+      await postToChat(page, team.id, job.id, `Tablet layout message ${Date.now().toString(36)}`)
+      await open(page, `/b?room=${team.id}`, roomReady)
       if (portrait) {
         // The chat bar's Back, the conversation's first topic divider and the composer share a left edge; the bar's
         // tools, the divider and the composer share a right edge.
@@ -171,7 +178,14 @@ for (const size of sizes) {
 
         // The one-to-one's messages and composer fill the sheet: the agent's glyph and the composer share a left edge,
         // the person's bubble, the composer and the header tools a right edge.
-        await open(page, '/b?with=builder', visible('.bold-dm-bar'))
+        const chat = await makeDirectChat(
+          page,
+          'builder',
+          `Tablet one-to-one ${Date.now().toString(36)}`,
+          `Tablet one-to-one question ${Date.now().toString(36)}`,
+        )
+        await open(page, `/b?with=builder&chat=${chat.id}`, visible('.bold-dm-bar'))
+        await expect(page.locator('#bold-room-stream .chat-message--you').first()).toBeVisible()
         const dm = await page.evaluate(() => {
           const rect = (el: Element | null) => el!.getBoundingClientRect()
           const you = document.querySelector(
@@ -229,29 +243,32 @@ test('a big team and a long name never push the chat bar past the screen on a po
 }) => {
   await pair(page)
   await page.setViewportSize({ width: 768, height: 1024 })
-  await page.route(/\/api\/team-room(\?.*)?$/, async (route) => {
-    const response = await route.fetch()
-    const body = (await response.json()) as { room: { name: string } }
-    await route.fulfill({
-      response,
-      json: {
-        ...body,
-        room: { ...body.room, name: 'The platform and release engineering team room' },
-      },
-    })
-  })
+  const team = await makeTeam(page, 'tablet-long-name')
+  await page.route(
+    (url) => url.pathname === `/api/rooms/${team.id}`,
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      await route.fulfill({
+        json: {
+          asOfSeq: 12,
+          room: { ...team, name: 'The platform and release engineering team room' },
+          filesInPlay: [],
+          learned: [],
+        },
+      })
+    },
+  )
   await page.route(/\/api\/agents(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    const response = await route.fetch()
-    const body = (await response.json()) as { items: { id: string; name: string }[] }
+    const body = visualFixtures['/api/agents'] as { items: { id: string; name: string }[] }
     const extra = Array.from({ length: 12 }, (_, i) => ({
       ...body.items[0]!,
       id: `extra-${i}`,
       name: `extra-${i}`,
     }))
-    await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
+    await route.fulfill({ json: { ...body, items: [...body.items, ...extra] } })
   })
-  await open(page, roomPath(), roomReady)
+  await open(page, `/b?room=${team.id}`, roomReady)
   await closeSheet(page)
   await expect(page.locator('.bold-chat-phone-bar')).toBeVisible()
   await expect(page.locator('[data-phone-chat-title]')).toContainText('The platform')

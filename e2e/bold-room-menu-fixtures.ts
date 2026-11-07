@@ -1,6 +1,7 @@
 import { expect, type Page, type Route } from '@playwright/test'
 import { mockBoldRoom, type BoldRoomReply, type RoomRequest } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
+import { visualFixtures } from './visual-fixtures.ts'
 
 type Json = Record<string, unknown>
 
@@ -17,6 +18,7 @@ const team = {
   channels: [],
   role: 'team',
   routing: 'exchanges',
+  everyone: true,
 }
 
 const older = {
@@ -203,6 +205,13 @@ export async function mockRoomMenus(
         directs: [],
         projects: [],
       })
+    // Other specs add teams and agents. Both reads decide the share label and the dock, so pin them for this page.
+    if (method === 'GET' && path === '/api/team-rooms')
+      return response(route, { asOfSeq: 12, items: [team] })
+    if (method === 'GET' && path === '/api/agents')
+      return response(route, visualFixtures['/api/agents'])
+    if (method === 'GET' && path === '/api/questions')
+      return response(route, { asOfSeq: 12, items: [], nextCursor: null })
     if (method === 'GET' && path === '/api/outside-sessions')
       return response(route, { items: [outside], unavailable: [] })
     if (method === 'GET' && path === `/api/rooms/${older.id}`)

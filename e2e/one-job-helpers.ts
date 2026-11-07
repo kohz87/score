@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import type { Job, Room } from '@score/contract'
 
 // 3.28.0: a chat holds one active job, and the seeded team room already has two. Specs that start work make a team room
 // of their own (the server is shared, so the seeded jobs are never ended).
@@ -11,8 +12,51 @@ export async function makeTeam(page: Page, tag: string, members = ['lead', 'buil
     data: { name, members, leadAgentId: members[0] },
   })
   expect(response.status()).toBe(201)
-  const room = (await response.json()) as { id: string; name: string }
+  const room = (await response.json()) as Room
   return { ...room, label: `#${name}` }
+}
+
+export async function makeJob(page: Page, roomId: string, title: string): Promise<Job> {
+  const response = await page.request.post(`/api/rooms/${roomId}/jobs`, {
+    headers: { ...web, 'Idempotency-Key': `job-${Date.now()}-${Math.random()}` },
+    data: { title },
+  })
+  expect(response.status()).toBe(201)
+  return (await response.json()) as Job
+}
+
+/** Pins the team-room reads to one owned team, even while other specs add teams to the shared server. */
+export async function pinTeamRoom(page: Page, room: Room, jobs: Job[] = []) {
+  const team = { ...room, ...(room.everyone === undefined ? { everyone: false } : {}) }
+  // A hand-off creates its job after the page has loaded; keep that new job in the pinned snapshots.
+  let listed = [...jobs]
+  await page.route(
+    (url) => url.pathname === '/api/team-rooms',
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      await route.fulfill({ json: { asOfSeq: 12, items: [team] } })
+    },
+  )
+  await page.route(
+    (url) => url.pathname === '/api/team-room',
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      await route.fulfill({ json: { asOfSeq: 12, room: team, jobs: listed } })
+    },
+  )
+  await page.route(
+    (url) => url.pathname === `/api/rooms/${team.id}/jobs`,
+    async (route) => {
+      if (route.request().method() === 'POST') {
+        const response = await route.fetch()
+        const made = (await response.json()) as Job
+        if (response.ok()) listed = [...listed.filter((job) => job.id !== made.id), made]
+        return route.fulfill({ response, json: made })
+      }
+      if (route.request().method() !== 'GET') return route.fallback()
+      await route.fulfill({ json: { asOfSeq: 12, items: listed } })
+    },
+  )
 }
 
 export async function roomJobs(page: Page, roomId: string) {

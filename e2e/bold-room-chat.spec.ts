@@ -10,11 +10,16 @@ import {
   streamOf,
 } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
+import { holdLockPerTest } from './locks.ts'
 
 // 3.0.0: the classic Chat specs (chat, chat-actions, chat-composer, chat-delete, chat-formatting, chat-rewind, chat-stalled,
 // chat-approval) ported to the new shell's team room (`/b?room=`), against the real fake server. Each test makes its own
 // room: a rewind is refused while another spec's agent is answering in a shared one.
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
+
+// Rewinds and retries wait on the fake adapter's one run queue; keep this file's runs in turn so another of its tests
+// cannot make a reply look stalled in a room these tests already own.
+holdLockPerTest('room-chat-runs')
 
 test.beforeEach(async ({ page }) => {
   await pair(page)

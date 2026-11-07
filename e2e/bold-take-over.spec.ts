@@ -1,17 +1,49 @@
 import { expect, test, type Page } from '@playwright/test'
 import { E2E_SECURITY_PASSWORD, pair } from './pair.ts'
+import { acquireLock } from './locks.ts'
 
 // 3.17.0: taking over builder's screen against the fake adapter (one takeover per desktop, so the sizes run in turn).
 test.describe.configure({ mode: 'serial' })
 test.use({ reducedMotion: 'reduce' })
 const web = { 'x-score-client': 'web' }
+let releaseTakeover: (() => void) | undefined
+
+/** The fake desktop holds one takeover process-wide; a crashed predecessor must not leave this spec read-only. */
+async function handBackIfHeld(page: Page) {
+  const status = await page.request.get('/api/agents/builder/bot-screen')
+  if (!status.ok()) return
+  const takeoverId = ((await status.json()) as { control?: { takeoverId?: string } }).control
+    ?.takeoverId
+  if (takeoverId)
+    await page.request.post('/api/agents/builder/bot-screen/hand-back', {
+      headers: web,
+      data: { takeoverId },
+    })
+}
 
 test.beforeEach(async ({ page }) => {
-  await pair(page)
-  await page.request.put('/api/session/security/password', {
-    headers: web,
-    data: { password: E2E_SECURITY_PASSWORD },
-  })
+  releaseTakeover = await acquireLock('bot-takeover')
+  try {
+    await pair(page)
+    await handBackIfHeld(page)
+    await page.request.put('/api/session/security/password', {
+      headers: web,
+      data: { password: E2E_SECURITY_PASSWORD },
+    })
+  } catch (error) {
+    releaseTakeover()
+    releaseTakeover = undefined
+    throw error
+  }
+})
+
+test.afterEach(async ({ page }) => {
+  try {
+    await handBackIfHeld(page)
+  } finally {
+    releaseTakeover?.()
+    releaseTakeover = undefined
+  }
 })
 
 async function takeOver(page: Page) {

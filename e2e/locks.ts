@@ -12,7 +12,8 @@ import { test } from '@playwright/test'
 // A directory is the lock (mkdir is atomic across processes); one left by a crashed worker is taken over after a
 // minute. Always take 'roster' before 'model-lists'.
 const STALE_MS = 60_000
-export type LockName = 'model-lists' | 'roster' | 'builder-questions'
+export type LockName =
+  'model-lists' | 'roster' | 'builder-questions' | 'room-chat-runs' | 'bot-takeover'
 
 /** Waits for the lock and returns the function that releases it. */
 export async function acquireLock(name: LockName): Promise<() => void> {
