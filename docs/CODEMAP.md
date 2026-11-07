@@ -290,12 +290,15 @@ likely to be the entry point for a change.
 - `apps/server/src/workspace/` — workspace roots, git, policy and per-agent workspaces.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
+- `apps/server/test/` — server integration tests and recorded fixtures.
+- `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
 
 ### Key files
 
 - `apps/server/src/index.ts` — process entry and signal handling.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
+- `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
