@@ -861,6 +861,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `scripts/` — repo checks, launchers, comparison tools and maintenance commands.
+- `scripts/load-test/` — configuration, metrics, process, stream, browser and report helpers for the load test.
 - `scripts/compare/` — screen comparisons against the bold prototype boards.
 - `scripts/perf/` — Playwright performance configuration and specs.
 
@@ -884,7 +885,13 @@ likely to be the entry point for a change.
 - `scripts/capacity.mjs` — machine load report.
 - `scripts/set-password.mjs` — security-password setter.
 - `scripts/codex-task.sh` — task worktree launcher.
-- `scripts/load-test.ts` — local load test entry.
+- `scripts/load-test.ts` — local load test orchestration entry.
+- `scripts/load-test/config.ts` — load-test environment knobs, paths and performance budgets.
+- `scripts/load-test/metrics.ts` — percentile, distribution, sleep and database-size helpers.
+- `scripts/load-test/process.ts` — process spawning and child-message wait helpers.
+- `scripts/load-test/report.ts` — load-report console table, warning and verdict output.
+- `scripts/load-test/stream-client.ts` — SSE clients and session pairing for latency measurement.
+- `scripts/load-test/web-check.ts` — Playwright browser-check runner and web result shape.
 
 ## e2e
 

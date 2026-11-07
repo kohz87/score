@@ -478,10 +478,5 @@
     "path": "scripts/compare/11.6b.mjs",
     "lines": 547,
     "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "scripts/load-test.ts",
-    "lines": 585,
-    "reason": "split in CS.2 wave 1"
   }
 ]

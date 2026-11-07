@@ -5,199 +5,31 @@
 // Knobs (env): LOAD_RATE events/min (1000), LOAD_MINUTES sustained minutes (10), LOAD_BURST_MINUTES burst
 // minutes at 5x (1), LOAD_HOME (a fresh temp dir), SCORE_PORT (8893), SCORE_WEB_PORT (5593), LOAD_WEB=0 skips
 // the browser check.
-import { type ChildProcess, execFile, fork, spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { type ChildProcess, fork, spawn } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-import { cpus, loadavg, tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
-
-const run = promisify(execFile)
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const num = (name: string, fallback: number) => {
-  const value = Number(process.env[name] ?? fallback)
-  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative number`)
-  return value
-}
-
-const rate = num('LOAD_RATE', 1000)
-const sustainedMinutes = num('LOAD_MINUTES', 10)
-const burstMinutes = num('LOAD_BURST_MINUTES', 1)
-const burstFactor = 5
-const serverPort = num('SCORE_PORT', 8893)
-const webPort = num('SCORE_WEB_PORT', 5593)
-const withWeb = process.env.LOAD_WEB !== '0'
-const home = process.env.LOAD_HOME ?? mkdtempSync(join(tmpdir(), 'score-load-'))
-const origin = `http://127.0.0.1:${serverPort}`
-const webOrigin = `http://127.0.0.1:${webPort}`
-
-const BUDGETS = {
-  ingestP95Ms: 25,
-  lagP95Ms: 250,
-  rssMb: 400,
-  dbGrowthMbPer10Min: 50,
-  renderMs: 2000,
-  longTaskMs: 200,
-}
-
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)]!
-}
-const round = (value: number, digits = 1) => Number(value.toFixed(digits))
-const dist = (values: number[]) => ({
-  count: values.length,
-  p50: round(percentile(values, 50), 2),
-  p95: round(percentile(values, 95), 2),
-  p99: round(percentile(values, 99), 2),
-  max: round(
-    values.reduce((a, b) => Math.max(a, b), 0),
-    2,
-  ),
-})
-type Dist = ReturnType<typeof dist>
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const fileSize = (path: string) => {
-  try {
-    return statSync(path).size
-  } catch {
-    return 0
-  }
-}
-const dbBytes = () => fileSize(join(home, 'score.db')) + fileSize(join(home, 'score.db-wal'))
-const maxOf = (values: number[]) => values.reduce((a, b) => Math.max(a, b), 0)
-
-interface Client {
-  headSeq: number
-  seqs: number[]
-  lags: number[]
-  lagByPhase: Map<string, number[]>
-  closed: boolean
-}
+import { cpus, loadavg } from 'node:os'
+import { join } from 'node:path'
+import {
+  BUDGETS,
+  burstFactor,
+  burstMinutes,
+  home,
+  rate,
+  root,
+  serverPort,
+  sustainedMinutes,
+  webOrigin,
+  webPort,
+  withWeb,
+} from './load-test/config.ts'
+import { dbBytes, dist, fileSize, maxOf, round, sleep } from './load-test/metrics.ts'
+import { run, waitFor } from './load-test/process.ts'
+import { printReport } from './load-test/report.ts'
+import { openClient, pairCookie } from './load-test/stream-client.ts'
+import { webCheck, type WebResult } from './load-test/web-check.ts'
 
 let phaseName = 'idle'
-
-async function openClient(cookie: string, abort: AbortSignal): Promise<Client> {
-  const client: Client = { headSeq: -1, seqs: [], lags: [], lagByPhase: new Map(), closed: false }
-  const response = await fetch(`${origin}/api/stream`, { headers: { cookie }, signal: abort })
-  if (!response.ok || !response.body) throw new Error(`stream refused: ${response.status}`)
-  const hello = Promise.withResolvers<void>()
-  void (async () => {
-    const decoder = new TextDecoder()
-    let buffer = ''
-    try {
-      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
-        const received = Date.now()
-        buffer += decoder.decode(chunk, { stream: true })
-        let end: number
-        while ((end = buffer.indexOf('\n\n')) >= 0) {
-          const frame = buffer.slice(0, end)
-          buffer = buffer.slice(end + 2)
-          const data = /^data: (.*)$/m.exec(frame)?.[1]
-          if (!data) continue
-          const message = JSON.parse(data) as {
-            type: string
-            seq?: number
-            ts?: string
-            data?: { headSeq?: number }
-          }
-          if (message.type === 'stream.hello') {
-            client.headSeq = message.data!.headSeq!
-            hello.resolve()
-          } else if (message.seq !== undefined && message.ts !== undefined) {
-            client.seqs.push(message.seq)
-            const lag = received - Date.parse(message.ts)
-            client.lags.push(lag)
-            const list = client.lagByPhase.get(phaseName) ?? []
-            list.push(lag)
-            client.lagByPhase.set(phaseName, list)
-          }
-        }
-      }
-    } catch {
-      // Aborted at the end of the run.
-    }
-    client.closed = true
-  })()
-  await hello.promise
-  return client
-}
-
-async function pairCookie(token: string): Promise<string> {
-  const response = await fetch(`${origin}/api/session/pair`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: webOrigin, 'x-score-client': 'web' },
-    body: JSON.stringify({ token }),
-  })
-  const cookie = response.headers.getSetCookie()[0]?.split(';')[0]
-  if (response.status !== 204 || !cookie) throw new Error(`pairing failed: ${response.status}`)
-  return cookie
-}
-
-interface WebResult {
-  label: string
-  route: string
-  renderMs: number
-  longTasks: number
-  maxLongTaskMs: number
-}
-
-async function webCheck(label: string, cookie: string): Promise<{ ok: boolean; output: string }> {
-  const [name, value] = cookie.split('=') as [string, string]
-  try {
-    const { stdout } = await run(
-      join(root, 'node_modules/.bin/playwright'),
-      ['test', '-c', 'scripts/perf/playwright.config.ts'],
-      {
-        cwd: root,
-        env: {
-          ...process.env,
-          PERF_BASE_URL: webOrigin,
-          PERF_COOKIE_NAME: name,
-          PERF_COOKIE_VALUE: value,
-          PERF_LABEL: label,
-          PERF_OUT: join(home, 'web-perf.jsonl'),
-        },
-        maxBuffer: 10 * 1024 * 1024,
-      },
-    )
-    return { ok: true, output: stdout }
-  } catch (error) {
-    const failure = error as { stdout?: string; stderr?: string }
-    return { ok: false, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` }
-  }
-}
-
-function waitFor<T>(child: ChildProcess, type: string, timeoutMs: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const finish = () => {
-      clearTimeout(timer)
-      child.off('message', onMessage)
-      child.off('exit', onExit)
-    }
-    const timer = setTimeout(() => {
-      finish()
-      reject(new Error(`timed out waiting for ${type}`))
-    }, timeoutMs)
-    const onMessage = (message: { type: string; message?: string }) => {
-      if (message.type === 'error') {
-        finish()
-        reject(new Error(message.message))
-      } else if (message.type === type) {
-        finish()
-        resolve(message as T)
-      }
-    }
-    const onExit = () => {
-      finish()
-      reject(new Error(`server exited before ${type}`))
-    }
-    child.on('message', onMessage)
-    child.once('exit', onExit)
-  })
-}
 
 function sumBefore(phases: { name: string; seconds: number }[], name: string): number {
   let total = 0
@@ -269,7 +101,9 @@ async function main(): Promise<number> {
     const ready = await waitFor<{ token: string }>(server, 'ready', 60_000)
     // A pairing token is single-use; the browser check shares the session with the stream clients.
     const cookie = await pairCookie(ready.token)
-    const clients = await Promise.all([0, 1, 2].map(() => openClient(cookie, abort.signal)))
+    const clients = await Promise.all(
+      [0, 1, 2].map(() => openClient(cookie, abort.signal, () => phaseName)),
+    )
 
     const phases = [
       { name: 'sustained', eventsPerMinute: rate, seconds: sustainedMinutes * 60 },
@@ -509,72 +343,6 @@ async function main(): Promise<number> {
     abort.abort()
     for (const child of children) if (child.exitCode === null) child.kill('SIGTERM')
   }
-}
-
-function printReport(report: {
-  machine: {
-    cpus: number
-    loadAverageAtStart: number[]
-    loadAverageAtEnd: number[]
-    maxLoadAverageDuringRun: number
-  }
-  phases: {
-    name: string
-    eventsPerMinute: number
-    ingestMs: Dist
-    queueWaitMs: Dist
-    lagMs: Dist
-  }[]
-  resources: {
-    maxRssMb: number
-    cpuPercentAvg: number
-    cpuPercentMax: number
-    stalls: { at: string; loopMaxMs: number }[]
-  }
-  db: { growthMb: number; growthMbPer10MinAtRate: number; walMbAtEnd: number }
-  retention: { events: number; deleted: number; pruneMs: number; retireMs: number }
-  web: WebResult[]
-  verdicts: Record<string, { value: number; budget: number }>
-  failures: string[]
-}): void {
-  console.log(
-    `\nmachine: ${report.machine.cpus} CPUs, load average start ${report.machine.loadAverageAtStart.join('/')}, end ${report.machine.loadAverageAtEnd.join('/')}, highest 1-min sample during run ${report.machine.maxLoadAverageDuringRun}`,
-  )
-  console.table(
-    report.phases.map((phase) => ({
-      phase: phase.name,
-      'events/min': phase.eventsPerMinute,
-      'ingest p50': phase.ingestMs.p50,
-      'ingest p95': phase.ingestMs.p95,
-      'ingest p99': phase.ingestMs.p99,
-      'queue p95': phase.queueWaitMs.p95,
-      'lag p50': phase.lagMs.p50,
-      'lag p95': phase.lagMs.p95,
-      'lag p99': phase.lagMs.p99,
-    })),
-  )
-  console.log(
-    `RSS max ${report.resources.maxRssMb} MB, CPU avg ${report.resources.cpuPercentAvg}% max ${report.resources.cpuPercentMax}%, DB growth ${report.db.growthMb} MB (${report.db.growthMbPer10MinAtRate} MB per 10 min at rate), WAL ${report.db.walMbAtEnd} MB`,
-  )
-  if (report.resources.stalls.length)
-    console.log(
-      `WARNING: the server process froze for over 1 s in ${report.resources.stalls.length} window(s) (longest ${Math.max(...report.resources.stalls.map((stall) => stall.loopMaxMs))} ms): the machine was starved. Rerun on a quieter machine.`,
-    )
-  console.log(
-    `retention sweep: pruned ${report.retention.deleted}/${report.retention.events} events in ${round(report.retention.pruneMs)} ms, retired ingest keys in ${round(report.retention.retireMs)} ms`,
-  )
-  if (report.web.length) console.table(report.web)
-  console.table(
-    Object.entries(report.verdicts).map(([name, v]) => ({
-      budget: name,
-      value: v.value,
-      limit: v.budget,
-      result: v.value < v.budget ? 'ok' : 'FAIL',
-    })),
-  )
-  console.log(
-    report.failures.length === 0 ? 'ALL BUDGETS MET' : `FAILED:\n${report.failures.join('\n')}`,
-  )
 }
 
 try {
