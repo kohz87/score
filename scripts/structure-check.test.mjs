@@ -114,6 +114,20 @@ test('fails when a listed file is now at or under the limit', () => {
   ])
 })
 
+test('fails when a path is listed twice', () => {
+  const root = makeTree({
+    files: { 'apps/web/src/big.css': lines(451) },
+    exceptions: [
+      { path: 'apps/web/src/big.css', lines: 451, reason: 'kept' },
+      { path: 'apps/web/src/big.css', lines: 451, reason: 'kept' },
+    ],
+  })
+
+  expect(checkStructure(root).errors).toEqual([
+    expect.stringContaining('apps/web/src/big.css is listed twice'),
+  ])
+})
+
 test('fails when a listed file grows past its recorded line count', () => {
   const root = makeTree({
     files: { 'apps/web/src/grew.css': lines(452) },

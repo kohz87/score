@@ -115,6 +115,12 @@ export function checkStructure(root = process.cwd()) {
   const errors = []
   const exceptions = readExceptions(root, errors)
   const exceptionLines = new Map(exceptions.map((entry) => [entry.path, entry.lines]))
+  // A path listed twice (a merge can leave one) would let two ceilings disagree.
+  const seen = new Set()
+  for (const entry of exceptions) {
+    if (seen.has(entry.path)) errors.push(`${entry.path} is listed twice in ${EXCEPTIONS_PATH}.`)
+    seen.add(entry.path)
+  }
 
   for (const source of oversizedSources(root)) {
     if (source.lines <= LIMIT || exceptionLines.has(source.path)) continue
