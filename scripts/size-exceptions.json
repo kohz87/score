@@ -70,16 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/room/RoomMessageStream.test.tsx",
-    "lines": 778,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/room/RoomRequests.test.tsx",
-    "lines": 875,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/chat/ContextMeter.tsx",
     "lines": 483,
     "reason": "split in CS.2 wave 1"
