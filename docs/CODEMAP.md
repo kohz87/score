@@ -92,7 +92,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/settings/` — settings sections for providers, logs, backup and notifications.
 - `apps/web/src/routes/team/` — team and agent pages, coding agent, model and workspace tabs, and ordered stylesheets.
 - `apps/web/src/routes/terminal/` — browser terminal page and key handling.
-- `apps/web/src/routes/watch/` — watch replay timeline, stage and replay model.
+- `apps/web/src/routes/watch/` — watch replay timeline, stage, panes, approval and ordered stylesheets.
 - `apps/web/src/routes/workflows/` — workflow editor, nodes, runs, recipes and previews.
 - `apps/web/src/shell/` — classic-shell navigation and frame helpers.
 - `apps/web/src/styles/` — global tokens, select and protected styles, built-in packs.
@@ -515,6 +515,13 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/knowledge/knowledge-cell-editing.css` — version-body sizing, in-place table-cell editing and editor focus.
 - `apps/web/src/routes/knowledge/knowledge-upload.css` — upload progress card.
 - `apps/web/src/routes/watch/watch-model.ts` — watch timeline and replay model.
+- `apps/web/src/routes/watch/watch.css` — ordered entry for the watch stylesheets.
+- `apps/web/src/routes/watch/watch-stage.css` — stage bar, banners and overlapping window frames.
+- `apps/web/src/routes/watch/watch-panes.css` — terminal, editor, diff and browser pane contents.
+- `apps/web/src/routes/watch/watch-cursor.css` — the agent cursor over the stage.
+- `apps/web/src/routes/watch/watch-approval.css` — protected approval bar and its actions.
+- `apps/web/src/routes/watch/watch-replay.css` — replay controls, scrub track, markers and legend.
+- `apps/web/src/routes/watch/watch-responsive.css` — phone layout overrides for the stage and approval bar.
 - `apps/web/src/themes/guard.ts` — protected-surface and theme guard.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
