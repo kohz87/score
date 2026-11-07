@@ -235,7 +235,7 @@ test('no Score session id is built outside domain/job-sessions.ts', () => {
   // Known `score-${…}` templates that are not session ids: export file names, a pairing label, coding unit names.
   const allowed = new Map([
     ['http/conversations.ts', 1],
-    ['hermes/live/settings.ts', 1],
+    ['hermes/live/settings-providers.ts', 1],
     ['runtimes/coding/unit-names.ts', 1],
     ['domain/job-sessions.ts', 2],
   ])

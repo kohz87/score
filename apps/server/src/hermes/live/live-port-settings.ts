@@ -4,7 +4,6 @@ import type { AgentFile, AgentFileName } from '../agent-files.ts'
 import { messagingFields, messagingWrites } from '../messaging-fields.ts'
 import { KNOWN_PATTERN_KEYS } from '../pattern-keys.ts'
 import type { HermesPort } from '../port.ts'
-import { runHermes } from './cli.ts'
 import {
   computeFingerprint,
   testedFingerprints,

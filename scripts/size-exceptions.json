@@ -33,10 +33,5 @@
     "path": "packages/contract/src/workflows.ts",
     "lines": 1062,
     "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
-  },
-  {
-    "path": "packages/contract/src/workflows.ts",
-    "lines": 1062,
-    "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
   }
 ]
