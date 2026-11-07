@@ -2460,3 +2460,27 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Rejected: deleting the 404 checks for the removed room-project PATCH/DELETE (`conversations.test.ts:142-145`) — they
   keep the removed endpoints from returning by accident. Left: "the step diagram was removed" comments in three e2e
   specs (history, harmless).
+
+## CS.2 wave 2 — sixteen files of 1000–2000 lines split (2026-11-07)
+- Split on DeepSeek, started one at a time by a launcher under 50% load: vault, RoomMenus, BoldRecipes, Composer,
+  knowledge.css, BoldAddAgent, bold-frame-compare.mjs, bold-recipes.css, chats.css, orchestrations.css, Customizer,
+  http/rooms.ts, BoldTriggers, BoldLibrary, journal, bold.css. live-port.ts, fence.ts and contract/workflows.ts stay
+  with the lead (boundary, safety, declarative schema). Exceptions 205 → 189.
+- Proof each moved only: line comparison against main (signatures/`this:` params/re-wrapping only), compiled CSS
+  byte-identical to the branch's own base (a stale main baseline gave one false "differs"; the comparison now builds
+  each branch's base). CS.2x removed dead rules for classes no component uses (listed in its commit) — verified by the
+  lead, the coder's report was cut off.
+- Reviews (claude -p Sonnet + Opus advisor): all clean except CS.2v (exception entry and code map lines missing —
+  added by the lead). CS.2k's two new `exhaustive-deps` disables keep the original dependency lists.
+- Process changes from the owner during the wave: no pre-fix checks (rule 6) — the per-split `pnpm check` runs were
+  dropped; one full check on main per merged batch gates the push. Audit before splitting (rule 5). DeepSeek sessions
+  often end mid-command; its sandbox test runs hung and were killed by PID.
+- Found: `e2e/readme/readme-screenshots.spec.ts` clicks `button.side-toggle`, which no component renders (stale).
+
+## CS.3 — independent e2e specs (2026-11-07)
+- DeepSeek's two rounds (no test runs possible in its sandbox) took the targeted run from 1 to 15 failures; a Sonnet
+  coder took over, kept the sound parts, and made the ten specs own their state (own chat, team list, session, reply;
+  pinned fixtures for the look tests; hover+click retried as an interaction). Targeted 105/105; full runs 860/3 and
+  863/4 with failures outside the ten (bold-room-tools 390 Unpin, orchestrations dots, themes-bold(-visual), terminal,
+  bold-room-files) — next test task. Review: no weakened assertion; P2 accepted: the no-git-badge check moved from lead
+  to builder (no spec makes builder's workspace a repo), the "looks right" workspace test now pins its fixture data.
