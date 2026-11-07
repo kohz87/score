@@ -88,7 +88,25 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldLibrarySearchResults.tsx` — Library search results list.
 - `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
-- `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
+- `apps/web/src/bold/BoldShell.tsx` — bold shell entry: glyph context, frame styles and the route outlet.
+- `apps/web/src/bold/BoldShellFrame.tsx` — bold frame state and chrome: top bar, phone tab bar, search, start-job and terminal controls.
+- `apps/web/src/bold/BoldShellDock.tsx` — team dock rings and the rule for which agents stay visible.
+- `apps/web/src/bold/BoldShellNotices.tsx` — global fence and Hermes-version notices shown outside Settings.
+- `apps/web/src/bold/bold-shell-model.ts` — bold shell view types and path-to-view helper.
+- `apps/web/src/bold/BoldTaskEdit.tsx` — New task dialog and the compatibility exports for task edit, moves and archive.
+- `apps/web/src/bold/BoldTaskEditForm.tsx` — task title, description and assignee editing form.
+- `apps/web/src/bold/BoldTaskMoves.tsx` — task column moves and their request state.
+- `apps/web/src/bold/BoldTaskArchive.tsx` — in-place archive confirmation and action.
+- `apps/web/src/bold/bold-task-edit-model.ts` — task edit request messages and the ready-agent filter.
+- `apps/web/src/bold/use-task-dialog-focus.ts` — modal task dialog focus and Escape lifecycle.
+- `apps/web/src/bold/BoldTasks.tsx` — Tasks route state, filters and board/panel composition.
+- `apps/web/src/bold/BoldTasksCards.tsx` — task cards, card contents and board columns.
+- `apps/web/src/bold/BoldTasksFilters.tsx` — agent and room filter chips.
+- `apps/web/src/bold/BoldTasksNeeds.tsx` — needs-you approval, unblock and phone action cards.
+- `apps/web/src/bold/BoldTasksPanel.tsx` — task details panel with facts, steps, comments and actions.
+- `apps/web/src/bold/BoldTasksSheet.tsx` — task details sheet with focus and Escape handling.
+- `apps/web/src/bold/bold-tasks-page-model.ts` — task page lookup types and agent/room lookup helpers.
+- `apps/web/src/bold/use-task-post.ts` — task unblock/comment request hook and failure copy.
 - `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
 - `apps/web/src/bold/BoldShell-helpers.tsx` — shared bold shell test harness: state, fetch fixtures, router render and cleanup.
 - `apps/web/src/bold/BoldShell-run-fixtures.ts` — shared run topic and run summary fixtures for the bold shell suites.
