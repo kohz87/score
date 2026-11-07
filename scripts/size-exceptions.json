@@ -500,23 +500,8 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldShell.tsx",
-    "lines": 530,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldTaskEdit.tsx",
-    "lines": 506,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldTasks.test.tsx",
     "lines": 636,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldTasks.tsx",
-    "lines": 832,
     "reason": "split in CS.2 wave 1"
   },
   {
