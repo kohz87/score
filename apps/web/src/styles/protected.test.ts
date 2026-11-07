@@ -311,10 +311,13 @@ test('the way back wears an opaque background of its own (re-gate finding 5: a t
 
 // Cross-audit X1: a form that posts a consent can't lose its markers unnoticed. Each of these is one decision
 // (`data-decision`) and wears the protected surfaces listed for it; a new consent form is added here.
-const consentForms: Record<string, { decisions: number; markers: string[] }> = {
+// `parts`: component files the form renders inside itself (a split moved them out of the form's file); its markers may
+// sit there, while the data-decision count is still the form file's own.
+const consentForms: Record<string, { decisions: number; markers: string[]; parts?: string[] }> = {
   'routes/orchestrations/NewOrchestrationDialog.tsx': {
     decisions: 1,
     markers: ['orch-workers', 'orch-approvals', 'orch-spend', 'orch-limits', 'orch-start'],
+    parts: ['routes/orchestrations/new-orchestration-checks.tsx'],
   },
   'routes/workflows/StartWorkflowDialog.tsx': {
     decisions: 1,
@@ -357,10 +360,11 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
 
 test('every form that posts a consent is a data-decision and wears its protected surfaces', () => {
   const problems: string[] = []
-  for (const [file, { decisions, markers }] of Object.entries(consentForms)) {
-    const text = readFileSync(join(root, file), 'utf8')
+  for (const [file, { decisions, markers, parts = [] }] of Object.entries(consentForms)) {
+    const own = readFileSync(join(root, file), 'utf8')
     // The attribute, not a comment's "(data-decision)".
-    const found = text.match(/(?<![(\w-])data-decision(?![\w)-])/g)?.length ?? 0
+    const found = own.match(/(?<![(\w-])data-decision(?![\w)-])/g)?.length ?? 0
+    const text = [own, ...parts.map((part) => readFileSync(join(root, part), 'utf8'))].join('\n')
     if (found !== decisions) problems.push(`${file}: ${found} data-decision, expected ${decisions}`)
     for (const marker of markers) {
       if (!(protectedClasses as readonly string[]).includes(marker))
