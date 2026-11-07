@@ -307,7 +307,7 @@ likely to be the entry point for a change.
 - `apps/server/src/workspace/` — workspace roots, git, policy, per-agent workspaces, and workspace file access, reads and mutations.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
-- `apps/server/test/` — server integration tests and recorded fixtures.
+- `apps/server/test/` — server integration tests and recorded fixtures; terminal tests are split by access/transport, shell session and live agent with a shared harness.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 
@@ -350,6 +350,7 @@ likely to be the entry point for a change.
 - `apps/server/src/installation-journal.ts` — journal checksums, copied-history inheritance and legacy scope closure.
 - `apps/server/src/installation-confirm.ts` — confirmed moves and confirmed copies.
 - `apps/server/src/installation-restore.ts` — restore-marker and restored-home registry lookups.
+- `apps/server/test/terminal-helpers.ts` — shared TLS app setup, pairing, ticket, WebSocket, cleanup and process-exit harness for the terminal tests.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
