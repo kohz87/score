@@ -70,11 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/triggers/triggers.ts",
-    "lines": 454,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/watch-frames.ts",
     "lines": 539,
     "reason": "split in CS.2 wave 1"
