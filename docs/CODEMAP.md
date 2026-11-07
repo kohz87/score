@@ -903,7 +903,19 @@ likely to be the entry point for a change.
 - `e2e/customizer-package-versions.spec.ts` — copies, package revisions, exports, cached looks and replaced assets.
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
-- `e2e/visual-fixtures.ts` — shared visual-test setup.
+- `e2e/themes-safety-helpers.ts` — shared hostile theme for the theme safety specs.
+- `e2e/themes-safety-hostile.spec.ts` — hostile theme sanitiser, protected approval and escape attempts.
+- `e2e/themes-safety-way-back.spec.ts` — safe mode, keyboard reset, command palette reset and failed theme loading.
+- `e2e/themes-safety-looks.spec.ts` — shared and per-device looks, stream changes and early painting.
+- `e2e/themes-safety-sanitiser.spec.ts` — CSS escape handling and dropped-rule reporting in a real browser.
+- `e2e/themes-safety-layout.spec.ts` — protected surfaces across layout, shape, glass and background options.
+- `e2e/visual-fixtures.ts` — merged visual-test fixture table and stream hello.
+- `e2e/visual-fixtures-data.ts` — recorded visual data and shared room, report and journey builders.
+- `e2e/visual-fixtures-core.ts` — shell, system, agent, room-list and orchestration visual fixtures.
+- `e2e/visual-fixtures-rooms.ts` — room detail, messages, versions, context, deletion and approval fixtures.
+- `e2e/visual-fixtures-reports.ts` — report presets and trend fixtures.
+- `e2e/visual-fixtures-settings.ts` — provider, connection, plugin, rules and config-search fixtures.
+- `e2e/visual-fixtures-knowledge.ts` — knowledge info, tree, documents, notes, history and archive-preview fixtures.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.
 - `e2e/locks.ts` — cross-worker test locks.
 - `e2e/global-teardown.ts` — shared fake-server teardown.
