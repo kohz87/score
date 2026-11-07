@@ -915,11 +915,6 @@
     "reason": "data list"
   },
   {
-    "path": "packages/contract/test/schemas.test.ts",
-    "lines": 2824,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "packages/contract/test/workflow-cases.ts",
     "lines": 497,
     "reason": "data list"
