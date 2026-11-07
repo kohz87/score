@@ -810,7 +810,14 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/executor-workflow-create.ts` — workflow run creation.
 - `apps/server/src/domain/orchestration/executor-workflow-decisions.ts` — human decisions on workflow runs.
 - `apps/server/src/domain/orchestration/executor-workflow-preflight.ts` — workflow validation, preflight and reads.
-- `apps/server/src/domain/orchestration/fence.ts` — decision fences and turn ownership.
+- `apps/server/src/domain/orchestration/fence-evidence.ts` — applying journal dispatch, handle and renewal evidence to the database.
+- `apps/server/src/domain/orchestration/fence-notice.ts` — the holding sentence and the freeze fence-item ref.
+- `apps/server/src/domain/orchestration/fence-read.ts` — global fence rows, fence items and the public fence view.
+- `apps/server/src/domain/orchestration/fence-startup.ts` — startup journal-versus-database reconciliation and history generation checks.
+- `apps/server/src/domain/orchestration/fence-store.ts` — `GlobalFenceStore`: freeze predicate, set, lift, view and fence numbering.
+- `apps/server/src/domain/orchestration/fence-types.ts` — fence row schemas and the mismatch shape.
+- `apps/server/src/domain/orchestration/fence-verify.ts` — journal-versus-database verification and lost-witness checks.
+- `apps/server/src/domain/orchestration/fence.ts` — decision fences and turn ownership; re-exports the fence modules.
 - `apps/server/src/domain/orchestration/helpers.ts` — helper setup, votes and audits facade.
 - `apps/server/src/domain/orchestration/helpers-audit.ts` — automatic audits after the lead's steps.
 - `apps/server/src/domain/orchestration/helpers-auto-votes.ts` — automatic step votes and their cleanup.
