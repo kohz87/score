@@ -409,6 +409,8 @@ Receipts and the single-use spec files live outside the home (`<journal dir>/<id
 
 Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-systemd coding-systemd` runs the opt-in suite
 against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
+`SCORE_TEST_CLI_HELP=1 pnpm --filter @score/server test coding-worker-policy` asks the installed coding CLIs for
+`--help` (no prompt, no model) and checks that every flag Score relies on is still documented there.
 
 ### Running agents in Docker (PLAN 11.8a, optional)
 An agent page's "Runs on" can switch a profile to Hermes's Docker backend. It needs Docker on this machine and the

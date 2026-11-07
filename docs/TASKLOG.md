@@ -2448,3 +2448,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   (missing members). Lessons: the lead runs the checks after each DeepSeek round; precompute diffs for the reviewer.
 - CS.3 (independent e2e): DeepSeek's two rounds took the targeted run from 1 failure (main's specs) to 15; handed to a
   Sonnet coder (can run e2e), per the two-failed-rounds rule.
+
+## CS.4 — test cleanup audit (2026-11-07, decision 170)
+- Read-only audit (`claude -p` Sonnet + Opus advisor, docs/briefs/CS.4-audit.md; report kept at ~/.score/codex/runs/CS.4/audit.md):
+  all 80 screenshot baselines are produced by a current spec; every fixture is loaded (many by computed path — the
+  lead's first name-only count of 61 "unreferenced" fixtures was wrong); every helper is imported; every skip is
+  conditional except one; no test still exercises a removed feature; no duplicate coverage (the lead's repo-wide
+  duplicate-title scan found one shared title, on different endpoints).
+- Removed: `e2e/customizer-shots.spec.ts` — a 9.4 review screenshot generator gated on `SCORE_UI_SHOTS_DIR`, which
+  nothing sets; its 5 tests never ran. Added `SCORE_TEST_CLI_HELP` to docs/SETUP.md (opt-in suite, was undocumented).
+- Rejected: deleting the 404 checks for the removed room-project PATCH/DELETE (`conversations.test.ts:142-145`) — they
+  keep the removed endpoints from returning by accident. Left: "the step diagram was removed" comments in three e2e
+  specs (history, harmless).
