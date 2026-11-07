@@ -1,19 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
-import { visualFixtures } from './visual-fixtures.ts'
 
 // 2.2.0 (decision 127): agents have eyes in the new shell only. Fake mode, no model.
-
-// The Team page and the dock read the shared roster, which other specs grow; pin both to the four neutral agents.
-test.beforeEach(async ({ page }) => {
-  await page.route(
-    (url) => url.pathname === '/api/agents',
-    async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback()
-      await route.fulfill({ json: visualFixtures['/api/agents'] })
-    },
-  )
-})
 
 test('every glyph on the bold Team page has two blank eyes', async ({ page }) => {
   await pair(page)

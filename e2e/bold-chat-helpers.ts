@@ -55,129 +55,6 @@ export async function postToChat(page: Page, roomId: string, chatId: string, tex
   expect(response.ok()).toBe(true)
 }
 
-/** Waits for the fake agent's reply in a chat and returns its text, so a reading can name its own copy. */
-export async function waitForChatReply(page: Page, roomId: string, chatId: string) {
-  let reply: string | undefined
-  await expect
-    .poll(
-      async () => {
-        const response = await page.request.get(`/api/rooms/${roomId}/messages?jobId=${chatId}`)
-        const body = (await response.json()) as {
-          items: { author: { kind: string }; parts: { kind: string; text?: string }[] }[]
-        }
-        reply = body.items
-          .filter((item) => item.author.kind === 'agent')
-          .flatMap((item) => item.parts)
-          .find((part) => part.kind === 'text' && part.text)?.text
-        return reply !== undefined
-      },
-      { timeout: 40_000 },
-    )
-    .toBe(true)
-  return reply!
-}
-
-/** Hides direct chats other specs made, so a page reading one agent shows only the chats this test owns. */
-export async function onlyDirectChats(page: Page, agent: string, chatIds: readonly string[]) {
-  await page.route(
-    (url) => url.pathname === `/api/agents/${agent}/direct`,
-    async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback()
-      const response = await route.fetch()
-      const body = (await response.json()) as { chats: { id: string }[] }
-      await route.fulfill({
-        response,
-        json: { ...body, chats: body.chats.filter((chat) => chatIds.includes(chat.id)) },
-      })
-    },
-  )
-}
-
-/** Keeps the merged direct-chat stream to this test's chats; the server still owns every message and reply. */
-export async function onlyChatMessages(page: Page, roomId: string, chatIds: readonly string[]) {
-  await page.route(
-    (url) =>
-      url.pathname === `/api/rooms/${roomId}/messages` && url.searchParams.get('all') === '1',
-    async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback()
-      const response = await route.fetch()
-      const body = (await response.json()) as { items: { jobId?: string | null }[] }
-      await route.fulfill({
-        response,
-        json: { ...body, items: body.items.filter((item) => chatIds.includes(item.jobId ?? '')) },
-      })
-    },
-  )
-}
-
-/** A fixed seeded chat, found by its title rather than by "the latest" (other specs keep adding chats). */
-export async function directChatByTitle(
-  page: Page,
-  agent: string,
-  title: string,
-): Promise<DirectChat> {
-  const body = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
-    chats: DirectChat[]
-  }
-  const chat = body.chats.find((item) => item.title === title)
-  expect(chat, `seeded chat ${title}`).toBeDefined()
-  return chat!
-}
-
-export const directComposerOf = (page: Page, agent: string) =>
-  page.getByPlaceholder(`Message ${agent} privately`)
-
-export const messagesOf = (page: Page) => streamOf(page).locator('.bold-message')
-
-export async function expectOneToOnePrivacy(page: Page, agent: string) {
-  const label = page.locator('[data-protected].bold-dm-privacy')
-  await expect(label.first()).toBeVisible()
-  await expect(label.first()).toHaveText(`Only you and ${agent} see this`)
-}
-
-/** Chat info: open by default on a desktop, a sheet behind the "i" button on a phone. */
-export async function openOneToOneInfo(page: Page) {
-  const panel = page.getByRole('complementary', { name: 'Side panel' })
-  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Chat info' }).click()
-  await expect(panel).toBeVisible()
-  const info = panel.getByRole('tab', { name: 'Info' })
-  if ((await info.count()) > 0 && (await info.getAttribute('aria-selected')) !== 'true')
-    await info.click()
-  await openAllInfoSections(panel)
-  return panel
-}
-
-/** The newest reply's Share action; touch devices show the row without hovering. */
-export async function shareReplyAction(page: Page) {
-  const share = 'button[aria-label^="Share message from "][aria-label$=" to the team room"]'
-  const message = messagesOf(page)
-    .filter({ has: page.locator(share) })
-    .last()
-  await message.hover()
-  return message.locator(share)
-}
-
-export async function openChatFromInfo(page: Page, title: RegExp) {
-  const panel = await openOneToOneInfo(page)
-  await panel.getByRole('link', { name: title }).click()
-}
-
-export type Posted = { url: string; body: Record<string, unknown> | null }
-
-/** Every mutating request the page makes, with its JSON body, in order. */
-export function recordPosts(page: Page): Posted[] {
-  const posts: Posted[] = []
-  page.on('request', (request) => {
-    if (request.method() !== 'POST' || !request.url().includes('/api/')) return
-    const data = request.postData()
-    posts.push({
-      url: new URL(request.url()).pathname,
-      body: data ? (JSON.parse(data) as Record<string, unknown>) : null,
-    })
-  })
-  return posts
-}
-
 export const composerOf = (page: Page) => page.getByRole('combobox', { name: /^Message/ })
 
 /** The room's message stream (the new shell's name for the classic "Message history" region). */
@@ -233,3 +110,38 @@ export async function openAllInfoSections(scope: Page | Locator) {
   const folded = scope.getByRole('heading').getByRole('button', { expanded: false })
   while ((await folded.count()) > 0) await folded.first().click()
 }
+
+/**
+ * Hovers a message and clicks a button in its action row. The row shows only while the pointer is over the message, and
+ * cards that other specs' approvals and questions put in the shared stream can shift the message away from a pointer that
+ * is already resting, so the hover and the click are repeated together until the click lands.
+ */
+export async function clickAction(message: Locator, name: string | RegExp) {
+  await expect(async () => {
+    await message.hover()
+    await message.getByRole('button', { name }).click({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+}
+
+/**
+ * A seeded one-to-one's chat id and its newest agent reply, found by title. The one-to-one view merges every chat of the
+ * agent, so "the last reply on the page" is whichever chat other specs touched last; a test that acts on a reply names it.
+ */
+export async function seededReply(page: Page, agent: string, title: string) {
+  const direct = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
+    chats: { id: string; roomId: string; title: string }[]
+  }
+  const chat = direct.chats.find((item) => item.title === title)
+  expect(chat, `seeded chat ${title}`).toBeDefined()
+  const body = (await (
+    await page.request.get(`/api/rooms/${chat!.roomId}/messages?jobId=${chat!.id}`)
+  ).json()) as { items: { id: string; author: { kind: string } }[] }
+  const replies = body.items.filter((item) => item.author.kind === 'agent')
+  expect(replies.length, `a reply in ${title}`).toBeGreaterThan(0)
+  const reply = replies[replies.length - 1]!
+  return { chatId: chat!.id, replyId: reply.id, reply: messageById(page, reply.id) }
+}
+
+/** One message of the conversation, by its id (stable while other chats' messages arrive). */
+export const messageById = (page: Page, id: string) =>
+  streamOf(page).locator(`[data-message-id="${id}"]`)

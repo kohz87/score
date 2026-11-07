@@ -1,24 +1,11 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
-import {
-  directChatByTitle,
-  directComposerOf,
-  expectOneToOnePrivacy,
-  makeDirectChat,
-  messagesOf,
-  openChatFromInfo,
-  openOneToOneInfo,
-  onlyChatMessages,
-  onlyDirectChats,
-  recordPosts,
-  shareReplyAction,
-  streamOf,
-  waitForChatReply,
-} from './bold-chat-helpers.ts'
-import { mockBoldRoom } from './bold-room-fixtures.ts'
-import { makeJob, makeTeam, pinTeamRoom } from './one-job-helpers.ts'
+import { clickAction, openAllInfoSections, seededReply } from './bold-chat-helpers.ts'
+import { openBoldJob } from './bold-room-fixtures.ts'
+import { onlyTeams } from './one-job-helpers.ts'
 
-// PLAN 11.7: seeded chats move as other specs write, and the shared team room accumulates jobs; each test owns its chats and team.
+// PLAN 11.7: one-to-ones in the bold shell, against the fake adapter's seeded direct chats (builder: "Websockets or
+// server-sent events", "The cursor bug", "Working in the Docker sandbox"; reviewer: "How strict to be on docs").
 test.use({ reducedMotion: 'reduce' })
 
 const sizes = [
@@ -30,12 +17,76 @@ function tag(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-const stream = streamOf
-const messages = messagesOf
-const composerOf = directComposerOf
-const expectPrivacy = expectOneToOnePrivacy
-const openInfo = openOneToOneInfo
-const shareAction = shareReplyAction
+// 3.22.0: a one-to-one is the chat view itself (header, one conversation with the agent's chats as topics, composer,
+// context bar); the side panel is only Info (the agent, its chats, Add someone) and Results.
+const stream = (page: Page) => page.locator('#bold-room-stream')
+const messages = (page: Page) => stream(page).locator('.bold-message')
+const composerOf = (page: Page, agent: string) =>
+  page.getByPlaceholder(`Message ${agent} privately`)
+
+async function expectPrivacy(page: Page, agent: string) {
+  const label = page.locator('[data-protected].bold-dm-privacy')
+  await expect(label.first()).toBeVisible()
+  await expect(label.first()).toHaveText(`Only you and ${agent} see this`)
+}
+
+/** Chat info: open by default on a desktop, a sheet behind the "i" button on a phone. Returns the Info panel. */
+async function openInfo(page: Page) {
+  const panel = page.getByRole('complementary', { name: 'Side panel' })
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Chat info' }).click()
+  await expect(panel).toBeVisible()
+  const info = panel.getByRole('tab', { name: 'Info' })
+  if ((await info.count()) > 0 && (await info.getAttribute('aria-selected')) !== 'true')
+    await info.click()
+  // 3.27.1: the Info sections start folded; a person opens the ones they want.
+  await openAllInfoSections(panel)
+  return panel
+}
+
+/** The share action in a reply's hover row (always shown on touch). */
+const SHARE = /^Share message from .* to the team room$/
+
+/** The agent's chats in Info, found by title. Picking one makes it the current topic. */
+async function openChatFromInfo(page: Page, title: RegExp) {
+  const panel = await openInfo(page)
+  await panel.getByRole('link', { name: title }).click()
+}
+
+async function teamRoomId(page: Page) {
+  await expect
+    .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
+    .toBe(200)
+  const team = (await (await page.request.get('/api/team-room')).json()) as {
+    room: { id: string }
+  }
+  return team.room.id
+}
+
+type Posted = { url: string; body: Record<string, unknown> | null }
+
+/** Every mutating request the page makes, with its JSON body, in order. */
+function recordPosts(page: Page): Posted[] {
+  const posts: Posted[] = []
+  page.on('request', (request) => {
+    if (request.method() !== 'POST' || !request.url().includes('/api/')) return
+    const data = request.postData()
+    posts.push({
+      url: new URL(request.url()).pathname,
+      body: data ? (JSON.parse(data) as Record<string, unknown>) : null,
+    })
+  })
+  return posts
+}
+
+/** A seeded chat by title: other specs add newer chats, so "the latest" is not a stable thing to open. */
+async function seededChat(page: Page, agent: string, title: string) {
+  const direct = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
+    chats: { id: string; title: string }[]
+  }
+  const found = direct.chats.find((chat) => chat.title === title)
+  expect(found, `seeded chat ${title}`).toBeDefined()
+  return found!.id
+}
 
 for (const { name, viewport } of sizes) {
   const phone = viewport.width <= 860
@@ -49,23 +100,10 @@ for (const { name, viewport } of sizes) {
     test('opens from the dock, lands in the latest chat and always shows the privacy label', async ({
       page,
     }) => {
-      // The seeded direct chats are shared and "latest" moves as other specs write; make three chats and hide theirs.
-      const stamp = tag('dock')
-      const wsTitle = `Websockets or server-sent events ${stamp}`
-      const wsQuestion = `Why websockets and not server-sent events? ${stamp}`
-      const ws = await makeDirectChat(page, 'builder', wsTitle, wsQuestion)
-      const wsReply = await waitForChatReply(page, ws.roomId, ws.id)
-      const cursorTitle = `The cursor bug ${stamp}`
-      const cursorQuestion = `Why did reviewer send the read layer back? ${stamp}`
-      const cursor = await makeDirectChat(page, 'builder', cursorTitle, cursorQuestion)
-      await waitForChatReply(page, cursor.roomId, cursor.id)
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      const latest = await makeDirectChat(page, 'builder', `Latest chat ${stamp}`)
-      const own = [ws.id, cursor.id, latest.id]
-      await onlyDirectChats(page, 'builder', own)
-      await onlyChatMessages(page, ws.roomId, own)
+      // `?open=1` opens the team room's chat; a phone's `/b` is its chat list.
       await page.goto(phone ? '/b' : '/b?open=1')
       if (phone) {
+        // A phone has no dock (board 19); its chat list has a Direct group with every agent.
         await page
           .getByRole('complementary', { name: 'Chats', exact: true })
           .getByRole('link', { name: /^builder/ })
@@ -76,85 +114,70 @@ for (const { name, viewport } of sizes) {
         await ring.click()
       }
       await expect(page).toHaveURL(/[?&]with=builder/)
-      await expect(page).toHaveURL(new RegExp(`chat=${latest.id}`))
       await expectPrivacy(page, 'builder')
       await expect(stream(page)).toBeVisible()
       // The agent's earlier chats are topics of the one conversation, listed in Info: picking one makes it current.
-      await openChatFromInfo(page, new RegExp(wsTitle))
-      await expect(page).toHaveURL(new RegExp(`chat=${ws.id}`))
-      await expect(messages(page).filter({ hasText: wsQuestion })).toHaveCount(1)
-      await expect(messages(page).filter({ hasText: wsReply })).toHaveCount(1)
+      await openChatFromInfo(page, /Websockets or server-sent events/)
+      await expect(page).toHaveURL(/chat=job_/)
+      await expect(
+        messages(page).filter({ hasText: 'Why websockets and not server-sent events?' }),
+      ).toHaveCount(1)
+      await expect(
+        messages(page).filter({ hasText: 'Server-sent events only go one way.' }),
+      ).toHaveCount(1)
       await expect(composerOf(page, 'builder')).toBeVisible()
-      await openChatFromInfo(page, new RegExp(cursorTitle))
-      await expect(page).toHaveURL(new RegExp(`chat=${cursor.id}`))
+      // The label survives a switch to another earlier chat.
+      await openChatFromInfo(page, /The cursor bug/)
+      await expect(page).toHaveURL(/chat=job_/)
       await expectPrivacy(page, 'builder')
-      await expect(messages(page).filter({ hasText: cursorQuestion })).toHaveCount(1)
+      await expect(
+        messages(page).filter({ hasText: 'Why did reviewer send the read layer back?' }),
+      ).toHaveCount(1)
       await expect(page.locator('.bold-dm-privacy').first()).toHaveAttribute('data-protected', /.+/)
     })
 
     test('opens from the Team page Message button', async ({ page }) => {
-      // The Message button opens the agent's newest chat, which other specs move; return only this test's chat.
-      const stamp = tag('team')
-      const question = `How strict should you be on docs? ${stamp}`
-      const chat = await makeDirectChat(page, 'reviewer', `Docs policy ${stamp}`, question)
-      await waitForChatReply(page, chat.roomId, chat.id)
-      await onlyDirectChats(page, 'reviewer', [chat.id])
-      await onlyChatMessages(page, chat.roomId, [chat.id])
       await page.goto('/b/agents')
       const card = page
         .locator('.bold-agentcard')
         .filter({ has: page.getByRole('link', { name: 'reviewer', exact: true }) })
       await card.getByRole('link', { name: 'Message', exact: true }).click()
       await expect(page).toHaveURL(/[?&]with=reviewer/)
-      await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`))
       await expectPrivacy(page, 'reviewer')
-      await expect(messages(page).filter({ hasText: question })).toHaveCount(1)
+      await expect(
+        messages(page).filter({ hasText: 'How strict should you be on docs?' }),
+      ).toHaveCount(1)
     })
 
     test('opens from Search (a chat result)', async ({ page }) => {
-      // Search reads every direct chat on the shared server; a unique title names the one result without racing them.
-      const stamp = tag('search')
-      const title = `Working in the Docker sandbox ${stamp}`
-      const question = `Can you work inside the Docker sandbox? ${stamp}`
-      const chat = await makeDirectChat(page, 'builder', title, question)
-      await page.goto(`/b?with=builder&chat=${chat.id}`)
-      await expectPrivacy(page, 'builder')
       await page.goto('/b?open=1')
       await page.getByRole('button', { name: 'Search', exact: true }).click()
       const search = page.getByRole('combobox', { name: 'Search or run a command' })
-      await search.fill(title)
-      await page.getByRole('option', { name: new RegExp(title) }).click()
-      await expect(page).toHaveURL(new RegExp(`/b\\?with=builder&chat=${chat.id}`))
+      await search.fill('Docker sandbox')
+      await page.getByRole('option', { name: /Working in the Docker sandbox/ }).click()
+      await expect(page).toHaveURL(/\/b\?with=builder&chat=job_/)
       await expectPrivacy(page, 'builder')
-      await expect(messages(page).filter({ hasText: question })).toHaveCount(1)
+      await expect(
+        messages(page).filter({ hasText: 'Can you work inside the Docker sandbox' }),
+      ).toHaveCount(1)
     })
 
     test('Info lists the chats, searches them and starts a New chat', async ({ page }) => {
-      // The live chat list is shared and only grows; make the three topics this test reads, with unique words.
-      const stamp = tag('info')
-      const websockets = await makeDirectChat(
-        page,
-        'builder',
-        `Websockets or server-sent events ${stamp}`,
-      )
-      const cursor = await makeDirectChat(page, 'builder', `The cursor bug ${stamp}`)
-      const docker = await makeDirectChat(page, 'builder', `Working in the Docker sandbox ${stamp}`)
-      await page.goto(`/b?with=builder&chat=${websockets.id}`)
+      await page.goto('/b?with=builder')
       await expectPrivacy(page, 'builder')
       const info = await openInfo(page)
       const rows = info.locator('.bold-chat-topics li')
-      await expect(rows.filter({ hasText: websockets.title })).toHaveCount(1)
-      await expect(rows.filter({ hasText: cursor.title })).toHaveCount(1)
-      await expect(rows.filter({ hasText: docker.title })).toHaveCount(1)
+      await expect(rows.filter({ hasText: 'Websockets or server-sent events' })).toHaveCount(1)
+      await expect(rows.filter({ hasText: 'The cursor bug' })).toHaveCount(1)
+      await expect(rows.filter({ hasText: 'Working in the Docker sandbox' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'How strict to be on docs' })).toHaveCount(0)
 
       const search = info.getByRole('searchbox', { name: 'Search chats' })
-      await search.fill(cursor.title)
-      await expect(rows.filter({ hasText: cursor.title })).toHaveCount(1)
+      await search.fill('cursor')
+      await expect(rows.filter({ hasText: 'The cursor bug' })).toHaveCount(1)
       await expect(rows.filter({ hasText: 'Docker sandbox' })).toHaveCount(0)
-      const nothing = `zzz-nothing-${stamp}`
-      await search.fill(nothing)
-      await expect(info.getByText(`No chats match “${nothing}”.`)).toBeVisible()
+      await search.fill('zzz-nothing')
+      await expect(info.getByText('No chats match “zzz-nothing”.')).toBeVisible()
       await search.fill('')
 
       const before = new URL(page.url()).searchParams.get('chat')
@@ -164,6 +187,7 @@ for (const { name, viewport } of sizes) {
       expect(posts[0]).toEqual({ url: '/api/agents/builder/chats', body: {} })
       await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before)
       await expectPrivacy(page, 'builder')
+      // The new chat is now in the list, as the current one.
       const again = await openInfo(page)
       await expect(again.locator('.bold-chat-topics a[aria-current="true"]')).toHaveCount(1)
       await expect
@@ -174,55 +198,9 @@ for (const { name, viewport } of sizes) {
     test('"Take it aside" opens an empty one-to-one and makes the chat only when the first message is sent', async ({
       page,
     }) => {
-      // The team room's jobs and exchanges are shared; this fixture job and exchange belong to the test alone.
-      const job = {
-        id: 'job_aside',
-        roomId: 'team-room',
-        title: 'Take it aside study',
-        state: 'working',
-        holderAgentId: 'builder',
-        isDefault: false,
-        exchangeBudget: 8,
-        jobTurnLimit: 40,
-        unread: 0,
-        activeAgents: [],
-        lastMessageAt: null,
-        messageCount: 0,
-        summary: null,
-        source: null,
-        reportBack: null,
-        spendCapUsd: null,
-        recipe: null,
-        createdAt: '2026-10-24T10:00:00.000Z',
-        updatedAt: '2026-10-24T10:15:00.000Z',
-      }
-      const exchange = {
-        id: 'exchange-aside',
-        jobId: job.id,
-        roomId: 'team-room',
-        kind: 'review',
-        parentId: null,
-        from: 'builder',
-        to: 'lead',
-        state: 'live',
-        round: 1,
-        turnsUsed: 1,
-        budget: 8,
-        outcome: null,
-        endedReason: null,
-        pause: null,
-        queuedBehind: null,
-        createdAt: '2026-10-24T10:01:00.000Z',
-        updatedAt: '2026-10-24T10:02:00.000Z',
-      }
-      await mockBoldRoom(page, {
-        jobs: [job],
-        handle: (request) =>
-          request.method === 'GET' && request.path === `/api/jobs/${job.id}/exchanges`
-            ? { body: { asOfSeq: 12, items: [exchange] } }
-            : undefined,
-      })
-      await page.goto(`/b?open=1&job=${job.id}`)
+      await page.goto('/b?open=1')
+      // A phone opens on the job list; the capsule with Take it aside is in the job's own chat.
+      if (phone) await openBoldJob(page, /^Activity feed\./)
       const aside = page.getByRole('button', { name: 'Take it aside with builder' }).first()
       await expect(aside).toBeVisible({ timeout: 30_000 })
       const posts = recordPosts(page)
@@ -232,6 +210,7 @@ for (const { name, viewport } of sizes) {
       const chip = page.locator('.bold-dm-ref')
       await expect(chip).toContainText('Referring to')
       await expect(page.getByRole('heading', { name: 'New chat with builder' })).toBeVisible()
+      // Looking is free: nothing was created, so the agent's chats have no empty chat in them.
       expect(posts).toHaveLength(0)
 
       const text = tag('About the review')
@@ -239,6 +218,7 @@ for (const { name, viewport } of sizes) {
       await page.locator('button.chat-send').click()
       await expect(page).toHaveURL(/\/b\?with=builder&chat=job_[^&]+$/)
       await expect(messages(page).filter({ hasText: text })).toBeVisible()
+      // The message carries a frozen reference to the team-room job, and the chip is spent.
       await expect(page.locator('.bold-ref-chip').first()).toContainText('Referring to')
       await expect(chip).toHaveCount(0)
       const made = posts.filter((post) => post.url === '/api/agents/builder/chats')
@@ -251,28 +231,15 @@ for (const { name, viewport } of sizes) {
     test('a normal message carries no references, and a draft follows the one conversation', async ({
       page,
     }) => {
-      // Two owned topics: the seeded ones are shared and other specs write into them while this draft moves.
-      const stamp = tag('draft')
-      const first = await makeDirectChat(
-        page,
-        'builder',
-        `The cursor bug ${stamp}`,
-        `Cursor question ${stamp}`,
-      )
-      const second = await makeDirectChat(
-        page,
-        'builder',
-        `Working in the Docker sandbox ${stamp}`,
-        `Docker question ${stamp}`,
-      )
-      await onlyDirectChats(page, 'builder', [first.id, second.id])
-      await onlyChatMessages(page, first.roomId, [first.id, second.id])
-      await page.goto(`/b?with=builder&chat=${first.id}`)
+      const first = await seededChat(page, 'builder', 'The cursor bug')
+      const second = await seededChat(page, 'builder', 'Working in the Docker sandbox')
+      await page.goto(`/b?with=builder&chat=${first}`)
       const box = composerOf(page, 'builder')
       await box.fill('half a thought for the cursor chat')
-      await openChatFromInfo(page, new RegExp(second.title))
-      await expect(page).toHaveURL(new RegExp(`chat=${second.id}`))
-      // One composer follows the person across topics; what is sent goes to the current one (3.22.0).
+      await openChatFromInfo(page, /Docker sandbox/)
+      await expect(page).toHaveURL(new RegExp(`chat=${second}`))
+      // 3.22.0: a chat is one conversation with one composer, so the draft belongs to the conversation and follows
+      // the person from topic to topic; what is sent goes to the topic that is current when it is sent.
       await expect(composerOf(page, 'builder')).toHaveValue('half a thought for the cursor chat')
       await composerOf(page, 'builder').fill('')
       const posts = recordPosts(page)
@@ -281,46 +248,53 @@ for (const { name, viewport } of sizes) {
       await page.locator('button.chat-send').click()
       await expect(messages(page).filter({ hasText: text })).toBeVisible()
       const sent = posts.find((post) => /\/api\/rooms\/[^/]+\/messages$/.test(post.url))
-      expect(sent?.body).toMatchObject({ text, jobId: second.id })
+      expect(sent?.body).toMatchObject({ text, jobId: second })
       expect(sent?.body).not.toHaveProperty('refs')
       // The draft is kept per conversation: switching topics back and forth does not lose it.
       await composerOf(page, 'builder').fill('another half thought')
-      await openChatFromInfo(page, new RegExp(first.title))
+      await openChatFromInfo(page, /The cursor bug/)
       await expect(composerOf(page, 'builder')).toHaveValue('another half thought')
     })
 
     test('a shared reply appears in the team room labelled "shared from a one-to-one"', async ({
       page,
     }) => {
-      // The seeded docs chat is fixed; the destination team, job and merged history are this test's own.
-      const source = await directChatByTitle(page, 'reviewer', 'How strict to be on docs')
-      await onlyChatMessages(page, source.roomId, [source.id])
-      const team = await makeTeam(page, 'shared reply')
-      const job = await makeJob(page, team.id, `Shared reply ${tag('job')}`)
-      await pinTeamRoom(page, team, [job])
-      await page.goto(`/b?with=reviewer&chat=${source.id}`)
+      // 3.28.0: the team room already has two active jobs, so a new one is refused (409 job_running); share into the
+      // seeded Activity feed job instead.
+      // Other specs add teams; with two the share menu is "Share to a team", so this page sees the team room only.
+      await onlyTeams(page, [await teamRoomId(page)])
+      const jobTitle = 'Activity feed'
+      const team = (await (await page.request.get('/api/team-room')).json()) as {
+        jobs: { id: string; title: string }[]
+      }
+      const target = team.jobs.find((item) => item.title === jobTitle)
+      expect(target).toBeTruthy()
+      const made = { id: target!.id }
+      // The seeded chat by title: "the latest reviewer chat" moves when other specs talk to reviewer.
+      const seeded = await seededReply(page, 'reviewer', 'How strict to be on docs')
+      await page.goto(`/b?with=reviewer&chat=${seeded.chatId}`)
       await expectPrivacy(page, 'reviewer')
       await expect(
         messages(page).filter({ hasText: 'I’ll block only when steps are missing or wrong' }),
       ).toHaveCount(1)
+      await expect(seeded.reply).toContainText('I’ll block only when steps are missing or wrong')
       const posts = recordPosts(page)
-      await (await shareAction(page)).click()
+      await clickAction(seeded.reply, SHARE)
       const menu = page.getByRole('dialog', { name: 'Share to the team room' })
       await expect(menu).toHaveAttribute('data-protected', 'block')
-      await menu.getByRole('button', { name: new RegExp(job.title) }).click()
+      await menu.getByRole('button', { name: new RegExp(jobTitle) }).click()
       // The confirmation sits in the message's hover row: the menu's job buttons are not under the message, so point at it again.
-      await messages(page)
-        .filter({ hasText: 'I’ll block only when steps are missing or wrong' })
-        .hover()
+      await seeded.reply.hover()
       await expect(
         stream(page).getByRole('status').filter({ hasText: 'Shared to the team room' }),
       ).toBeVisible()
       const share = posts.find((post) => /\/api\/messages\/[^/]+\/share$/.test(post.url))
-      expect(share?.body).toEqual({ jobId: job.id })
+      expect(share?.body).toEqual({ jobId: made.id })
 
       // The team room shows a frozen copy, named for the one-to-one it came from.
-      await page.goto(`/b?job=${job.id}`)
+      await page.goto(`/b?job=${made.id}`)
       const shared = page.locator('.bold-shared')
+      // 3.22.0: the team room is one merged conversation, so the copies shared to earlier jobs show too.
       await expect(shared.first()).toBeVisible()
       expect(await shared.count()).toBeGreaterThanOrEqual(1)
       const mine = shared
@@ -335,17 +309,9 @@ for (const { name, viewport } of sizes) {
     test('Add someone says what leaves, then moves the talk to the team room with the chat referenced', async ({
       page,
     }) => {
-      // The hand-off names and refs this chat, and starts in a team made for the test rather than the shared team room.
-      const chat = await makeDirectChat(
-        page,
-        'builder',
-        'Websockets or server-sent events',
-        `Add someone ${tag('question')}`,
-      )
-      await onlyChatMessages(page, chat.roomId, [chat.id])
-      const team = await makeTeam(page, 'add someone')
-      await pinTeamRoom(page, team)
-      await page.goto(`/b?with=builder&chat=${chat.id}`)
+      await onlyTeams(page, [await teamRoomId(page)])
+      const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
+      await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
       const info = await openInfo(page)
       await info.getByRole('button', { name: 'Add someone' }).click()
@@ -377,7 +343,7 @@ for (const { name, viewport } of sizes) {
       const message = posts.find((post) => /\/api\/rooms\/[^/]+\/messages$/.test(post.url))
       expect(message?.body).toMatchObject({
         to: ['builder', 'reviewer'],
-        refs: [{ jobId: chat.id }],
+        refs: [{ jobId: chat }],
       })
     })
 
@@ -385,25 +351,17 @@ for (const { name, viewport } of sizes) {
       page,
     }) => {
       // 3.22.0: the "Earlier chats" popover is gone (the chats are Info's list), so only the dialogs remain.
-      const chat = await makeDirectChat(
-        page,
-        'builder',
-        'Websockets or server-sent events',
-        `Escape ${tag('question')}`,
-      )
-      await waitForChatReply(page, chat.roomId, chat.id)
-      await onlyChatMessages(page, chat.roomId, [chat.id])
-      // One pinned team keeps the chooser from naming another spec's team ("Share to a team").
-      await pinTeamRoom(page, await makeTeam(page, 'escape'))
-      await page.goto(`/b?with=builder&chat=${chat.id}`)
+      await onlyTeams(page, [await teamRoomId(page)])
+      const seeded = await seededReply(page, 'builder', 'Websockets or server-sent events')
+      await page.goto(`/b?with=builder&chat=${seeded.chatId}`)
       await expectPrivacy(page, 'builder')
 
-      const share = await shareAction(page)
-      await share.click()
+      await clickAction(seeded.reply, SHARE)
+      const share = seeded.reply.getByRole('button', { name: SHARE })
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toBeVisible()
       // The row's buttons show only while the message is hovered; opening the menu can move the message under or away
       // from the pointer, so rest the pointer on it again before Escape.
-      await shareAction(page)
+      await seeded.reply.hover()
       await page.keyboard.press('Escape')
       await expect(page.getByRole('dialog', { name: 'Share to the team room' })).toHaveCount(0)
       await expect(share).toBeFocused()
@@ -426,13 +384,8 @@ for (const { name, viewport } of sizes) {
       page,
     }) => {
       // 3.22.0: the per-chat context ring under the composer is replaced by the context bar (agent-level reading).
-      const chat = await makeDirectChat(
-        page,
-        'builder',
-        'Websockets or server-sent events',
-        `Context ${tag('question')}`,
-      )
-      await page.goto(`/b?with=builder&chat=${chat.id}`)
+      const chat = await seededChat(page, 'builder', 'Websockets or server-sent events')
+      await page.goto(`/b?with=builder&chat=${chat}`)
       await expectPrivacy(page, 'builder')
       const bar = page.getByLabel('Where this message goes')
       await expect(bar).toContainText('builder')

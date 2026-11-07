@@ -6,7 +6,7 @@ import { composerOf, makeRoom, openBoldRoomById, streamOf } from './bold-chat-he
 import { pair } from './pair.ts'
 
 // 3.0.0: the classic workspace spec on the new shell's agent page (More › Workspace › Browse all files). The fake adapter
-// gives each agent a small temp-dir workspace. `lead` stays untouched; `reviewer` is edited; `designer` has a remote
+// gives each agent a small temp-dir workspace. `lead`'s folder is pinned for the screenshot (Settings › Workspaces moves it); `reviewer` is edited; `designer` has a remote
 // terminal backend.
 test.describe.configure({ mode: 'serial' })
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
@@ -37,7 +37,11 @@ async function pinLeadWorkspace(page: Page) {
       const url = new URL(route.request().url())
       if (url.pathname === '/api/agents/lead/workspace')
         return route.fulfill({
-          json: { root: '/home/lead/workspace', available: true, reason: null },
+          json: {
+            root: '/tmp/score-e2e-6381/tmp/score-fake-ws-AbCdEf/lead',
+            available: true,
+            reason: null,
+          },
         })
       if (url.pathname.endsWith('/git')) return route.fulfill({ json: null })
       if (url.pathname.endsWith('/tree')) {
@@ -45,11 +49,12 @@ async function pinLeadWorkspace(page: Page) {
         const entries =
           path === ''
             ? [
+                entry('.git', 'dir'),
                 entry('notes', 'dir'),
                 entry('src', 'dir'),
                 entry('.gitignore', 'file'),
-                entry('README.md', 'file'),
                 entry('logo.png', 'file'),
+                entry('README.md', 'file'),
               ]
             : path === 'src'
               ? [entry('index.ts', 'file')]
@@ -246,8 +251,9 @@ test('the header shows the git branch and the changed-file count for a repositor
   await expect(badge).toBeVisible()
   await expect(badge).toContainText('e2e-branch')
   // A folder that is no repository shows no badge.
-  const lead = await openWorkspace(page, 'lead')
-  await expect(lead.getByLabel(/^Git branch/)).toHaveCount(0)
+  // Builder, not lead: Settings > Workspaces gives lead another folder (an empty one) while this spec runs.
+  const builder = await openWorkspace(page, 'builder')
+  await expect(builder.getByLabel(/^Git branch/)).toHaveCount(0)
 })
 
 test("a workspace:// link in chat opens the file in the agent's Files panel", async ({ page }) => {

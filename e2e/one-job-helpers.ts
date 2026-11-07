@@ -1,5 +1,4 @@
 import { expect, type Page } from '@playwright/test'
-import type { Job, Room } from '@score/contract'
 
 // 3.28.0: a chat holds one active job, and the seeded team room already has two. Specs that start work make a team room
 // of their own (the server is shared, so the seeded jobs are never ended).
@@ -12,49 +11,53 @@ export async function makeTeam(page: Page, tag: string, members = ['lead', 'buil
     data: { name, members, leadAgentId: members[0] },
   })
   expect(response.status()).toBe(201)
-  const room = (await response.json()) as Room
+  const room = (await response.json()) as { id: string; name: string }
   return { ...room, label: `#${name}` }
 }
 
-export async function makeJob(page: Page, roomId: string, title: string): Promise<Job> {
-  const response = await page.request.post(`/api/rooms/${roomId}/jobs`, {
-    headers: { ...web, 'Idempotency-Key': `job-${Date.now()}-${Math.random()}` },
-    data: { title },
-  })
-  expect(response.status()).toBe(201)
-  return (await response.json()) as Job
-}
-
-/** Pins the team-room reads to one owned team, even while other specs add teams to the shared server. */
-export async function pinTeamRoom(page: Page, room: Room, jobs: Job[] = []) {
-  const team = { ...room, ...(room.everyone === undefined ? { everyone: false } : {}) }
-  // A hand-off creates its job after the page has loaded; keep that new job in the pinned snapshots.
-  let listed = [...jobs]
+/**
+ * Keeps the page's team list to the teams a test owns (plus the seeded team room). Other specs add teams to the shared
+ * server at any moment, and two or more teams change what the share and hand-off menus show ("Share to a team", a team
+ * select). Both the list read and the live room.upserted events that would add a team afterwards are filtered; the server
+ * and everything else stay real.
+ */
+export async function onlyTeams(page: Page, keep: readonly string[]) {
+  await page.addInitScript(
+    (ids: string[]) => {
+      const add = EventSource.prototype.addEventListener
+      EventSource.prototype.addEventListener = function (
+        this: EventSource,
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+      ) {
+        if (type !== 'room.upserted' || typeof listener !== 'function')
+          return add.call(this, type, listener, options)
+        const wrapped = (event: Event) => {
+          try {
+            const room = (JSON.parse((event as MessageEvent<string>).data) as { data?: unknown })
+              .data as { id?: string; role?: string } | undefined
+            if (room?.role === 'team' && !ids.includes(room.id ?? '')) return
+          } catch {
+            // Not JSON: pass it on and let the app decide.
+          }
+          listener.call(this, event)
+        }
+        return add.call(this, type, wrapped, options)
+      }
+    },
+    [...keep],
+  )
   await page.route(
     (url) => url.pathname === '/api/team-rooms',
     async (route) => {
       if (route.request().method() !== 'GET') return route.fallback()
-      await route.fulfill({ json: { asOfSeq: 12, items: [team] } })
-    },
-  )
-  await page.route(
-    (url) => url.pathname === '/api/team-room',
-    async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback()
-      await route.fulfill({ json: { asOfSeq: 12, room: team, jobs: listed } })
-    },
-  )
-  await page.route(
-    (url) => url.pathname === `/api/rooms/${team.id}/jobs`,
-    async (route) => {
-      if (route.request().method() === 'POST') {
-        const response = await route.fetch()
-        const made = (await response.json()) as Job
-        if (response.ok()) listed = [...listed.filter((job) => job.id !== made.id), made]
-        return route.fulfill({ response, json: made })
-      }
-      if (route.request().method() !== 'GET') return route.fallback()
-      await route.fulfill({ json: { asOfSeq: 12, items: listed } })
+      const response = await route.fetch()
+      const body = (await response.json()) as { items: { id: string }[] }
+      await route.fulfill({
+        response,
+        json: { ...body, items: body.items.filter((room) => keep.includes(room.id)) },
+      })
     },
   )
 }
