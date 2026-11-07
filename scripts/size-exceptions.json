@@ -1000,11 +1000,6 @@
     "reason": "data list"
   },
   {
-    "path": "scripts/bold-frame-compare.mjs",
-    "lines": 1295,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "scripts/compare/11.10a.mjs",
     "lines": 604,
     "reason": "split in CS.2 wave 1"
