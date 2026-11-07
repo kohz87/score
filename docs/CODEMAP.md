@@ -630,6 +630,7 @@ likely to be the entry point for a change.
 
 ### Folders
 
+- `apps/server/test/hermes/` — fake and live Hermes adapter tests, split by feature, with shared helpers.
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
 - `apps/server/test/domain/` — domain tests split by feature, with shared approval, exchange, and budget harnesses.
 
@@ -658,6 +659,8 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
+- `apps/server/test/hermes/fake-helpers.ts` — shared fake-port test setup, scheduler state, event readers and scenario play helpers.
+- `apps/server/test/hermes/live-port-helpers.ts` — shared live-port test setup, teardown and port factory.
 - `apps/server/test/http/` — HTTP route tests for the server API, including agent profiles, rooms, tasks and settings.
 
 ### Key files

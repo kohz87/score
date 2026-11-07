@@ -85,16 +85,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/hermes/fake.test.ts",
-    "lines": 552,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/hermes/live-port.test.ts",
-    "lines": 479,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/hermes/live/agent-tabs.test.ts",
     "lines": 502,
     "reason": "split in CS.2 wave 1"
