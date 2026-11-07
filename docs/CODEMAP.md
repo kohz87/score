@@ -137,6 +137,13 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/chat-documents.css` — attach menus, file chips, document preview and workspace picker.
 - `apps/web/src/routes/chat/chat-room.css` — room summary/status, compact layout, attachment saving and room actions.
 - `apps/web/src/routes/chat/chat-theme.css` — theme overrides for room and message presentation.
+- `apps/web/src/routes/orchestrations/orchestrations.css` — ordered entry for the orchestration stylesheets.
+- `apps/web/src/routes/orchestrations/orchestrations-base.css` — shared controls, heading, status and badges.
+- `apps/web/src/routes/orchestrations/orchestrations-decisions.css` — decisions, forms, preflight checks and dialog chrome.
+- `apps/web/src/routes/orchestrations/orchestrations-diagram.css` — main run layout, canvas, edges, nodes and step states.
+- `apps/web/src/routes/orchestrations/orchestrations-log-cards.css` — event log, replay bar, step cards, room header and fence list.
+- `apps/web/src/routes/orchestrations/orchestrations-workflow.css` — workflow shapes, edge labels, node transitions and summary slot.
+- `apps/web/src/routes/orchestrations/orchestrations-run-cards.css` — coding, check, stuck-step, advisor, helper and vote cards.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/watch/watch-model.ts` — watch timeline and replay model.
