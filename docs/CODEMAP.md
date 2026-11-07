@@ -314,6 +314,7 @@ likely to be the entry point for a change.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in feature-specific helper modules.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 - `apps/server/test/themes/` — theme route and store tests split by feature, plus shared package fixtures and store-swap fault-injection helpers.
+- `apps/server/test/workspace/` — workspace policy, listing, reading, writing, entry and opening tests split by feature; shared setup lives in `workspace-fixtures.ts`.
 
 ### Key files
 
@@ -374,6 +375,7 @@ likely to be the entry point for a change.
 - `apps/server/src/themes/store-journal.ts` — durable swap-note writes, erasure, settlement and rollback.
 - `apps/server/src/themes/store-transactions.ts` — custom saves, imported asset swaps and journaled deletes.
 - `apps/server/src/themes/store-recovery.ts` — interrupted swap recovery, built-in id reclaim and orphan-folder sweep.
+- `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
