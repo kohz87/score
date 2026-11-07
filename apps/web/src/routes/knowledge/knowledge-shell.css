@@ -1,0 +1,129 @@
+/* Knowledge: left tree, centre editor, right panels. Tokens only; white cards, ~28px radius, ink actions. */
+.kn-left,
+.kn-main {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  min-width: 0;
+}
+.kn-left {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+.kn-left h1,
+.kn-note h2,
+.kn-empty h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.kn-left h1 {
+  font-size: 26px;
+}
+.kn-left h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.kn-note h2,
+.kn-empty h2 {
+  font-size: 26px;
+}
+.kn-note h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+}
+.kn-muted,
+.kn-path {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.kn-path {
+  font-family: var(--font-code);
+  font-size: 12px;
+  word-break: break-all;
+}
+.kn-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.kn-dialog input:not([type='checkbox']) {
+  width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  color: var(--ink);
+  font: inherit;
+}
+.kn-dialog input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.kn-left button,
+.kn-main button,
+.kn-dialog button {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.kn-left button.kn-primary,
+.kn-main button.kn-primary,
+.kn-dialog button.kn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+.kn-main button:disabled,
+.kn-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.kn-main button:focus-visible,
+.kn-left button:focus-visible,
+.kn-dialog button:focus-visible,
+.kn-left a:focus-visible,
+.kn-main a:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.kn-link-button {
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  text-decoration: underline;
+  font-weight: 500 !important;
+  text-align: left;
+}
+.kn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}

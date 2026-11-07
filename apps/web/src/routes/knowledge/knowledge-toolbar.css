@@ -1,0 +1,202 @@
+/* Header toggles (Source) */
+.kn-actions button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+
+/* Editor toolbar (PLAN 6.8): sticky above the note, one scrolling strip, panels open inline below it */
+.kn-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--card);
+  min-width: 0;
+}
+.kn-tb-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+.kn-main .kn-tb-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 34px;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-10);
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kn-main .kn-tb-btn:hover:not(:disabled) {
+  background: var(--subtle);
+}
+.kn-main .kn-tb-btn[aria-pressed='true'],
+.kn-main .kn-tb-btn[aria-expanded='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+.kn-main .kn-tb-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+.kn-main .kn-tb-btn[aria-pressed='true']:focus-visible,
+.kn-main .kn-tb-btn[aria-expanded='true']:focus-visible {
+  outline-color: var(--card);
+  outline-offset: -4px;
+}
+.kn-tb-text {
+  font-size: 12px;
+}
+.kn-tb-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--hairline);
+}
+.kn-tb-label {
+  flex: none;
+  padding: 0 var(--space-2) 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kn-tb-table {
+  border-top: 1px solid var(--hairline);
+  padding-top: var(--space-1);
+}
+/* Wide screens show every table tool; phones scroll the strip. */
+@media (width >= 600px) {
+  .kn-tb-table {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+.kn-tb-panel {
+  padding: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+.kn-tb-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kn-tb-choices button[aria-pressed='true'],
+.kn-tb-choices button[aria-checked='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+.kn-tb-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.kn-tb-inline,
+.kn-tb-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+.kn-tb-link .kn-tb-choices {
+  flex-basis: 100%;
+}
+.kn-tb-inline label,
+.kn-tb-link label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.kn-tb-inline input,
+.kn-tb-link input {
+  height: 32px;
+  min-width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-8);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.kn-tb-link input[aria-invalid='true'] {
+  border-color: var(--agent-coral-text);
+}
+.kn-tb-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--agent-coral-text);
+}
+.kn-tb-table-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kn-tb-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 3px;
+}
+.kn-main .kn-tb-grid button {
+  width: 22px;
+  height: 22px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+}
+.kn-main .kn-tb-grid button.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.kn-tb-grid-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.kn-tb-notice {
+  margin: 0;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-14);
+  background: var(--agent-saffron-tint);
+  color: var(--ink);
+  font-size: 13px;
+}
+@media (pointer: coarse), (width < 600px) {
+  .kn-main .kn-tb-btn {
+    height: 40px;
+    min-width: 40px;
+  }
+  .kn-tb-grid {
+    grid-template-columns: repeat(8, 28px);
+  }
+  .kn-main .kn-tb-grid button {
+    width: 28px;
+    height: 28px;
+  }
+}
