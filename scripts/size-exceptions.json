@@ -880,11 +880,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/customizer.spec.ts",
-    "lines": 1255,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "e2e/themes-consent.spec.ts",
     "lines": 593,
     "reason": "split in CS.2 wave 1"
