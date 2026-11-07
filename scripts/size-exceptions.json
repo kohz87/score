@@ -75,21 +75,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldLibrary.test.tsx",
-    "lines": 535,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldScreen.test.tsx",
-    "lines": 499,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldSettings.test.tsx",
-    "lines": 639,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldTasks.test.tsx",
     "lines": 636,
     "reason": "split in CS.2 wave 1"
