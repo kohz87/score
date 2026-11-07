@@ -100,21 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/orchestration/coding-journal.test.ts",
-    "lines": 597,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/orchestration/coding-workers-f1.test.ts",
-    "lines": 480,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/orchestration/coding-workers-release.test.ts",
-    "lines": 517,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/orchestration/fix-h.test.ts",
     "lines": 622,
     "reason": "split in CS.2 wave 1"

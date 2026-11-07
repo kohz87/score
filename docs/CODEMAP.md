@@ -637,9 +637,12 @@ likely to be the entry point for a change.
 - `apps/server/test/hermes/live/` — live Hermes adapter tests, including feature-split SQLite and SSE suites.
 - `apps/server/test/hub/` — ingest test suites split by commit, listeners, snapshot, lifecycle, checkpoints, sync safety and projection order, plus their shared harness.
 - `apps/server/test/mcp/` — MCP integration tests split by tools, auth, management, lifecycle, content and limits.
+- `apps/server/test/orchestration/` — orchestrator, journal and coding-worker integration suites, split by feature with shared harness helpers.
 
 ### Key files
 
+- `apps/server/test/orchestration/coding-journal-helpers.ts` — shared coding-journal database, clock and launch fixtures for the split journal suites.
+- `apps/server/test/orchestration/coding-workers-helpers.ts` — shared worker harness lifecycle, scripted step and release-state probes for the split coding-worker suites.
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
 - `apps/server/test/launcher-service-helpers.ts` — shared launcher rig, fake systemd/loginctl, command and prompt harnesses for the feature-split launcher suites.
 - `apps/server/test/remote-helpers.ts` — shared remote config, app/pairing setup, cleanup and TLS fixtures for the feature-split remote suites.
