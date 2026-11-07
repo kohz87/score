@@ -545,11 +545,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldStartJob.test.tsx",
-    "lines": 1575,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldTaskEdit.tsx",
     "lines": 506,
     "reason": "split in CS.2 wave 1"

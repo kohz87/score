@@ -34,7 +34,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/web/src/` — SPA bootstrap, root router and the classic/bold shell choice.
-- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles.
+- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, colocated tests and other bold-only styles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
@@ -118,6 +118,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldStartJobCheckFields.tsx` — pre-finish command check fields.
 - `apps/web/src/bold/BoldStartJobLimitFields.tsx` — limits, deadline, workflow options, unknown cost and inputs.
 - `apps/web/src/bold/BoldStartJobParts.tsx` — checklist rows, auth fields, result cards and dialog actions.
+- `apps/web/src/bold/BoldStartJob-helpers.tsx` — shared fixtures, fake fetch server and render helpers for the split start-job tests.
 - `apps/web/src/bold/use-start-job-view.ts` — composes the start-job state, queries, model and actions.
 - `apps/web/src/bold/use-start-job-state.ts` — start-job form state and refs.
 - `apps/web/src/bold/use-start-job-refs.ts` — start-job dialog, auth and attempt refs.
