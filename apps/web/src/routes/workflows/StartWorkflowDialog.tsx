@@ -9,13 +9,12 @@ import {
 } from '@score/contract'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
-import {
-  CodingWorkers,
-  describeCreateError,
-  PreflightList,
-} from '../orchestrations/NewOrchestrationDialog.tsx'
+import { PreflightList } from '../orchestrations/NewOrchestrationDialog.tsx'
 import { sourceName } from '../orchestrations/decision-parts.tsx'
-import { AgentChip } from '../orchestrations/RunDecisions.tsx'
+import { StartWorkflowAgents } from './StartWorkflowAgents.tsx'
+import { StartWorkflowChecks } from './StartWorkflowChecks.tsx'
+import { StartWorkflowInputs } from './StartWorkflowInputs.tsx'
+import { describeStartError } from './start-workflow-error.ts'
 import {
   useCreateWorkflowRun,
   useWorkflow,
@@ -187,29 +186,11 @@ export function StartWorkflowDialog({
           coding agents and the button that starts the run are measured together, with the theme and without it. */}
       <form onSubmit={submit} className="orch-form" data-decision>
         {definition && definition.inputs.length > 0 && (
-          <fieldset className="orch-field wf-fieldset">
-            <legend>Inputs</legend>
-            {definition.inputs.map((input) => (
-              <label key={input.name} className="orch-field">
-                <span>
-                  {input.label}
-                  {input.required ? '' : ' (optional)'}
-                </span>
-                <textarea
-                  rows={input.maxChars > 200 ? 3 : 1}
-                  value={ownText(inputs, input.name)}
-                  maxLength={input.maxChars}
-                  required={input.required}
-                  onChange={(event) =>
-                    setInputs((current) => ({ ...current, [input.name]: event.target.value }))
-                  }
-                />
-                <small className="orch-muted">
-                  {ownText(inputs, input.name).length} of {input.maxChars} characters
-                </small>
-              </label>
-            ))}
-          </fieldset>
+          <StartWorkflowInputs
+            inputs={definition.inputs}
+            values={inputs}
+            onChange={(name, value) => setInputs((current) => ({ ...current, [name]: value }))}
+          />
         )}
 
         <fieldset className="orch-field orch-approvals" data-protected="flex">
@@ -361,62 +342,18 @@ export function StartWorkflowDialog({
           </p>
         </details>
 
-        <section aria-label="Agents this run will use">
-          <h3>Agents this run will use</h3>
-          {data ? (
-            <ul className="wf-agents" aria-label="Agent mapping">
-              {data.mapping.map((entry) => (
-                <li key={entry.agentId}>
-                  <AgentChip agentId={entry.agentId} agents={agents} />{' '}
-                  <span className="orch-mono" title="Identifies the exact version of the agent">
-                    {entry.incarnation}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="orch-muted" role="status">
-              Reading the agents…
-            </p>
-          )}
-          <p className="orch-muted">
-            The run keeps using exactly these agents. If one is replaced later, its steps wait until
-            you decide.
-          </p>
-        </section>
+        <StartWorkflowAgents mapping={data?.mapping} agents={agents} />
 
-        <section aria-label="Before it starts">
-          <h3>Before it starts</h3>
-          {preflight.isPending && chosen !== undefined && <p role="status">Checking…</p>}
-          {preflight.isError && (
-            <p role="alert" className="orch-error">
-              Couldn’t run the checks.
-            </p>
-          )}
-          {data && <PreflightList checks={data.checks} />}
-          {problems.length > 0 && (
-            <ul className="orch-checks" aria-label="Problems with the workflow">
-              {problems.map((issue, index) => (
-                <li key={index} className="orch-check-item orch-check-item--fail">
-                  <strong>Problem</strong>
-                  <span>{issue.message}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {workers.length > 0 && (
-            <CodingWorkers
-              workers={workers}
-              agents={agents}
-              accepted={reachIds.length > 0 && reachCovered}
-              onAccept={(accepted) => setReachAccepted(accepted ? reachIds : [])}
-              answerGoesTo="passed to the steps after it, which may use an online model"
-            />
-          )}
-          <p className="orch-muted">
-            Watch also shows the agent’s other work; it can’t show a single run on its own.
-          </p>
-        </section>
+        <StartWorkflowChecks
+          checking={preflight.isPending && chosen !== undefined}
+          checkError={preflight.isError}
+          checks={data?.checks}
+          problems={problems}
+          workers={workers}
+          agents={agents}
+          reachAccepted={reachIds.length > 0 && reachCovered}
+          onAcceptReach={(accepted) => setReachAccepted(accepted ? reachIds : [])}
+        />
 
         <label className="orch-check orch-ack" data-protected="any">
           <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
@@ -456,15 +393,4 @@ export function StartWorkflowDialog({
       </form>
     </dialog>
   )
-}
-
-function describeStartError(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === 'conflict')
-      return 'An agent changed while this screen was open. The list above now shows the current ones. Check it and start again.'
-    if (error.code === 'invalid_inputs') return error.message
-    if (error.code === 'invalid_definition')
-      return 'A step of this workflow can’t run as it is drawn. The problems are listed below; fix them in the editor and save a new version.'
-  }
-  return describeCreateError(error)
 }

@@ -305,23 +305,8 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/workflows/NodeInspector.tsx",
-    "lines": 528,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/workflows/recipe-layers.css",
     "lines": 451,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/workflows/RecipeLayers.tsx",
-    "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/workflows/StartWorkflowDialog.tsx",
-    "lines": 470,
     "reason": "split in CS.2 wave 1"
   },
   {
