@@ -1,0 +1,27 @@
+.logs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: end;
+}
+.logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+}
+.logs-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.logs-table th,
+.logs-table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.logs-table tr[data-level='error'] td:nth-child(2) {
+  font-weight: 700;
+}

@@ -38,7 +38,7 @@ test('Display currency saves the typed code and rate', async () => {
 })
 
 test('the currency inputs are styled like the other Settings fields', () => {
-  const css = readFileSync(join(import.meta.dirname, 'settings.css'), 'utf8')
+  const css = readFileSync(join(import.meta.dirname, 'settings-currency.css'), 'utf8')
   const rule = /\.plugins-currency input \{([^}]*)\}/.exec(css)?.[1] ?? ''
   expect(rule).toMatch(/border:\s*1px solid var\(--hairline\)/)
   expect(rule).toMatch(/border-radius:\s*var\(--radius-14\)/)

@@ -1,0 +1,6 @@
+@media (width < 600px) {
+  .settings-card {
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-20);
+  }
+}
