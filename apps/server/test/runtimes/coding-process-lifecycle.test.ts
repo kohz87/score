@@ -1,34 +1,19 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { signalGroup as realSignalGroup } from '../../src/runtimes/coding/pidfd-signal.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { realProcEnv, type ProcEnv } from '../../src/runtimes/coding/proc.ts'
+import {
+  alive,
+  baseOptions,
+  dir,
+  script,
+  setupProcessTestLifecycle,
+  waitGone,
+} from './coding-process-helpers.ts'
 
-let dir: string
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'score-coding-proc-'))
-})
-afterEach(() => {
-  // A test that fails before its own cleanup (a wait that times out under load) must not leave its worker running:
-  // the 'ignore' worker has no pipe to its parent, so nothing else ever reaps it. Every worker writes its pid here.
-  for (const name of readdirSync(dir)) {
-    if (!/^worker-.*\.pid$/.test(name)) continue
-    const pid = Number(readFileSync(join(dir, name), 'utf8'))
-    if (pid > 0 && alive(pid)) process.kill(pid, 'SIGKILL')
-  }
-  rmSync(dir, { recursive: true, force: true })
-})
-
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
+setupProcessTestLifecycle()
 
 test('fix-l: Stop keeps escalating until a signal-ignoring descendant is gone, even when the CLI exits first', async () => {
   const pidFile = join(dir, 'descendant.pid')
@@ -85,20 +70,6 @@ setInterval(() => {}, 1000)
     if (alive(descendantPid)) process.kill(descendantPid, 'SIGKILL')
   }
 }, 60_000)
-
-const noParser = { parse: () => [], stats: { unknown: 0, malformed: 0 } }
-const baseOptions = (args: string[]) => ({
-  file: process.execPath,
-  args,
-  cwd: tmpdir(),
-  env: { PATH: process.env['PATH'] ?? '' },
-  stdin: '',
-  parser: noParser,
-  onEvent: async () => undefined,
-})
-const waitGone = async (pid: number) => {
-  await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 30_000 })
-}
 
 /**
  * A leader that starts a harmless worker (its pid goes to a file) and exits once Score has noted that worker. The note
@@ -410,66 +381,6 @@ test.each(['mismatch', 'unavailable'] as const)(
 
 // ---- FZ1 (re-review 2026-10-12 #5, #9, #17) --------------------------------------------------------------------------
 
-const script = (code: string) => baseOptions(['-e', code])
-
-test('#9: a final stdout line with no newline is no record: the stream is incomplete and nothing parses it', async () => {
-  const lines: string[] = []
-  const run = spawnCli({
-    ...script(`process.stdout.write('{"ok":1}\\n{"result":"success"}')`),
-    parser: {
-      parse: (line: string) => {
-        lines.push(line)
-        return []
-      },
-      stats: { unknown: 0, malformed: 0 },
-    },
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome.exitCode).toBe(0)
-  expect(lines).toEqual(['{"ok":1}'])
-  expect(outcome.streamComplete).toBe(false)
-  expect(outcome.streamLoss).toContain('partial-last-line')
-}, 30_000)
-
-test('#9: an oversized record is a dropped record and the stream is incomplete', async () => {
-  const run = spawnCli({
-    ...script(`process.stdout.write('x'.repeat(1100 * 1024) + '\\n{"a":1}\\n')`),
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome.streamComplete).toBe(false)
-  expect(outcome.streamLoss).toContain('dropped-record')
-}, 30_000)
-
-test('#9: a clean stream is complete', async () => {
-  const run = spawnCli({
-    ...script(`process.stdout.write('{"a":1}\\n')`),
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome).toMatchObject({ streamComplete: true, streamLoss: [] })
-}, 30_000)
-
-test('#5: stderr keeps its start and is redacted whole: a labelled long value never leaks', async () => {
-  const run = spawnCli({
-    ...script(`process.stderr.write('password=' + 'v'.repeat(10000) + '\\n')`),
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome.stderr).not.toMatch(/v{20}/)
-}, 30_000)
-
-test('#5: stderr past the raw limit is dropped, not kept as a tail', async () => {
-  const run = spawnCli({
-    ...script(`process.stderr.write('head ' + 'a'.repeat(200000) + ' TAILMARK')`),
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome.stderr.startsWith('head ')).toBe(true)
-  expect(outcome.stderr).not.toContain('TAILMARK')
-}, 30_000)
-
 test('#17: every stop path calls the hook once, with its cause, before the group is signalled', async () => {
   const cases = [
     ['user', 'user'],
@@ -524,20 +435,3 @@ test('#17: a hook that throws is reported and the stop still goes on', async () 
   expect(outcome.groupGone).toBe(true)
   expect(errors).toHaveLength(1)
 }, 60_000)
-
-test('FW #7: a pipe destroyed because a descendant outside the group holds it open is forced loss, not a complete stream', async () => {
-  const run = spawnCli({
-    ...script(
-      // A descendant in its own session keeps stdout open past the turn, then ends by itself.
-      `const { spawn } = require('node:child_process');
-       const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 3500)'], { detached: true, stdio: ['ignore', 'inherit', 'ignore'] });
-       holder.unref();
-       process.stdout.write('{"result":"success"}\\n')`,
-    ),
-    onEvent: async () => undefined,
-  })
-  const outcome = await run.done
-  expect(outcome.exitCode).toBe(0)
-  expect(outcome.streamComplete).toBe(false)
-  expect(outcome.streamLoss).toContain('forced-stdout-close')
-}, 30_000)
