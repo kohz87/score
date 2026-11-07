@@ -3,6 +3,22 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.31.0] — 2026-11-08
+
+### Changed
+- **The code is reorganised into small files with a map, so it is cheaper and safer to work on.** No behaviour, screen or
+  API changes: every file now holds one job and stays at or under 450 lines (213 files were over it; six stay whole on
+  purpose, each with its reason), and `docs/CODEMAP.md` says where to find what. Lint and `pnpm check` keep it that way:
+  a file over the limit, a source folder missing from the map, or a listed file that grows now fails the check. Splits
+  were proven to move code only (line comparison, byte-identical compiled CSS, every test and assertion kept), and every
+  test count is unchanged.
+- Dead code found on the way is gone: style rules for retired classic-shell screens and a review-only screenshot spec
+  that never ran.
+
+### Fixed
+- The browser tests no longer depend on what other tests leave behind (rooms, chats, sessions, pins), so a full run is
+  reliable; the end-to-end tests are now type-checked too.
+
 ## [3.30.1] — 2026-11-05
 
 ### Fixed

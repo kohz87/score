@@ -2524,3 +2524,15 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Follow-ups queued: (1) e2e is not typechecked — a split spec lost an import unnoticed; add an e2e tsconfig to
   `pnpm typecheck`. (2) bold-workbench flake: the fake scenario loop can surface its own builder approval before the
   spec's seeded one — needs a fake-server change (owner/lead decision). (3) structure-check: reject a path listed twice.
+
+## Release 3.31.0 — the code restructure (2026-11-08)
+- Contents: CS.1–CS.5 and CS.2 waves 1–5 (decisions 168–172; see the entries above), the e2e typecheck (e2e/tsconfig.json
+  in `pnpm typecheck`; sixteen type-only fixes, no check changed) and the bold-workbench fix (the screen tests wait until
+  only the seeded approval is pending — the fake scenario asks builder its own approval for about a second each cycle;
+  40/40 in a 20× repeat, the whole spec green).
+- Gate: build ok; `pnpm check` green (contract 1614, web 3371, server 4989|14 skipped, structure 8, plugin 378); e2e 865
+  passed, 2 failed — bold-try-another (3 / 3 pager, a Try another button not found) and themes-bold-visual (score dark
+  Team, 2% pixels) — both passed on a fresh-server re-run (66/66) and in the full run on main just before (867/867);
+  known load-sensitive specs (CS.5's list), still intermittent: a follow-up.
+- No behaviour change: the plugin's Python files were split too, but nothing compares installed plugins with the server,
+  so the live profiles keep theirs (no writes to the owner's profiles).
