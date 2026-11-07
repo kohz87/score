@@ -100,11 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/mcp/mcp.test.ts",
-    "lines": 719,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/orchestration/coding-journal.test.ts",
     "lines": 597,
     "reason": "split in CS.2 wave 1"
