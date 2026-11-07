@@ -41,7 +41,9 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, recipe test suites and other bold-only styles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
+- `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
+- `apps/web/src/bold/hermes-updates/` — Hermes update progress, results, dialog and supporting model helpers.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
@@ -107,6 +109,9 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldRecipeEditorStatus.tsx` — problems, notices, conflicts, version-view note and delete-with-runs dialog.
 - `apps/web/src/bold/BoldRecipeWorkspace.tsx` — graph and text panels, recipe details and settings pane.
 - `apps/web/src/bold/BoldRecipeInspector.tsx` — selected graph node or text step settings.
+- `apps/web/src/bold/BoldRecipeText.tsx` — text recipe step settings and the compatibility export for its rows.
+- `apps/web/src/bold/RecipeStepRow.tsx` — one text recipe step, its route controls and move/remove actions.
+- `apps/web/src/bold/bold-recipe-inspector-model.ts` — branch-condition and runtime-refusal helpers for step settings.
 - `apps/web/src/bold/DeleteWithRunsDialog.tsx` — name-confirmed recipe and runs deletion dialog.
 - `apps/web/src/bold/bold-recipe-editor-model.ts` — editor props, problem types, deduplication and error copy.
 - `apps/web/src/bold/use-bold-recipe-editor-state.ts` — editor draft, queries, validation, history and derived state.
@@ -153,6 +158,18 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-system.css` — System cards, logs, pause and about facts.
 - `apps/web/src/bold/bold-settings-usage.css` — Usage summary, charts, tables and spending bars.
 - `apps/web/src/bold/bold-settings-connections.css` — Connection lists, statuses, local models and phone pairing.
+- `apps/web/src/bold/BoldConnections.tsx` — Settings › Connections composition.
+- `apps/web/src/bold/connections/HermesCard.tsx` — Hermes reachability, version, gateway and agent-count card.
+- `apps/web/src/bold/connections/ModelProvidersCard.tsx` — model provider list, connection panels, removal and local-model form.
+- `apps/web/src/bold/connections/ChannelsCard.tsx` — messaging channel list, setup and browser-owned removal.
+- `apps/web/src/bold/connections/PhoneCard.tsx` — paired-device count, security-password state and device settings link.
+- `apps/web/src/bold/connections/OtherAppsCard.tsx` — tool-server and webhook-trigger settings link.
+- `apps/web/src/bold/BoldHermesUpdates.tsx` — Settings › System Hermes update card composition.
+- `apps/web/src/bold/hermes-updates/Progress.tsx` — update step progress and Hermes output.
+- `apps/web/src/bold/hermes-updates/Outcome.tsx` — compatible, differing, broken and failed update results.
+- `apps/web/src/bold/hermes-updates/UpdateDialog.tsx` — update confirmation, test-agent choice and security password form.
+- `apps/web/src/bold/hermes-updates/hermes-update-model.ts` — update constants, byte formatting and test-agent selection.
+- `apps/web/src/bold/hermes-updates/hermes-update-problem.tsx` — Hermes update error copy and security-settings link.
 - `apps/web/src/bold/bold-settings-tools.css` — Tool servers, shared buttons and chips, and textarea controls.
 - `apps/web/src/bold/bold-settings-triggers.css` — Webhook trigger cards and the trigger creation wizard.
 - `apps/web/src/bold/triggers/wizard-model.ts` — trigger wizard types, defaults, request shaping and error/display copy.
