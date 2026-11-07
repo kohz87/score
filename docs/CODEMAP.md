@@ -332,7 +332,18 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/theme-files.ts` — read a theme snapshot and rebuild the snapshot after a save.
 - `apps/web/src/routes/customizer/use-customizer-actions.ts` — save, export, use, import, start-from and keyboard actions with their status state.
 - `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
-- `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
+- `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page composition and public re-exports.
+- `apps/web/src/routes/team/CodingAccessCard.tsx` — access card and its permission/quota-floor editor.
+- `apps/web/src/routes/team/CodingAlerts.tsx` — held-program and broken-CLI notices.
+- `apps/web/src/routes/team/CodingDanger.tsx` — remove-agent danger zone.
+- `apps/web/src/routes/team/CodingFacts.tsx` — CLI, workspace and quota facts for the personality card.
+- `apps/web/src/routes/team/CodingModelCard.tsx` — model card, model/effort/advisor editor and advisor select.
+- `apps/web/src/routes/team/CodingPermission.tsx` — read-access warning and permission picker.
+- `apps/web/src/routes/team/coding-agent-permissions.ts` — permission labels, names and read-access helper.
+- `apps/web/src/routes/team/coding-agent-queries.ts` — coding-agent list/runtime queries and patch mutation.
+- `apps/web/src/routes/team/useCodingAgentDraft.ts` — coding-agent create fields, validation, consent and mutation.
+- `apps/web/src/routes/team/WorkspaceBrowser.tsx` — workspace tree, file pane, splitter, file actions and uploads.
+- `apps/web/src/routes/team/WorkspaceTab.tsx` — workspace tab states, folder form and browser entry.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.
 - `apps/web/src/routes/knowledge/knowledge-shell.css` — left tree/main card shells, headings, shared controls and actions.
