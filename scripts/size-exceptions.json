@@ -70,11 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/agent-more/agent-more.test.tsx",
-    "lines": 680,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/direct/DirectChat.test.tsx",
     "lines": 656,
     "reason": "split in CS.2 wave 1"

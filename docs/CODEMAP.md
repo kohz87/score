@@ -55,6 +55,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldTasks-helpers.tsx` — shared Task test state, fixtures, fetch stub, render setup and query helpers.
 - `apps/web/src/bold/recipe-model-helpers.ts` — shared recipe fixtures and graph-versus-validator comparison helpers.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
+- `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal, with feature-split tests.
+- `apps/web/src/bold/agent-more/agent-more-helpers.tsx` — shared agent-detail test agent, fetch stub, mount and lifecycle state for the split card suites.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
