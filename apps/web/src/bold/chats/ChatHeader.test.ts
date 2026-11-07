@@ -12,7 +12,7 @@ test('the owner is the lead, else the raw id, else "no owner yet"', () => {
 })
 
 test('the round Back and Info buttons are at least 44px, the phone’s finger-target floor', () => {
-  const css = readFileSync(join(__dirname, 'chats.css'), 'utf8')
+  const css = readFileSync(join(__dirname, 'chats-list.css'), 'utf8')
   const rule = /\.bold-chat-round\.small \{([^}]*)\}/.exec(css)?.[1] ?? ''
   expect(rule).toContain('width: 44px')
   expect(rule).toContain('height: 44px')

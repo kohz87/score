@@ -1,0 +1,249 @@
+/* The chat list column: 320px, 14px padding, a hairline on its right. */
+[data-ui='bold'] .bold-chat-list {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 14px;
+  border-right: 1px solid var(--line);
+}
+
+/* The fold rail: 72px of tiles. */
+[data-ui='bold'] .bold-chat-list.rail {
+  flex-basis: 72px;
+  width: 72px;
+  align-items: center;
+  padding: 14px 0;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-chat-tools,
+[data-ui='bold'] .bold-chat-phone-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-chat-round {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--faint);
+  background: transparent;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-list.rail .bold-chat-round,
+[data-ui='bold'] .bold-chat-round.small {
+  /* 44px: the phone's Back and Info are finger targets (the 44px floor the phone specs hold every control to). */
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-chat-round.solid {
+  border: 0;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 22px;
+}
+
+[data-ui='bold'] .bold-chat-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-chat-search::placeholder {
+  color: var(--faint);
+}
+
+[data-ui='bold'] .bold-chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-ui='bold'] .bold-chat-scroll section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-ui='bold'] .bold-chat-kicker {
+  margin: 6px 6px 0;
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-scroll section + section .bold-chat-kicker {
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .bold-chat-title {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-note {
+  margin: 4px 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 18px;
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-row.direct {
+  padding: 8px 10px;
+}
+
+[data-ui='bold'] .bold-chat-row:hover {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-chat-row.on {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-chat-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-chat-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-top b {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-chat-row.direct .bold-chat-top b {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-chat-at {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-line {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-chat-tile,
+[data-ui='bold'] .bold-chat-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* A group's tile: the lead's colour lightened (the mock-up's pastel tiles) with the dark ink on it. */
+[data-ui='bold'] .bold-chat-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--chat-color, #9aa0ad) 55%, #ffffff);
+  color: #12131a;
+  font-family: var(--font-d);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-chat-tile.is-rail {
+  width: 48px;
+  height: 48px;
+}
+
+[data-ui='bold'] .bold-chat-avatar.is-rail {
+  width: 40px;
+  height: 40px;
+}
+
+/* The light "for you" pill, the same light object the room's Needs-you card uses. */
+[data-ui='bold'] .bold-chat-needs {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-chat-rail-item {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 16px;
+  border: 2px solid transparent;
+}
+
+[data-ui='bold'] .bold-chat-rail-item.on {
+  border-color: var(--ink);
+}
+
+[data-ui='bold'] .bold-chat-meta {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-chat-meta b {
+  color: var(--ink);
+}

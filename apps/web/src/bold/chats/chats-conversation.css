@@ -1,0 +1,139 @@
+/* A topic starts with a hairline divider (board 18): "Topic · title · state". */
+[data-ui='bold'] .bold-topic-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-topic-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-topic-text strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-topic-state.is-working,
+[data-ui='bold'] .bold-topic-state.is-open {
+  /* The bold scope has no link token; the violet name tint is readable in both looks (the pale fallback was 1.7:1 on light). */
+  color: var(--agent-violet-name);
+}
+
+[data-ui='bold'] .bold-topic-state.is-done {
+  color: var(--ok);
+}
+
+/* What a command changed: one quiet centred line in the flow. */
+[data-ui='bold'] .bold-system-line {
+  margin: 6px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The / palette opens above the composer in the layout flow, not over the messages. */
+[data-ui='bold'] .bold-room-composer .chat-menu {
+  position: static;
+  width: auto;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-room-composer .chat-menu button .chat-menu-command {
+  min-width: 150px;
+}
+
+/* The context bar under the composer. */
+[data-ui='bold'] .bold-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-context-bar strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-bar code {
+  font-family: var(--font-c, 'JetBrains Mono', monospace);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-context-track {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-context-track > span {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+[data-ui='bold'] .bold-context-spacer {
+  flex: 1;
+}
+
+/* Info | Results as pill tabs (board 18's Info | Graph). */
+[data-ui='bold'] .bold-side-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-side-tabs button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-side-tabs button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-top-links,
+[data-ui='bold'] .top .word,
+[data-ui='bold'] .bold-avatar,
+[data-ui='bold'] .bold-terminal-btn {
+  flex-shrink: 0;
+}
+[data-ui='bold'] .bold-top-links {
+  flex-shrink: 1;
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-room-composer {
+    padding-bottom: 16px;
+  }
+}

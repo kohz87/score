@@ -1,0 +1,245 @@
+/* Info › This topic (3.22.0): the old thread panel's status, run, report-back and tasks, compact for a 300px column. */
+[data-ui='bold'] .bold-topic-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 3.27.1 (owner's Troubleshooting note): the Stop confirm takes its own row under the title, so a long title is not
+   squeezed to a letter per line and the confirm stays inside the panel. A long title shows three lines; the rest is in
+   its tooltip. */
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm {
+  flex: 1 0 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-topic-head > .bold-thread-stop-confirm > b {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-topic-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-d);
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-topic-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe,
+[data-ui='bold'] .bold-topic-info .bold-thread-tasks {
+  margin: 0;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head > b {
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-stop-confirm {
+  padding: 12px 14px;
+}
+
+/* 3.22.0 review: the bar's meter is the context meter's trigger (its popover holds the breakdown and Compact). */
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger {
+  min-height: 28px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:hover {
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The bar's meter sits on the left: its popover opens up and to the right, inside the screen. */
+[data-ui='bold'] .bold-context-bar .chat-ctx-panel {
+  right: auto;
+  left: 0;
+}
+
+/* 3.22.1: a long topic or run title wraps in Info's This topic instead of running past the panel. */
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head {
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe-head > b,
+[data-ui='bold'] .bold-topic-info .bold-thread-recipe {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 3.22.1: the phone mock-up has no context bar; on a phone it is one line — who and where (shortened) and the meter.
+   The model and the /compress hint stay in the meter's details. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-context-bar {
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding-top: 6px;
+  }
+
+  [data-ui='bold'] .bold-context-to {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  [data-ui='bold'] .bold-context-bar .chat-ctx-bar-trigger,
+  [data-ui='bold'] .bold-context-bar .chat-ctx {
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-context-model,
+  [data-ui='bold'] .bold-context-hint,
+  [data-ui='bold'] .bold-context-spacer {
+    display: none;
+  }
+  /* The meter sits at the line's right end here: its details open up and to the left, inside the screen. */
+  [data-ui='bold'] .bold-context-bar .chat-ctx-panel {
+    top: auto;
+    right: 0;
+    bottom: calc(100% + 10px);
+    left: auto;
+  }
+}
+
+/* 3.23.0: the side panel's Graph tab (mock-up 18): "Run · title" and its state, the run's graph, the Session log. The
+   graph fits the panel: nodes shrink to its width and anything wider scrolls inside its own box, never the page. */
+[data-ui='bold'] .bold-topic-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+[data-ui='bold'] .bold-topic-graph-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-graph-state {
+  flex: none;
+  /* AA in both looks (the job map's swarm blue exists only inside the map). */
+  color: var(--agent-violet-name);
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap {
+  --jm-swarm: #7db8ff;
+  align-items: stretch;
+  background: var(--deep);
+  border-radius: 18px;
+  padding: 14px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-node,
+[data-ui='bold'] .bold-topic-graph .jobmap-node[data-tone] {
+  width: 100%;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-topic-graph-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-topic-graph-log h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-topic-graph .bold-run-classic {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* The log inside the 300-420px panel: the time on the left, who and what stacked beside it (as the mock-up's rows).
+   `.jobmap` raises these over the map's narrow rules, which the panel always gets since 3.27.1. */
+[data-ui='bold'] .bold-topic-graph .jobmap-log {
+  margin-top: 4px;
+  padding: 12px 14px;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li {
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 0 10px;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log time {
+  grid-row: 1 / span 2;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > b,
+[data-ui='bold'] .bold-topic-graph .jobmap .jobmap-log li > span {
+  grid-column: 2;
+}
+
+/* The phone bar's menu with its older-chats list. */
+[data-ui='bold'] .bold-chat-phone-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+[data-ui='bold'] .bold-chat-phone-menu .bold-room-switch-wrap {
+  position: static;
+}
+
+[data-ui='bold'] .bold-chat-phone-menu .bold-room-switch {
+  left: auto;
+  right: 0;
+  width: min(420px, calc(100vw - 28px));
+}
+
+/* 3.24.0: on a phone Info › Topics is the only way to pick a topic (the All topics screen is gone): a 44px tap target. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-chat-topics a {
+    min-height: 44px;
+  }
+}

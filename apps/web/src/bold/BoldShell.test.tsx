@@ -751,7 +751,7 @@ test('the phone top bar keeps wordmark, section pills, terminal button and avata
   const phoneRules = css.slice(css.indexOf('@media (max-width: 860px)'))
   expect(phoneRules).toMatch(/\.top \{[^}]*flex-wrap: nowrap/)
   expect(css).toMatch(/\.bold-top-links \{[^}]*flex: 1 1 0;[^}]*overflow-x: auto/)
-  const chatsCss = readFileSync(`${__dirname}/chats/chats.css`, 'utf8')
+  const chatsCss = readFileSync(`${__dirname}/chats/chats-conversation.css`, 'utf8')
   expect(chatsCss).toMatch(
     /\.top \.word,\s*\[data-ui='bold'\] \.bold-avatar,\s*\[data-ui='bold'\] \.bold-terminal-btn \{\s*flex-shrink: 0/,
   )

@@ -1,0 +1,164 @@
+/* 3.27.1: every Info section folds. The heading is the toggle; its body keeps the section's own column layout. */
+[data-ui='bold'] .bold-chat-info .bold-info-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-info-toggle:focus-visible {
+  outline: 2px solid var(--hi-bg);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+[data-ui='bold'] .bold-info-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+[data-ui='bold'] .bold-info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-info-body[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-info-needs {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-ui='bold'] .bold-chat-meta code,
+[data-ui='bold'] .bold-chat-info code {
+  font-family: var(--font-m);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-chat-meta code {
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-infobtn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--faint);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-infobtn[aria-pressed='true'] {
+  background: var(--field);
+}
+
+/* The Info tab: sections with small-caps headings, members with their role text, topics with a state mark. */
+[data-ui='bold'] .bold-chat-info {
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-chat-info section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-chat-info .bold-chat-kicker {
+  margin: 0;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-info code {
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-chat-members,
+[data-ui='bold'] .bold-chat-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-chat-members li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-chat-members li > span:first-of-type:not(.bold-chat-role) {
+  flex: 1;
+}
+
+[data-ui='bold'] .bold-chat-role {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-chat-topics a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-chat-topics a:hover .bold-chat-topic-title {
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-chat-check {
+  color: var(--muted);
+  width: 8px;
+  text-align: center;
+}
+
+[data-ui='bold'] .bold-chat-topic-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The side column can be closed from the header's Chat info button. A plain `hidden` loses to `display: flex`. */
+[data-ui='bold'] .bold-sidecol[hidden] {
+  display: none;
+}
