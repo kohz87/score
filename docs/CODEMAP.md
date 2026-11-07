@@ -74,6 +74,13 @@ likely to be the entry point for a change.
 
 - `apps/web/src/main.tsx` — browser bootstrap: routers, providers, stream, theme and service worker.
 - `apps/web/src/App.tsx` — route table and classic/bold shell choice.
+- `apps/web/src/bold/BoldLibrary.tsx` — Library page: state, queries and the layout of nav, main and dialogs.
+- `apps/web/src/bold/BoldLibraryNav.tsx` — Library folder tree, note groups and drag-and-drop.
+- `apps/web/src/bold/BoldLibraryMain.tsx` — Library main pane: the selected note or folder and its actions.
+- `apps/web/src/bold/BoldLibraryDialogs.tsx` — Library dialogs: new note, new folder, move and delete (notes and folders).
+- `apps/web/src/bold/BoldLibrarySearchResults.tsx` — Library search results list.
+- `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
+- `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
 - `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.

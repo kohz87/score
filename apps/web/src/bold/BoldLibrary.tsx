@@ -1,166 +1,32 @@
-import type {
-  AgentSummary,
-  KnowledgeAuthor,
-  KnowledgeChanged,
-  KnowledgeExportRequest,
-  KnowledgeNoteSummary,
-} from '@score/contract'
+import type { AgentSummary, KnowledgeChanged } from '@score/contract'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { useMediaQuery } from '../data/use-media.ts'
-import { DocumentWorkspace } from '../routes/knowledge/DocumentWorkspace.tsx'
-import { ExportDialog } from '../routes/knowledge/ExportDialog.tsx'
-import { FilesView } from '../routes/knowledge/FilesView.tsx'
-import {
-  DeleteDialog,
-  MoveDialog,
-  FolderMoveDialog,
-  FolderDeleteDialog,
-  NewFolderDialog,
-  NewNoteDialog,
-} from '../routes/knowledge/KnowledgeDialogs.tsx'
-import { AuthorLabel } from '../routes/knowledge/NotePanels.tsx'
-import { NoteWorkspace } from '../routes/knowledge/NoteWorkspace.tsx'
-import { ACCEPT_FILES, TYPE_LABEL, isNotePath } from '../routes/knowledge/knowledge-files.ts'
 import { useExport } from '../routes/knowledge/knowledge-export.ts'
+import { folderOf } from '../routes/knowledge/knowledge-paths.ts'
 import {
-  baseName,
-  folderOf,
-  pathForLinkTarget,
-  timeAgo,
-} from '../routes/knowledge/knowledge-paths.ts'
-import {
-  UnsavedDraftError,
   useKnowledgeActions,
   useKnowledgeInfo,
   useKnowledgeLive,
   useKnowledgeTree,
-  useNote,
   useSearch,
 } from '../routes/knowledge/knowledge-queries.ts'
-import { splitSnippet } from '../routes/knowledge/wikilinks.ts'
 import { summaryText, useUploadFlow } from '../routes/knowledge/UploadFlow.tsx'
-import { BookIcon, PlusIcon, SearchIcon, UploadIcon } from './BoldIcons.tsx'
-import { FolderRail, PAGE_DOCUMENTS, PageList } from './KnowledgePageParts.tsx'
+import { BoldLibraryDialogs } from './BoldLibraryDialogs.tsx'
+import { BoldLibraryMain } from './BoldLibraryMain.tsx'
+import { BoldLibraryNav } from './BoldLibraryNav.tsx'
+import { PAGE_DOCUMENTS } from './KnowledgePageParts.tsx'
+import {
+  COLLAPSED_KEY,
+  PAGE_PHONE,
+  PHONE,
+  filesInDrag,
+  folderChain,
+  noteGroups,
+  readCollapsed,
+  type Dialog,
+  type ExportRequest,
+} from './bold-library-model.ts'
 import './bold-library.css'
-
-type Dialog =
-  | { kind: 'new'; initial: string }
-  | { kind: 'move'; path: string }
-  | { kind: 'delete'; path: string }
-  | { kind: 'folder'; parent: string; fromNav?: boolean }
-  | { kind: 'folder-move'; path: string }
-  | { kind: 'folder-delete'; path: string }
-  | null
-
-type ExportRequest = { request: KnowledgeExportRequest; heading: string }
-const PHONE = '(max-width: 860px)'
-// The Knowledge page goes to one column where the shell itself switches to its phone layout (the tab bar).
-const PAGE_PHONE = '(max-width: 860px)'
-
-function Byline({
-  author,
-  mtime,
-  agents,
-  detail = false,
-}: {
-  author: KnowledgeAuthor | null
-  mtime?: string
-  agents: AgentSummary[]
-  detail?: boolean
-}) {
-  return (
-    <span className={`bold-library-by${detail ? ' is-detail' : ''}`}>
-      {author === 'outside' ? (
-        'Last edited outside Score'
-      ) : author ? (
-        <>
-          Last edited by <AuthorLabel author={author} agents={agents} />
-        </>
-      ) : (
-        'Author not recorded'
-      )}
-      {detail && mtime && <> · {timeAgo(mtime)}</>}
-    </span>
-  )
-}
-
-function SelectedByline({ path, agents }: { path: string; agents: AgentSummary[] }) {
-  const note = useNote(isNotePath(path) ? path : null)
-  if (!note.data) return null
-  return <Byline author={note.data.lastAuthor} mtime={note.data.mtime} agents={agents} detail />
-}
-
-function SearchResults({
-  search,
-  debounced,
-  onOpen,
-}: {
-  search: ReturnType<typeof useSearch>
-  debounced: string
-  onOpen: (path: string) => void
-}) {
-  return (
-    <section className="bold-library-results" aria-label="Search results">
-      {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
-      {search.isError && <p role="alert">Couldn’t search the Library. Try again.</p>}
-      {search.data && search.data.length === 0 && (
-        <p className="muted small">Nothing matches “{debounced}”.</p>
-      )}
-      <ul>
-        {(search.data ?? []).map((hit) => (
-          <li key={hit.path}>
-            <button type="button" onClick={() => onOpen(hit.path)}>
-              <strong>
-                {hit.title || baseName(hit.path)}
-                {hit.kind === 'document' && hit.type && (
-                  <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
-                )}
-              </strong>
-              <span className="kn-path">{hit.path}</span>
-              <span className="bold-library-snippet">
-                {splitSnippet(hit.snippet).map((part, index) =>
-                  part.match ? <mark key={index}>{part.text}</mark> : part.text,
-                )}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-const COLLAPSED_KEY = 'score.library.collapsed'
-
-function readCollapsed(): Set<string> {
-  try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(COLLAPSED_KEY) ?? '[]')
-    return new Set(
-      Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [],
-    )
-  } catch {
-    return new Set()
-  }
-}
-
-/** `a/b/c` is inside `a/b/c`, `a/b` and `a`. */
-export function folderChain(folder: string): string[] {
-  const parts = folder.split('/').filter(Boolean)
-  return parts.map((_, index) => parts.slice(0, index + 1).join('/'))
-}
-
-function noteGroups(tree: { folders: string[]; notes: KnowledgeNoteSummary[] }) {
-  const groups = new Map<string, KnowledgeNoteSummary[]>([['', []]])
-  for (const folder of tree.folders) groups.set(folder, [])
-  for (const note of tree.notes) {
-    const folder = folderOf(note.path)
-    groups.set(folder, [...(groups.get(folder) ?? []), note])
-  }
-  return [...groups.entries()]
-    .filter(([folder, notes]) => folder !== '' || notes.length > 0 || tree.folders.length > 0)
-    .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
-}
 
 /** The bold Library: the prototype's two-column side panel, backed by the classic Knowledge hooks and editors. */
 export function BoldLibrary({
@@ -211,7 +77,6 @@ export function BoldLibrary({
   const info = useKnowledgeInfo()
   const tree = useKnowledgeTree()
   const actions = useKnowledgeActions()
-  const uploadInput = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLElement>(null)
   const flushRef = useRef<(() => Promise<boolean>) | null>(null)
   const registerFlush = (flush: (() => Promise<boolean>) | null) => {
@@ -386,44 +251,6 @@ export function BoldLibrary({
     )
   }
 
-  function create(newPath: string) {
-    actions.save.mutate(
-      { path: newPath, body: `# ${baseName(newPath)}\n\n`, etag: null },
-      {
-        onSuccess: (response) => {
-          setDialog(null)
-          open(response.path)
-        },
-        onError: setDialogError,
-      },
-    )
-  }
-
-  function move(from: string, to: string, updateLinks: boolean) {
-    actions.move.mutate(
-      { from, to, updateLinks },
-      {
-        onSuccess: (response) => {
-          setDialog(null)
-          const left =
-            response.skipped.length > 0
-              ? ` Couldn’t update the links in ${response.skipped.map((item) => item.path).join(', ')}. They still link to the old name.`
-              : ''
-          setNotice(
-            updateLinks
-              ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.${left}`
-              : `Moved to ${response.path}. Links in other notes were left as they are.`,
-          )
-          if (from === active) open(response.path)
-        },
-        onError: setDialogError,
-      },
-    )
-  }
-
-  const filesInDrag = (event: { dataTransfer: DataTransfer }) =>
-    event.dataTransfer.types.includes('Files')
-
   return (
     <div
       ref={rootRef}
@@ -462,573 +289,106 @@ export function BoldLibrary({
           )}
         </p>
       )}
-      {page && !reading && (
-        <FolderRail
-          tree={tree.data}
-          filter={pageFilter}
-          onFilter={(next) => {
-            setPageFilter(next)
-            setPickedFolder(next === PAGE_DOCUMENTS ? '' : next)
-            setSection('notes')
-          }}
-          onNewNote={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
-          onNewFolder={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
-          onRenameFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
-          onMoveFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
-          onDeleteFolder={(folder) => openDialog({ kind: 'folder-delete', path: folder })}
-        />
-      )}
-      <nav
-        className="bold-library-nav"
-        aria-label="Library notes"
-        data-folded={folded ? '' : undefined}
-        hidden={reading}
-      >
-        {chosen && (
-          // 3.8.1 (owner, phone): with a note open the list folds to this bar, so the note is what the screen shows.
-          <button
-            type="button"
-            className="bold-library-fold"
-            aria-expanded={!folded}
-            onClick={() => setListOpen((value) => !value)}
-          >
-            <span>{folded ? 'Notes and files' : 'Hide the list'}</span>
-            <span aria-hidden="true">{folded ? '▾' : '▴'}</span>
-          </button>
-        )}
-        {folded && (
-          // The one tool used while reading a note stays in reach; the rest are behind the bar.
-          <button
-            type="button"
-            className="bold-library-new"
-            onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
-          >
-            <PlusIcon size={14} /> New note
-          </button>
-        )}
-        {!folded && (
-          <>
-            <label className="bold-library-search">
-              <SearchIcon size={14} />
-              <span className="kn-sr">Search the Library</span>
-              <input
-                type="search"
-                placeholder="Search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
+      <BoldLibraryNav
+        active={active}
+        agents={agents}
+        chosen={chosen}
+        collapsed={collapsed}
+        debounced={debounced}
+        dropTarget={dropTarget}
+        flowBusy={flow.busy}
+        folded={folded}
+        groups={groups}
+        onDialog={openDialog}
+        onDragging={setDragging}
+        onDropTarget={setDropTarget}
+        onExportAll={() =>
+          setExportRequest({ request: { all: true }, heading: 'Export all of Knowledge' })
+        }
+        onFiles={() => {
+          setSection('files')
+          setQuery('')
+        }}
+        onFilter={(next) => {
+          setPageFilter(next)
+          setPickedFolder(next === PAGE_DOCUMENTS ? '' : next)
+          setSection('notes')
+        }}
+        onOpen={open}
+        onPickedFolder={setPickedFolder}
+        onQueryChange={setQuery}
+        onToggleFolder={toggleFolder}
+        onToggleList={() => setListOpen((value) => !value)}
+        onUpload={upload}
+        page={page}
+        pageFilter={pageFilter}
+        picked={picked}
+        query={query}
+        reading={reading}
+        search={search}
+        searching={searching}
+        section={section}
+        tree={tree}
+        uploadFolder={uploadFolder}
+      />
 
-            {searching ? (
-              <SearchResults search={search} debounced={debounced} onOpen={open} />
-            ) : page ? (
-              <PageList
-                tree={tree}
-                agents={agents}
-                filter={pageFilter}
-                active={section === 'notes' ? active : null}
-                onOpen={open}
-              />
-            ) : (
-              <div className="bold-library-groups">
-                {tree.isPending && <p role="status">Loading notes…</p>}
-                {tree.isError && <p role="alert">Couldn’t load the notes.</p>}
-                {tree.data &&
-                  groups
-                    .filter(
-                      ([folder]) =>
-                        !folderChain(folder)
-                          .slice(0, -1)
-                          .some((up) => collapsed.has(up)),
-                    )
-                    .map(([folder, items]) => (
-                      <section
-                        key={folder || 'root'}
-                        aria-label={folder || 'Notes'}
-                        className={`bold-library-group${dropTarget === folder ? ' is-drop' : ''}`}
-                        onDragOver={(event) => {
-                          if (!filesInDrag(event)) return
-                          event.preventDefault()
-                          event.stopPropagation()
-                          setDragging(true)
-                          setDropTarget(folder)
-                        }}
-                        onDragLeave={(event) => {
-                          if (event.currentTarget.contains(event.relatedTarget as Node | null))
-                            return
-                          setDropTarget((current) => (current === folder ? null : current))
-                        }}
-                        onDrop={(event) => {
-                          if (!filesInDrag(event)) return
-                          event.preventDefault()
-                          event.stopPropagation()
-                          upload([...event.dataTransfer.files], folder)
-                        }}
-                      >
-                        {folder === '' ? (
-                          <h2 className={`bold-library-folder${picked === '' ? ' is-picked' : ''}`}>
-                            <button
-                              type="button"
-                              className="bold-library-folder-toggle"
-                              aria-pressed={picked === ''}
-                              onClick={() => setPickedFolder('')}
-                            >
-                              Notes
-                            </button>
-                          </h2>
-                        ) : (
-                          <h2
-                            className={`bold-library-folder${picked === folder ? ' is-picked' : ''}`}
-                            style={{ paddingLeft: 10 + (folder.split('/').length - 1) * 14 }}
-                          >
-                            <button
-                              type="button"
-                              className="bold-library-folder-toggle bold-library-chevron"
-                              aria-expanded={!collapsed.has(folder)}
-                              aria-label={`${collapsed.has(folder) ? 'Expand' : 'Collapse'} ${folder}`}
-                              onClick={() => toggleFolder(folder)}
-                            >
-                              {collapsed.has(folder) ? '▸' : '▾'}
-                            </button>
-                            <button
-                              type="button"
-                              className="bold-library-folder-toggle"
-                              aria-pressed={picked === folder}
-                              title={folder}
-                              onClick={() => setPickedFolder(folder)}
-                            >
-                              {baseName(folder)}
-                              {items.length === 0 && (
-                                <span className="bold-library-empty"> (empty)</span>
-                              )}
-                            </button>
-                          </h2>
-                        )}
-                        {!collapsed.has(folder) &&
-                          items.map((note) => (
-                            <button
-                              key={note.path}
-                              type="button"
-                              className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
-                              aria-current={
-                                active === note.path && section === 'notes' ? 'page' : undefined
-                              }
-                              onClick={() => open(note.path)}
-                            >
-                              <span className="bold-library-item-title">
-                                {note.title || baseName(note.path)}
-                              </span>
-                              <Byline author={note.lastAuthor} agents={agents} />
-                            </button>
-                          ))}
-                      </section>
-                    ))}
-                {tree.data && tree.data.notes.length === 0 && (
-                  <p className="bold-library-empty-list">
-                    No notes yet. Start one below or upload a file.
-                  </p>
-                )}
-              </div>
-            )}
+      <BoldLibraryMain
+        actions={actions}
+        active={active}
+        agents={agents}
+        exporter={exporter}
+        external={external}
+        filesFolder={filesFolder}
+        flowBusy={flow.busy}
+        info={info}
+        mainRef={mainRef}
+        notes={notes}
+        notice={notice}
+        onBack={() => {
+          setReturnedFrom(active ?? null)
+          setSelected(undefined)
+          setSection('notes')
+          onOpened?.(null)
+        }}
+        onDialog={openDialog}
+        onDismissExternal={() => setExternal(null)}
+        onDismissNotice={() => setNotice(null)}
+        onOpen={open}
+        onRegisterFlush={registerFlush}
+        onSelectFilesFolder={setFilesFolder}
+        onShare={onShare}
+        onUpload={upload}
+        page={page}
+        pagePhone={pagePhone}
+        reading={reading}
+        section={section}
+        tree={tree}
+      />
 
-            <div className="bold-library-tools">
-              {!page && (
-                <Link
-                  className="bold-library-open"
-                  to={active ? `/b/knowledge?note=${encodeURIComponent(active)}` : '/b/knowledge'}
-                >
-                  Open Knowledge
-                </Link>
-              )}
-              {!page && (
-                <button
-                  type="button"
-                  className="bold-library-new"
-                  onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
-                >
-                  <PlusIcon size={14} /> New note
-                </button>
-              )}
-              {!page && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
-                  >
-                    <PlusIcon size={14} /> New folder
-                  </button>
-                  {/* 3.14.5 (owner): the picked folder can be renamed or deleted from here too. */}
-                  {picked !== '' && (
-                    <>
-                      <button
-                        type="button"
-                        aria-label={`Rename folder ${baseName(picked)}`}
-                        onClick={() => openDialog({ kind: 'folder-move', path: picked })}
-                      >
-                        Rename folder
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete folder ${baseName(picked)}`}
-                        onClick={() => openDialog({ kind: 'folder-delete', path: picked })}
-                      >
-                        Delete folder
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-              <input
-                ref={uploadInput}
-                type="file"
-                multiple
-                hidden
-                accept={ACCEPT_FILES}
-                aria-label="Choose files to upload to the Library"
-                onChange={(event) => {
-                  const files = [...(event.target.files ?? [])]
-                  event.target.value = ''
-                  upload(files, uploadFolder)
-                }}
-              />
-              <button
-                type="button"
-                disabled={flow.busy}
-                onClick={() => uploadInput.current?.click()}
-              >
-                <UploadIcon size={14} /> {flow.busy ? 'Uploading…' : 'Upload'}
-              </button>
-              <button
-                type="button"
-                aria-pressed={section === 'files'}
-                onClick={() => {
-                  setSection('files')
-                  setQuery('')
-                }}
-              >
-                <BookIcon size={14} /> Files
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setExportRequest({ request: { all: true }, heading: 'Export all of Knowledge' })
-                }
-              >
-                Export
-              </button>
-            </div>
-          </>
-        )}
-      </nav>
-
-      <section
-        className="kn-main bold-library-main"
-        aria-label="Library note"
-        ref={mainRef}
-        hidden={page && pagePhone && !reading}
-      >
-        {reading && <h1 className="kn-sr">Knowledge</h1>}
-        {reading && (
-          <button
-            type="button"
-            className="bold-knowledge-back"
-            onClick={() => {
-              setReturnedFrom(active ?? null)
-              setSelected(undefined)
-              setSection('notes')
-              onOpened?.(null)
-            }}
-          >
-            ← Back to the notes
-          </button>
-        )}
-        {notice && (
-          <p className="kn-banner" role="status">
-            {notice}{' '}
-            <button type="button" onClick={() => setNotice(null)}>
-              Dismiss
-            </button>
-          </p>
-        )}
-        {info.data?.moveIssue && (
-          <p className="kn-banner is-warn" role="status">
-            {info.data.moveIssue.state === 'pending'
-              ? `Move pending: ${info.data.moveIssue.from} to ${info.data.moveIssue.to}. Score is finishing it.`
-              : `Move needs attention: ${info.data.moveIssue.message}`}{' '}
-            {info.data.moveIssue.state === 'conflicted' && (
-              <button type="button" onClick={() => actions.dismissMoveIssue.mutate()}>
-                Dismiss
-              </button>
-            )}
-          </p>
-        )}
-        {info.data && !info.data.gitAvailable && (
-          <p className="kn-banner is-warn">
-            Git isn’t available for Knowledge. Notes still save; history and undo are unavailable.
-          </p>
-        )}
-
-        {section === 'files' && tree.data ? (
-          <FilesView
-            tree={tree.data}
-            folder={filesFolder}
-            agents={agents}
-            onOpenPath={open}
-            busy={flow.busy}
-            onOpenFolder={setFilesFolder}
-            onUpload={upload}
-            onNewFolder={(parent) => openDialog({ kind: 'folder', parent })}
-            onMove={(path) => openDialog({ kind: 'move', path })}
-            onDelete={(path) => openDialog({ kind: 'delete', path })}
-            exporting={exporter.busy}
-            onExport={(request) => void exporter.run(request)}
-            onDeleteFolder={(folder) => openDialog({ kind: 'folder-delete', path: folder })}
-            onRenameFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
-          />
-        ) : active ? (
-          <>
-            {page && (
-              <div className="bold-knowledge-actions">
-                <button
-                  type="button"
-                  className="bold-knowledge-share"
-                  disabled={!onShare}
-                  onClick={() => onShare?.(active)}
-                >
-                  Share to a chat
-                </button>
-                {isNotePath(active) && (
-                  <button
-                    type="button"
-                    className="bold-knowledge-edit"
-                    onClick={() =>
-                      mainRef.current
-                        ?.querySelector<HTMLElement>('[contenteditable="true"], textarea')
-                        ?.focus()
-                    }
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-            )}
-            <SelectedByline path={active} agents={agents} />
-            {isNotePath(active) ? (
-              <NoteWorkspace
-                key={active}
-                path={active}
-                notes={notes}
-                agents={agents}
-                onOpenPath={open}
-                external={external?.forPath === active ? external.event : null}
-                onDismissExternal={() => setExternal(null)}
-                onCreateLink={(target) =>
-                  openDialog({
-                    kind: 'new',
-                    initial: pathForLinkTarget(target).replace(/\.md$/i, ''),
-                  })
-                }
-                onMove={() => openDialog({ kind: 'move', path: active })}
-                onDelete={() => openDialog({ kind: 'delete', path: active })}
-                registerFlush={registerFlush}
-              />
-            ) : (
-              <DocumentWorkspace
-                key={active}
-                path={active}
-                agents={agents}
-                onMove={() => openDialog({ kind: 'move', path: active })}
-                onDelete={() => openDialog({ kind: 'delete', path: active })}
-              />
-            )}
-          </>
-        ) : (
-          <div className="bold-library-blank">
-            <BookIcon size={34} />
-            <b>{tree.data?.notes.length === 0 ? 'The Library is empty' : 'Pick a note'}</b>
-            <span>
-              {tree.data?.notes.length === 0
-                ? 'Start with a note, or upload files and folders.'
-                : 'Choose one on the left, or search the whole vault.'}
-            </span>
-          </div>
-        )}
-      </section>
-
-      {dialog?.kind === 'new' && (
-        <NewNoteDialog
-          initial={dialog.initial}
-          busy={actions.save.isPending}
-          error={dialogError}
-          onSubmit={create}
-          onClose={() => setDialog(null)}
-        />
-      )}
-      {dialog?.kind === 'move' && (
-        <MoveDialog
-          from={dialog.path}
-          document={!isNotePath(dialog.path)}
-          busy={actions.move.isPending}
-          error={dialogError}
-          onClose={() => setDialog(null)}
-          onSubmit={(to, updateLinks) => {
-            const from = dialog.path
-            void (
-              from === active
-                ? (flushRef.current?.() ?? Promise.resolve(true))
-                : Promise.resolve(true)
-            ).then((saved) => {
-              if (!saved) {
-                setDialogError(new UnsavedDraftError())
-                return
-              }
-              move(from, to, updateLinks)
-            })
-          }}
-        />
-      )}
-      {dialog?.kind === 'delete' && (
-        <DeleteDialog
-          path={dialog.path}
-          document={!isNotePath(dialog.path)}
-          busy={actions.remove.isPending || actions.removeDocument.isPending}
-          error={dialogError}
-          onClose={() => setDialog(null)}
-          onConfirm={() => {
-            const target = dialog.path
-            const mutation = isNotePath(target) ? actions.remove : actions.removeDocument
-            mutation.mutate(target, {
-              onSuccess: () => {
-                setDialog(null)
-                setNotice(`Deleted ${target}.`)
-                if (target === active) setSelected(null)
-              },
-              onError: setDialogError,
-            })
-          }}
-        />
-      )}
-      {dialog?.kind === 'folder-move' && (
-        <FolderMoveDialog
-          from={dialog.path}
-          busy={actions.moveFolder.isPending}
-          error={dialogError}
-          onClose={() => setDialog(null)}
-          onSubmit={(to, updateLinks) => {
-            const from = dialog.path
-            // The open note is saved first, as for a note move: it may be inside the folder.
-            void (flushRef.current?.() ?? Promise.resolve(true)).then((saved) => {
-              if (!saved) {
-                setDialogError(new UnsavedDraftError())
-                return
-              }
-              actions.moveFolder.mutate(
-                { from, to, updateLinks },
-                {
-                  onSuccess: (result) => {
-                    setDialog(null)
-                    const moveInto = (path: string) =>
-                      path === from || path.startsWith(`${from}/`)
-                        ? `${to}${path.slice(from.length)}`
-                        : path
-                    if (active) setSelected(moveInto(active))
-                    setFilesFolder((current) => moveInto(current))
-                    setNotice(
-                      result.leftBehind.length > 0
-                        ? `Moved ${result.moved} into ${to}; ${result.leftBehind.length} stayed in ${from} (${result.leftBehind.map((item) => `${item.path}: ${item.reason}`).join('; ')}).`
-                        : `Moved the folder to ${to}${result.updatedNotes > 0 ? `; links updated in ${result.updatedNotes} notes` : ''}.`,
-                    )
-                  },
-                  onError: setDialogError,
-                },
-              )
-            })
-          }}
-        />
-      )}
-      {dialog?.kind === 'folder-delete' &&
-        tree.data &&
-        (() => {
-          const folder = dialog.path
-          const inside = (path: string) => path.startsWith(`${folder}/`)
-          return (
-            <FolderDeleteDialog
-              path={folder}
-              notes={tree.data.notes.filter((note) => inside(note.path)).length}
-              files={tree.data.documents.filter((document) => inside(document.path)).length}
-              unversionedFiles={
-                tree.data.documents.filter(
-                  (document) => inside(document.path) && !document.versioned,
-                ).length
-              }
-              gitAvailable={info.data?.gitAvailable !== false}
-              folders={tree.data.folders.filter(inside).length}
-              busy={actions.removeFolderWithContents.isPending}
-              error={dialogError}
-              onClose={() => setDialog(null)}
-              onConfirm={() =>
-                actions.removeFolderWithContents.mutate(folder, {
-                  onSuccess: (result) => {
-                    setDialog(null)
-                    if (active && inside(active)) setSelected(null)
-                    setFilesFolder((current) =>
-                      current === folder || inside(current)
-                        ? folder.split('/').slice(0, -1).join('/')
-                        : current,
-                    )
-                    setNotice(
-                      result.leftBehind.length > 0
-                        ? `Deleted ${result.deleted} from ${folder}; ${result.leftBehind.length} stayed (${result.leftBehind.map((item) => `${item.path}: ${item.reason}`).join('; ')}).`
-                        : `Deleted the folder ${folder}.`,
-                    )
-                  },
-                  onError: setDialogError,
-                })
-              }
-            />
-          )
-        })()}
-      {dialog?.kind === 'folder' && (
-        <NewFolderDialog
-          parent={dialog.parent}
-          busy={actions.createFolder.isPending}
-          error={dialogError}
-          onClose={() => setDialog(null)}
-          onSubmit={(folder) =>
-            actions.createFolder.mutate(folder, {
-              onSuccess: () => {
-                setDialog(null)
-                if (dialog.fromNav) {
-                  setPickedFolder(folder)
-                  setCollapsed((current) => {
-                    const next = new Set(current)
-                    next.delete(folder)
-                    return next
-                  })
-                  return
-                }
-                setFilesFolder(folder)
-                setSection('files')
-              },
-              onError: setDialogError,
-            })
-          }
-        />
-      )}
-      {exportRequest && (
-        <ExportDialog
-          heading={exportRequest.heading}
-          request={exportRequest.request}
-          busy={exporter.busy}
-          onClose={() => setExportRequest(null)}
-          onExport={() =>
-            void exporter.run(exportRequest.request).then((ok) => {
-              if (ok) setExportRequest(null)
-            })
-          }
-        />
-      )}
-      {flow.dialogs}
+      <BoldLibraryDialogs
+        actions={actions}
+        active={active}
+        dialog={dialog}
+        dialogError={dialogError}
+        exportRequest={exportRequest}
+        exporter={exporter}
+        flushRef={flushRef}
+        info={info}
+        onClose={() => setDialog(null)}
+        onDialogError={setDialogError}
+        onOpen={open}
+        onSelect={setSelected}
+        onSetCollapsed={setCollapsed}
+        onSetExportRequest={setExportRequest}
+        onSetFilesFolder={setFilesFolder}
+        onSetNotice={setNotice}
+        onSetPickedFolder={setPickedFolder}
+        onSetSection={setSection}
+        tree={tree}
+        uploadDialogs={flow.dialogs}
+      />
     </div>
   )
 }
+
+export { folderChain }

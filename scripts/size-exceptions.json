@@ -535,11 +535,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldLibrary.tsx",
-    "lines": 1034,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldRecipes.test.tsx",
     "lines": 1024,
     "reason": "split in CS.2 wave 1"
