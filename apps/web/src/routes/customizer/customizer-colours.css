@@ -1,0 +1,63 @@
+/* Colours */
+.cz-color {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 118px auto;
+  align-items: center;
+  gap: 4px var(--space-3);
+}
+.cz-color-picker {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-12);
+  background: none;
+  cursor: pointer;
+}
+.cz-color-text {
+  display: grid;
+  min-width: 0;
+}
+.cz-color-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cz-color[data-set] .cz-color-name::after {
+  content: ' ·';
+  color: var(--ink-muted);
+}
+.cz-color-hint {
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cz .cz-color-input {
+  min-height: 34px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-10);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 13px;
+  min-width: 0;
+}
+.cz .cz-color-input[aria-invalid='true'] {
+  border-color: var(--agent-coral-text);
+}
+.cz-color-problem,
+.cz-color-warning {
+  grid-column: 2 / -1;
+  margin: 0;
+  font-size: 12px;
+}
+.cz-color-problem {
+  color: var(--agent-coral-text);
+  font-weight: 600;
+}
+.cz-color-warning {
+  color: var(--agent-saffron-text);
+  font-weight: 600;
+}

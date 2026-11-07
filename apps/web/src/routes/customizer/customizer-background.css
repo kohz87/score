@@ -1,0 +1,8 @@
+/* Background */
+.cz-bg-thumb {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-14);
+  border: 1px solid var(--hairline);
+}

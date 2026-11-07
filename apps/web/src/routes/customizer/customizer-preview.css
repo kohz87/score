@@ -1,0 +1,88 @@
+/* Body: the editor beside the preview */
+.cz-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+.cz-controls {
+  flex: 1 1 420px;
+  max-width: 500px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+.cz-preview {
+  flex: 999 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Preview */
+.cz-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.cz-stage {
+  position: relative;
+  height: clamp(420px, 62vh, 640px);
+  overflow: hidden;
+  border-radius: 24px;
+  box-shadow: 0 0 0 1px var(--line);
+  background: repeating-conic-gradient(var(--field) 0 25%, var(--panel) 0 50%) 0 0 / 20px 20px;
+}
+.cz-frame-box {
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--panel);
+}
+.cz-stage[data-device='phone'] .cz-frame-box,
+.cz-stage[data-device='tablet'] .cz-frame-box {
+  box-shadow: 0 0 0 1px var(--line);
+}
+.cz-frame {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+  background: transparent;
+}
+.cz-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.cz-checks {
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--panel);
+  font-size: 14px;
+}
+.cz-checks h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
+}
+.cz-checks p {
+  margin: 0;
+  color: var(--muted);
+}
+.cz-checks ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}

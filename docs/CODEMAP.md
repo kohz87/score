@@ -59,7 +59,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/` — destination pages mounted by the app router.
 - `apps/web/src/routes/attempts/` — attempt detail and replay page.
 - `apps/web/src/routes/chat/` — classic chat page, composer, message rendering, dialogs and ordered stylesheets.
-- `apps/web/src/routes/customizer/` — theme customizer and its live preview.
+- `apps/web/src/routes/customizer/` — theme customizer, its area stylesheets and live preview.
 - `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images and tables.
 - `apps/web/src/routes/orchestrations/` — orchestration run panels, decisions and live diagram.
 - `apps/web/src/routes/pair/` — pairing and sign-in page.
@@ -327,6 +327,17 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/CustomizerPanel.tsx` — section tabs and the active theme section panel.
 - `apps/web/src/routes/customizer/CustomizerPreview.tsx` — preview page/size controls, frame, contrast checks and use buttons.
 - `apps/web/src/routes/customizer/CustomizerTabs.tsx` — customizer tab list, ids and keyboard navigation.
+- `apps/web/src/routes/customizer/customizer.css` — ordered entry for the customizer area stylesheets.
+- `apps/web/src/routes/customizer/customizer-shell.css` — token aliases, page frame, focus, header/actions, messages and pane switch.
+- `apps/web/src/routes/customizer/customizer-preview.css` — editor/preview split layout, stage frame and contrast checks.
+- `apps/web/src/routes/customizer/customizer-controls.css` — tabs, section headings/groups, segmented choices, sliders and use/lost controls.
+- `apps/web/src/routes/customizer/customizer-inputs.css` — text/select/textarea fields, forms, rows and file inputs.
+- `apps/web/src/routes/customizer/customizer-colours.css` — colour rows, pickers, text inputs and colour problem/warning lines.
+- `apps/web/src/routes/customizer/customizer-fonts.css` — font-role samples, font faces and add-font fields.
+- `apps/web/src/routes/customizer/customizer-background.css` — background picture thumbnail.
+- `apps/web/src/routes/customizer/customizer-css.css` — custom CSS editor host, drop report and allowlist help.
+- `apps/web/src/routes/customizer/customizer-dialogs.css` — dialog frame, import facts/preview, reasons and modal actions.
+- `apps/web/src/routes/customizer/customizer-narrow.css` — narrow-window pane and dialog overrides.
 - `apps/web/src/routes/customizer/customizer-helpers.ts` — system colour mode, zip download and manifest-settings check.
 - `apps/web/src/routes/customizer/customizer-types.ts` — customizer target, source, busy and pane types.
 - `apps/web/src/routes/customizer/theme-files.ts` — read a theme snapshot and rebuild the snapshot after a save.

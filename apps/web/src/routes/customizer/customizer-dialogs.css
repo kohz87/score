@@ -1,0 +1,102 @@
+/* Dialogs */
+.cz-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(var(--shadow-rgb) / 45%);
+}
+.cz-modal {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgb(var(--shadow-rgb) / 30%);
+}
+.cz-modal[data-wide] {
+  width: min(1040px, 100%);
+}
+.cz-modal h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-heading);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.cz-modal h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.cz-modal p {
+  margin: 0 0 var(--space-3);
+}
+.cz-modal ul {
+  margin: 0 0 var(--space-3);
+  padding-left: 18px;
+}
+.cz-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.cz-import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: var(--space-5);
+}
+.cz-import-info {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.cz-import-preview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+.cz-import-stage {
+  position: relative;
+  height: 380px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  overflow: hidden;
+}
+.cz-import-stage .cz-stage {
+  position: absolute;
+  inset: 0;
+}
+.cz-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.cz-facts div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: var(--space-2);
+}
+.cz-facts dt {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.cz-facts dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cz-check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: 14px;
+}
+.cz-reasons {
+  font-size: 14px;
+}
