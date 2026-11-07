@@ -10,19 +10,12 @@ import {
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { CloseIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
-import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { agentDisplayName, agentMood } from './bold-agents.ts'
-import { DirectChat } from './direct/DirectChat.tsx'
-import { DirectInfo } from './direct/DirectInfo.tsx'
-import { BoldElsewhere, forgetBroughtOutsideSessions } from './room/BoldElsewhere.tsx'
-import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
+import { BoldRoomChatColumn } from './BoldRoomChatColumn.tsx'
+import { BoldRoomSidePanel } from './BoldRoomSidePanel.tsx'
+import type { SideMode } from './bold-room-types.ts'
+import { forgetBroughtOutsideSessions } from './room/BoldElsewhere.tsx'
 import { roomJobsQuery } from './room/room-queries.ts'
-import { ChatInfoButton, ChatMeta } from './chats/ChatHeader.tsx'
-import { ChatInfo } from './chats/ChatInfo.tsx'
-import { TopicGraph } from './chats/TopicGraph.tsx'
-import { DirectViewerSheet, ViewerSheet } from './chats/ViewerSheet.tsx'
 import { isViewerWork } from './chats/files-model.ts'
 import { ChatList, readFolded, saveFolded } from './chats/ChatList.tsx'
 import { chatForRun, chatIsOpen, currentTopic, runIdOf } from './chats/chat-model.ts'
@@ -34,8 +27,6 @@ import { isEveryoneRoom } from './room/room-model.ts'
 const PHONE = '(max-width: 860px)'
 /** Below this the Graph tab is 340px wide and the chat list folds to its rail while it is open. */
 const NARROW_GRAPH = '(max-width: 1279px)'
-
-type SideMode = 'info' | 'elsewhere' | 'graph'
 
 /** The room column and the switchable side panel (PLAN 11.3), with the one-to-one as its agent mode (11.7). */
 export function BoldRoom() {
@@ -338,193 +329,62 @@ export function BoldRoom() {
           {deletedNotice}
         </p>
       )}
-      <section
-        className="roomcol"
-        aria-label={directAgent ? `Chat with ${agentDisplayName(directAgent)}` : 'Team room'}
-        inert={phone && sheetOpen}
-      >
-        {directMode ? (
-          directAgent ? (
-            <DirectChat
-              key={directAgent.id}
-              agent={directAgent}
-              agents={agents}
-              phone={phone}
-              infoOpen={infoShown}
-              onToggleInfo={toggleInfo}
-              infoRef={phoneOpenRef}
-              infoExpanded={sheetOpen}
-              onChatInfo={() => {
-                setPanelShut(false)
-                setSheetOpen(true)
-              }}
-              onBackToChats={() => {
-                setSheetOpen(false)
-                void navigate('/b')
-              }}
-            />
-          ) : (
-            <p className="bold-stream-note bold-dm-status" role="status">
-              {agentsState.status === 'pending'
-                ? 'Opening your chats…'
-                : 'That agent isn’t on your team any more.'}
-            </p>
-          )
-        ) : (
-          <BoldTeamRoom
-            agents={agents}
-            phone={phone}
-            onOpenElsewhere={openElsewhere}
-            onOpenThread={openThread}
-            onShowGraph={showGraph}
-            externalDeletedNotice
-            chatMeta={(room) => <ChatMeta room={room} agents={agents} />}
-            chatAction={() => <ChatInfoButton open={infoShown} onToggle={toggleInfo} />}
-            infoRef={phoneOpenRef}
-            infoExpanded={sheetOpen}
-            onChatInfo={() => {
-              setMode('info')
-              setPanelShut(false)
-              setSheetOpen(true)
-            }}
-            onBackToChats={() => {
-              setSheetOpen(false)
-              void navigate('/b')
-            }}
-          />
-        )}
-        {viewerOpen &&
-          !phone &&
-          (directMode ? (
-            directAgent && (
-              <DirectViewerSheet agents={agents} agentId={directAgent.id} phone={false} />
-            )
-          ) : (
-            <ViewerSheet agents={agents} phone={false} fallbackJob={currentJob} />
-          ))}
-      </section>
-      {viewerOpen &&
-        phone &&
-        (directMode ? (
-          directAgent && (
-            <DirectViewerSheet
-              agents={agents}
-              agentId={directAgent.id}
-              phone
-              onBackToChat={() => setSheetOpen(false)}
-            />
-          )
-        ) : (
-          <ViewerSheet
-            agents={agents}
-            phone
-            fallbackJob={currentJob}
-            onBackToChat={() => setSheetOpen(false)}
-          />
-        ))}
+      <BoldRoomChatColumn
+        directMode={directMode}
+        directAgent={directAgent}
+        agents={agents}
+        agentsPending={agentsState.status === 'pending'}
+        phone={phone}
+        infoShown={infoShown}
+        sheetOpen={sheetOpen}
+        viewerOpen={viewerOpen}
+        currentJob={currentJob}
+        phoneOpenRef={phoneOpenRef}
+        onToggleInfo={toggleInfo}
+        onChatInfo={() => {
+          setPanelShut(false)
+          setSheetOpen(true)
+        }}
+        onTeamChatInfo={() => {
+          setMode('info')
+          setPanelShut(false)
+          setSheetOpen(true)
+        }}
+        onBackToChats={() => {
+          setSheetOpen(false)
+          void navigate('/b')
+        }}
+        onOpenElsewhere={openElsewhere}
+        onOpenThread={openThread}
+        onShowGraph={showGraph}
+        onCloseViewer={() => setSheetOpen(false)}
+      />
 
-      <div
-        className={`bold-sidecol${phone && sheetOpen ? ' open' : ''}`}
-        hidden={(phone && !sheetOpen) || panelClosed}
-      >
-        <aside
-          className="side"
-          id="bold-side-panel"
-          ref={sideRef}
-          aria-label="Side panel"
-          aria-modal={phone && sheetOpen ? true : undefined}
-        >
-          <div className="sidehead">
-            {shownMode === 'elsewhere' && !directMode && elsewhereAgent ? (
-              <span className="bold-elsewhere-label">
-                <AgentGlyph
-                  agent={elsewhereAgent}
-                  size="sm"
-                  bare
-                  decorative
-                  mood={agentMood(elsewhereAgent)}
-                />{' '}
-                {label}
-              </span>
-            ) : (
-              <div className="bold-side-tabs" role="tablist" aria-label="Panel">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={directMode || shownMode === 'info'}
-                  className={directMode || shownMode === 'info' ? 'on' : undefined}
-                  onClick={() => (directMode ? undefined : choose('info'))}
-                >
-                  Info
-                </button>
-                {graphJob && (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={shownMode === 'graph'}
-                    className={shownMode === 'graph' ? 'on' : undefined}
-                    onClick={() => choose('graph')}
-                  >
-                    Graph
-                  </button>
-                )}
-              </div>
-            )}
-            {phone && (
-              <button
-                ref={phoneCloseRef}
-                type="button"
-                className="icon-btn sm sideclose"
-                aria-label="Close side panel"
-                onClick={closeSheet}
-              >
-                <CloseIcon />
-              </button>
-            )}
-          </div>
-
-          {directMode ? (
-            directAgent ? (
-              <DirectInfo
-                agent={directAgent}
-                agents={agents}
-                chatId={chatId}
-                visible={filesVisible}
-                onNavigate={() => setSheetOpen(false)}
-              />
-            ) : (
-              <ChatInfo
-                room={null}
-                agents={agents}
-                jobs={[]}
-                everyone={false}
-                phone={phone}
-                onNavigate={() => setSheetOpen(false)}
-              />
-            )
-          ) : shownMode === 'graph' && graphJob ? (
-            <TopicGraph key={graphJob.id} job={graphJob} />
-          ) : shownMode === 'info' ? (
-            <ChatInfo
-              room={openGroup}
-              agents={agents}
-              jobs={openGroupJobs ?? []}
-              everyone={everyoneOpen}
-              phone={phone}
-              visible={filesVisible}
-              openTopics={topicsLanding}
-              onNavigate={() => setSheetOpen(false)}
-            />
-          ) : shownMode === 'elsewhere' && elsewhere ? (
-            <BoldElsewhere
-              key={`${elsewhere.agentId}:${elsewhere.id}`}
-              session={elsewhere}
-              agents={agents}
-              onBroughtIn={broughtIntoJob}
-            />
-          ) : null}
-        </aside>
-      </div>
+      <BoldRoomSidePanel
+        directMode={directMode}
+        directAgent={directAgent}
+        agents={agents}
+        chatId={chatId}
+        phone={phone}
+        sheetOpen={sheetOpen}
+        panelClosed={panelClosed}
+        sideRef={sideRef}
+        phoneCloseRef={phoneCloseRef}
+        shownMode={shownMode}
+        elsewhereAgent={elsewhereAgent}
+        label={label}
+        graphJob={graphJob}
+        filesVisible={filesVisible}
+        openGroup={openGroup}
+        openGroupJobs={openGroupJobs}
+        everyoneOpen={everyoneOpen}
+        topicsLanding={topicsLanding}
+        elsewhere={elsewhere}
+        onChoose={choose}
+        onCloseSheet={closeSheet}
+        onNavigate={() => setSheetOpen(false)}
+        onBroughtIntoJob={broughtIntoJob}
+      />
     </div>
   )
 }

@@ -92,6 +92,19 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
 - `apps/web/src/bold/BoldShell-helpers.tsx` — shared bold shell test harness: state, fetch fixtures, router render and cleanup.
 - `apps/web/src/bold/BoldShell-run-fixtures.ts` — shared run topic and run summary fixtures for the bold shell suites.
+- `apps/web/src/bold/BoldRoom.tsx` — team-room page composition, address state and chat/panel coordination.
+- `apps/web/src/bold/BoldRoomChatColumn.tsx` — direct or team chat column and its viewer sheet.
+- `apps/web/src/bold/BoldRoomSidePanel.tsx` — Info, Graph and Elsewhere side panel with phone sheet chrome.
+- `apps/web/src/bold/bold-room-types.ts` — side-panel mode for the bold room.
+- `apps/web/src/bold/BoldScreen.tsx` — agent screen page data, replay state and composition.
+- `apps/web/src/bold/BoldScreenApproval.tsx` — screen approval bar and needs-you ask panel.
+- `apps/web/src/bold/BoldScreenHeader.tsx` — screen header, pause control and replay notices.
+- `apps/web/src/bold/BoldScreenLog.tsx` — replay step log and resume command.
+- `apps/web/src/bold/BoldScreenOtherScreens.tsx` — links to the team's other agent screens.
+- `apps/web/src/bold/BoldScreenStage.tsx` — replayed screen panes, small-screen switcher and read-only badge.
+- `apps/web/src/bold/BoldScreenSteps.tsx` — grouped activity step list with history expansion.
+- `apps/web/src/bold/BoldSearch.tsx` — search and command palette state, commands and keyboard navigation.
+- `apps/web/src/bold/BoldSearchResults.tsx` — grouped search results with match highlights.
 - `apps/web/src/bold/bold.css` — bold shell style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-base.css` — scoped resets, shared utilities and the button and icon controls.
 - `apps/web/src/bold/bold-topbar.css` — top bar, section links, wordmark, navigation, dock, search and avatar.
