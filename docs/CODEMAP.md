@@ -1197,7 +1197,10 @@ likely to be the entry point for a change.
 - `hermes-plugin/score_bridge/sender_capture.py` — bounded hook preparation: Watch capture, screenshot paths and argument digests.
 - `hermes-plugin/score_bridge/sender_queue.py` — bounded hook admission queue and loss accounting.
 - `hermes-plugin/score_bridge/client.py` — HTTP client for Score.
-- `hermes-plugin/score_bridge/spool.py` — bounded on-disk spool for failed delivery.
+- `hermes-plugin/score_bridge/spool.py` — bounded on-disk spool facade: lifecycle, reads, writes, lock-descriptor cleanup and acknowledgements.
+- `hermes-plugin/score_bridge/spool_format.py` — spool envelope encoding, gap events, caps and record validation.
+- `hermes-plugin/score_bridge/spool_process.py` — producer process identity for recycled-pid detection.
+- `hermes-plugin/score_bridge/spool_directory.py` — directory-quota eviction across producer outboxes and quarantine.
 - `hermes-plugin/score_bridge/hermes_private.py` — the only calls into private Hermes functions.
 - `hermes-plugin/score_bridge/approvals.py` — gateway approval handling.
 - `hermes-plugin/score_bridge/decisions.py` — decision delivery.
