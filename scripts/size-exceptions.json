@@ -180,11 +180,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/knowledge/vault.ts",
-    "lines": 1910,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/runtimes/coding/claude.ts",
     "lines": 693,
     "reason": "split in CS.2 wave 1"
