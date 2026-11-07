@@ -1,0 +1,349 @@
+/* the side panel */
+[data-ui='bold'] .bold-tb-panel {
+  flex: 1 1 340px;
+  max-width: 420px;
+  min-width: 0;
+  background: var(--panel);
+  border-radius: calc(28px * var(--bold-r, 1));
+  padding: 24px;
+}
+
+[data-ui='bold'] .bold-tb-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-tb-panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+[data-ui='bold'] .bold-tb-panel-body h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+[data-ui='bold'] .bold-tb-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-tb-facts dt {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-facts dd {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-tb-needs-block {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  --agent-violet-name: #4a2fd9;
+}
+
+[data-ui='bold'] .bold-tb-needs-block p {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-tb-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-tb-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-command {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-m);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The ghost button on the block's own ink took the page's ink (dark on dark in the light look). */
+[data-ui='bold'] .bold-tb-needs-block .btn.ghost {
+  color: inherit;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+[data-ui='bold'] .bold-tb-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-tb-room-link {
+  color: var(--hi-ink);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: underline;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-tb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-tb-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-tb-steps li[data-done='true'] {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 6px;
+  border: 2px solid var(--faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-tb-steps li[data-done='true'] .bold-tb-box {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--bg);
+}
+
+[data-ui='bold'] .bold-tb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+[data-ui='bold'] .bold-tb-comment {
+  background: var(--field);
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-tb-comment > span:first-child {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-comment strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-tb-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+[data-ui='bold'] .bold-tb-comment-form label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-comment-row {
+  display: flex;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-comment-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* phone */
+[data-ui='bold'] .bold-tb-phone-needs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-phone-needs h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+[data-ui='bold'] .bold-tb-tabs button {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-tb-tabs button[aria-selected='true'] {
+  background: var(--field);
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-tabs button span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-tb-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* On a phone a task opens as a bottom sheet (mock-up 20-tasks-phone): a grip, the panel, the page dimmed behind. */
+[data-ui='bold'] .bold-tb-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 80;
+  max-height: 88dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border-radius: calc(24px * var(--bold-r, 1)) calc(24px * var(--bold-r, 1)) 0 0;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.5);
+  clip-path: inset(-100vmax 0 0 0);
+  padding: 12px max(16px, env(safe-area-inset-right, 0px))
+    max(22px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .bold-tb-sheet-grip {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 2px;
+  background: var(--line, #3a3d4a);
+}
+
+[data-ui='bold'] .bold-tb-sheet--side .bold-tb-sheet-grip {
+  display: none;
+}
+
+/* The side sheet (601-1279px): the details panel slides over the board's right edge; the dim is its own shadow, so no
+   extra fixed element exists for a theme to hide. */
+[data-ui='bold'] .bold-tb-sheet--side {
+  inset: 0 0 0 auto;
+  max-height: none;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  width: min(440px, 100%);
+  box-sizing: border-box;
+  border-radius: calc(28px * var(--bold-r, 1)) 0 0 calc(28px * var(--bold-r, 1));
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+  clip-path: inset(0 0 0 -100vmax);
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-tb-title h1 {
+    font-size: 28px;
+  }
+
+  [data-ui='bold'] .bold-tb-title p {
+    font-size: 14px;
+  }
+}
+
+/* The second action on a needs-you card sits on the card's own ink: it takes the card's colours, not the page's. */
+[data-ui='bold'] .bold-tb-need .bold-tb-need-more {
+  color: inherit;
+  border-color: currentColor;
+  background: transparent;
+}

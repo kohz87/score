@@ -1,0 +1,79 @@
+/* The reused classic timeline, with the prototype's dark card and pill buttons. */
+[data-ui='bold'] .bold-screen .watch-replay {
+  background: var(--panel);
+  border: 0;
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__buttons button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__time,
+[data-ui='bold'] .bold-screen .watch-replay__legend {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen .watch-track__rail {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-screen .watch-track__played {
+  background: var(--faint);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker {
+  border-color: var(--panel);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--command {
+  background: var(--ink2);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--file {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--browser {
+  background: #b3a6ff;
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--asked {
+  background: var(--bad);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--on {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__live {
+  /* --live (#d93a4e) is 3.8:1 on the dark look's card; --bad is the look's readable red. */
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__live:focus-visible,
+[data-ui='bold'] .bold-screen .watch-marker:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--command {
+  background: var(--ink2);
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--file {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--browser {
+  background: #b3a6ff;
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--asked {
+  background: var(--bad);
+}

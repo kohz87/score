@@ -144,6 +144,19 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-motion.css` — live and pulse animations with the reduced-motion reset.
 - `apps/web/src/bold/bold-responsive.css` — laptop, phone and tablet shell, room layout and touch targets.
 - `apps/web/src/bold/bold-notices.css` — fence and update notices, project and archive surfaces, and the classic primary-button fix.
+- `apps/web/src/bold/bold-screen.css` — Agent screen style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/bold-screen-shell.css` — Agent screen page frame, title, actions and terminal link.
+- `apps/web/src/bold/bold-screen-frames.css` — Screen frame grid, small-window previews, other-screen chips and command card.
+- `apps/web/src/bold/bold-screen-log.css` — Screen layout, ask column, replay log, step rows and paging.
+- `apps/web/src/bold/bold-screen-stage.css` — Main stage, window chrome, empty/status states, approval and needs-live control.
+- `apps/web/src/bold/bold-screen-replay.css` — Reused classic replay timeline theme.
+- `apps/web/src/bold/bold-screen-responsive.css` — Narrow-layout and reduced-motion overrides for the screen.
+- `apps/web/src/bold/bold-screen-live.css` — Live screen card and its screen-off/error lines.
+- `apps/web/src/bold/bold-tasks.css` — Tasks board style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/bold-tasks-board.css` — Tasks page head, filters, board layout and columns.
+- `apps/web/src/bold/bold-tasks-cards.css` — Task cards, badges, agent attribution, progress and empty states.
+- `apps/web/src/bold/bold-tasks-details.css` — Task details panel, needs/approval, steps, comments, phone tabs and sheets.
+- `apps/web/src/bold/bold-tasks-edit.css` — New task, edit, move, archive and confirm dialog surfaces.
 - `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
 - `apps/web/src/bold/BoldRecipes-helpers.tsx` — shared fetch setup, mount and fixtures helpers for the Recipes test suites.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.

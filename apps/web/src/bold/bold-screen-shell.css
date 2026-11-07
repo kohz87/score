@@ -1,0 +1,59 @@
+/* One agent's screen (PLAN 11.6b), rebuilt from docs/design/bold/prototype.html's vReplay() and board 12. The classic
+   Watch frame renderers and replay timeline are reused verbatim; only their bold-shell colours and place in the page
+   are set here. Watching is read-only: the stage draws recorded frames and has no input into the agent's session. */
+[data-ui='bold'] .bold-screen {
+  --card: var(--panel);
+  --hairline: var(--line);
+  --ink-muted: var(--muted);
+  --tasks-border: var(--line);
+  --profile-dashed: var(--faint);
+  --agent-jade: var(--ok);
+  --agent-blue: #b3a6ff;
+  --agent-coral: var(--bad);
+  --agent-coral-text: var(--bad);
+  --watch-stage: var(--code-bg);
+  --watch-window: #23252e;
+  --watch-window-bar: #20232c;
+  --watch-window-dot: #3a3e4a;
+  /* The window is dark in both looks: its muted text can't follow the light look's grey. */
+  --watch-muted: #a9adb8;
+  /* Path parts and diff line numbers on the tree and code surface: readable (≥ 4.5:1 on #171922), as in the Workbench. */
+  --watch-faint: #8a8f9c;
+  --watch-bright: #e8eaf0;
+  --watch-tree: #171922;
+  --watch-live: var(--live);
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-head {
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-title h1 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-screen-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-terminal {
+  min-height: 40px;
+  text-decoration: none;
+}

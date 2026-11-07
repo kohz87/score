@@ -1,0 +1,136 @@
+[data-ui='bold'] .bold-screen-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'ask main'
+    'steps main';
+  align-items: start;
+  column-gap: calc(20px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-ask {
+  grid-area: ask;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-ask:not(:empty) {
+  margin-bottom: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-log {
+  grid-area: steps;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-log-title {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+[data-ui='bold'] .bold-screen-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  /* One bounded scroll area, so a long history never pushes the replay controls away. */
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-screen-steps--nested {
+  max-height: none;
+  overflow: visible;
+  margin: 4px 0 0 6px;
+  padding-left: calc(10px * var(--bold-d, 1));
+  border-left: 2px solid var(--line);
+}
+
+[data-ui='bold'] .bold-screen-group {
+  padding: calc(4px * var(--bold-d, 1)) 0;
+}
+
+[data-ui='bold'] .bold-screen-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-top: calc(7px * var(--bold-d, 1));
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-screen-more {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-screen-step {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--deep);
+  color: var(--ink);
+  display: flex;
+  align-items: flex-start;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-step:hover {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-screen-step.sel {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+[data-ui='bold'] .bold-screen-step:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+[data-ui='bold'] .bold-screen-step:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen-time {
+  flex: none;
+  padding-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-screen-step[aria-current='true'] .bold-screen-time {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen-sub {
+  color: var(--muted);
+}

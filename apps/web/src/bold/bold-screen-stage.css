@@ -1,0 +1,170 @@
+[data-ui='bold'] .bold-screen-main {
+  grid-area: main;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-stage {
+  position: relative;
+  min-height: 600px;
+  border-radius: calc(26px * var(--bold-r, 1));
+  background: var(--code-bg);
+  padding: calc(16px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-badge {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  z-index: 2;
+  border-radius: 999px;
+  padding: calc(4px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  background: #20232c;
+  color: #e8eaf0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  min-height: 38px;
+  padding-right: calc(132px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-who {
+  color: #e8eaf0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-readonly {
+  color: #a9adb8;
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-screen-window {
+  flex: 1;
+  min-height: 0;
+  border-radius: calc(16px * var(--bold-r, 1));
+  overflow: hidden;
+  background: #1e2029;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-screen-window > .watch-window__bar {
+  height: 38px;
+  flex: 0 0 38px;
+  background: #20232c;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-window__dot {
+  width: 10px;
+  height: 10px;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-terminal,
+[data-ui='bold'] .bold-screen-window .watch-editor,
+[data-ui='bold'] .bold-screen-window .watch-browser {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Line numbers sit on added/removed rows' tints too: the diff text grey stays ≥ 4.5:1 on all of them. */
+[data-ui='bold'] .bold-screen-window .watch-diff__number {
+  color: #9ea3b0;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-terminal {
+  font-size: 14px;
+  line-height: 1.9;
+  padding: calc(18px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-empty,
+[data-ui='bold'] .bold-screen-state {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The window is always the dark code surface, so its text takes the code ink, not the look's muted grey. */
+[data-ui='bold'] .bold-screen-window .bold-screen-empty,
+[data-ui='bold'] .bold-screen-window .bold-screen-state {
+  color: var(--code-ink);
+}
+
+[data-ui='bold'] .bold-screen-window > .bold-screen-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: calc(24px * var(--bold-d, 1));
+}
+
+/* The approval bar is a decision for you: the shell's light "for you" object, whose pair the contrast fallback pins to
+   Score's own (the classic bar's white fill under the shell's dark ink would be light on light). */
+[data-ui='bold'] .bold-screen-approval {
+  position: static;
+  width: auto;
+  margin: 0;
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(10px * var(--bold-d, 1));
+  box-shadow: none;
+  background: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-screen-asked {
+  font-size: 13px;
+  color: var(--hi-ink);
+  opacity: 0.8;
+}
+
+[data-ui='bold'] .bold-screen-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__go {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__no,
+[data-ui='bold'] .bold-screen-approval .watch-approval__link {
+  border-color: var(--hi-ink);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__text {
+  color: var(--hi-ink);
+  font-weight: 500;
+}
+
+[data-ui='bold'] .bold-screen-answer {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-needs-live {
+  align-self: flex-start;
+  border: 1px solid #f0a39d;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  background: #2a2026;
+  color: #ffd8d5;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
