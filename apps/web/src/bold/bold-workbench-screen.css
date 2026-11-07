@@ -1,0 +1,59 @@
+/* Screen: the classic frame renderers, read-only, inside the bold panel. */
+[data-ui='bold'] .bold-bench-screen {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-bench-screen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-bench-screen-who {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-bench-readonly {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-bench-screen-head .btn {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .bold-bench-screen-frame {
+  min-height: 340px;
+  height: min(54vh, 440px);
+  border-radius: calc(20px * var(--bold-r, 1));
+  overflow: hidden;
+  background: var(--code-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-bench-screen-frame > .watch-window__bar,
+[data-ui='bold'] .bold-screen-stage > .watch-window__bar {
+  height: 32px;
+  flex: 0 0 32px;
+  background: var(--watch-window-bar);
+}
+
+[data-ui='bold'] .bold-bench-screen-frame .watch-terminal,
+[data-ui='bold'] .bold-bench-screen-frame .watch-editor,
+[data-ui='bold'] .bold-bench-screen-frame .watch-browser {
+  flex: 1;
+  min-height: 0;
+}
+
+[data-ui='bold'] .bold-bench-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}

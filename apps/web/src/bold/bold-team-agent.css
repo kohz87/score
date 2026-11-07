@@ -1,0 +1,255 @@
+/* Agent page */
+[data-ui='bold'] .bold-agent,
+[data-ui='bold'] .bold-team {
+  /* The page header sits where Tasks' and Knowledge's do (the shell's `.bold-page` top spacing), not against the bar. */
+  padding-top: calc(44px * var(--bold-d, 1));
+  /* The classic Team components keep their markup; these tokens make them read as bold cards. */
+  --card: var(--panel);
+  --hairline: var(--line);
+  --ink-muted: var(--ink2);
+  --subtle: var(--field);
+  --tasks-border: var(--line);
+  --line-strong: var(--faint);
+  --font-code: var(--font-m);
+  --font-heading: var(--font-d);
+  --agent-jade-tint: rgba(25, 195, 154, 0.14);
+  --agent-jade-text: var(--ok);
+  --agent-coral-tint: rgba(255, 151, 174, 0.14);
+  --agent-coral-text: var(--bad);
+  --agent-coral: var(--bad);
+  --agent-saffron: var(--warn);
+  --agent-saffron-tint: rgba(255, 201, 77, 0.14);
+  --agent-saffron-text: var(--warn);
+  --agent-violet-tint: rgba(179, 166, 255, 0.14);
+  --agent-violet-text: var(--agent-violet-name);
+}
+
+[data-ui='bold'][data-look='light'] .bold-agent,
+[data-ui='bold'][data-look='light'] .bold-team {
+  --agent-jade-tint: #ddf6ee;
+  --agent-jade-text: #00694f;
+  --agent-coral-tint: #ffe3e9;
+  --agent-coral-text: #b01e43;
+  --agent-coral: #ff6b8a;
+  --agent-saffron: #ffb61e;
+  --agent-saffron-tint: #fff1d1;
+  --agent-saffron-text: #8a5a00;
+  --agent-violet-tint: #ece8ff;
+  --agent-violet-text: #4a2fd9;
+}
+
+[data-ui='bold'] .bold-agent-role {
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .bold-agent-actions {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .bold-agent-now {
+  min-height: 24px;
+  gap: calc(12px * var(--bold-d, 1));
+  margin-top: -10px;
+}
+
+[data-ui='bold'] .bold-agent-state {
+  font-size: 0.93em;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(4px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
+  margin: -4px 0 0;
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-agent-now .bold-agent-facts {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-agent-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: calc(7px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-facts dt {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-agent-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-agent-facts a {
+  color: inherit;
+}
+
+[data-ui='bold'] .bold-agent-actions .bold-agent-watch,
+[data-ui='bold'] .bold-agent-actions .bold-agent-remove {
+  align-self: center;
+  /* The link (an anchor) and the button centre their text the same way, level with the pills' labels. */
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-up-card {
+  scroll-margin-top: 16px;
+}
+
+/* Editors mounted inside an up-front card are the card; no second panel. */
+[data-ui='bold'] .bold-up-card > .team-card {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+[data-ui='bold'] .bold-up-card .team-file-text {
+  min-height: 150px;
+}
+
+[data-ui='bold'] .bold-up-card .team-model-name {
+  font-size: 24px;
+}
+
+[data-ui='bold'] .bold-asks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-more-toggle {
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  border-radius: calc(24px * var(--bold-r, 1));
+}
+
+[data-ui='bold'] .bold-more {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent .team-card {
+  background: var(--panel);
+  border: 0;
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent .team-stack {
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent .team-card > h2 {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-agent .team-file-text {
+  background: var(--field);
+  border: 0;
+  color: var(--ink);
+  font-family: var(--font-m);
+}
+
+[data-ui='bold'] .bold-agent .team-file-actions button,
+[data-ui='bold'] .bold-agent .team-pill-button {
+  background: var(--field);
+  border: 0;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent .team-file-actions .team-primary,
+[data-ui='bold'] .bold-agent .team-routine-form .team-primary {
+  background: var(--hi-bg);
+  border: 0;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-agent .team-routine-form {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-agent .team-routine-form input,
+[data-ui='bold'] .bold-agent .team-routine-form textarea,
+[data-ui='bold'] .bold-agent .team-routine-form select {
+  background: var(--panel);
+  border: 0;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent .team-segment button {
+  background: var(--field);
+  border: 0;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent .team-segment button[aria-pressed='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-agent .team-diff {
+  background: var(--code-bg);
+  border: 0;
+  color: var(--code-ink);
+}
+
+[data-ui='bold'] .bold-agent .team-diff [data-kind='add'] {
+  background: rgba(25, 195, 154, 0.16);
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-agent .team-diff [data-kind='del'] {
+  background: rgba(255, 151, 174, 0.16);
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-agent .team-conflict {
+  background: rgba(255, 201, 77, 0.12);
+  border-color: var(--warn);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent .team-profile-danger {
+  border: 1px solid var(--bad);
+}
+
+[data-ui='bold'] .bold-agent .team-text-action {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-coding {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-coding .team-overview-grid {
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-coding .team-card {
+  background: var(--panel);
+  border: 0;
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-coding .team-text-action {
+  color: var(--ink);
+}

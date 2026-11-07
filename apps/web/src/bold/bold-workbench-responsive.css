@@ -1,0 +1,44 @@
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-bench-caret {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-bench-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  [data-ui='bold'] .bold-bench-tab {
+    flex: none;
+    max-width: 78vw;
+  }
+
+  [data-ui='bold'] .bold-bench-code-body {
+    font-size: 12.5px;
+  }
+
+  [data-ui='bold'] .bold-bench-no {
+    width: 38px;
+    padding-right: calc(10px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-bench-tx {
+    padding-left: calc(10px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-bench-comment-row {
+    padding-left: calc(48px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-bench-screen-head .btn {
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-bench-screen-frame {
+    height: 340px;
+  }
+}

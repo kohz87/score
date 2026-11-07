@@ -1,0 +1,138 @@
+/* Where it works (11.8a): the separation badge never reads as "safe"; partly and not-known are warnings. */
+[data-ui='bold'] #agent-where .badge {
+  border-radius: 999px;
+  padding: 2px calc(10px * var(--bold-d, 1));
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-ui='bold'] #agent-where .runs-on-no {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+  color: var(--bad);
+}
+[data-ui='bold'] #agent-where .runs-on-partly,
+[data-ui='bold'] #agent-where .runs-on-unknown {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+[data-ui='bold'] .bold-runs-on-notes {
+  margin: 0;
+  padding-left: calc(18px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+}
+[data-ui='bold'] .bold-runs-on-form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-remove-agent {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  margin: 12px 0;
+  padding: calc(16px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--deep);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-remove-agent form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-remove-agent p {
+  margin: 0;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-remove-agent code {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-remove-agent-type {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-remove-agent-type input {
+  border-radius: 999px;
+  min-height: 44px;
+}
+
+/* 2.0.6: the status card of an agent that is setting up, stopped partway or being removed; the classic operation
+   card inside it (steps, Retry, Confirm) takes the bold look from here. */
+[data-ui='bold'] .bold-agent-status,
+[data-ui='bold'] .bold-remove-agent > .team-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  margin: 12px 0;
+  padding: calc(16px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--deep);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent-status-line {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-agent-status .team-card,
+[data-ui='bold'] .bold-remove-agent > .team-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-agent-status .team-card h2,
+[data-ui='bold'] .bold-remove-agent > .team-card h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent-status .team-operation-steps,
+[data-ui='bold'] .bold-remove-agent .team-operation-steps {
+  margin: 8px 0;
+  padding-left: calc(22px * var(--bold-d, 1));
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent-status .team-card p,
+[data-ui='bold'] .bold-remove-agent > .team-card p {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-agent-status .team-primary,
+[data-ui='bold'] .bold-remove-agent > .team-card .team-primary {
+  min-height: 44px;
+  padding: 0 calc(18px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+/* 3.7.0: two columns on a portrait tablet. */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .grid2,
+  [data-ui='bold'] .grid3,
+  [data-ui='bold'] .grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-ui='bold'] .span2 {
+    grid-column: span 2;
+  }
+}

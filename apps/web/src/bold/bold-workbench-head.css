@@ -1,0 +1,118 @@
+[data-ui='bold'] .bold-workbench[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-workbench {
+  --font-code: var(--font-m);
+  --watch-text: var(--code-ink);
+  --watch-bright: #e8eaf0;
+  --watch-faint: #8a8f9c;
+  --watch-tree: #171922;
+  --watch-window-bar: #20232c;
+  --watch-window-dot: #3a3e4a;
+  --rules-go: #5ee3bf;
+  --rules-never: #ff97ae;
+  --rules-ask: #ffc94d;
+  --radius-pill: 999px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+}
+
+[data-ui='bold'] .bold-bench-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-bench-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-bench-head h2 {
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+[data-ui='bold'] .bold-bench-kicker {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+[data-ui='bold'] .bold-bench-status,
+[data-ui='bold'] .bold-bench-live {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-bench-status.is-live,
+[data-ui='bold'] .bold-bench-live {
+  color: var(--live);
+}
+
+[data-ui='bold'] .bold-bench-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-bench-tabs {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--bold-d, 1));
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-bench-tab {
+  background: var(--panel);
+  color: var(--ink2);
+  min-height: 36px;
+  max-width: 100%;
+}
+
+[data-ui='bold'] .bold-bench-tab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-bench-tab.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-bench-tab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-bench-state {
+  margin: 0;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-bench-error,
+[data-ui='bold'] .bold-bench-inline-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-bench-error p {
+  margin: 0;
+}

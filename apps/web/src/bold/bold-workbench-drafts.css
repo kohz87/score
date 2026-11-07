@@ -1,0 +1,47 @@
+/* Drafts */
+[data-ui='bold'] .bold-bench-draft {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+  padding-bottom: calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-bench-draft .bold-bench-file-head {
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-bench-draft-preview {
+  min-height: 180px;
+  margin: 0 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-bench-draft-preview span {
+  display: block;
+  height: 10px;
+  width: 54%;
+  border-radius: 999px;
+  background: rgba(18, 19, 26, 0.18);
+}
+
+[data-ui='bold'] .bold-bench-draft-preview span:first-child {
+  width: 72px;
+  height: 72px;
+  border-radius: calc(22px * var(--bold-r, 1));
+  background: rgba(18, 19, 26, 0.28);
+}
+
+[data-ui='bold'] .bold-bench-draft .bold-bench-caption,
+[data-ui='bold'] .bold-bench-draft > .btn {
+  margin: 0 16px;
+  align-self: flex-start;
+}
+
+[data-ui='bold'] .bold-bench-draft .bold-bench-caption {
+  color: #5e626c;
+}
