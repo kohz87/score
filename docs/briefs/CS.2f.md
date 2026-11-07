@@ -16,9 +16,7 @@ limit (AGENTS.md "File size and the code map"); split it into files of at most 4
 ## Rules
 Follow AGENTS.md. A split moves code only: no fixes, renames of behaviour, or refactors in this change (note anything
 you'd fix in the report). No new dependencies; don't edit docs/API-CONTRACT.md or docs/ARCHITECTURE.md; don't commit.
-Never run pkill/killall, never touch ports 8740/8741, never read ~/.hermes or ~/.score, never git stash. No e2e runs
-(the lead runs them at the release gate) — except for a CSS split: one temporary look-check spec on port 6405
-comparing the affected screens before and after (production build, never `SCORE_E2E_DEV=1`), deleted afterwards.
+Never run pkill/killall, never touch ports 8740/8741, never read ~/.hermes or ~/.score, never git stash. No e2e runs and no look-check spec: your sandbox cannot open ports. The lead compares the affected screens before and after.
 
 ## Done when
 `pnpm check` passes (lint, format, typecheck, structure check, all tests) with `apps/web/src/bold/room/bold-room.css` off the exception list.
