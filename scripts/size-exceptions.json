@@ -375,21 +375,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/runtimes/coding-process.test.ts",
-    "lines": 543,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/runtimes/coding-socket.test.ts",
-    "lines": 753,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/runtimes/coding-supervisor.test.ts",
-    "lines": 626,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/terminal.test.ts",
     "lines": 753,
     "reason": "split in CS.2 wave 1"

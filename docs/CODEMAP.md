@@ -302,7 +302,7 @@ likely to be the entry point for a change.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
 - `apps/server/test/` — server integration tests and recorded fixtures.
-- `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
+- `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in feature-specific helper modules.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 
 ### Key files
@@ -311,6 +311,9 @@ likely to be the entry point for a change.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
+- `apps/server/test/runtimes/coding-process-helpers.ts` — shared temporary directory lifecycle, liveness checks, spawn options and stream-script setup for the coding process tests.
+- `apps/server/test/runtimes/coding-socket-helpers.ts` — shared socket server setup, fake supervisor, run registration, clean completion and half-open client for the coding socket tests.
+- `apps/server/test/runtimes/coding-supervisor-helpers.ts` — shared supervisor harness lifecycle, run driver and receipt reader for the coding supervisor tests.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
