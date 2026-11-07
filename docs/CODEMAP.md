@@ -426,6 +426,9 @@ likely to be the entry point for a change.
 
 ### Key files
 
+- `apps/server/test/db-startup-helpers.ts` — shared startup mocks, signal capture and environment setup for the split startup suites.
+- `apps/server/test/db-helpers.ts` — shared temporary-home lifecycle, database opener, migration copy and event helpers for the split database suites.
+- `apps/server/test/execution-freeze-helpers.ts` — shared copy/reset homes, server runner, seeded rows and fence-store constructors for the split execution-freeze suites.
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 

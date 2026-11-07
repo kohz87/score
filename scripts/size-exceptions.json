@@ -220,16 +220,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/db-startup.test.ts",
-    "lines": 557,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/db.test.ts",
-    "lines": 599,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/domain/approvals.test.ts",
     "lines": 950,
     "reason": "split in CS.2 wave 1"
@@ -247,11 +237,6 @@
   {
     "path": "apps/server/test/domain/reports.test.ts",
     "lines": 469,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/execution-freeze.test.ts",
-    "lines": 729,
     "reason": "split in CS.2 wave 1"
   },
   {
