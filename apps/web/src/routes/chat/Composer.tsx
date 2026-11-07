@@ -1,107 +1,24 @@
-import type { AgentSummary } from '@score/contract'
-import { StopIcon } from '../../components/StopIcon.tsx'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { sendsOnKey } from '../../data/send-key.ts'
-import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
-import { Link } from 'react-router'
-import { AgentGlyph, agentTint } from '../../components/AgentGlyph.tsx'
-import { apiFetch, apiUpload, ApiError, type UploadProgress as Progress } from '../../data/api.ts'
-import { UploadProgress } from '../../components/UploadProgress.tsx'
-import { agentTextColor } from './agent-text-color.ts'
-import {
-  insertMention,
-  loadDraft,
-  mentionAt,
-  parseCommands,
-  parseSendResult,
-  saveDraft,
-  slashQuery,
-  withMessage,
-  withoutMessage,
-  type CommandResult,
-  type SlashCommand,
-} from './composer-model.ts'
-import {
-  fetchAgentContext,
-  LOCAL_COMMAND_MENU,
-  parseLocalCommand,
-  usageSummary,
-} from './context-meter.ts'
-import { ContextMeter } from './ContextMeter.tsx'
-import { messagesQuery, type MessagePageData } from './queries.ts'
-import { useVoiceInput } from './voice.ts'
-import { newId } from '../../data/ids.ts'
-import { stopEdit, useEditing } from './message-edit.ts'
-import { RewindDialog } from './RewindDialog.tsx'
-import { fetchRewindPlan, postRewind } from './rewind.ts'
-import { roomHasLiveShare } from '../../data/shares.ts'
-import {
-  ACCEPT,
-  attachmentKey,
-  attachmentName,
-  isImage,
-  MAX_ATTACHMENTS,
-  parseUpload,
-  toPart,
-  toRequest,
-  uploadProblem,
-  type Attachment,
-} from './attachments.ts'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
-import { ReleaseHeld } from '../team/ReleaseHeld.tsx'
-import { ChipSaveOption } from '../knowledge/ChipSaveOption.tsx'
-import { summaryText, useUploadFlow } from '../knowledge/UploadFlow.tsx'
-import { isSupportedName } from '../knowledge/knowledge-files.ts'
-
-const ORCHESTRATE_MENU_ITEM = {
-  name: 'orchestrate',
-  usage: '/orchestrate <goal>',
-  description: 'Start an orchestration for a goal.',
-}
-
-type Notice =
-  | {
-      kind: 'error'
-      text: string
-      heldAgent?: string
-      action?: { label: string; to: string }
-      retry?: { label: string; run: () => void }
-    }
-  | { kind: 'info'; text: string }
-  | { kind: 'result'; command: CommandResult | null }
-type Snapshot = { asOfSeq: number; data: MessagePageData }
-
-function errorText(error: unknown): string {
-  if (!(error instanceof ApiError)) return 'Couldn’t send the message. Try again.'
-  const details =
-    typeof error.details === 'object' && error.details !== null
-      ? (error.details as { error?: unknown; usage?: unknown })
-      : {}
-  const reason = typeof details.error === 'string' ? details.error : null
-  const usage = typeof details.usage === 'string' ? `Usage: ${details.usage}` : null
-  if (error.status === 409 && error.code === 'orchestration_owned')
-    return 'This room belongs to a running orchestration. Use the run controls above instead.'
-  if (error.status === 501)
-    return ['That command isn’t available yet.', usage].filter(Boolean).join(' ')
-  if (reason || usage) return [reason, usage].filter(Boolean).join(' ')
-  return error.message
-}
-
-function CommandNotice({ command }: { command: CommandResult | null }) {
-  if (!command) return null
-  if (command.kind === 'assign') return <>Created task {command.taskKey}</>
-  if (command.kind === 'model') return <>Sent using {command.model}</>
-  return <>Command applied</>
-}
+import { ComposerAttachControls } from './ComposerAttachControls.tsx'
+import { ComposerAttachments } from './ComposerAttachments.tsx'
+import { ComposerEditing } from './ComposerEditing.tsx'
+import { ComposerMenu } from './ComposerMenu.tsx'
+import { ComposerNotice } from './ComposerNotice.tsx'
+import { ComposerSendControls } from './ComposerSendControls.tsx'
+import { ComposerToPicker } from './ComposerToPicker.tsx'
+import { attachmentKey } from './attachments.ts'
+import { loadDraft, saveDraft } from './composer-model.ts'
+import { createLocalCommandRunner } from './composer-local-command.ts'
+import { useComposerSend } from './composer-send.ts'
+import type { ComposerProps, Notice } from './composer-types.ts'
+import { useComposerEditing } from './use-composer-editing.ts'
+import { useComposerMenu } from './use-composer-menu.ts'
+import { useComposerRoom } from './use-composer-room.ts'
+import { useComposerUploads } from './use-composer-uploads.ts'
+import { useComposerVoice } from './use-composer-voice.ts'
 
 export function Composer({
   roomId,
@@ -125,70 +42,7 @@ export function Composer({
   onClosedJob,
   topicCommands,
   footer,
-}: {
-  roomId: string
-  roomName: string
-  agents: AgentSummary[]
-  /**
-   * 3.7.10: who @ and To offer (default: `agents`). `agents` stays the full list, so an edited message to a removed agent
-   * still shows its name.
-   */
-  offered?: AgentSummary[]
-  leadAgentId?: string | null
-  /** The user view's first message opens its room once it is sent (PLAN 8.4). */
-  onSent?: () => void
-  /**
-   * Where `/compress` goes when the composer shows no context ring of its own (the new shell's chats keep the ring in
-   * their footer): the owner of that ring opens its confirmation.
-   */
-  onCompress?: () => void
-  /**
-   * The user view starts orchestrations from the composer (PLAN 8.4): the "+" menu gets "Start an orchestration…",
-   * and `/orchestrate <goal>` calls this with the goal (empty when none was typed).
-   */
-  orchestrate?: (goal: string) => void
-  /** The job (thread) a room message is posted in (PLAN 11.1b); null posts in the room's default job. */
-  jobId?: string | null
-  /** The bold team room's one-line composer, using the same send, upload and voice logic. */
-  roomMode?: boolean
-  /** The room composer's fixed To chip ("To: new job" or "To: <job title>"). */
-  toLabel?: string
-  placeholder?: string
-  /** Holds the composer (typing and sending off) with this reason as its placeholder, e.g. while the topic loads. */
-  hold?: string
-  /** The live message page the composer sends into; defaults to the classic room's default-job thread. */
-  messagesKey?: QueryKey
-  /** Text to load once on mount, taking precedence over the stored draft (the bold room's command hand-off). */
-  initialText?: string
-  /** Jobs this message refers to (PLAN 11.2 §6.3); the server freezes each one into a `ref` part. */
-  references?: readonly { jobId: string }[]
-  /** Where the draft is stored when it is not the room's (the one-to-one keeps one per chat). */
-  draftScope?: string
-  /** Makes the job this message goes into on first send (a one-to-one that is only created by its first message). */
-  resolveJob?: () => Promise<string>
-  /** The bold room reopens a job the server refused as closed, then sends the same message into it. */
-  onClosedJob?: (jobId: string) => Promise<void>
-  /**
-   * 3.22.0: the chat commands (/new, /rename, /done, …). Listed in the palette; `run` does the work and throws an Error
-   * with plain words when it can't, which this composer shows and then keeps the typed text.
-   */
-  topicCommands?: {
-    items: SlashCommand[]
-    /** Names that run when typed but are not offered in the `/` palette. */
-    typedOnly?: string[]
-    run: (name: string, args: string) => Promise<void>
-  }
-  /** 3.22.0: replaces the hint line under the box (the chat's context bar) and the fixed "To" label. */
-  footer?: (state: {
-    to: string[]
-    subject: string | null
-    /** Changes on every finished reply: a context reading in the footer refreshes. */
-    finishedReplies: number
-    /** Bumped by `/compress`: the footer's meter opens its compaction confirmation (for `compactSubject`). */
-    compactSignal: number
-    compactSubject: string | null
-  }) => ReactNode
-}) {
+}: ComposerProps) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
   const sendKey = useRef<{ signature: string; key: string } | null>(null)
@@ -197,33 +51,9 @@ export function Composer({
   const [caret, setCaret] = useState(0)
   const [to, setTo] = useState<string[]>([])
   const [planFirst, setPlanFirst] = useState(false)
-  const [picker, setPicker] = useState(false)
-  const [active, setActive] = useState(0)
-  const [closed, setClosed] = useState(false)
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const latestSend = useRef<(force?: boolean) => Promise<void>>(async () => {})
-  // "Also save to Knowledge" (PLAN 6.6): mediaId -> folder for attachments the person chose to keep.
-  const [saveTo, setSaveTo] = useState<Record<string, string>>({})
-  const knowledgeFlow = useUploadFlow((summary) => {
-    const text = summaryText(summary)
-    if (text) setNotice({ kind: 'info', text })
-  })
-  const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [uploading, setUploading] = useState(0)
-  // Each file being sent has its own chip in the tray, keyed by a counter so two files of one name stay apart.
-  const [sendingFiles, setSendingFiles] = useState<
-    { key: number; name: string; progress: Progress }[]
-  >([])
-  const sendingKey = useRef(0)
-  const [attachMenu, setAttachMenu] = useState(false)
-  const [pickingWorkspace, setPickingWorkspace] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  // Latest values for the send callback, which resolves long after the closure was created.
-  const live = useRef({ text, attachments })
-  useEffect(() => {
-    live.current = { text, attachments }
-  })
   const latest = useRef({ leaveEdit: () => {} })
   const mounted = useRef(true)
   useEffect(() => {
@@ -232,620 +62,164 @@ export function Composer({
       mounted.current = false
     }
   }, [])
-  const fileInput = useRef<HTMLInputElement>(null)
+  const [pickingWorkspace, setPickingWorkspace] = useState(false)
+  const [dragging, setDragging] = useState(false)
 
-  // Edit and resend: the message loads into the composer; what was there before comes back afterwards.
-  const editingNow = useEditing()
-  const editing = editingNow?.roomId === roomId ? editingNow : null
-  const editId = editing?.messageId ?? null
-  const [stash, setStash] = useState<{
-    text: string
-    to: string[]
-    attachments: Attachment[]
-  } | null>(null)
-  const [loadedEdit, setLoadedEdit] = useState<string | null>(null)
-  if (editId !== loadedEdit) {
-    // Adjusting state while rendering: only a different message reloads the composer.
-    setLoadedEdit(editId)
-    if (editing) {
-      setStash((saved) => saved ?? { text, to, attachments })
-      setText(editing.text)
-      setCaret(editing.text.length)
-      setTo(editing.to)
-      setAttachments(editing.attachments)
-      setPlanFirst(false)
-      setNotice(null)
-    }
-  }
-  // Counts edit sessions, so a response can tell whether the edit it belongs to is still the one on screen.
-  const editSession = useRef(0)
-  useEffect(() => {
-    editSession.current += 1
-    if (editId) textarea.current?.focus()
-  }, [editId])
-  const rewoundEdit = useRef<string | null>(null)
-  // One rewind request per edited message, so a retried Send can't rewind twice.
-  const rewindKey = useRef<{ messageId: string; key: string } | null>(null)
-  const [rewinding, setRewinding] = useState(false)
-  function leaveEdit() {
-    // A rewind that never confirmed is planned again by the next edit; one that happened stays done.
-    if (rewindKey.current && rewoundEdit.current !== rewindKey.current.messageId)
-      rewindKey.current = null
-    stopEdit()
-    setLoadedEdit(null)
-    if (!stash) return
-    setText(stash.text)
-    setCaret(stash.text.length)
-    setTo(stash.to)
-    setAttachments(stash.attachments)
-    setStash(null)
-  }
+  const uploads = useComposerUploads({ draftText: text, setNotice })
+  const {
+    attachments,
+    setAttachments,
+    uploading,
+    sendingFiles,
+    saveTo,
+    setSaveTo,
+    knowledgeFlow,
+    fileInput,
+    live,
+    upload,
+    addWorkspaceFile,
+    saveSentToKnowledge,
+  } = uploads
+
+  const {
+    editing,
+    editId,
+    stash,
+    setStash,
+    editSession,
+    rewoundEdit,
+    rewindKey,
+    rewinding,
+    setRewinding,
+    leaveEdit,
+    markRewound,
+    confirmEdit,
+    setConfirmEdit,
+    setLoadedEdit,
+  } = useComposerEditing({
+    roomId,
+    text,
+    to,
+    attachments,
+    setText,
+    setCaret,
+    setTo,
+    setAttachments,
+    setPlanFirst,
+    setNotice,
+    textarea,
+  })
   useEffect(() => {
     latest.current = { leaveEdit }
   })
-  useEffect(() => () => stopEdit(), [])
-  // The message whose rewind already happened: a failed send is retried without asking again.
-  const [confirmEdit, setConfirmEdit] = useState(false)
 
-  const commands = useQuery({
-    queryKey: ['chat', 'commands'],
-    queryFn: async () => parseCommands(await apiFetch('commands')),
-    staleTime: Infinity,
-  })
+  const {
+    roomMessagesKey,
+    writing,
+    stopping,
+    stopReplies,
+    subject,
+    subjectAgent,
+    finishedReplies,
+    meterAgents,
+    compactSignal,
+    setCompactSignal,
+    compactSubject,
+    setCompactSubject,
+  } = useComposerRoom({ roomId, messagesKey, agents, leadAgentId, to, setNotice })
 
-  // The room's messages are kept live by the stream; a reply being written turns Send into Stop (PLAN 5.25).
-  const roomMessagesKey: QueryKey = messagesKey ?? messagesQuery(roomId).key
-  const thread = useQuery<{ asOfSeq: number; data: MessagePageData } | undefined>({
-    queryKey: roomMessagesKey,
-    queryFn: skipToken,
-  })
-  const items = thread.data?.data.items
-  const writing = useMemo(
-    () => (items ?? []).filter((item) => item.streaming && item.author.kind === 'agent'),
-    [items],
-  )
-  const [stopping, setStopping] = useState(false)
-  const stopTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(stopTimer.current), [])
-  async function stopReplies() {
-    setStopping(true)
-    try {
-      await Promise.all(
-        writing.map((item) =>
-          apiFetch(
-            `rooms/${encodeURIComponent(roomId)}/messages/${encodeURIComponent(item.id)}/stop`,
-            { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
-          ),
-        ),
-      )
-    } catch {
-      setNotice({ kind: 'error', text: 'Couldn’t stop the reply. It may have just finished.' })
-    } finally {
-      // The reply's own completion event ends the Stop state; this only guards a response that never comes.
-      stopTimer.current = setTimeout(() => setStopping(false), 3000)
-    }
-  }
-
-  // The agent the meter and /usage speak about: the first "To" chip, else whoever answered last, else the lead.
-  const lastReplier = (items ?? []).find((item) => item.author.kind === 'agent')?.author
-  const subject =
-    to[0] ??
-    (lastReplier?.kind === 'agent' ? lastReplier.agentId : null) ??
-    (leadAgentId && agents.some((agent) => agent.id === leadAgentId) ? leadAgentId : null)
-  const subjectAgent = agents.find((agent) => agent.id === subject)
-  const finishedReplies = (items ?? []).filter((item) => !item.streaming).length
-  // One ring per addressed agent (PLAN 5.36), or the subject when nobody is addressed.
-  const meterAgents = [...new Set(to.length ? to : subject ? [subject] : [])].slice(0, 4)
-  const [compactSignal, setCompactSignal] = useState(0)
-  const [compactSubject, setCompactSubject] = useState<string | null>(null)
-
-  // Voice input: interim words replace each other in the draft until the utterance settles.
-  const voiceBase = useRef('')
-  const voice = useVoiceInput({
-    onText: (heard) => {
-      const base = voiceBase.current
-      const next = heard ? `${base}${base && !/\s$/.test(base) ? ' ' : ''}${heard}` : base
-      setText(next)
-      setCaret(next.length)
-    },
-    onFinal: () => textarea.current?.focus(),
-  })
-  function toggleVoice() {
-    if (voice.listening) voice.stop()
-    else {
-      voiceBase.current = text
-      voice.start()
-    }
-  }
-
+  const { voice, toggleVoice } = useComposerVoice({ text, setText, setCaret, textarea })
   useEffect(() => {
     if (!editId) saveDraft(draftScope ?? roomId, text)
   }, [draftScope, roomId, text, editId])
 
-  const slash = slashQuery(text)
-  const mention = slash === null ? mentionAt(text, caret) : null
-  const slashItems: SlashCommand[] = useMemo(
-    () =>
-      slash === null
-        ? []
-        : [
-            ...(commands.data ?? []),
-            ...LOCAL_COMMAND_MENU.filter(
-              (local) => !commands.data?.some((item) => item.name === local.name),
-            ),
-            ...(topicCommands?.items ?? []).filter(
-              (extra) => !commands.data?.some((item) => item.name === extra.name),
-            ),
-            ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
-          ].filter((item) => item.name.startsWith(slash)),
-    [slash, commands.data, orchestrate, topicCommands],
+  const {
+    commands,
+    slashItems,
+    mentionItems,
+    menu,
+    count,
+    index,
+    optionId,
+    edit,
+    select,
+    setActive,
+    setClosed,
+  } = useComposerMenu({
+    text,
+    caret,
+    offered,
+    orchestrate,
+    topicCommands,
+    ids,
+    textarea,
+    setText,
+    setCaret,
+  })
+
+  // "From workspace…" browses the workspace of whoever the message goes to: the To chips, else the room lead.
+  const pickerAgents = agents.filter((agent) =>
+    to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),
   )
-  const mentionItems = useMemo(() => {
-    if (!mention) return []
-    const query = mention.query.toLowerCase()
-    return offered.filter(
-      (agent) =>
-        agent.id.toLowerCase().startsWith(query) || agent.name.toLowerCase().startsWith(query),
-    )
-  }, [mention, offered])
-  const menu = closed ? null : slashItems.length ? 'slash' : mentionItems.length ? 'mention' : null
-  const count = menu === 'slash' ? slashItems.length : mentionItems.length
-  const index = Math.min(active, Math.max(count - 1, 0))
-  const optionId = (position: number) => `${ids}-option-${position}`
 
-  function edit(value: string, position: number) {
-    setText(value)
-    setCaret(position)
-    setActive(0)
-    setClosed(false)
-  }
-  // After a pick the caret goes to the end of what was inserted, once React has written the value. A frame later the
-  // person may already have typed on (the next "@" of a fast typist): then the text differs and the caret is theirs.
-  function restoreCaret(area: HTMLTextAreaElement | null, expected: string, position: number) {
-    requestAnimationFrame(() => {
-      if (area && area.value === expected) area.setSelectionRange(position, position)
-    })
-  }
-  function select(position: number) {
-    const area = textarea.current
-    if (menu === 'slash') {
-      const command = slashItems[position]
-      if (!command) return
-      const next = `/${command.name} `
-      edit(next, next.length)
-      restoreCaret(area, next, next.length)
-    } else if (menu === 'mention' && mention) {
-      const agent = mentionItems[position]
-      if (!agent) return
-      const next = insertMention(text, caret, mention.start, agent.id)
-      edit(next.text, next.caret)
-      restoreCaret(area, next.text, next.caret)
-    }
-  }
-
-  // Buttons, drag and drop and paste all end here. Every file is checked by the server from its bytes.
-  async function upload(picked: File[]) {
-    if (fileInput.current) fileInput.current.value = ''
-    for (const file of picked) {
-      const problem = uploadProblem(file)
-      if (problem) {
-        setNotice({ kind: 'error', text: problem })
-        continue
-      }
-      if (live.current.attachments.length + uploadsInFlight.current >= MAX_ATTACHMENTS) {
-        setNotice({
-          kind: 'error',
-          text: `A message can carry up to ${MAX_ATTACHMENTS} attachments.`,
-        })
-        break
-      }
-      uploadsInFlight.current += 1
-      setUploading((count) => count + 1)
-      const key = (sendingKey.current += 1)
-      const name = file.name || 'pasted-file'
-      const track = (progress: Progress) =>
-        setSendingFiles((current) =>
-          current.some((item) => item.key === key)
-            ? current.map((item) => (item.key === key ? { ...item, progress } : item))
-            : [...current, { key, name, progress }],
-        )
-      track({ loaded: 0, total: file.size })
-      try {
-        const form = new FormData()
-        form.append('file', file, name)
-        const stored = parseUpload(await apiUpload('media', form, track, {}, 'POST'))
-        changeAttachments((current) =>
-          current.length >= MAX_ATTACHMENTS ||
-          current.some((item) => attachmentKey(item) === stored.mediaId)
-            ? current
-            : [...current, stored],
-        )
-      } catch (error) {
-        const reason =
-          error instanceof ApiError && error.status === 413
-            ? 'is too large (images up to 8 MB, other files up to 25 MB)'
-            : error instanceof ApiError && error.status === 415
-              ? 'isn’t a type that can be attached (images, PDF, DOCX, XLSX, TXT, Markdown, CSV, JSON, HTML)'
-              : 'couldn’t be uploaded'
-        setNotice({ kind: 'error', text: `${file.name} ${reason}.` })
-      } finally {
-        setSendingFiles((current) => current.filter((item) => item.key !== key))
-        uploadsInFlight.current -= 1
-        setUploading((count) => count - 1)
-      }
-    }
-  }
-  const uploadsInFlight = useRef(0)
-  // The ref moves first, so a loop of uploads counts what the previous one added before React re-renders.
-  function changeAttachments(change: (current: Attachment[]) => Attachment[]) {
-    const next = change(live.current.attachments)
-    live.current = { ...live.current, attachments: next }
-    setAttachments(next)
-  }
-  function addWorkspaceFile(agentId: string, path: string, root?: string) {
-    changeAttachments((current) => {
-      const item: Attachment = {
-        kind: 'workspace',
-        agentId,
-        path,
-        ...(root === undefined ? {} : { root }),
-      }
-      return current.length >= MAX_ATTACHMENTS ||
-        current.some((existing) => attachmentKey(existing) === attachmentKey(item))
-        ? current
-        : [...current, item]
-    })
-  }
-
-  // /compress, /usage and /model <name> are answered here (PLAN 5.25); other commands go to the server as before.
-  async function runLocalCommand(command: NonNullable<ReturnType<typeof parseLocalCommand>>) {
-    const name = subjectAgent?.name ?? subject
-    setNotice(null)
-    if (!subject || !name) {
-      setNotice({ kind: 'error', text: 'Choose who this is for first: add someone to “To”.' })
-      return
-    }
-    setText('')
-    setCaret(0)
-    try {
-      if (command.kind === 'compress') {
-        // The ring's details open on the compaction confirmation (PLAN 5.36).
-        if (onCompress) onCompress()
-        else if (roomMode && footer) {
-          // The chat's footer carries the meter (3.22.0): it opens on the compaction confirmation.
-          setCompactSubject(subject)
-          setCompactSignal((value) => value + 1)
-        } else if (roomMode) {
-          // The team room's composer has no ring: say where compaction is, instead of clearing the command silently.
-          setText('/compress')
-          setNotice({
-            kind: 'info',
-            text: 'Compact from a one-to-one chat or a job: the context ring sits beside its message box.',
-          })
-        } else {
-          setCompactSubject(subject)
-          setCompactSignal((value) => value + 1)
-        }
-      } else if (command.kind === 'usage') {
-        setNotice({ kind: 'info', text: usageSummary(name, await fetchAgentContext(subject)) })
-      } else {
-        await apiFetch(`agents/${encodeURIComponent(subject)}/model`, {
-          method: 'PUT',
-          body: JSON.stringify({ model: command.model }),
-        })
-        void queryClient.invalidateQueries({ queryKey: ['chat', 'context'] })
-        setNotice({ kind: 'info', text: `${name} now uses ${command.model}.` })
-      }
-    } catch (error) {
-      setText(`/${command.kind}${command.kind === 'model' ? ` ${command.model}` : ''}`)
-      setNotice({
-        kind: 'error',
-        text:
-          error instanceof ApiError && error.status === 400
-            ? `${command.kind === 'model' ? command.model : 'That'} isn’t available for ${name}.`
-            : 'That command failed. Try again.',
-      })
-    }
-  }
-
-  async function send(force = false) {
-    const body = text.trim()
-    // Reopen resends through the closure captured before the failed send; only that retry may bypass its stale
-    // `pending` flag (the request it belonged to has already failed).
-    if (!body || hold || (pending && !force) || uploading) return
-    const orchestration =
-      orchestrate && !editing ? /^\/orchestrate(?:\s+([\s\S]*))?$/i.exec(body) : null
-    if (orchestrate && orchestration) {
-      setText('')
-      setCaret(0)
-      orchestrate((orchestration[1] ?? '').trim())
-      return
-    }
-    const local = editing ? null : parseLocalCommand(body)
-    if (local) return runLocalCommand(local)
-    const typed = !editing && topicCommands ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
-    if (typed && topicCommands) {
-      const word = typed[1]!.toLowerCase()
-      if (
-        topicCommands.items.some((item) => item.name === word) ||
-        topicCommands.typedOnly?.includes(word)
-      ) {
-        setNotice(null)
-        setPending(true)
-        try {
-          await topicCommands.run(word, (typed[2] ?? '').trim())
-          setText('')
-          setCaret(0)
-        } catch (error) {
-          setNotice({
-            kind: 'error',
-            text: error instanceof Error ? error.message : 'That command failed. Try again.',
-          })
-        } finally {
-          setPending(false)
-        }
-        return
-      }
-      const known =
-        commands.data?.some((item) => item.name === word) ||
-        LOCAL_COMMAND_MENU.some((item) => item.name === word) ||
-        (orchestrate && word === 'orchestrate')
-      // Only once the server's list is here: before that an unknown word may just be one it has not told us about.
-      if (!known && commands.data) {
-        setNotice({
-          kind: 'error',
-          text: `I don’t know /${word}. Type / to see the commands.`,
-        })
-        return
-      }
-    }
-    // Editing rewinds the room and the agents first (PLAN 5.33). When every agent can be rewound and nothing is still
-    // running, Score does it on Send without asking (owner, 2.0.12); otherwise the dialog explains and offers the way
-    // out (stop the work first, or hide in Score only).
-    if (editing && !editing.rewound && rewoundEdit.current !== editing.messageId) {
-      setPending(true)
-      setRewinding(true)
-      setNotice(null)
-      let clean: boolean
-      try {
-        // A rewind already sent for this message (its answer lost) is repeated with the same key, not re-planned: the
-        // server returns the stored result, and a plan for an already-hidden message would fail.
-        const retrying = rewindKey.current?.messageId === editing.messageId
-        // A share link made since the lost answer still needs the dialog's revoke offer.
-        if (retrying) clean = !(await roomHasLiveShare(queryClient, roomId))
-        else {
-          const plan = await fetchRewindPlan(roomId, editing.messageId)
-          // A live share link keeps showing the old message: the dialog says so and offers to revoke it.
-          clean =
-            !plan.blocked &&
-            plan.agents.every((agent) => !agent.cannot) &&
-            !(await roomHasLiveShare(queryClient, roomId))
-        }
-        if (clean) {
-          if (!retrying) rewindKey.current = { messageId: editing.messageId, key: newId() }
-          await postRewind(roomId, editing.messageId, 'edit', false, rewindKey.current!.key)
-          rewoundEdit.current = editing.messageId
-        }
-      } catch (caught) {
-        // A refusal or an incomplete rewind: the dialog reads the plan again and says what happened. Anything else (a
-        // dropped connection) keeps the edit as it is; Send again repeats the same rewind request.
-        // Only a lost answer is worth repeating as it is (no answer, a server error, a timeout or rate limit); any other
-        // refusal is final and the dialog says what changed.
-        const transient =
-          !(caught instanceof ApiError) ||
-          caught.status >= 500 ||
-          caught.status === 408 ||
-          caught.status === 429
-        if (transient) {
-          setPending(false)
-          setRewinding(false)
-          setNotice({ kind: 'error', text: 'Couldn’t send the correction. Try again.' })
-          return
-        }
-        // A refusal is final for that request: the next Send plans again.
-        rewindKey.current = null
-        clean = false
-      }
-      setPending(false)
-      setRewinding(false)
-      if (!clean) {
-        setConfirmEdit(true)
-        return
-      }
-    }
-    const sent = attachments
-    let sentJobId = editing?.jobId ?? jobId
-    if (resolveJob && !editing) {
-      setPending(true)
-      setNotice(null)
-      try {
-        sentJobId = await resolveJob()
-      } catch {
-        setPending(false)
-        setNotice({ kind: 'error', text: 'Couldn’t start the chat. Try again.' })
-        return
-      }
-    }
-    const payload = {
-      text: body,
-      ...(sent.length ? { attachments: sent.map(toRequest) } : {}),
-      // An edit that omits `to` reuses the original recipients, so removing every chip must say so explicitly.
-      ...(to.length || editing ? { to } : {}),
-      ...(planFirst ? { planFirst: true } : {}),
-      ...(editing ? { edits: editing.messageId } : {}),
-      ...(sentJobId ? { jobId: sentJobId } : {}),
-      ...(references.length
-        ? { refs: references.map((reference) => ({ jobId: reference.jobId })) }
-        : {}),
-    }
-    const submittedSession = editSession.current
-    // A retry of the same payload reuses its key, so a lost response cannot post twice.
-    const signature = JSON.stringify(payload)
-    if (sendKey.current?.signature !== signature) sendKey.current = { signature, key: newId() }
-    const key = sendKey.current.key
-    const temporary = `pending-${key}`
-    const queryKey = roomMessagesKey
-    const update = (change: (data: MessagePageData) => MessagePageData) => {
-      const snapshot = queryClient.getQueryData<Snapshot>(queryKey)
-      if (snapshot) queryClient.setQueryData(queryKey, { ...snapshot, data: change(snapshot.data) })
-    }
-    setPending(true)
-    setNotice(null)
-    update((data) =>
-      withMessage(data, {
-        id: temporary,
-        roomId,
-        author: { kind: 'you' },
-        to,
-        ...(sentJobId ? { jobId: sentJobId } : {}),
-        ...(editing ? { edits: editing.messageId } : {}),
-        parts: [{ kind: 'text', text: body }, ...sent.map(toPart)],
-        createdAt: new Date().toISOString(),
-        streaming: false,
-        refs: [],
-      }),
-    )
-    try {
-      const result = parseSendResult(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages`, {
-          method: 'POST',
-          headers: { 'Idempotency-Key': key },
-          body: JSON.stringify(payload),
-        }),
-      )
-      update((data) => withMessage(data, result.message, temporary))
-      sendKey.current = null
-      void saveSentToKnowledge(sent)
-      if (!editing) onSent?.()
-      if (!mounted.current) {
-        // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
-        if (loadDraft(draftScope ?? roomId).trim() === body) saveDraft(draftScope ?? roomId, '')
-        return
-      }
-      if (editing) {
-        // Only the edit that sent this is finished by it; a cancelled or replaced edit left the composer to the person.
-        if (editSession.current === submittedSession) {
-          if (live.current.text.trim() === body) latest.current.leaveEdit()
-          else {
-            // The person kept typing: that stays, and the draft stashed before the edit comes back before it.
-            stopEdit()
-            setLoadedEdit(null)
-            if (stash) {
-              const typed = live.current.text
-              const restored = stash.text.trim() ? `${stash.text}\n\n${typed}` : typed
-              setText(restored)
-              setCaret(restored.length)
-              setTo(stash.to)
-              setAttachments((current) => [...stash.attachments, ...current])
-              setStash(null)
-            }
-          }
-        }
-        setNotice(
-          result.notices?.length
-            ? { kind: 'info', text: result.notices.join(' ') }
-            : { kind: 'result', command: result.command },
-        )
-        return
-      }
-      // Keep whatever was typed or attached while the request was in flight.
-      if (live.current.text.trim() === body) {
-        setText('')
-        setCaret(0)
-      }
-      setAttachments((current) =>
-        current.filter((item) => !sent.some((done) => attachmentKey(done) === attachmentKey(item))),
-      )
-      setNotice(
-        result.notices?.length
-          ? { kind: 'info', text: result.notices.join(' ') }
-          : { kind: 'result', command: result.command },
-      )
-    } catch (error) {
-      update((data) => withoutMessage(data, temporary))
-      const held =
-        error instanceof ApiError && error.code === 'agent_still_stopping'
-          ? (error.details as { agentId?: unknown } | undefined)?.agentId
-          : undefined
-      const noLead = error instanceof ApiError && error.code === 'no_lead'
-      const jobClosed =
-        error instanceof ApiError &&
-        error.status === 409 &&
-        Boolean(sentJobId) &&
-        Boolean(onClosedJob) &&
-        /job is closed/i.test(error.message)
-      setNotice({
-        kind: 'error',
-        text: jobClosed
-          ? 'This job is closed. Reopen it to write in it.'
-          : noLead
-            ? 'No lead yet — use @name, or pick a lead in Settings.'
-            : errorText(error),
-        ...(typeof held === 'string' ? { heldAgent: held } : {}),
-        ...(jobClosed && sentJobId && onClosedJob
-          ? {
-              retry: {
-                label: 'Reopen',
-                run: () => {
-                  void (async () => {
-                    setPending(true)
-                    setNotice(null)
-                    try {
-                      await onClosedJob(sentJobId)
-                    } catch {
-                      setNotice({
-                        kind: 'error',
-                        text: 'Couldn’t reopen this job. Try again.',
-                      })
-                      setPending(false)
-                      return
-                    }
-                    setPending(false)
-                    await latestSend.current(true)
-                  })()
-                },
-              },
-            }
-          : {}),
-        // Only the new shell's room links into it; the classic chat keeps the plain sentence.
-        ...(noLead && roomMode ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
-      })
-    } finally {
-      if (mounted.current) {
-        setPending(false)
-        textarea.current?.focus()
-      }
-    }
-  }
-
-  // After the message is sent: the files marked "Also save to Knowledge" go there too, one folder at a time.
-  async function saveSentToKnowledge(sent: Attachment[]) {
-    const wanted = sent.flatMap((item) =>
-      item.kind === 'upload' && saveTo[item.mediaId] !== undefined
-        ? [
-            {
-              name: item.name,
-              mediaId: item.mediaId,
-              folder: saveTo[item.mediaId]!.trim().replace(/\/+$/, ''),
-            },
-          ]
-        : [],
-    )
-    if (wanted.length === 0) return
-    setSaveTo((current) => {
-      const next = { ...current }
-      for (const item of wanted) delete next[item.mediaId]
-      return next
-    })
-    for (const folder of new Set(wanted.map((item) => item.folder)))
-      await knowledgeFlow.start(
-        wanted
-          .filter((item) => item.folder === folder)
-          .map((item) => ({ name: item.name, mediaId: item.mediaId })),
-        folder,
-      )
-  }
-
+  const runLocalCommand = createLocalCommandRunner({
+    subject,
+    subjectAgent,
+    setText,
+    setCaret,
+    setNotice,
+    onCompress,
+    roomMode,
+    hasFooter: Boolean(footer),
+    setCompactSubject,
+    setCompactSignal,
+    queryClient,
+  })
+  const send = useComposerSend({
+    roomId,
+    roomMode,
+    draftScope,
+    jobId,
+    hold,
+    orchestrate,
+    topicCommands,
+    references,
+    resolveJob,
+    onSent,
+    onClosedJob,
+    text,
+    editing,
+    pending,
+    uploading,
+    attachments,
+    to,
+    planFirst,
+    setText,
+    setCaret,
+    setTo,
+    setAttachments,
+    setPending,
+    setRewinding,
+    setNotice,
+    setConfirmEdit,
+    setLoadedEdit,
+    setStash,
+    stash,
+    editSession,
+    rewoundEdit,
+    rewindKey,
+    sendKey,
+    roomMessagesKey,
+    queryClient,
+    commands: commands.data,
+    runLocalCommand,
+    saveSentToKnowledge,
+    latest,
+    latestSend,
+    mounted,
+    live,
+    textarea,
+  })
   useEffect(() => {
     latestSend.current = send
   })
@@ -876,11 +250,6 @@ export function Composer({
     }
   }
 
-  const available = offered.filter((agent) => !to.includes(agent.id))
-  // "From workspace…" browses the workspace of whoever the message goes to: the To chips, else the room lead.
-  const pickerAgents = agents.filter((agent) =>
-    to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),
-  )
   const lines = roomMode ? 1 : Math.min(Math.max(text.split('\n').length, 1), 8)
   // The room composer grows with what wraps, not only with newlines; CSS caps it at 8 lines and then scrolls.
   useLayoutEffect(() => {
@@ -894,122 +263,32 @@ export function Composer({
     : (toLabel ?? 'To: new job')
   return (
     <div className="chat-composer">
-      {notice && (
-        <div
-          className={`chat-composer-notice${notice.kind === 'error' ? ' chat-composer-notice--error' : ''}`}
-          role={notice.kind === 'error' ? 'alert' : 'status'}
-        >
-          {notice.kind === 'result' ? (
-            <CommandNotice command={notice.command} />
-          ) : (
-            <span className="chat-usage-card">
-              {notice.text}
-              {notice.kind === 'error' && notice.action && (
-                <>
-                  {' '}
-                  <Link className="link" to={notice.action.to}>
-                    {notice.action.label}
-                  </Link>
-                </>
-              )}
-              {notice.kind === 'error' && notice.retry && (
-                <>
-                  {' '}
-                  <button
-                    type="button"
-                    className="link"
-                    disabled={pending}
-                    onClick={notice.retry.run}
-                  >
-                    {notice.retry.label}
-                  </button>
-                </>
-              )}
-            </span>
-          )}
-          {notice.kind === 'error' && notice.heldAgent && (
-            <ReleaseHeld agentId={notice.heldAgent} />
-          )}
-        </div>
-      )}
-      {menu && count > 0 && (
-        <div
-          className="chat-menu"
-          role="listbox"
-          id={`${ids}-menu`}
-          aria-label={menu === 'slash' ? 'Commands' : 'Agents'}
-        >
-          {menu === 'slash'
-            ? slashItems.map((item, position) => (
-                <button
-                  key={item.name}
-                  id={optionId(position)}
-                  type="button"
-                  role="option"
-                  tabIndex={-1}
-                  aria-selected={position === index}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => select(position)}
-                >
-                  <span className="chat-menu-command">/{item.name}</span>
-                  <span className="chat-menu-detail" title={item.description}>
-                    {item.description}
-                  </span>
-                </button>
-              ))
-            : mentionItems.map((agent, position) => (
-                <button
-                  key={agent.id}
-                  id={optionId(position)}
-                  type="button"
-                  role="option"
-                  tabIndex={-1}
-                  aria-selected={position === index}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => select(position)}
-                >
-                  <AgentGlyph agent={agent} size="xs" bare decorative />
-                  <span className="chat-menu-command">@{agent.id}</span>
-                  <span className="chat-menu-detail" title={agent.role ?? undefined}>
-                    {agent.role}
-                  </span>
-                </button>
-              ))}
-        </div>
-      )}
-      {editing && confirmEdit && (
-        <RewindDialog
-          roomId={roomId}
-          messageId={editing.messageId}
-          mode="edit"
-          agents={agents}
-          onClose={() => setConfirmEdit(false)}
-          onDone={() => {
-            rewoundEdit.current = editing.messageId
-            setConfirmEdit(false)
-            void send()
-          }}
-        />
-      )}
-      {editing && (
-        <div className="chat-editing" role="status">
-          <span>Editing your message</span>
-          <span className="chat-edit-note">
-            {roomMode
-              ? 'Sending replaces it and rewinds the agents to before it (long-term memory stays).'
-              : 'Sending hides it and everything after it as the previous version.'}
-          </span>
-          <button
-            type="button"
-            className="chat-editing-cancel"
-            onClick={leaveEdit}
-            // While Send rewinds, Cancel can't take it back (the correction's post can still be left, as before).
-            disabled={rewinding}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
+      <ComposerNotice notice={notice} pending={pending} />
+      <ComposerMenu
+        menu={menu}
+        count={count}
+        slashItems={slashItems}
+        mentionItems={mentionItems}
+        ids={ids}
+        index={index}
+        optionId={optionId}
+        select={select}
+      />
+      <ComposerEditing
+        editing={editing}
+        confirmEdit={confirmEdit}
+        roomId={roomId}
+        roomMode={roomMode}
+        agents={agents}
+        rewinding={rewinding}
+        onClose={() => setConfirmEdit(false)}
+        onDone={(messageId) => {
+          markRewound(messageId)
+          setConfirmEdit(false)
+          void send()
+        }}
+        onCancel={leaveEdit}
+      />
       {pickingWorkspace && (
         <WorkspacePicker
           agents={pickerAgents}
@@ -1070,393 +349,63 @@ export function Composer({
             void upload(files)
           }}
         />
-        {(attachments.length > 0 || uploading > 0) && (
-          <ul className="chat-attachments" aria-label="Attachments">
-            {attachments.map((item) => (
-              <li
-                key={attachmentKey(item)}
-                className={`chat-attachment${item.kind === 'upload' && canSaveToKnowledge(item) ? ' has-save' : ''}`}
-              >
-                {item.kind === 'upload' && isImage(item.contentType) ? (
-                  <img src={`/api/media/${encodeURIComponent(item.mediaId)}`} alt="" />
-                ) : (
-                  <span className="chat-attachment-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path
-                        d="M4 1.8 H9.4 L12.6 5 V13.4 A0.8 0.8 0 0 1 11.8 14.2 H4 A0.8 0.8 0 0 1 3.2 13.4 V2.6 A0.8 0.8 0 0 1 4 1.8 Z M9.2 1.9 V5.2 H12.5"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                )}
-                <span
-                  title={item.kind === 'workspace' ? `${item.agentId}: ${item.path}` : undefined}
-                >
-                  {item.kind === 'workspace' ? item.path : attachmentName(item)}
-                </span>
-                {item.kind === 'upload' && canSaveToKnowledge(item) && (
-                  <ChipSaveOption
-                    name={item.name}
-                    folder={saveTo[item.mediaId] ?? null}
-                    onChange={(folder) =>
-                      setSaveTo((current) => {
-                        const next = { ...current }
-                        if (folder === null) delete next[item.mediaId]
-                        else next[item.mediaId] = folder
-                        return next
-                      })
-                    }
-                  />
-                )}
-                <button
-                  type="button"
-                  aria-label={`Remove ${attachmentName(item)}`}
-                  onClick={() =>
-                    setAttachments(
-                      attachments.filter((other) => attachmentKey(other) !== attachmentKey(item)),
-                    )
-                  }
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-            {sendingFiles.map((item) => (
-              <li key={item.key} className="chat-attachment">
-                <UploadProgress
-                  name={item.name}
-                  progress={item.progress}
-                  after="Checking…"
-                  compact
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <ComposerAttachments
+          attachments={attachments}
+          uploading={uploading}
+          sendingFiles={sendingFiles}
+          saveTo={saveTo}
+          setSaveTo={setSaveTo}
+          onRemove={(item) =>
+            setAttachments(
+              attachments.filter((other) => attachmentKey(other) !== attachmentKey(item)),
+            )
+          }
+        />
         {knowledgeFlow.dialogs}
         <div className="chat-composer-row">
-          {!roomMode && <span className="chat-composer-label">To</span>}
-          {!roomMode && to.length === 0 && <span className="chat-composer-default">Room lead</span>}
-          {to.map((id) => {
-            const agent = agents.find((item) => item.id === id)
-            const color = agent?.style.color
-            return (
-              <span
-                key={id}
-                className="chat-chip"
-                style={
-                  color ? { background: agentTint(color), color: agentTextColor(color) } : undefined
-                }
-              >
-                {agent && <AgentGlyph agent={agent} size="xs" bare decorative />}
-                {agent?.name ?? id}
-                <button
-                  type="button"
-                  aria-label={`Remove ${agent?.name ?? id}`}
-                  onClick={() => setTo(to.filter((item) => item !== id))}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                    <path
-                      d="M2 2 L8 8 M8 2 L2 8"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </span>
-            )
-          })}
-          {!roomMode && (
-            <span
-              className="chat-add"
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && picker) {
-                  event.stopPropagation()
-                  setPicker(false)
-                }
-              }}
-            >
-              <button
-                type="button"
-                className="chat-add-trigger"
-                aria-expanded={picker}
-                aria-haspopup="true"
-                disabled={!available.length}
-                onClick={() => setPicker(!picker)}
-              >
-                Add someone
-              </button>
-              {picker && (
-                <ul className="chat-add-list" aria-label="Add someone">
-                  {available.map((agent) => (
-                    <li key={agent.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTo([...to, agent.id])
-                          setPicker(false)
-                          textarea.current?.focus()
-                        }}
-                      >
-                        <AgentGlyph agent={agent} size="xs" bare decorative />
-                        {agent.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </span>
-          )}
-          <span className="chat-grow" />
-          {!roomMode && (
-            <button
-              type="button"
-              className="chat-plan-toggle"
-              aria-pressed={planFirst}
-              onClick={() => setPlanFirst(!planFirst)}
-            >
-              <span className="chat-switch" aria-hidden="true" />
-              Plan first
-            </button>
-          )}
-          <input
-            ref={fileInput}
-            type="file"
-            className="chat-sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            accept={ACCEPT}
-            multiple
-            data-testid="attach-input"
-            onChange={(event) => void upload([...(event.target.files ?? [])])}
+          <ComposerToPicker
+            roomMode={roomMode}
+            agents={agents}
+            offered={offered}
+            to={to}
+            setTo={setTo}
+            planFirst={planFirst}
+            setPlanFirst={setPlanFirst}
+            textarea={textarea}
           />
-          <span
-            className="chat-attach-menu"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && attachMenu) {
-                event.stopPropagation()
-                setAttachMenu(false)
-              }
-            }}
-          >
-            <button
-              type="button"
-              className="chat-attach"
-              aria-label={
-                roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach files'
-              }
-              aria-haspopup="true"
-              aria-expanded={attachMenu}
-              title={
-                orchestrate
-                  ? 'Attach files or start an orchestration'
-                  : 'Attach images and documents (up to 10; 25 MB each)'
-              }
-              disabled={
-                pending || (!orchestrate && attachments.length + uploading >= MAX_ATTACHMENTS)
-              }
-              onClick={() => setAttachMenu(!attachMenu)}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                {orchestrate || roomMode ? (
-                  <path
-                    d="M8 3 V13 M3 8 H13"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                  />
-                ) : (
-                  <path
-                    d="M10.5 5 L5.8 9.7 A1.6 1.6 0 0 0 8.1 12 L13 7.1 A3 3 0 0 0 8.8 2.9 L3.9 7.8 A4.4 4.4 0 0 0 10.1 14"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                )}
-              </svg>
-            </button>
-            {attachMenu && (
-              <ul
-                className="chat-attach-list"
-                aria-label={
-                  roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach'
-                }
-              >
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAttachMenu(false)
-                      fileInput.current?.click()
-                    }}
-                  >
-                    Upload files…
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAttachMenu(false)
-                      setPickingWorkspace(true)
-                    }}
-                  >
-                    From workspace…
-                  </button>
-                </li>
-                {roomMode && voice.supported && (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachMenu(false)
-                        toggleVoice()
-                      }}
-                    >
-                      {voice.listening ? 'Stop voice input' : 'Voice input'}
-                    </button>
-                  </li>
-                )}
-                {roomMode && (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachMenu(false)
-                        edit('/', 1)
-                        requestAnimationFrame(() => textarea.current?.focus())
-                      }}
-                    >
-                      Commands…
-                    </button>
-                  </li>
-                )}
-                {roomMode && topicCommands?.items.some((item) => item.name === 'run') && (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachMenu(false)
-                        // The same dialog as /run: Start a run for this chat (3.24.0: the header's + Job is gone).
-                        topicCommands.run('run', '').catch((error: unknown) =>
-                          setNotice({
-                            kind: 'error',
-                            text:
-                              error instanceof Error
-                                ? error.message
-                                : 'That command failed. Try again.',
-                          }),
-                        )
-                      }}
-                    >
-                      Start a run…
-                    </button>
-                  </li>
-                )}
-                {orchestrate && (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachMenu(false)
-                        orchestrate('')
-                      }}
-                    >
-                      Start an orchestration…
-                    </button>
-                  </li>
-                )}
-              </ul>
-            )}
-          </span>
-          {voice.supported && (
-            <button
-              type="button"
-              className="chat-voice"
-              aria-label="Voice input"
-              aria-pressed={voice.listening}
-              title={voice.listening ? 'Stop listening' : 'Dictate a message'}
-              onClick={toggleVoice}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <rect
-                  x="5.5"
-                  y="1.5"
-                  width="5"
-                  height="8"
-                  rx="2.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                />
-                <path
-                  d="M3 7.5 A5 5 0 0 0 13 7.5 M8 12.5 V14.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          )}
-          {/* The context rings and Send stay together (owner request: rings just left of Send). */}
-          <span className="chat-send-group">
-            {/* Context rings sit just left of Send (owner request): one per addressed agent. */}
-            {!roomMode && meterAgents.length > 0 && (
-              <div className="chat-meter" role="group" aria-label="Context use">
-                {meterAgents.map((id) => (
-                  <ContextMeter
-                    key={id}
-                    roomId={roomId}
-                    agentId={id}
-                    name={agents.find((agent) => agent.id === id)?.name ?? id}
-                    finishedReplies={finishedReplies}
-                    confirmSignal={id === compactSubject ? compactSignal : undefined}
-                  />
-                ))}
-              </div>
-            )}
-            {writing.length > 0 && !text.trim() && !editing ? (
-              <button
-                type="button"
-                className="chat-send chat-send--stop"
-                data-protected="inline-flex"
-                aria-label={stopping ? 'Stopping…' : 'Stop'}
-                title="Stop"
-                aria-busy={stopping}
-                disabled={stopping}
-                onClick={() => void stopReplies()}
-              >
-                <StopIcon />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                className="chat-send"
-                disabled={!text.trim() || Boolean(hold) || pending || uploading > 0}
-              >
-                {roomMode ? (
-                  <>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M12 19V5M6 11l6-6 6 6"
-                        stroke="currentColor"
-                        strokeWidth="2.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="chat-sr-only">{editing ? 'Send correction' : 'Send'}</span>
-                  </>
-                ) : editing ? (
-                  'Send correction'
-                ) : (
-                  'Send'
-                )}
-              </button>
-            )}
-          </span>
+          <ComposerAttachControls
+            roomMode={roomMode}
+            orchestrate={orchestrate}
+            pending={pending}
+            attachmentCount={attachments.length}
+            uploading={uploading}
+            fileInput={fileInput}
+            upload={upload}
+            onPickWorkspace={() => setPickingWorkspace(true)}
+            voice={voice}
+            toggleVoice={toggleVoice}
+            edit={edit}
+            textarea={textarea}
+            topicCommands={topicCommands}
+            setNotice={setNotice}
+          />
+          <ComposerSendControls
+            roomMode={roomMode}
+            roomId={roomId}
+            agents={agents}
+            meterAgents={meterAgents}
+            finishedReplies={finishedReplies}
+            compactSubject={compactSubject}
+            compactSignal={compactSignal}
+            writingCount={writing.length}
+            text={text}
+            editing={Boolean(editing)}
+            stopping={stopping}
+            hold={hold}
+            pending={pending}
+            uploading={uploading}
+            stopReplies={stopReplies}
+          />
         </div>
         {voice.error && (
           <p className="chat-composer-notice chat-composer-notice--error" role="alert">
@@ -1474,9 +423,4 @@ export function Composer({
         footer({ to, subject, finishedReplies, compactSignal, compactSubject })}
     </div>
   )
-}
-
-/** Images, PDF, DOCX and text files can go to Knowledge; XLSX and anything else cannot. */
-function canSaveToKnowledge(item: { name: string; contentType: string }): boolean {
-  return item.contentType.startsWith('image/') || isSupportedName(item.name)
 }

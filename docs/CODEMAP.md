@@ -125,6 +125,21 @@ likely to be the entry point for a change.
 - `apps/web/src/data/stream.ts` — resumable browser SSE client.
 - `apps/web/src/data/query-client.ts` — query client and stream context.
 - `apps/web/src/routes/chat/Composer.tsx` — classic chat composer and send flow.
+- `apps/web/src/routes/chat/composer-types.ts` — composer props, notice/snapshot types and shared draft types.
+- `apps/web/src/routes/chat/composer-local-command.ts` — `/compress`, `/usage` and `/model` handling.
+- `apps/web/src/routes/chat/composer-send.ts` — message posting, optimistic updates, rewind and send retries.
+- `apps/web/src/routes/chat/ComposerNotice.tsx` — composer notice banner and command result text.
+- `apps/web/src/routes/chat/ComposerMenu.tsx` — slash-command and agent mention menu.
+- `apps/web/src/routes/chat/ComposerEditing.tsx` — edit notice and rewind confirmation.
+- `apps/web/src/routes/chat/ComposerAttachments.tsx` — attachment tray, upload progress and Knowledge save chips.
+- `apps/web/src/routes/chat/ComposerToPicker.tsx` — recipient chips, add-person menu and plan-first toggle.
+- `apps/web/src/routes/chat/ComposerAttachControls.tsx` — file input, attach menu, voice button and command shortcuts.
+- `apps/web/src/routes/chat/ComposerSendControls.tsx` — context rings, stop and send controls.
+- `apps/web/src/routes/chat/use-composer-editing.ts` — edit session, draft stash and rewind state.
+- `apps/web/src/routes/chat/use-composer-room.ts` — room message state, stop replies, subject and context-ring state.
+- `apps/web/src/routes/chat/use-composer-menu.ts` — command query, slash/mention suggestions and menu selection.
+- `apps/web/src/routes/chat/use-composer-voice.ts` — voice input lifecycle and draft updates.
+- `apps/web/src/routes/chat/use-composer-uploads.ts` — uploads, attachment state, Knowledge saving and live draft ref.
 - `apps/web/src/routes/chat/MessageItem.tsx` — chat message rendering.
 - `apps/web/src/routes/chat/chat.css` — ordered entry for the classic chat stylesheets.
 - `apps/web/src/routes/chat/chat-shell.css` — New chat actions, direct-room link, thread frame and title.

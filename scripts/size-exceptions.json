@@ -715,11 +715,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/chat/Composer.tsx",
-    "lines": 1482,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/chat/ContextMeter.tsx",
     "lines": 483,
     "reason": "split in CS.2 wave 1"
