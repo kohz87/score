@@ -1,12 +1,10 @@
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import type { AgentSummary, Job, Message } from '@score/contract'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStreamQuery } from '../../data/query-client.ts'
 import './bold-thread.css'
-import { approvalsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
+import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { type VersionView } from '../../routes/chat/versions.tsx'
-import { agentDisplayName } from '../bold-agents.ts'
 import { authorName, BoldMessage, buildMessageNodes, retryableIds } from './BoldMessage.tsx'
 import { approvalPointerSet, holdsSeveralJobs } from './room-model.ts'
 import {
@@ -18,71 +16,20 @@ import {
   type SystemLine,
 } from './topic-divider.tsx'
 import { groupKey, groupReplies, pickReplyVersion } from './reply-versions.ts'
-import { roomChatMessagesQuery, roomSeekQuery } from './room-queries.ts'
-import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
-import { isRunOver } from '../../routes/orchestrations/orch-model.ts'
-import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { RunCard } from './RunCard.tsx'
-import { recipeRun } from './thread-model.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
 import { NeedsSlot, slotIds } from './needs-slots.tsx'
-
-type PageState = {
-  data?: MessagePageData & { found?: boolean }
-  status: 'pending' | 'success' | 'error'
-  error?: unknown
-}
-
-function pageKey(before: string | null) {
-  return before ?? 'latest'
-}
-
-function seekMarker(seek: string) {
-  return `seek:${seek}`
-}
-
-/** Registers one page of the chat's one chain (every topic together) and hands its state to the stream. */
-function MessagePageCollector({
-  roomId,
-  before,
-  defaultJobId,
-  onPage,
-}: {
-  roomId: string
-  before: string | null
-  defaultJobId: string | null
-  onPage: (key: string, state: PageState) => void
-}) {
-  const definition = useMemo(
-    () => roomChatMessagesQuery(roomId, before, defaultJobId),
-    [before, defaultJobId, roomId],
-  )
-  const { data, status, error } = useStreamQuery(definition)
-  useEffect(() => {
-    onPage(pageKey(before), { data, status, error })
-  }, [before, data, error, onPage, status])
-  return null
-}
-
-/** Reads back through the chat's history to a `?message=` target without paging state. */
-function MessageSeekCollector({
-  roomId,
-  seek,
-  onPage,
-}: {
-  roomId: string
-  seek: string
-  onPage: (key: string, state: PageState) => void
-}) {
-  const definition = useMemo(() => roomSeekQuery(roomId, null, seek, true), [roomId, seek])
-  const { data, status, error } = useStreamQuery(definition)
-  useEffect(() => {
-    onPage(pageKey(seekMarker(seek)), { data, status, error })
-  }, [data, error, onPage, seek, status])
-  return null
-}
+import {
+  MessagePageCollector,
+  MessageSeekCollector,
+  pageKey,
+  seekMarker,
+  type PageState,
+} from './room-message-pages.tsx'
+import { RoomTyping } from './RoomTyping.tsx'
+import { useRoomLiveCards } from './use-room-live-cards.ts'
 
 /** The chat as one conversation: every topic's messages in time order, a divider where each topic starts. */
 export function RoomMessageStream({
@@ -125,17 +72,7 @@ export function RoomMessageStream({
   ) => { actions?: ReactNode; below?: ReactNode } | undefined
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
-  // Only the 3 newest cards of runs still going read their live detail; the rest (and every finished run) use summaries.
-  const orchestrations = useStreamQuery(orchestrationsQuery).data
-  const workflowRuns = useStreamQuery(workflowRunsQuery).data
-  const liveCards = useMemo(() => {
-    const going = jobs.filter((job) => {
-      const match = recipeRun(job.recipe ?? null, orchestrations ?? [], workflowRuns ?? [])
-      return match !== null && !isRunOver(match.summary.status)
-    })
-    going.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    return new Set(going.slice(0, 3).map((job) => job.id))
-  }, [jobs, orchestrations, workflowRuns])
+  const liveCards = useRoomLiveCards(jobs)
   const runCard = (job: Job) =>
     job.recipe && onShowGraph ? (
       <RunCard
@@ -499,22 +436,7 @@ export function RoomMessageStream({
         )}
       {nodes}
       <NeedsSlot id={slotIds.end} />
-      {Object.entries(typing).map(([agentId, text]) => {
-        const agent = agents.find((item) => item.id === agentId)
-        if (!agent) return null
-        return (
-          <p className="bold-typing" key={agentId} role="status">
-            <AgentGlyph
-              agent={agent}
-              size="xs"
-              bare
-              decorative
-              mood={text ? 'working' : 'thinking'}
-            />{' '}
-            <b>{agentDisplayName(agent)}</b> {text}
-          </p>
-        )
-      })}
+      <RoomTyping agents={agents} typing={typing} />
       {/* Sticks above the composer: "2 need you ↑" when a card is out of view. */}
       <NeedsSlot id={slotIds.chip} className="bold-needs-chip-slot" />
     </div>
