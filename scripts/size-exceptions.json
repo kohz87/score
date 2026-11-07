@@ -1,15 +1,5 @@
 [
   {
-    "path": "apps/server/src/domain/approvals.ts",
-    "lines": 668,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/briefs.ts",
-    "lines": 523,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/exchanges/apply.ts",
     "lines": 631,
     "reason": "split in CS.2 wave 1"
