@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// How busy this machine is, for the lead's parallel-task rule (CLAUDE.md "Ground rules" 3, owner 2026-11-07): keep it
-// at about 80% while building, start more tasks under 50%, start nothing over 90%. Linux only (/proc).
+// How busy the whole machine is, for the lead's load rule (CLAUDE.md "Ground rules" 3, owner 2026-11-07): 80% is a
+// safety ceiling so the VM never crashes; under 50% the lead starts more tasks. Linux only (/proc).
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -33,13 +33,15 @@ const after = cpuTimes()
 const total = after.total - before.total
 const cpu = total > 0 ? Math.round(100 * (1 - (after.idle - before.idle) / total)) : 0
 const mem = memoryPercent()
-const busiest = Math.max(cpu, mem)
+// The whole machine counts (other projects share it): 80% is a safety ceiling, and memory is the crash risk.
 const advice =
-  busiest < 50
-    ? 'start more parallel tasks (under 50%)'
-    : busiest > 90
-      ? 'start nothing new (over 90%)'
-      : busiest >= 70
-        ? 'hold (in the 70–90% band)'
-        : 'room for one more task (50–70%)'
+  mem > 90
+    ? 'memory over 90%: stop the newest task Score started'
+    : cpu > 85 || mem > 80
+      ? 'over the ceiling: start nothing, let running work finish'
+      : Math.max(cpu, mem) >= 70
+        ? 'near the ceiling (70–85%): start nothing new'
+        : Math.max(cpu, mem) >= 50
+          ? 'room for one more task (50–70%)'
+          : 'start more parallel tasks (under 50%), one at a time'
 console.log(`cpu ${cpu}%  mem ${mem}%  → ${advice}`)

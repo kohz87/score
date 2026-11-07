@@ -12,10 +12,13 @@
    `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*)" "<review prompt>"`
    (the prompt carries the brief, the diff command and the checks). Every task and every fix round gets one before
    the lead's merge checks; the lead verifies each finding.
-3. **Keep the machine at about 80% busy while building.** Check `node scripts/capacity.mjs` (CPU and memory, sampled);
-   under 50% start more parallel tasks (independent worktrees) until about 80%; over 90% start nothing new. A release's
-   full test run (`pnpm e2e` + `pnpm check`) gets the machine to itself: no new coders start while it runs (load makes
-   e2e flaky).
+3. **Machine load is measured for the whole system, and 80% is a safety ceiling** (the owner's other projects share
+   this VM; the point is that it never crashes). Before starting or adding any task, run `node scripts/capacity.mjs`
+   (CPU and memory of the whole machine, sampled). Under 50%: start more parallel tasks (independent worktrees), one at
+   a time, re-checking after each, aiming at about 80%. 70–85%: start nothing new. Over 85% CPU, or memory over 80%:
+   start nothing and let running work finish; over 90% memory: stop the newest task Score started (it can be resumed).
+   Memory is the crash risk (each Playwright run and builder takes several GB), so it counts as much as CPU. A release's
+   full test run gets the machine to itself: no new coders while it runs.
 4. **450 lines and the code map** (AGENTS.md "File size and the code map"): every brief repeats the rule, every review
    checks it, and every task that adds, moves or removes a file updates `docs/CODEMAP.md`.
 
