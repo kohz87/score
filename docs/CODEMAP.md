@@ -435,6 +435,11 @@ likely to be the entry point for a change.
 
 - `apps/server/test/runtimes/coding-fixtures.ts` — recorded coding-driver CLI fixture lines.
 - `apps/server/test/runtimes/coding-drivers-helpers.ts` — shared coding-driver test setup: fixture parsing, deny/base options, verdict extraction and Codex record factories.
+- `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate suites.
+
+### Key files
+
+- `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
 
 ## packages/contract/src
 
