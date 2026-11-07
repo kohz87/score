@@ -1173,6 +1173,8 @@ likely to be the entry point for a change.
 - `e2e/bold-library-editor-helpers.ts` — shared library-editor navigation, note creation and zip-reading helpers.
 - `e2e/bold-library-helpers.ts` — shared bold Library navigation, note, file and zip helpers.
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
+- `e2e/bold-needs-you-helpers.ts` — shared needs-you room jobs, approvals, exchanges and orchestration/workflow run fixtures.
+- `e2e/bold-recipes-helpers.ts` — shared Recipes page navigation, step selection, validation and workflow API helpers.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
 - `e2e/visual-fixtures.ts` — shared visual-test setup.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.
