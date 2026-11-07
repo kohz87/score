@@ -322,6 +322,18 @@ likely to be the entry point for a change.
 - `apps/server/src/http/rooms/summary-routes.ts` — room summary generate, edit and delete routes.
 - `apps/server/src/http/rooms/version-routes.ts` — room version list and version-message reads.
 - `apps/server/src/http/stream.ts` — stream route.
+- `apps/server/src/domain/approvals.ts` — approval public surface: decisions, signals and run approvals re-exported from their modules.
+- `apps/server/src/domain/approval-schemas.ts` — gate signal and approval signal row schemas.
+- `apps/server/src/domain/approval-writes.ts` — approval row insertion, change journal and choice recording.
+- `apps/server/src/domain/approval-signals.ts` — bridge signal application, hidden-card folding, replay and tool completion claims.
+- `apps/server/src/domain/approval-runs.ts` — Score-run approval request, response, close and expiry.
+- `apps/server/src/domain/briefs.ts` — brief public surface and re-exports.
+- `apps/server/src/domain/brief-types.ts` — brief, task-link and turn row schemas and types.
+- `apps/server/src/domain/brief-queries.ts` — brief, task and turn reads plus title and actionability helpers.
+- `apps/server/src/domain/brief-status.ts` — derived brief status, summaries, emission, last activity and listing.
+- `apps/server/src/domain/brief-links.ts` — brief creation, task links and flow edges.
+- `apps/server/src/domain/brief-holds.ts` — arrival holds for paused briefs, agents and the team.
+- `apps/server/src/domain/brief-events.ts` — ingest hook that keeps brief links and blocks in step with events.
 - `apps/server/src/domain/orchestration/executor.ts` — public Orchestrator facade, constructor state and re-exports.
 - `apps/server/src/domain/orchestration/executor-admission.ts` — choosing queued work and admitting runs.
 - `apps/server/src/domain/orchestration/executor-capacity.ts` — capacity and storage usage reads.
