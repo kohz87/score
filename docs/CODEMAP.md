@@ -628,7 +628,14 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner pass modules, runs and split view modules.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
-- `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
+- `apps/server/src/hermes/bridge/` — Python bridge producers, routes, event translation, ingest and retention.
+- `apps/server/src/hermes/bridge/translate.ts` — bridge event observation facade and dispatch.
+- `apps/server/src/hermes/bridge/translate-schemas.ts` — bridge translation schemas, constants and shared payload types.
+- `apps/server/src/hermes/bridge/translate-payload.ts` — bridge payload decoding, bounds, identifier extraction and redaction.
+- `apps/server/src/hermes/bridge/translate-log.ts` — redacted bridge log-event drafts.
+- `apps/server/src/hermes/bridge/translate-tools.ts` — tool-call translation into shared tool state and Watch frames.
+- `apps/server/src/hermes/bridge/translate-approvals.ts` — approval-signal persistence and application.
+- `apps/server/src/hermes/bridge/translate-system.ts` — session deletion, compaction, bridge gaps and system/message logs.
 - `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs, run control, the demo timeline and team-room seed.
 - `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
