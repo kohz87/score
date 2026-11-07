@@ -66,6 +66,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
 - `apps/web/src/bold/jobmap/` — job map graph, worker nodes and split map styles for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
+- `apps/web/src/bold/room/` — team room shell, loaded-room parts, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
@@ -324,8 +325,18 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/jobmap/jobmap-layers.css` — vote rows, swarm and worker layout, stop rows and check lines.
 - `apps/web/src/bold/jobmap/jobmap-lines-log.css` — connector lines and dots, session log, phone layout and motion.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
+- `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room shell, room lookup and title composition.
+- `apps/web/src/bold/room/LoadedTeamRoom.tsx` — loaded room body: topics, requests, stream, composer and dialogs.
+- `apps/web/src/bold/room/RoomEntryStates.tsx` — team-room loading and unavailable states.
+- `apps/web/src/bold/room/RoomJobLifecycleNotice.tsx` — protected job close, reopen and stop notice.
+- `apps/web/src/bold/room/RoomJobStrip.tsx` — active, stopped and past job bars with Next up.
+- `apps/web/src/bold/room/StartedBy.tsx` — trigger source card and report-back line.
 - `apps/web/src/bold/room/BoldTeamRoom-helpers.tsx` — shared fixtures, setup and DOM probes for the split BoldTeamRoom tests.
-- `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
+- `apps/web/src/bold/room/RoomMessageStream.tsx` — conversation rendering, seeking, history and follow behaviour.
+- `apps/web/src/bold/room/RoomTyping.tsx` — agent typing rows under the conversation.
+- `apps/web/src/bold/room/room-message-pages.tsx` — message page state keys and latest, earlier and seek collectors.
+- `apps/web/src/bold/room/use-room-job-lifecycle.ts` — remote deletion, close, reopen, stop, rename/delete cache and undo handling.
+- `apps/web/src/bold/room/use-room-live-cards.ts` — the three newest live run-card ids.
 - `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.
 - `apps/web/src/bold/room/menu-primitives.tsx` — menu dots, focus and Escape lifecycle, and arrow-key navigation.
 - `apps/web/src/bold/room/room-menu-model.ts` — the older-room predicate shared by the room title and switcher.
