@@ -170,16 +170,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/runtimes/coding/claude.ts",
-    "lines": 693,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/runtimes/coding/codex.ts",
-    "lines": 486,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/runtimes/coding/coding-socket.ts",
     "lines": 889,
     "reason": "split in CS.2 wave 1"

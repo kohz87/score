@@ -406,6 +406,16 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/service-admission.ts` — idempotent run admission and unresolved-run checks.
 - `apps/server/src/runtimes/coding/service-stops.ts` — Stop controls for live, recorded and queued runs.
 - `apps/server/src/runtimes/coding/service-recovery.ts` — restart recovery, shutdown and the final `CodingRuntime` class.
+- `apps/server/src/runtimes/coding/claude.ts` — public Claude Code driver import path and re-export facade.
+- `apps/server/src/runtimes/coding/claude-schemas.ts` — Claude Code stream-json schemas and ignore lists.
+- `apps/server/src/runtimes/coding/claude-helpers.ts` — Claude Code tool previews/details, result text and sub-agent status helpers.
+- `apps/server/src/runtimes/coding/claude-parser.ts` — Claude Code stream-json parser, loss handling, sub-agents and quota events.
+- `apps/server/src/runtimes/coding/claude-driver.ts` — Claude Code driver configuration, arguments, help checks and deny rules.
+- `apps/server/src/runtimes/coding/codex.ts` — public Codex driver import path and re-export facade.
+- `apps/server/src/runtimes/coding/codex-schemas.ts` — Codex JSONL record schemas and ignore lists.
+- `apps/server/src/runtimes/coding/codex-helpers.ts` — Codex retry-notice and agent-message detection helpers.
+- `apps/server/src/runtimes/coding/codex-parser.ts` — Codex JSONL parser, loss handling and command, file and search events.
+- `apps/server/src/runtimes/coding/codex-driver.ts` — Codex driver configuration, arguments, help checks and worker policy.
 - `apps/server/src/runtimes/coding/units.ts` — coding unit lifecycle.
 - `apps/server/src/runtimes/coding/unit-backend.ts` — the systemd unit backend (`UnitBackend`), the end of the class chain below, and its public exports.
 - `apps/server/src/runtimes/coding/unit-backend-types.ts` — unit backend types: status, deps, launch request, outcomes, recovery report.
