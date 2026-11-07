@@ -346,6 +346,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/knowledge/knowledge-cell-editing.css` — version-body sizing, in-place table-cell editing and editor focus.
 - `apps/web/src/routes/knowledge/knowledge-upload.css` — upload progress card.
 - `apps/web/src/routes/watch/watch-model.ts` — watch timeline and replay model.
+- `apps/web/src/routes/workflows/workflows-test-helpers.tsx` — shared fetch, stream, mount and fixture helpers for the split workflow tests.
 - `apps/web/src/themes/guard.ts` — protected-surface and theme guard.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.

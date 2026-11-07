@@ -340,11 +340,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/workflows/workflows.test.tsx",
-    "lines": 464,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/themes/guard.ts",
     "lines": 719,
     "reason": "split in CS.2 wave 1"
