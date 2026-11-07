@@ -5,16 +5,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/workflows/planner.ts",
-    "lines": 909,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/workflows/views.ts",
-    "lines": 830,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/bridge/translate.ts",
     "lines": 515,
     "reason": "split in CS.2 wave 1"

@@ -283,6 +283,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, call intake, queue, lifecycle, payload rendering and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
+- `apps/server/src/domain/workflows/` — workflow definitions, planner pass modules, runs and split view modules.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
 - `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs and run control.
@@ -492,6 +493,19 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/triggers/trigger-content.ts` — payload value lookup, redaction, opening message, links and samples.
 - `apps/server/src/domain/triggers/trigger-lifecycle.ts` — trigger listing, creation retry, update, deletion, secret read and rotation.
 - `apps/server/src/domain/triggers/trigger-calls.ts` — signed call verification, idempotency, budgets, job source and queue hand-off.
+- `apps/server/src/domain/workflows/planner.ts` — planner entry point and public facade.
+- `apps/server/src/domain/workflows/planner-context.ts` — planner pass loading, state/token primitives and run failure.
+- `apps/server/src/domain/workflows/planner-observe.ts` — executor-step observation and coding-hold handling.
+- `apps/server/src/domain/workflows/planner-graph.ts` — local node resolution, graph ancestry and node gates.
+- `apps/server/src/domain/workflows/planner-assign.ts` — assignment readiness, refusals and step creation.
+- `apps/server/src/domain/workflows/planner-finish.ts` — terminal graph detection and finish receipt.
+- `apps/server/src/domain/workflows/views.ts` — workflow view facade and public re-exports.
+- `apps/server/src/domain/workflows/views-remap.ts` — remap planning for unsent workflow work.
+- `apps/server/src/domain/workflows/views-waiting.ts` — per-node waiting reasons.
+- `apps/server/src/domain/workflows/views-summary.ts` — run summaries, coding authorisation and Needs-you items.
+- `apps/server/src/domain/workflows/views-storage.ts` — run storage inventory.
+- `apps/server/src/domain/workflows/views-detail.ts` — full workflow run detail assembly.
+- `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
