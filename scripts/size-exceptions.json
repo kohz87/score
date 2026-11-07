@@ -100,11 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/triggers/webhooks.test.ts",
-    "lines": 798,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/workflows/http.test.ts",
     "lines": 561,
     "reason": "split in CS.2 wave 1"
