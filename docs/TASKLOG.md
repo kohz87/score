@@ -2429,3 +2429,22 @@ One entry per completed task: what landed, review results, and any **rejected re
   row lands, which in normal order is before the turn completes (no event re-sends the job if it came later).
 - Gate: check green (contract 1614, web 3371, server 4989); e2e 16 failed, all passing on a fresh server (room-menu ×8,
   one-to-ones ×4, take-over, agent faces, team choice, workspace).
+
+## CS.1–CS.2 wave 1 — code maps, the 450-line limit, the eight largest files split (2026-11-07, decision 168)
+- First tasks under the 2026-11-07 ground rules: DeepSeek v4.1 Flash (NanoGPT) coded; `claude -p` Sonnet with an Opus
+  advisor reviewed; the lead verified, ran the checks, merged one at a time, and added tasks only under 50% load.
+- CS.1: `docs/CODEMAP.md`, ESLint `max-lines` 450 (ts, tsx, mjs, js — the lead added js after review), 213 exceptions
+  each capped at its line count, `scripts/structure-check.mjs` in `pnpm check`. A 451-line file fails lint/check.
+- CS.2a–h: executor.ts 4033 → 71 + 25 modules; BoldStartJob.tsx 2544 → 319 + 18; fake-port.ts 2426 → 11 modules;
+  coding service.ts 2203 → class chain; unit-backend.ts 2048 → class chain; bold-room.css, bold-settings.css, chat.css →
+  ordered `@import` stylesheets. Exceptions 213 → 205. Main: check green after every merge (web 3371, server 4989).
+- How "moved only" was proven: a line-multiset diff of the original against the new modules (only signatures,
+  `private`→`protected`, constants→exports differ); for CSS, the production build's compiled CSS is md5-identical.
+- Review findings: CS.2b effect dependency changed to the whole state object (re-ran every render) — fixed by the lead;
+  CS.2e code map missing its nine files — added by the lead. Rejected: none. Reviews of CS.2a/CS.2g could not finish
+  (their sandbox blocks scripts) — the lead's diffs above replaced them.
+- DeepSeek behaviour: sessions often end mid-command or after printing a raw tool call as text (CS.1, CS.2f); its sandbox
+  cannot bind ports (no e2e) and leaves hung test runs behind (two in CS.2d, stopped by PID). CS.2e needed one fix round
+  (missing members). Lessons: the lead runs the checks after each DeepSeek round; precompute diffs for the reviewer.
+- CS.3 (independent e2e): DeepSeek's two rounds took the targeted run from 1 failure (main's specs) to 15; handed to a
+  Sonnet coder (can run e2e), per the two-failed-rounds rule.
