@@ -39,7 +39,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
-- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state and split room styles.
+- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
 - `apps/web/src/components/flow-layout/` — workflow node placement helpers.
@@ -133,6 +133,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-responsive.css` — Settings frame, grid and section-page responsive rules.
 - `apps/web/src/bold/bold-settings-workspaces.css` — Workspace cards, agent chips and shared folders.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
+- `apps/web/src/bold/room/BoldTeamRoom-helpers.tsx` — shared fixtures, setup and DOM probes for the split BoldTeamRoom tests.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
 - `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.
 - `apps/web/src/bold/room/menu-primitives.tsx` — menu dots, focus and Escape lifecycle, and arrow-key navigation.
