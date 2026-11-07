@@ -1,0 +1,161 @@
+[data-ui='bold'] .bold-thread {
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-thread-title h2 {
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-thread-status {
+  color: var(--muted);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-thread-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-stop {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(16px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  border-radius: calc(22px * var(--bold-r, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm > b {
+  font-family: var(--font-d);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+[data-ui='bold'] .bold-thread-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm .btn {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm .btn.ghost {
+  background: transparent;
+  color: var(--hi-ink);
+  box-shadow: inset 0 0 0 1.5px var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-status-line,
+[data-ui='bold'] .bold-thread-error,
+[data-ui='bold'] .bold-thread-note {
+  margin: 0;
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .bold-thread-status-line {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-error {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-note {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-picker {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-picker > button {
+  border: 0;
+  border-radius: calc(18px * var(--bold-r, 1));
+  min-height: 54px;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  text-align: left;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-picker > button:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-thread-messages {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-round {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-round-label,
+[data-ui='bold'] .bold-thread-eyebrow {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-ui='bold'] .bold-thread-history {
+  align-self: center;
+  border: 0;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-thread-history:hover {
+  background: var(--field);
+  color: var(--ink);
+}

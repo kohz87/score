@@ -176,6 +176,25 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/BoldTeamRoom-helpers.tsx` — shared fixtures, setup and DOM probes for the split BoldTeamRoom tests.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
+- `apps/web/src/bold/room/RoomRequests.tsx` — needs-you composition, reads, announcements and focus hand-off.
+- `apps/web/src/bold/room/room-request-decisions.ts` — exchange decision bodies, form requirements and errors.
+- `apps/web/src/bold/room/ExchangeRequests.tsx` — pending exchange cards and their room read.
+- `apps/web/src/bold/room/ApprovalRequests.tsx` — approval cards, choices and room filtering.
+- `apps/web/src/bold/room/RoomFenceCard.tsx` — global run-fence notice.
+- `apps/web/src/bold/room/ReportBackRequests.tsx` — report-back cards and their send action.
+- `apps/web/src/bold/room/RoomQuestionRequests.tsx` — agent question cards.
+- `apps/web/src/bold/room/NeedsJumpChip.tsx` — out-of-view needs jump chip and stream clearance.
+- `apps/web/src/bold/room/NeedsFocusTracker.tsx` — document focus tracking for cards outside the React tree.
+- `apps/web/src/bold/room/RunSafetyRequests.tsx` — routes recipe jobs to their orchestration or workflow request cards.
+- `apps/web/src/bold/room/run-safety-entries.ts` — need-entry grouping and keys for runs and workflows.
+- `apps/web/src/bold/room/RunSafetyPins.tsx` — run request pin labels, notice flags and card wrapper.
+- `apps/web/src/bold/room/OrchestrationRunRequests.tsx` — orchestration run request cards.
+- `apps/web/src/bold/room/WorkflowRunRequests.tsx` — workflow run request cards.
+- `apps/web/src/bold/room/bold-thread.css` — thread style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/room/bold-thread-shell.css` — thread shell, stop and status, rounds and history.
+- `apps/web/src/bold/room/bold-thread-requests.css` — request cards, recipes, messages and context meter.
+- `apps/web/src/bold/room/bold-thread-composer.css` — thread composer, tasks and narrow-width actions.
+- `apps/web/src/bold/room/bold-thread-run-card.css` — run card and needs line in the stream.
 - `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.
 - `apps/web/src/bold/room/menu-primitives.tsx` — menu dots, focus and Escape lifecycle, and arrow-key navigation.
 - `apps/web/src/bold/room/room-menu-model.ts` — the older-room predicate shared by the room title and switcher.
