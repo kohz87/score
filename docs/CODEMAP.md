@@ -294,7 +294,12 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/src/index.ts` — process entry and signal handling.
-- `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
+- `apps/server/src/start-server.ts` — server wiring orchestration and the public startup exports.
+- `apps/server/src/start-server-background.ts` — hold recovery, delivery, retention and spend sweeps, certificate renewal and log rotation.
+- `apps/server/src/start-server-guide.ts` — HTTPS setup-guide server.
+- `apps/server/src/start-server-lifecycle.ts` — ordered shutdown of server resources and background jobs.
+- `apps/server/src/start-server-options.ts` — startup options and the removed insecure-flag message.
+- `apps/server/src/start-server-state.ts` — home and journal validation, installation resolution, database migration and event ingest startup.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
