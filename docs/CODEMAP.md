@@ -251,6 +251,16 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/executor-workflow-decisions.ts` — human decisions on workflow runs.
 - `apps/server/src/domain/orchestration/executor-workflow-preflight.ts` — workflow validation, preflight and reads.
 - `apps/server/src/domain/orchestration/fence.ts` — decision fences and turn ownership.
+- `apps/server/src/domain/orchestration/journal.ts` — execution journal facade: durable append, critical sections, reads, compaction and restore markers.
+- `apps/server/src/domain/orchestration/journal-entry.ts` — execution journal entry schemas and body types.
+- `apps/server/src/domain/orchestration/journal-history.ts` — history-reset and execution-freeze folding.
+- `apps/server/src/domain/orchestration/journal-dispatch.ts` — latest dispatch state per attempt.
+- `apps/server/src/domain/orchestration/journal-io.ts` — durable I/O seam, checksummed journal lines and shared read types.
+- `apps/server/src/domain/orchestration/journal-files.ts` — journal parsing, torn-tail repair, tail numbering and directory sync.
+- `apps/server/src/domain/orchestration/journal-markers.ts` — history and restore marker files plus launch-folder evidence.
+- `apps/server/src/domain/orchestration/journal-folds.ts` — generation and coding-record folds used by compaction.
+- `apps/server/src/domain/orchestration/journal-compaction.ts` — compaction planning and permanent tombstones.
+- `apps/server/src/domain/orchestration/journal-paths.ts` — journal file names and the size-alarm constant.
 - `apps/server/src/domain/exchanges/apply.ts` — applies accepted exchange results.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
