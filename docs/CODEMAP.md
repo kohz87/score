@@ -288,7 +288,7 @@ likely to be the entry point for a change.
 - `apps/server/src/http/` — API routes, one file per contract section.
 - `apps/server/src/http/rooms/` — split room catalogue, message, rewind, summary and version route groups.
 - `apps/server/src/hub/` — ordered event ingest, projections, SSE fan-out, snapshots and retention.
-- `apps/server/src/knowledge/` — vault files, notes, extraction, links, export and staging.
+- `apps/server/src/knowledge/` — vault files, notes, document index/uploads/scanning/zip, links, extraction, export and staging.
 - `apps/server/src/locks/` — OS-level lock helpers.
 - `apps/server/src/mcp/` — MCP access control, routes and tools.
 - `apps/server/src/media/` — upload storage, multipart parsing and type sniffing.
@@ -383,6 +383,14 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/fake/fake-port-tasks.ts` — fake task board reads, writes and actions.
 - `apps/server/src/hermes/fake/fake-port-runs.ts` — fake run start, streaming, questions and transitions.
 - `apps/server/src/hermes/fake/fake-port-run-control.ts` — stop, MCP, bot screen, rewind, compaction, context and decisions.
+- `apps/server/src/knowledge/documents.ts` — public document upload facade; composition of the document modules.
+- `apps/server/src/knowledge/knowledge-document-model.ts` — document row schemas, prepared/unpacked types and shared path/name helpers.
+- `apps/server/src/knowledge/knowledge-document-index.ts` — document rows, reads, search and index maintenance.
+- `apps/server/src/knowledge/knowledge-document-uploads.ts` — document validation, text extraction, single-file writes and history placement.
+- `apps/server/src/knowledge/knowledge-document-files.ts` — document deletes, moves and scanner reconciliation.
+- `apps/server/src/knowledge/knowledge-document-zip.ts` — zip preview and zip import placement.
+- `apps/server/src/knowledge/code-ranges.ts` — Markdown code block and inline span ranges.
+- `apps/server/src/knowledge/links.ts` — wikilink extraction, note index resolution and rewriting.
 - `apps/server/src/knowledge/vault.ts` — public vault facade: construction, fields, getters and method installation.
 - `apps/server/src/knowledge/vault-types.ts` — vault options, row and move schemas, shared types and history outcomes.
 - `apps/server/src/knowledge/vault-runtime.ts` — vault method-module runtime shape, public typing and installation.

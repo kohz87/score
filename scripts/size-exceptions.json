@@ -160,16 +160,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/knowledge/documents.ts",
-    "lines": 954,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/knowledge/links.ts",
-    "lines": 455,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/runtimes/coding/claude.ts",
     "lines": 693,
     "reason": "split in CS.2 wave 1"
