@@ -393,6 +393,13 @@ likely to be the entry point for a change.
 - `apps/server/src/knowledge/vault-writes.ts` — git commits, note writes, moves, deletes and restores.
 - `apps/server/src/knowledge/vault-move-plan.ts` — crash-safe move plans, recovery, retries and move issues.
 - `apps/server/src/knowledge/vault-folders.ts` — folder creation, moving, pruning and deletion.
+- `apps/server/src/runtimes/coding/coding-socket.ts` — public coding-socket import path and re-export facade.
+- `apps/server/src/runtimes/coding/coding-socket-types.ts` — supervisor wire-protocol constants, frame schema, limits and public socket types.
+- `apps/server/src/runtimes/coding/coding-socket-session.ts` — one launch's socket session: frames, output ingestion, backpressure and completeness.
+- `apps/server/src/runtimes/coding/coding-socket-server.ts` — listener setup, authentication, launch tokens, reservations and shutdown.
+- `apps/server/src/runtimes/coding/process.ts` — public CLI process import path and re-export facade.
+- `apps/server/src/runtimes/coding/process-types.ts` — stop reasons and the public CLI run, outcome, spawn-error and spawn-options types.
+- `apps/server/src/runtimes/coding/process-spawn.ts` — CLI spawning, output parsing, process-group supervision, Stop escalation and reaping.
 - `apps/server/src/runtimes/coding/service.ts` — public coding runtime import path and re-export facade.
 - `apps/server/src/runtimes/coding/service-types.ts` — coding runtime dependencies, run/attempt types, row schemas and shared helpers.
 - `apps/server/src/runtimes/coding/service-base.ts` — shared runtime state, backend status, accessors and shutdown assertion.

@@ -180,16 +180,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/runtimes/coding/coding-socket.ts",
-    "lines": 889,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/runtimes/coding/process.ts",
-    "lines": 485,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/runtimes/coding/supervisor.mjs",
     "lines": 793,
     "reason": "split in CS.2 wave 1"
