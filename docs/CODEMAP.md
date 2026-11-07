@@ -427,11 +427,14 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
-- `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
+- `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, routing, rules and shares suites are split by feature with their shared fixtures.
 
 ### Key files
 
 - `apps/server/test/http/rooms-helpers.ts` — rooms test setup, contract schemas, writable fixture bindings and shared factories.
+- `apps/server/test/http/routing-helpers.ts` — shared routing test setup, room/message fixtures, event readers and clock advance.
+- `apps/server/test/http/rules-helpers.ts` — shared rules test setup, app boot/pairing, rule readers and permission helpers.
+- `apps/server/test/http/shares-helpers.ts` — shared shares test setup, security password, room/message factories and public page helpers.
 - `apps/server/test/runtimes/` — runtime tests and recorded coding-driver fixtures, split by parser output, configuration, verdicts, loss handling and sub-agents.
 
 ### Key files

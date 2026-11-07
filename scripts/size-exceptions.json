@@ -310,21 +310,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/http/routing.test.ts",
-    "lines": 581,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/http/rules.test.ts",
-    "lines": 491,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/http/shares.test.ts",
-    "lines": 624,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/hub/ingest.test.ts",
     "lines": 985,
     "reason": "split in CS.2 wave 1"
