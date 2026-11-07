@@ -2500,3 +2500,27 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Lead's process slips, fixed: the verify scripts cut the task id at the first dash (wave-4 ids contain one; rerun);
   a bisect from a hidden directory found no tests (vitest skips dot-dirs) and a bisect over a test file that a split
   created gave a false culprit; an early cleanup removed four just-created wave-4 worktrees (59–62), restarted.
+
+## CS.2 wave 4 group 3, wave 5 (decision 172), CS.5 (2026-11-08, overnight)
+- Wave 4 group 3 (14 batches) merged; every flagged line explained (dead classic-shell CSS — each removed rule's
+  classes checked against the code; re-wrapped or prefixed asserts found). The batch check caught the consent-form guard
+  reading only NewOrchestrationDialog.tsx after its protected coding-workers section moved to new-orchestration-checks.tsx
+  (still inside the same data-decision form): the guard now takes `parts`, every marker still required.
+- Decision 172: six files stay whole with reasons (hermes_private.py, four contract section files, hermes/port.ts);
+  thirteen boundary/fence files + test_review_regressions.py split on DeepSeek (wave 5), the lead reading every
+  non-verbatim line: live-port, settings, fence, translate, bot-screen, agent-tabs, profile-management (class methods →
+  functions over the same read-only options), gateway (fix round: the first session left the original untouched), the
+  kanban writer, updates, bridge translate (`tool.result` without `?.` is safe: only reached with a parsed tool), sender,
+  spool (first run hit NanoGPT 429 → re-run on the OpenRouter `ordeepseek` profile), the plugin regression tests (28
+  tests, 101 asserts kept). Several coder sessions ended before their report or bookkeeping; the lead finished the map
+  lines and exception removals. The batch check caught two unused imports and the session-id allow list (settings →
+  settings-providers.ts); a merge left one duplicated exception entry (removed).
+- Structure check now covers all plugin Python (it had only walked score_bridge/), with a test.
+- Exceptions: 213 → 6, all with reasons. Main green: contract 1614, web 3371, server 4989|14 skipped, structure 7,
+  plugin 378, playwright --list 867.
+- CS.5 (Sonnet coder): the listed full-run flakes did not reproduce; fixed what full runs did show — orchestrations
+  start() (stale checkbox list), bold-library-notes (`unfold` import lost in a split), bold-team-choice (wait for the
+  share response); the README Library screenshot opens /b/knowledge. Three full runs, last 867/867. Review clean.
+- Follow-ups queued: (1) e2e is not typechecked — a split spec lost an import unnoticed; add an e2e tsconfig to
+  `pnpm typecheck`. (2) bold-workbench flake: the fake scenario loop can surface its own builder approval before the
+  spec's seeded one — needs a fake-server change (owner/lead decision). (3) structure-check: reject a path listed twice.
