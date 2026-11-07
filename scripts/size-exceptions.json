@@ -300,11 +300,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/watch/watch.css",
-    "lines": 600,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/workflows/NodeInspector.tsx",
     "lines": 528,
     "reason": "split in CS.2 wave 1"

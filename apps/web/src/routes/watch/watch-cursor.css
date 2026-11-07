@@ -1,0 +1,19 @@
+.watch-cursor {
+  position: absolute;
+  left: 31%;
+  top: 66%;
+  z-index: 9;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  pointer-events: none;
+}
+.watch-cursor span {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--watch-ink);
+  background: var(--watch-agent);
+  border-radius: var(--radius-pill);
+  padding: 1px 9px;
+}

@@ -1,0 +1,69 @@
+/* Approval bar */
+.watch-approval {
+  position: absolute;
+  /* Centred without a transform: protected surfaces never take one from a theme (styles/protected.css). */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  bottom: 18px;
+  z-index: 10;
+  width: min(680px, calc(100% - 32px));
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-2) var(--space-2) 22px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.watch-approval__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--panel-ink);
+}
+.watch-approval__text code {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.watch-approval__error {
+  color: var(--agent-coral-text);
+  font-weight: 500;
+  font-size: 13px;
+}
+.watch-approval button,
+.watch-approval__link {
+  height: 44px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.watch-approval__go {
+  padding: 0 var(--space-5);
+  border: 0;
+  background: var(--panel-ink);
+  color: var(--panel-card);
+  font-weight: 700;
+}
+.watch-approval__no {
+  padding: 0 18px;
+  border: 1.5px solid var(--panel-ink);
+  background: transparent;
+  color: var(--panel-ink);
+  font-weight: 600;
+}
+.watch-approval button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.watch-approval__link {
+  padding: 0 18px;
+  border: 1.5px solid var(--panel-ink);
+  color: var(--panel-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
