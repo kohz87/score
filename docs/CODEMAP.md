@@ -38,7 +38,9 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles; Team tests are split by feature under `bold-team-*.test.tsx`.
 - `apps/web/src/bold/bold-team-fixtures.ts` — shared Team test agents, runtimes, operations and response fixtures.
 - `apps/web/src/bold/bold-team-helpers.tsx` — shared Team test fetch stub, render setup, lifecycle state and removal helpers.
-- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, recipe test suites and other bold-only styles.
+- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, feature-split Task and recipe test suites and other bold-only styles.
+- `apps/web/src/bold/BoldTasks-helpers.tsx` — shared Task test state, fixtures, fetch stub, render setup and query helpers.
+- `apps/web/src/bold/recipe-model-helpers.ts` — shared recipe fixtures and graph-versus-validator comparison helpers.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
