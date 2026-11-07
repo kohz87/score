@@ -2484,3 +2484,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   863/4 with failures outside the ten (bold-room-tools 390 Unpin, orchestrations dots, themes-bold(-visual), terminal,
   bold-room-files) — next test task. Review: no weakened assertion; P2 accepted: the no-git-badge check moved from lead
   to builder (no spec makes builder's workspace a repo), the "looks right" workspace test now pins its fixture data.
+
+## CS.2 wave 3 and wave 4 (groups 1–2) — test files and the 451–999-line files (2026-11-07)
+- Wave 3: fifteen test files of 1000+ lines split by feature (CS.2w3a–o); static proof per split: every test title,
+  `expect` line and table case kept (schemas: all 513 cases counted); `playwright --list` added after one spec failed to
+  load (CS.2w3i: a duplicate `putSnap` declaration — review P1, fixed by the lead). Counts unchanged after merge.
+- Wave 4: 81 batches (2–3 files per folder) on DeepSeek, launcher raised to 12 concurrent (owner), a pipeline for
+  static proofs and reviews. Groups 1 and 2 (67 batches) merged; exceptions 174 → 45. Review findings fixed: shares
+  `say()` counter copy (P1, fix round), startup tests sharing one temp home (P2, fix round), phone viewer moved inside the
+  inert room column (P1, lead), jobmap-base.css lost a `}` (P1, lead). Dead CSS removed with proof (classic Team/Watch/
+  Customizer leftovers; each removed class checked: no code reference). Batch checks on main caught three more the
+  static proofs and reviews missed — fixed by the lead: the fake-adapter test sink captured the first ingest across a
+  restart (CS.2w4-22), the session-id allow list named a moved file (CS.2w4-14), and `export const … = vi.hoisted`
+  stopped three startup test files loading (CS.2w4-17). Both traps were added to the test-split review prompt.
+- Lead's process slips, fixed: the verify scripts cut the task id at the first dash (wave-4 ids contain one; rerun);
+  a bisect from a hidden directory found no tests (vitest skips dot-dirs) and a bisect over a test file that a split
+  created gave a false culprit; an early cleanup removed four just-created wave-4 worktrees (59–62), restarted.
