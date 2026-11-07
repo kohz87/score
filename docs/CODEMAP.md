@@ -436,6 +436,21 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/orchestrations/orchestrations-log-cards.css` — event log, replay bar, step cards, room header and fence list.
 - `apps/web/src/routes/orchestrations/orchestrations-workflow.css` — workflow shapes, edge labels, node transitions and summary slot.
 - `apps/web/src/routes/orchestrations/orchestrations-run-cards.css` — coding, check, stuck-step, advisor, helper and vote cards.
+- `apps/web/src/routes/workflows/NodeAgentSettings.tsx` — agent step settings: agent, instruction, retries, estimate and failure route.
+- `apps/web/src/routes/workflows/NodeBranchSettings.tsx` — branch subject and first-match rules settings.
+- `apps/web/src/routes/workflows/NodeGateSettings.tsx` — gate question and rejection-route settings.
+- `apps/web/src/routes/workflows/NodeInspectorFields.tsx` — shared inspector issue, reference-name and estimate fields.
+- `apps/web/src/routes/workflows/Connections.tsx` — inspector connection list, removal and connection targets.
+- `apps/web/src/routes/workflows/node-inspector-helpers.ts` — branch-condition and runtime-refusal helpers.
+- `apps/web/src/routes/workflows/node-inspector-types.ts` — inspector commit/patch callbacks and node-kind aliases.
+- `apps/web/src/routes/workflows/RecipeAddMenu.tsx` — keyboard-accessible recipe insertion menu.
+- `apps/web/src/routes/workflows/RecipeCard.tsx` — one recipe card: state, routes, issues and keyboard deletion.
+- `apps/web/src/routes/workflows/RecipeKicker.tsx` — shared small recipe label.
+- `apps/web/src/routes/workflows/recipe-layers-types.ts` — recipe card-state and insertion types.
+- `apps/web/src/routes/workflows/StartWorkflowAgents.tsx` — start dialog's exact agent-incarnation mapping.
+- `apps/web/src/routes/workflows/StartWorkflowChecks.tsx` — start dialog's preflight checks, problems and coding warnings.
+- `apps/web/src/routes/workflows/StartWorkflowInputs.tsx` — start dialog's workflow input fields.
+- `apps/web/src/routes/workflows/start-workflow-error.ts` — start-run conflict and definition error copy.
 - `apps/web/src/routes/customizer/Customizer.tsx` — customizer composition: probe, derived values, early states and page layout.
 - `apps/web/src/routes/customizer/CustomizerBar.tsx` — header, undo/save/export/import actions, messages and edit/preview switch.
 - `apps/web/src/routes/customizer/CustomizerModals.tsx` — save-as, start-from confirmation, import and leave-without-saving dialogs.
