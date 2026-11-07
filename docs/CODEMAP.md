@@ -634,6 +634,7 @@ likely to be the entry point for a change.
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
 - `apps/server/test/domain/` — domain tests split by feature, with shared approval, exchange, and budget harnesses.
 - `apps/server/test/hermes/live/` — live Hermes adapter tests, including feature-split SQLite and SSE suites.
+- `apps/server/test/hub/` — ingest test suites split by commit, listeners, snapshot, lifecycle, checkpoints, sync safety and projection order, plus their shared harness.
 
 ### Key files
 
@@ -644,6 +645,7 @@ likely to be the entry point for a change.
 - `apps/server/test/domain/exchanges-helpers.ts` — shared exchange database setup, room, turn, action and reply helpers.
 - `apps/server/test/domain/exchange-budgets-helpers.ts` — shared exchange-budget harness and paused-review setup.
 - `apps/server/test/domain/reports-helpers.ts` — shared report fixtures: timezone, timestamps, task, run, approval and report input factories.
+- `apps/server/test/hub/ingest-helpers.ts` — shared ingest test harness: temp database, migrations, ingest setup and teardown, event and observation factories, row readers and second connections.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, Kanban attempts, passkeys and rewind suites are split by feature with their shared fixtures.
 
