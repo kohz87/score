@@ -246,6 +246,7 @@ likely to be the entry point for a change.
 - `apps/server/src/workspace/` — workspace roots, git, policy and per-agent workspaces.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
+- `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 
 ### Key files
 
@@ -254,6 +255,7 @@ likely to be the entry point for a change.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
+- `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/rooms.ts` — room, message and room-action routes.
