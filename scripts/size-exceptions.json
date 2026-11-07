@@ -35,11 +35,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/live/profile-management.ts",
-    "lines": 602,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/live/settings.ts",
     "lines": 675,
     "reason": "split in CS.2 wave 1"

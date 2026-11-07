@@ -630,7 +630,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
 - `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs, run control, the demo timeline and team-room seed.
-- `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
+- `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles, profile setup/import/export/removal and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
 - `apps/server/src/http/` — API routes, one file per contract section.
 - `apps/server/src/http/rooms/` — split room catalogue, message, rewind, summary and version route groups.
@@ -886,6 +886,12 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
 - `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
+- `apps/server/src/hermes/live/profile-management.ts` — public live profile-management facade and re-exports.
+- `apps/server/src/hermes/live/profile-management-files.ts` — profile filesystem safety, foreign ownership and archive verification.
+- `apps/server/src/hermes/live/profile-management-context.ts` — profile-management options, profile-home validation and CLI invocation.
+- `apps/server/src/hermes/live/profile-management-inventory.ts` — profile inventory and export paths.
+- `apps/server/src/hermes/live/profile-management-description.ts` — profile description validation, write and verification.
+- `apps/server/src/hermes/live/profile-management-steps.ts` — profile creation, import, setup, readiness, export and removal steps.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
 - `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.
