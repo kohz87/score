@@ -1,0 +1,239 @@
+/* ---- 3.29.0: the library (mock-up 23-recipes-library, 23-recipes-phone) ---- */
+[data-ui='bold'] .bold-rl-head {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-rl-head .bold-rp-h1 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 32px;
+}
+
+[data-ui='bold'] .bold-rl-find {
+  width: 260px;
+  max-width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0 16px;
+  font: inherit;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-rl-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-rl-intro {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-rl-intro b {
+  color: var(--ink);
+  font-family: var(--font-m);
+}
+
+[data-ui='bold'] .bold-rl-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-rc {
+  padding: calc(18px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
+  border-radius: calc(22px * var(--bold-r, 1));
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-rc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-rc-head b {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-rc-version {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-rc-facts {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-rc-last {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+[data-ui='bold'] .bold-rc-last a {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-rc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+[data-ui='bold'] .bold-rc-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-rl-archived {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted);
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-rl-new-more {
+  display: inline;
+}
+
+@media (max-width: 1100px) {
+  [data-ui='bold'] .bold-rl-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  [data-ui='bold'] .bold-rl-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-rl-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  [data-ui='bold'] .bold-rl-head .bold-rp-h1 {
+    font-size: 26px;
+  }
+
+  [data-ui='bold'] .bold-rl-find {
+    order: 3;
+    width: 100%;
+    height: 44px;
+    font-size: 15px;
+  }
+
+  [data-ui='bold'] .bold-rl-new {
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-rl-new-more {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-rc {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  [data-ui='bold'] .bold-rc-btn {
+    height: 44px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+}
+
+/* The run that belongs to no chat: a read-only sheet over the library. */
+[data-ui='bold'] .bold-rp-runsheet {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  margin: auto;
+  border: 0;
+  box-sizing: border-box;
+  background: var(--panel);
+  color: var(--ink);
+  padding: calc(24px * var(--bold-d, 1));
+  border-radius: calc(26px * var(--bold-r, 1));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+[data-ui='bold'] .bold-rp-runsheet[open] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+[data-ui='bold'] .bold-rp-runsheet::backdrop {
+  background: rgba(5, 6, 9, 0.62);
+}
+[data-ui='bold'] .bold-rp-runsheet .bold-rp-sheet-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+[data-ui='bold'] .bold-rp-runsheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-right: 52px;
+}
+
+[data-ui='bold'] .bold-rp-runsheet-head h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-rp-runsheet-head p {
+  margin: 4px 0 0;
+}

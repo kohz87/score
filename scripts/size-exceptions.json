@@ -485,11 +485,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/bold-recipes.css",
-    "lines": 1181,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/bold-screen.css",
     "lines": 753,
     "reason": "split in CS.2 wave 1"
