@@ -680,11 +680,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/room/RoomMenus.tsx",
-    "lines": 1850,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/room/RoomMessageStream.test.tsx",
     "lines": 778,
     "reason": "split in CS.2 wave 1"
