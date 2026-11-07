@@ -438,10 +438,14 @@ likely to be the entry point for a change.
 
 - `apps/server/test/runtimes/coding-fixtures.ts` — recorded coding-driver CLI fixture lines.
 - `apps/server/test/runtimes/coding-drivers-helpers.ts` — shared coding-driver test setup: fixture parsing, deny/base options, verdict extraction and Codex record factories.
+- `apps/server/test/hermes/live/` — live Hermes adapter tests, split by agent-tabs, Kanban projection and profile-management features.
 - `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate suites.
 
 ### Key files
 
+- `apps/server/test/hermes/live/agent-tabs-helpers.ts` — shared agent-tabs state hooks, Hermes CLI stub and write-call assertions.
+- `apps/server/test/hermes/live/kanban-attempts-projection-helpers.ts` — shared Kanban projection harness hooks and coordinator start.
+- `apps/server/test/hermes/live/profile-management-helpers.ts` — shared profile-management adapter setup, Hermes CLI stub, archive builders and step helpers.
 - `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
 - `apps/server/test/http/` — HTTP route tests for the server API, including agent profiles, rooms, tasks and settings.
 
