@@ -631,12 +631,16 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+- `apps/server/test/domain/` — domain tests split by feature, with shared approval, exchange, and budget harnesses.
 
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
 - `apps/server/test/launcher-service-helpers.ts` — shared launcher rig, fake systemd/loginctl, command and prompt harnesses for the feature-split launcher suites.
 - `apps/server/test/remote-helpers.ts` — shared remote config, app/pairing setup, cleanup and TLS fixtures for the feature-split remote suites.
+- `apps/server/test/domain/approvals-helpers.ts` — shared approval app, outbox, pairing, request, decision and signal helpers.
+- `apps/server/test/domain/exchanges-helpers.ts` — shared exchange database setup, room, turn, action and reply helpers.
+- `apps/server/test/domain/exchange-budgets-helpers.ts` — shared exchange-budget harness and paused-review setup.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
