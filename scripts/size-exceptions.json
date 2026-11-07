@@ -40,11 +40,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/orchestration/executor.ts",
-    "lines": 4033,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/orchestration/fence.ts",
     "lines": 1177,
     "reason": "split in CS.2 wave 1"

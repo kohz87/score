@@ -103,7 +103,7 @@ likely to be the entry point for a change.
 - `apps/server/src/db/` — Score SQLite open, migrate, lock, FTS and epochs.
 - `apps/server/src/domain/` — room, task, approval, report, profile and other domain rules.
 - `apps/server/src/domain/exchanges/` — exchange requests, budgets, results and workbench state.
-- `apps/server/src/domain/orchestration/` — orchestrator state, executor, journal, fences and checks.
+- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, queue and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
@@ -138,7 +138,33 @@ likely to be the entry point for a change.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/rooms.ts` — room, message and room-action routes.
 - `apps/server/src/http/stream.ts` — stream route.
-- `apps/server/src/domain/orchestration/executor.ts` — orchestrator execution.
+- `apps/server/src/domain/orchestration/executor.ts` — public Orchestrator facade, constructor state and re-exports.
+- `apps/server/src/domain/orchestration/executor-admission.ts` — choosing queued work and admitting runs.
+- `apps/server/src/domain/orchestration/executor-capacity.ts` — capacity and storage usage reads.
+- `apps/server/src/domain/orchestration/executor-checks.ts` — check process lifecycle and the lead's check view.
+- `apps/server/src/domain/orchestration/executor-coding.ts` — coding launch closure and reconciliation.
+- `apps/server/src/domain/orchestration/executor-create.ts` — lead orchestration creation and its transaction.
+- `apps/server/src/domain/orchestration/executor-decisions.ts` — human decisions on lead runs.
+- `apps/server/src/domain/orchestration/executor-dispatch.ts` — attempt rows, dispatch and wake scheduling.
+- `apps/server/src/domain/orchestration/executor-insert.ts` — orchestration, attempt and step row insertion.
+- `apps/server/src/domain/orchestration/executor-lifecycle.ts` — start, pump, cycle, transactions and finalization.
+- `apps/server/src/domain/orchestration/executor-maintenance.ts` — journal compaction and retention pruning.
+- `apps/server/src/domain/orchestration/executor-observation.ts` — run evidence, reconciliation and accepted results.
+- `apps/server/src/domain/orchestration/executor-preflight.ts` — lead-run preflight checks.
+- `apps/server/src/domain/orchestration/executor-reads.ts` — lead-run reads and hold journaling.
+- `apps/server/src/domain/orchestration/executor-recovery-repair.ts` — startup repairs and legacy backfills.
+- `apps/server/src/domain/orchestration/executor-recovery.ts` — crash recovery and unknown-attempt marking.
+- `apps/server/src/domain/orchestration/executor-release.ts` — send failures and release decisions.
+- `apps/server/src/domain/orchestration/executor-run-facts.ts` — terminal run evidence helpers.
+- `apps/server/src/domain/orchestration/executor-runtime.ts` — internal runtime shape and prototype assembly.
+- `apps/server/src/domain/orchestration/executor-send.ts` — coding turn start, send handles and generation rows.
+- `apps/server/src/domain/orchestration/executor-settling.ts` — per-run settling and pause helpers.
+- `apps/server/src/domain/orchestration/executor-signals.ts` — agent readiness, admission changes and MCP tools.
+- `apps/server/src/domain/orchestration/executor-stops.ts` — owed Stop delivery.
+- `apps/server/src/domain/orchestration/executor-types.ts` — public executor options/types and quota constant.
+- `apps/server/src/domain/orchestration/executor-workflow-create.ts` — workflow run creation.
+- `apps/server/src/domain/orchestration/executor-workflow-decisions.ts` — human decisions on workflow runs.
+- `apps/server/src/domain/orchestration/executor-workflow-preflight.ts` — workflow validation, preflight and reads.
 - `apps/server/src/domain/orchestration/fence.ts` — decision fences and turn ownership.
 - `apps/server/src/domain/exchanges/apply.ts` — applies accepted exchange results.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
