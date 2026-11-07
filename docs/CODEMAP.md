@@ -9,7 +9,7 @@ likely to be the entry point for a change.
 - The bold frame, navigation or screen shell → `apps/web/src/bold/BoldShell.tsx`
 - A bold screen → `apps/web/src/bold/`
 - The team room, messages or needs-you cards → `apps/web/src/bold/room/`
-- Starting a job → `apps/web/src/bold/BoldStartJob.tsx`, `apps/web/src/bold/bold-start-job.ts`
+- Starting a job → `apps/web/src/bold/BoldStartJob.tsx`, `apps/web/src/bold/bold-start-job.ts`, `apps/web/src/bold/use-start-job-view.ts`
 - Chat messages or the composer → `apps/web/src/routes/chat/`
 - The live browser stream → `apps/web/src/data/stream.ts`
 - API calls and cache keys → `apps/web/src/data/api.ts`, `apps/web/src/data/query-client.ts`
@@ -75,7 +75,25 @@ likely to be the entry point for a change.
 - `apps/web/src/main.tsx` — browser bootstrap: routers, providers, stream, theme and service worker.
 - `apps/web/src/App.tsx` — route table and classic/bold shell choice.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
-- `apps/web/src/bold/BoldStartJob.tsx` — start-job flow entry and screen.
+- `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
+- `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
+- `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
+- `apps/web/src/bold/BoldStartJobHelperFields.tsx` — helpers, automatic votes/audits and coding launches.
+- `apps/web/src/bold/BoldStartJobCheckFields.tsx` — pre-finish command check fields.
+- `apps/web/src/bold/BoldStartJobLimitFields.tsx` — limits, deadline, workflow options, unknown cost and inputs.
+- `apps/web/src/bold/BoldStartJobParts.tsx` — checklist rows, auth fields, result cards and dialog actions.
+- `apps/web/src/bold/use-start-job-view.ts` — composes the start-job state, queries, model and actions.
+- `apps/web/src/bold/use-start-job-state.ts` — start-job form state and refs.
+- `apps/web/src/bold/use-start-job-refs.ts` — start-job dialog, auth and attempt refs.
+- `apps/web/src/bold/use-start-job-data.ts` — start-job queries and room/agent derivation.
+- `apps/web/src/bold/start-job-derive.ts` — start-job checks, validation and request-visible model.
+- `apps/web/src/bold/start-job-model.ts` — recipe preselection effect over the derived model.
+- `apps/web/src/bold/start-job-form-actions.ts` — dialog close, recipe and keyboard actions.
+- `apps/web/src/bold/start-job-start-actions.ts` — run, job, recipe, routine, trigger and auth actions.
+- `apps/web/src/bold/start-job-types.ts` — start-job options, recipe choice, result and limit types.
+- `apps/web/src/bold/start-job-context.ts` — start-job opener context and hook.
+- `apps/web/src/bold/start-job-checks.ts` — room and preflight check conversion.
+- `apps/web/src/bold/start-job-copy.ts` — size text and start/auth error messages.
 - `apps/web/src/bold/bold-start-job.ts` — start-job model and request shaping.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
