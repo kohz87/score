@@ -150,6 +150,16 @@ likely to be the entry point for a change.
 - `apps/server/src/knowledge/vault.ts` — knowledge vault operations.
 - `apps/server/src/runtimes/coding/service.ts` — coding runtime service.
 - `apps/server/src/runtimes/coding/units.ts` — coding unit lifecycle.
+- `apps/server/src/runtimes/coding/unit-backend.ts` — the systemd unit backend (`UnitBackend`), the end of the class chain below, and its public exports.
+- `apps/server/src/runtimes/coding/unit-backend-types.ts` — unit backend types: status, deps, launch request, outcomes, recovery report.
+- `apps/server/src/runtimes/coding/unit-backend-helpers.ts` — unit backend constants, file schemas and pure helpers (fence barrier, forced fallback, stop causes).
+- `apps/server/src/runtimes/coding/unit-backend-core.ts` — unit backend base class: state, rows, projections, rate limit, routing and identity files.
+- `apps/server/src/runtimes/coding/unit-backend-capability.ts` — whether units are usable: capability check, notify listener, receipts and the pause marker.
+- `apps/server/src/runtimes/coding/unit-backend-launch.ts` — launching a supervised unit and recording its stop.
+- `apps/server/src/runtimes/coding/unit-backend-drive.ts` — the drive loop that follows a running unit to its end.
+- `apps/server/src/runtimes/coding/unit-backend-proof.ts` — stopping a unit and proving it ended: stop receipts, identity, manager and boot checks.
+- `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
+- `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
 ## packages/contract/src
 
