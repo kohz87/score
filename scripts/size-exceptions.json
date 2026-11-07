@@ -475,23 +475,8 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldRoom.tsx",
-    "lines": 530,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldScreen.test.tsx",
     "lines": 499,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldScreen.tsx",
-    "lines": 834,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/BoldSearch.tsx",
-    "lines": 472,
     "reason": "split in CS.2 wave 1"
   },
   {
