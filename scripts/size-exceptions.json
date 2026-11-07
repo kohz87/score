@@ -93,5 +93,10 @@
     "path": "packages/contract/src/workflows.ts",
     "lines": 1062,
     "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
+  },
+  {
+    "path": "hermes-plugin/tests/test_review_regressions.py",
+    "lines": 611,
+    "reason": "found when the structure check widened to all plugin Python; split in CS.2w5-14"
   }
 ]

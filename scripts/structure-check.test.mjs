@@ -89,6 +89,18 @@ test('fails when an oversized Python file is not on the exception list', () => {
   ])
 })
 
+test('fails when an oversized plugin test file is not on the exception list', () => {
+  const root = makeTree({
+    files: { 'hermes-plugin/tests/test_new.py': lines(451) },
+  })
+
+  expect(checkStructure(root).errors).toEqual([
+    expect.stringContaining(
+      'hermes-plugin/tests/test_new.py is 451 lines (limit 450) and is missing from scripts/size-exceptions.json',
+    ),
+  ])
+})
+
 test('fails when a listed file is now at or under the limit', () => {
   const root = makeTree({
     files: { 'apps/web/src/shrunk.css': lines(450) },

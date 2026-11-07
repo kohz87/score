@@ -101,7 +101,8 @@ function oversizedSources(root) {
     ...walkFiles(join(root, 'apps')).filter(
       (path) => path.endsWith('.css') && asPosix(relative(root, path)).split('/').includes('src'),
     ),
-    ...walkFiles(join(root, 'hermes-plugin/score_bridge')).filter((path) => path.endsWith('.py')),
+    // All of the plugin's Python, its tests included (test_review_regressions.py once slipped past a score_bridge-only walk).
+    ...walkFiles(join(root, 'hermes-plugin')).filter((path) => path.endsWith('.py')),
   ]
 
   return [...new Set(files)].map((path) => ({
