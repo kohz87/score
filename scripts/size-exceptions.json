@@ -225,23 +225,8 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/knowledge/editor-commands.ts",
-    "lines": 533,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/knowledge/EditorToolbar.tsx",
-    "lines": 883,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/knowledge/knowledge.test.tsx",
     "lines": 647,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/knowledge/NoteWorkspace.tsx",
-    "lines": 569,
     "reason": "split in CS.2 wave 1"
   },
   {
