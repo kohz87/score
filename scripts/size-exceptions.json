@@ -205,11 +205,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/runtimes/coding/service.ts",
-    "lines": 2203,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/runtimes/coding/supervisor.mjs",
     "lines": 793,
     "reason": "split in CS.2 wave 1"
