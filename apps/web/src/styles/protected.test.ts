@@ -352,7 +352,7 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
   'bold/BoldAddAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
   // Not a consent, but the Customizer's way back to Look (X7).
-  'routes/customizer/Customizer.tsx': { decisions: 0, markers: ['cz-back'] },
+  'routes/customizer/CustomizerBar.tsx': { decisions: 0, markers: ['cz-back'] },
 }
 
 test('every form that posts a consent is a data-decision and wears its protected surfaces', () => {
