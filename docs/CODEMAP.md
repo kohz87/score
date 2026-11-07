@@ -429,6 +429,14 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/chat-documents.css` — attach menus, file chips, document preview and workspace picker.
 - `apps/web/src/routes/chat/chat-room.css` — room summary/status, compact layout, attachment saving and room actions.
 - `apps/web/src/routes/chat/chat-theme.css` — theme overrides for room and message presentation.
+- `apps/web/src/routes/orchestrations/RunPanel.tsx` — compatibility entry re-exporting the run panel components.
+- `apps/web/src/routes/orchestrations/run-budget.tsx` — budget, coding-step and quota facts.
+- `apps/web/src/routes/orchestrations/run-controls.tsx` — pause, resume and stop controls.
+- `apps/web/src/routes/orchestrations/run-finish.tsx` — finish outcome, unconfirmed attempts and cancel fence.
+- `apps/web/src/routes/orchestrations/run-panel-format.ts` — clock formatting shared by run panel facts.
+- `apps/web/src/routes/orchestrations/run-plan.tsx` — recorded run plan.
+- `apps/web/src/routes/orchestrations/run-status.tsx` — run status, spend and ended-run summary.
+- `apps/web/src/routes/orchestrations/step-card.tsx` — state mark, attempt line and step card.
 - `apps/web/src/routes/orchestrations/orchestrations.css` — ordered entry for the orchestration stylesheets.
 - `apps/web/src/routes/orchestrations/orchestrations-base.css` — shared controls, heading, status and badges.
 - `apps/web/src/routes/orchestrations/orchestrations-decisions.css` — decisions, forms, preflight checks and dialog chrome.

@@ -90,11 +90,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/orchestrations/RunPanel.tsx",
-    "lines": 470,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/settings/settings.css",
     "lines": 830,
     "reason": "split in CS.2 wave 1"
