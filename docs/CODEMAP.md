@@ -440,6 +440,11 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
+- `apps/server/test/http/` — HTTP route tests for the server API, including agent profiles, rooms, tasks and settings.
+
+### Key files
+
+- `apps/server/test/http/profiles-helpers.ts` — shared profile-test app setup, pairing, operations and cleanup.
 
 ## packages/contract/src
 
