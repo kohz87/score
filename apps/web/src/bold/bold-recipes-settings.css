@@ -1,0 +1,201 @@
+[data-ui='bold'] .bold-recipes-route {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--bold-d, 1));
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-recipes-route select,
+[data-ui='bold'] .bold-field,
+[data-ui='bold'] .bold-recipes-inspector .orch-field input,
+[data-ui='bold'] .bold-recipes-inspector .orch-field select {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  padding: 0 calc(14px * var(--bold-d, 1));
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field textarea {
+  width: 100%;
+  min-height: 90px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+[data-ui='bold'] .bold-recipes-route select {
+  width: auto;
+  max-width: 220px;
+}
+
+[data-ui='bold'] .bold-lab {
+  display: block;
+  margin-bottom: calc(6px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field > span,
+[data-ui='bold'] .bold-recipes-inspector .orch-field > label > span {
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field > legend {
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .wf-template__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-recipes-inspector .wf-template__bar button,
+[data-ui='bold'] .bold-recipes-inspector .wf-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: inherit;
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-recipes-inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-recipes-hint {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-recipes-gate {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1));
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-recipes-rules {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-recipes-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-recipes-rule select,
+[data-ui='bold'] .bold-recipes-rule input {
+  flex: 1 1 180px;
+}
+
+[data-ui='bold'] .bold-recipes-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-recipes-details-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+[data-ui='bold'] .bold-recipes-inputs {
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .bold-danger {
+  border: 1.5px solid var(--bad);
+  background: transparent;
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-conflict,
+[data-ui='bold'] .bold-recipes-graphnote {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-recipes-conflict p,
+[data-ui='bold'] .bold-recipes-graphnote p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-error {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-graph {
+  min-height: 300px;
+}
+
+[data-ui='bold'] .bold-recipes-graph .wf-canvas,
+[data-ui='bold'] .bold-recipes-graph .orch-canvas {
+  background: var(--deep);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-recipes-graph .wf-canvas__viewport {
+  max-height: 540px;
+  background: var(--deep);
+  border-radius: calc(14px * var(--bold-r, 1));
+}
+
+[data-ui='bold'] .bold-recipes-graph .origin-top-left {
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+}
+
+[data-ui='bold'] .bold-recipes-graph .orch-node--edit {
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-recipes-actions {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  [data-ui='bold'] .bold-recipes-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  [data-ui='bold'] .bold-recipes-inspector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
+  color: var(--bad);
+}

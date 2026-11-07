@@ -114,6 +114,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/start-job-checks.ts` — room and preflight check conversion.
 - `apps/web/src/bold/start-job-copy.ts` — size text and start/auth error messages.
 - `apps/web/src/bold/bold-start-job.ts` — start-job model and request shaping.
+- `apps/web/src/bold/bold-recipes.css` — Recipes style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/bold-recipes-list.css` — Recipes view switch, badges, page actions, columns, step rows and route controls.
+- `apps/web/src/bold/bold-recipes-settings.css` — Recipe route fields, step settings, gate/rules, conflict and graph surfaces.
+- `apps/web/src/bold/bold-recipes-editor.css` — Recipe editor page: tokens, header, problems, graph body, settings sidebar and narrow layout.
+- `apps/web/src/bold/bold-recipes-sheets.css` — Archived-recipe deletion dialog, add-to-step controls and phone settings sheet.
+- `apps/web/src/bold/bold-recipes-library.css` — Recipe library cards and responsive grid, plus the detached run sheet.
 - `apps/web/src/bold/bold-settings-shell.css` — Settings frame and shared classic card, form and control surfaces.
 - `apps/web/src/bold/bold-settings-rules.css` — Rules mode, columns, forms and save surfaces.
 - `apps/web/src/bold/bold-settings-advanced.css` — Advanced search, staged values, tray and diff.
