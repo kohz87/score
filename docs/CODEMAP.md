@@ -458,6 +458,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/theme-files.ts` — read a theme snapshot and rebuild the snapshot after a save.
 - `apps/web/src/routes/customizer/use-customizer-actions.ts` — save, export, use, import, start-from and keyboard actions with their status state.
 - `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
+- `apps/web/src/routes/team/coding-agent-test-helpers.ts` — shared coding-agent test fixtures, default fetch lifecycle and JSON responses.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/EditorLinkForm.tsx` — toolbar link dialog for web addresses and note wikilinks.
 - `apps/web/src/routes/knowledge/EditorToolbar.tsx` — editor toolbar composition: formatting strip, menus, table actions and image input.
@@ -495,6 +496,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/team/team-tabs.css` — file editor, routine forms, tab controls and shared profile actions.
 - `apps/web/src/routes/team/team-coding.css` — coding permissions, quota floor and meters, reach and personality.
 - `apps/web/src/routes/team/team-appearance.css` — appearance preview, colour and shape radio cards.
+- `apps/web/src/routes/team/workspace-tab-test-helpers.tsx` — shared workspace-tab test state, fetch handler, mount and editor helpers.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/table-widget.ts` — live-editor table widget facade, grid assembly and public focus/commit commands.
 - `apps/web/src/routes/knowledge/table-widget-types.ts` — table widget hooks and focused-cell request types.
