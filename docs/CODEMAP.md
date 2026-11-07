@@ -280,6 +280,8 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, lead commands, human decisions, journal, fences and checks.
 - `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, helper and vote machinery, state transitions, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, queue and report-back.
+- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
+- `apps/server/src/domain/triggers/` — webhook triggers, signatures, call intake, queue, lifecycle, payload rendering and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
@@ -485,6 +487,11 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/exchanges/row-lists.ts` — job and exchange list queries.
 - `apps/server/src/domain/exchanges/row-writes.ts` — job updates, exchange updates and exchange creation.
 - `apps/server/src/domain/exchanges/job-store.ts` — active-job rules, job creation and latest-message lookup.
+- `apps/server/src/domain/triggers/triggers.ts` — public trigger facade: lifecycle, call and secret re-exports.
+- `apps/server/src/domain/triggers/trigger-rows.ts` — trigger row schema, reads and contract mapping.
+- `apps/server/src/domain/triggers/trigger-content.ts` — payload value lookup, redaction, opening message, links and samples.
+- `apps/server/src/domain/triggers/trigger-lifecycle.ts` — trigger listing, creation retry, update, deletion, secret read and rotation.
+- `apps/server/src/domain/triggers/trigger-calls.ts` — signed call verification, idempotency, budgets, job source and queue hand-off.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
