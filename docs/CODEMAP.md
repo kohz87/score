@@ -302,6 +302,7 @@ likely to be the entry point for a change.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
 - `apps/server/test/` — server integration tests and recorded fixtures.
+- `apps/server/test/orchestration/` — orchestration executor and HTTP integration tests split by feature; shared setup lives in `fix-h-helpers.ts` and `http-helpers.ts`.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 
@@ -311,6 +312,8 @@ likely to be the entry point for a change.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
+- `apps/server/test/orchestration/fix-h-helpers.ts` — shared harness lifecycle, fence startup, running-run factory and agent-incarnation fixtures for the fix-h suites.
+- `apps/server/test/orchestration/http-helpers.ts` — shared app and bridge boot, pairing, request, body and MCP client helpers for the orchestration HTTP suites.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
