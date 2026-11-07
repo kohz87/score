@@ -2,6 +2,23 @@
 
 # Claude-specific notes
 
+## Ground rules (owner, 2026-11-07; these override older role notes below where they differ)
+1. **Code is written by DeepSeek v4.1 Flash through NanoGPT**: new files, edits and file splits, via
+   `CODEX_PROFILE=deepseek scripts/codex-task.sh start|fix …` (`~/.codex/deepseek.config.toml`,
+   `deepseek/deepseek-v4.1-flash-1017:thinking`). NanoGPT limit (exit 75) → the OpenRouter profile `ordeepseek`, then a
+   Sonnet coder. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
+   release gates, and fixes found in review that are a few lines.
+2. **Reviews are Sonnet with an Opus advisor**: a headless Claude Code run, read-only, findings only —
+   `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*)" "<review prompt>"`
+   (the prompt carries the brief, the diff command and the checks). Every task and every fix round gets one before
+   the lead's merge checks; the lead verifies each finding.
+3. **Keep the machine at about 80% busy while building.** Check `node scripts/capacity.mjs` (CPU and memory, sampled);
+   under 50% start more parallel tasks (independent worktrees) until about 80%; over 90% start nothing new. A release's
+   full test run (`pnpm e2e` + `pnpm check`) gets the machine to itself: no new coders start while it runs (load makes
+   e2e flaky).
+4. **450 lines and the code map** (AGENTS.md "File size and the code map"): every brief repeats the rule, every review
+   checks it, and every task that adds, moves or removes a file updates `docs/CODEMAP.md`.
+
 ## Roles (decided by the owner, 2026-10-06)
 - **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,
   `docs/API-CONTRACT.md`, `docs/PLAN.md`, task briefs, code review, merges and the overall product quality.

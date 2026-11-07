@@ -56,6 +56,18 @@ docs/                plan, architecture, contract, setup, spike, design referenc
 - Keep modules small and pure where possible; side effects go at the edges (http/, hermes/live/, db/).
 - Match the surrounding code's comment density. Comments explain *why*, not *what*.
 
+## File size and the code map (owner, 2026-11-07)
+- **A source file holds one job and stays at or under 450 lines** (TypeScript, TSX, CSS, Python; tests too, split by
+  feature). When a change would push a file past 450, split it first, by responsibility, in its own change. Generated
+  files and long declarative lists (schemas, fixtures, data tables) may exceed it; they are listed in
+  `scripts/size-exceptions.json` with a one-line reason. ESLint (`max-lines`) and `pnpm check` enforce it; files already
+  over the limit are on that exception list, which only shrinks (a file leaves it once split, and never comes back).
+- **Splits change no behaviour.** A split moves code only: no logic, naming or API changes in the same change, the
+  tests green before and after. Behaviour changes go in their own change.
+- **Every package keeps its code map** (`docs/CODEMAP.md`): one line per folder and per key file — what it owns and
+  where to look for what. A change that adds, moves, renames or deletes a source file updates the map in the same
+  change; `pnpm check` fails when a source folder is not in the map. Read the map before searching the tree.
+
 ## Testing
 - Every task ships with tests; the task's "done when" criteria in `docs/PLAN.md` are the acceptance tests.
 - Unit and integration: Vitest (`pnpm test`, or `pnpm --filter <pkg> test`). Server routes are tested with

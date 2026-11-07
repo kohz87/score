@@ -732,3 +732,28 @@ warning for others); listing and deleting triggers that were never called (orpha
 "Imported from" rooms created by Elsewhere previews; the chat-rooms fence e2e made deterministic. The bold Team
 screenshot test (`themes-bold-visual` phone Team) depends on the fake's agent order after other specs ran: make the
 order fixed in that test. Removing messaging channels clears only Score's field table keys (no Hermes verb exists).
+
+## Code structure (owner 2026-11-07; decision 168)
+Owner: "tidying the entire code structure, making each file dedicated function with code map (not more than 450 lines
+of codes) so it will help with troubleshooting, optimizing and less token wastage". Rules in AGENTS.md "File size and
+the code map"; working rules in CLAUDE.md "Ground rules". Coding: DeepSeek v4.1 Flash (NanoGPT); reviews: Sonnet with
+an Opus advisor; the machine kept at about 80% while building.
+
+**CS.1 Code maps and the size limit** (brief docs/briefs/CS.1-codemap-limits.md). `docs/CODEMAP.md` (web, server,
+contract, plugin, scripts, e2e: one line per folder and per key file); ESLint `max-lines` 450 with
+`scripts/size-exceptions.json` (today's larger files, each with a reason; the list only shrinks); a `pnpm check` step
+that fails when a source folder is missing from the map or a file over 450 lines is not on the list. Done when
+`pnpm check` enforces both and a new 451-line file fails it.
+
+**CS.2 Split the large files, in waves** (DeepSeek; behaviour-preserving moves only, one or two files per change, tests
+green before and after, the map and the exception list updated in the same change). Wave 1, over 2000 lines:
+`server/domain/orchestration/executor.ts`, `web/bold/BoldStartJob.tsx`, `server/hermes/fake/fake-port.ts`,
+`server/runtimes/coding/service.ts`, `server/runtimes/coding/unit-backend.ts`, `web/bold/room/bold-room.css`,
+`web/bold/bold-settings.css`, `web/routes/chat/chat.css`. Wave 2, 1000–2000 lines (vault, RoomMenus, BoldRecipes,
+Composer, knowledge.css, BoldAddAgent, live-port, bold-recipes.css, fence, chats.css, orchestrations.css, Customizer,
+http/rooms, BoldTriggers, BoldLibrary, journal, bold.css). Wave 3, the large test files (split by feature). The rest
+(450–1000) when a task touches them.
+
+**CS.3 Independent e2e specs.** The specs that pass alone but fail in a full run (bold-room-menu, one-to-ones,
+room-chat, team choice, workspace, tablet, + menu, take-over) stop depending on what other specs leave on the shared
+fake server: their own rooms, agents and state. Done when three full runs in a row have no such failure.
