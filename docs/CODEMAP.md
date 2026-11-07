@@ -884,7 +884,11 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
-- `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
+- `apps/server/src/hermes/live/gateway.ts` — Hermes gateway public facade and re-exports.
+- `apps/server/src/hermes/live/gateway-client.ts` — gateway transport, credentials, run, approval and clarify calls.
+- `apps/server/src/hermes/live/gateway-errors.ts` — gateway HTTP error type.
+- `apps/server/src/hermes/live/gateway-redaction.ts` — gateway payload and streamed-frame redaction.
+- `apps/server/src/hermes/live/gateway-schemas.ts` — gateway request and response schemas, run statuses and constants.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
