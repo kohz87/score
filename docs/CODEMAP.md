@@ -41,7 +41,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, recipe test suites and other bold-only styles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
-- `apps/web/src/bold/direct/` — one-to-one chat with an agent.
+- `apps/web/src/bold/direct/` — one-to-one chat with an agent, split test suites and their shared test helpers.
+- `apps/web/src/bold/direct/DirectChat-test-helpers.tsx` — shared direct-chat fixtures, fetch stub and render setup for the split suites.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
