@@ -109,7 +109,19 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-workspaces.css` — Workspace cards, agent chips and shared folders.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
-- `apps/web/src/bold/room/RoomMenus.tsx` — room and message action menus.
+- `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.
+- `apps/web/src/bold/room/menu-primitives.tsx` — menu dots, focus and Escape lifecycle, and arrow-key navigation.
+- `apps/web/src/bold/room/room-menu-model.ts` — the older-room predicate shared by the room title and switcher.
+- `apps/web/src/bold/room/RoomSwitcher.tsx` — older, team, imported and elsewhere-session room list.
+- `apps/web/src/bold/room/ArchivedBadge.tsx` — archived-room badge and unarchive action.
+- `apps/web/src/bold/room/job-lifecycle-error.ts` — job and chat lifecycle error messages.
+- `apps/web/src/bold/room/JobDialogs.tsx` — rename and delete job dialogs.
+- `apps/web/src/bold/room/RoomDialogs.tsx` — team lead, rename, project and workspace room dialogs.
+- `apps/web/src/bold/room/RoomMenu.tsx` — room actions menu and its organised-room dialogs.
+- `apps/web/src/bold/room/JobMenu.tsx` — job actions menu.
+- `apps/web/src/bold/room/RoomTitle.tsx` — desktop and phone room-title composition.
+- `apps/web/src/bold/room/ChatMenu.tsx` — one-to-one chat actions menu.
+- `apps/web/src/bold/room/ChatDialogs.tsx` — delete and clear one-to-one chat dialogs.
 - `apps/web/src/bold/room/use-needs-you.ts` — needs-you selection and state.
 - `apps/web/src/bold/room/bold-room.css` — team-room style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/room/bold-room-header.css` — room tabs, job filters, tools and the deleted toggle.
