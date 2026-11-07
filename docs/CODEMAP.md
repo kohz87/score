@@ -1159,6 +1159,27 @@ likely to be the entry point for a change.
 - `scripts/bold-frame-parts-dialogs.mjs` — search and recipe dialog selector tables.
 - `scripts/bold-frame-measure.mjs` — computed-style measurement and prototype settings navigation.
 - `scripts/bold-frame-report.mjs` — writes the comparison's JSON and Markdown metric reports.
+- `scripts/compare/11.10a.mjs` — runnable phone screen comparison entry: screenshots, assertions and summary.
+- `scripts/compare/11.10a-config.mjs` — board and app paths plus the review origin for 11.10a.
+- `scripts/compare/11.10a-fixtures.mjs` — phone comparison agents, rooms, jobs, messages and approval fixtures.
+- `scripts/compare/11.10a-serve.mjs` — serves the built app and fake API responses to Chromium for 11.10a.
+- `scripts/compare/11.10a-parts.mjs` — jobs, chat, one-to-one, team and tab-bar selector and property tables.
+- `scripts/compare/11.10a-measure.mjs` — computed-style capture and difference rows for 11.10a.
+- `scripts/compare/11.10a-navigation.mjs` — opens 11.10a boards and app pages and waits for fonts.
+- `scripts/compare/11.4d.mjs` — runnable room dropdown, menu and Elsewhere comparison entry.
+- `scripts/compare/11.4d-config.mjs` — prototype, board 21 and app paths for 11.4d.
+- `scripts/compare/11.4d-fixtures.mjs` — team and older rooms, jobs, Elsewhere and imported-message fixtures.
+- `scripts/compare/11.4d-serve.mjs` — fake API responses and built app files for 11.4d.
+- `scripts/compare/11.4d-parts.mjs` — menu and Elsewhere selector and property tables.
+- `scripts/compare/11.4d-measure.mjs` — computed-style capture and difference rows for 11.4d.
+- `scripts/compare/11.4d-navigation.mjs` — prototype and app dropdown, menu and Elsewhere flows.
+- `scripts/compare/11.6b.mjs` — runnable Workbench and agent-screen comparison entry.
+- `scripts/compare/11.6b-config.mjs` — prototype and app paths plus the review origin for 11.6b.
+- `scripts/compare/11.6b-fixtures.mjs` — seeded Workbench, screen, watch and approval fixtures.
+- `scripts/compare/11.6b-serve.mjs` — fake API responses and built app files for 11.6b.
+- `scripts/compare/11.6b-parts.mjs` — Workbench code, screen and replay selector and property tables.
+- `scripts/compare/11.6b-measure.mjs` — computed-style capture and difference rows for 11.6b.
+- `scripts/compare/11.6b-navigation.mjs` — prototype Workbench and replay, and app Workbench and screen flows.
 - `scripts/restore.mjs` — backup restore command.
 - `scripts/capacity.mjs` — machine load report.
 - `scripts/set-password.mjs` — security-password setter.
