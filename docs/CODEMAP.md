@@ -61,6 +61,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
 - `apps/web/src/bold/hermes-updates/` — Hermes update progress, results, dialog and supporting model helpers.
+- `apps/web/src/bold/direct/` — one-to-one chat with an agent, split test suites and their shared test helpers.
+- `apps/web/src/bold/direct/DirectChat-test-helpers.tsx` — shared direct-chat fixtures, fetch stub and render setup for the split suites.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
