@@ -51,7 +51,7 @@ likely to be the entry point for a change.
 - `apps/web/src/pwa/` — service worker and update banner.
 - `apps/web/src/routes/` — destination pages mounted by the app router.
 - `apps/web/src/routes/attempts/` — attempt detail and replay page.
-- `apps/web/src/routes/chat/` — classic chat page, composer, message rendering and chat dialogs.
+- `apps/web/src/routes/chat/` — classic chat page, composer, message rendering, dialogs and ordered stylesheets.
 - `apps/web/src/routes/customizer/` — theme customizer and its live preview.
 - `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images and tables.
 - `apps/web/src/routes/orchestrations/` — orchestration run panels, decisions and live diagram.
@@ -105,6 +105,17 @@ likely to be the entry point for a change.
 - `apps/web/src/data/query-client.ts` — query client and stream context.
 - `apps/web/src/routes/chat/Composer.tsx` — classic chat composer and send flow.
 - `apps/web/src/routes/chat/MessageItem.tsx` — chat message rendering.
+- `apps/web/src/routes/chat/chat.css` — ordered entry for the classic chat stylesheets.
+- `apps/web/src/routes/chat/chat-shell.css` — New chat actions, direct-room link, thread frame and title.
+- `apps/web/src/routes/chat/chat-messages.css` — message rows and text, plan cards and approval cards.
+- `apps/web/src/routes/chat/chat-composer.css` — composer frame and menus, side cards and early breakpoints.
+- `apps/web/src/routes/chat/chat-message-actions.css` — attachments, images, message actions, editing and toasts.
+- `apps/web/src/routes/chat/chat-markdown.css` — markdown replies, code blocks and tool/thinking cards.
+- `apps/web/src/routes/chat/chat-composer-controls.css` — stop, voice and send controls plus the context meter.
+- `apps/web/src/routes/chat/chat-conversations.css` — conversation search, share dialog, imported rooms, rewind and versions.
+- `apps/web/src/routes/chat/chat-documents.css` — attach menus, file chips, document preview and workspace picker.
+- `apps/web/src/routes/chat/chat-room.css` — room summary/status, compact layout, attachment saving and room actions.
+- `apps/web/src/routes/chat/chat-theme.css` — theme overrides for room and message presentation.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/watch/watch-model.ts` — watch timeline and replay model.

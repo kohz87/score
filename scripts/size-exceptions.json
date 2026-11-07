@@ -735,11 +735,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/chat/chat.css",
-    "lines": 2037,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/chat/Composer.tsx",
     "lines": 1482,
     "reason": "split in CS.2 wave 1"
