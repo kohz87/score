@@ -70,21 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/bold-room-fixtures.ts",
-    "lines": 630,
-    "reason": "data list"
-  },
-  {
-    "path": "e2e/bold-room-menu.spec.ts",
-    "lines": 704,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "e2e/bold-room.spec.ts",
-    "lines": 521,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "e2e/bold-thread.spec.ts",
     "lines": 578,
     "reason": "split in CS.2 wave 1"
