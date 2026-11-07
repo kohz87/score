@@ -10,11 +10,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/live/agent-tabs.ts",
-    "lines": 605,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/live/bot-screen.ts",
     "lines": 744,
     "reason": "split in CS.2 wave 1"

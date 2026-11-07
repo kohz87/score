@@ -883,6 +883,17 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
+- `apps/server/src/hermes/live/agent-tabs.ts` — public `LiveAgentTabs` facade for one profile's settings edits.
+- `apps/server/src/hermes/live/agent-tabs-core.ts` — shared profile lookup, locking and Hermes CLI writes for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-providers.ts` — local provider copies, keys and removal for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-workspace.ts` — workspace folder reads and writes for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-runs-on.ts` — local, Docker and SSH run-location settings for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-models.ts` — model selection and model settings for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-channels.ts` — gateway channel settings for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-skills.ts` — skill listing, installs, toggles and Hub search for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-memory.ts` — read-only built-in memory for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-tools.ts` — tool listing and per-platform toggles for agent tabs.
+- `apps/server/src/hermes/live/agent-tabs-plugins.ts` — plugin listing and toggles for agent tabs.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
 - `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
