@@ -1,10 +1,5 @@
 [
   {
-    "path": "apps/server/src/hermes/live/updates.ts",
-    "lines": 499,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/port.ts",
     "lines": 513,
     "reason": "the Hermes adapter interface (D2.1): a declarative list of the port's method signatures (decision 172)"

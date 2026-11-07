@@ -952,6 +952,10 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/profile-management-inventory.ts` — profile inventory and export paths.
 - `apps/server/src/hermes/live/profile-management-description.ts` — profile description validation, write and verification.
 - `apps/server/src/hermes/live/profile-management-steps.ts` — profile creation, import, setup, readiness, export and removal steps.
+- `apps/server/src/hermes/live/updates.ts` — public Hermes update facade and re-exports.
+- `apps/server/src/hermes/live/updates-job.ts` — update job lifecycle: status, check, start, run steps and test message.
+- `apps/server/src/hermes/live/updates-parse.ts` — check/plan output parsing and display helpers.
+- `apps/server/src/hermes/live/updates-types.ts` — update dependencies, limits, terminal states and test message.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
 - `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.
