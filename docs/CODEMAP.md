@@ -560,6 +560,14 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/watch/watch-responsive.css` — phone layout overrides for the stage and approval bar.
 - `apps/web/src/routes/workflows/workflows-test-helpers.tsx` — shared fetch, stream, mount and fixture helpers for the split workflow tests.
 - `apps/web/src/themes/guard.ts` — protected-surface and theme guard.
+- `apps/web/src/themes/guard-overlays.ts` — Score's own overlays and dialog backdrops, and their hit-test exception.
+- `apps/web/src/themes/guard-geometry.ts` — element ancestry, visible/clipped boxes, painted hits and scroll reachability.
+- `apps/web/src/themes/guard-contrast.ts` — text and standalone-graphic contrast, and large-text classification.
+- `apps/web/src/themes/guard-snapshot.ts` — one protected element's measured snapshot and its text/control targets.
+- `apps/web/src/themes/guard-verdict.ts` — contrast and protected-surface comparison verdicts.
+- `apps/web/src/themes/guard-violation.ts` — protected-surface scans, glyph-shape comparison and theme-off baseline measurement.
+- `apps/web/src/themes/guard-decision.ts` — click-time checks of the protected surfaces a decision answers to.
+- `apps/web/src/themes/guard-watch.ts` — watchers for protected-surface damage and click/submit refusal while a theme is worn.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
 
