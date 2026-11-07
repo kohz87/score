@@ -57,12 +57,12 @@
   {
     "path": "apps/server/src/hermes/port.ts",
     "lines": 513,
-    "reason": "split in CS.2 wave 1"
+    "reason": "the Hermes adapter interface (D2.1): a declarative list of the port's method signatures (decision 172)"
   },
   {
     "path": "hermes-plugin/score_bridge/hermes_private.py",
     "lines": 669,
-    "reason": "split in CS.2 wave 1"
+    "reason": "AGENTS.md D2.1: every call into private Hermes functions lives in this one file and nowhere else (kept whole, decision 172)"
   },
   {
     "path": "hermes-plugin/score_bridge/sender.py",
@@ -77,21 +77,21 @@
   {
     "path": "packages/contract/src/orchestration.ts",
     "lines": 985,
-    "reason": "data list"
+    "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
   },
   {
     "path": "packages/contract/src/theme-css.ts",
     "lines": 836,
-    "reason": "data list"
+    "reason": "one file per contract section (AGENTS.md layout); declarative theme-token schema lists (decision 172)"
   },
   {
     "path": "packages/contract/src/types.ts",
     "lines": 662,
-    "reason": "data list"
+    "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
   },
   {
     "path": "packages/contract/src/workflows.ts",
     "lines": 1062,
-    "reason": "data list"
+    "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"
   }
 ]
