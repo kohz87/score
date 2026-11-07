@@ -45,7 +45,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
 - `apps/web/src/bold/hermes-updates/` — Hermes update progress, results, dialog and supporting model helpers.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
-- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
+- `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom, RoomMessageStream and RoomRequests test suites.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
@@ -258,6 +258,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/BoldTeamRoom-helpers.tsx` — shared fixtures, setup and DOM probes for the split BoldTeamRoom tests.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
+- `apps/web/src/bold/room/RoomMessageStream-helpers.tsx` — shared stream fixtures, setup, request stubs and DOM probes for the split RoomMessageStream tests.
+- `apps/web/src/bold/room/RoomRequests-helpers.tsx` — shared approval, exchange and task fixtures, setup and request stubs for the split RoomRequests tests.
 - `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.
 - `apps/web/src/bold/room/menu-primitives.tsx` — menu dots, focus and Escape lifecycle, and arrow-key navigation.
 - `apps/web/src/bold/room/room-menu-model.ts` — the older-room predicate shared by the room title and switcher.
