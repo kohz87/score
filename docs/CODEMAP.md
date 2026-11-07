@@ -754,6 +754,7 @@ likely to be the entry point for a change.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, Kanban attempts, passkeys and rewind suites are split by feature with their shared fixtures.
 - `apps/server/test/mcp/mcp-helpers.ts` — shared app, database, vault, access and MCP client harness for the MCP suites.
+- `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, routing, rules and shares suites are split by feature with their shared fixtures.
 
 ### Key files
 
@@ -761,6 +762,9 @@ likely to be the entry point for a change.
 - `apps/server/test/http/kanban-attempts-consumers-helpers.ts` — Kanban attempt consumer test setup, seeded world, request helper and consumer URLs.
 - `apps/server/test/http/passkeys-helpers.ts` — passkeys test app setup, pairing, registration, sign-in and cleanup helpers.
 - `apps/server/test/http/rewind-helpers.ts` — rewind test setup, room and turn factories, event reads and request helpers.
+- `apps/server/test/http/routing-helpers.ts` — shared routing test setup, room/message fixtures, event readers and clock advance.
+- `apps/server/test/http/rules-helpers.ts` — shared rules test setup, app boot/pairing, rule readers and permission helpers.
+- `apps/server/test/http/shares-helpers.ts` — shared shares test setup, security password, room/message factories and public page helpers.
 - `apps/server/test/runtimes/` — runtime tests and recorded coding-driver fixtures, split by parser output, configuration, verdicts, loss handling and sub-agents.
 
 ### Key files
