@@ -402,6 +402,16 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
 - `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
+## apps/server/test
+
+### Folders
+
+- `apps/server/test/http/` — HTTP route tests for the server API, including agent profiles, rooms, tasks and settings.
+
+### Key files
+
+- `apps/server/test/http/profiles-helpers.ts` — shared profile-test app setup, pairing, operations and cleanup.
+
 ## packages/contract/src
 
 ### Folders

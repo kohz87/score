@@ -310,11 +310,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/http/profiles.test.ts",
-    "lines": 1033,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/http/rewind.test.ts",
     "lines": 564,
     "reason": "split in CS.2 wave 1"
