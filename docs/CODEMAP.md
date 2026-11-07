@@ -321,6 +321,11 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/orchestrations/orchestrations-log-cards.css` — event log, replay bar, step cards, room header and fence list.
 - `apps/web/src/routes/orchestrations/orchestrations-workflow.css` — workflow shapes, edge labels, node transitions and summary slot.
 - `apps/web/src/routes/orchestrations/orchestrations-run-cards.css` — coding, check, stuck-step, advisor, helper and vote cards.
+- `apps/web/src/routes/workflows/workflows.css` — ordered entry for the workflow stylesheets.
+- `apps/web/src/routes/workflows/workflows-base.css` — shared accessibility helper, editor/run typography, buttons and links.
+- `apps/web/src/routes/workflows/workflows-inspector.css` — step settings, template suggestions, connections, rules, problems, outline and inputs.
+- `apps/web/src/routes/workflows/workflows-run.css` — run outcomes, evidence/input lists, export diffs and the full-width run layout.
+- `apps/web/src/routes/workflows/workflows-live.css` — live-overlay line, run preview and the chat graph-tab outcome.
 - `apps/web/src/routes/customizer/Customizer.tsx` — customizer composition: probe, derived values, early states and page layout.
 - `apps/web/src/routes/customizer/CustomizerBar.tsx` — header, undo/save/export/import actions, messages and edit/preview switch.
 - `apps/web/src/routes/customizer/CustomizerModals.tsx` — save-as, start-from confirmation, import and leave-without-saving dialogs.

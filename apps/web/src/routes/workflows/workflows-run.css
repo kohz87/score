@@ -1,0 +1,74 @@
+/* Run view: outcomes, evidence and inputs, export diffs and the full-width run layout. */
+.wf-graph-badge--reached_end {
+  border: 2px solid var(--agent-jade-text);
+  color: var(--agent-jade-text);
+  background: var(--agent-jade-tint);
+}
+.wf-graph-badge--failed,
+.wf-graph-badge--stopped {
+  border: 2px dashed var(--agent-coral-text);
+  color: var(--agent-coral-text);
+  background: var(--agent-coral-tint);
+}
+.wf-outcome-note {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+.wf-evidence,
+.wf-reads,
+.wf-agents,
+.wf-inputs {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  display: grid;
+  gap: 6px;
+}
+.wf-input-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wf-run .wf-node-panel h4 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.wf-run button:not(.orch-node):not(.orch-link),
+.wf-run .orch-head-actions a {
+  font: inherit;
+}
+.wf-fieldset {
+  border: 0;
+  padding: 0;
+}
+.wf-diff {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+.wf-changes,
+.wf-leave {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.wf-changes code {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+.wf-room-run .orch-link {
+  font-size: 13px;
+}
+
+/* A workflow graph is wider than an orchestration's: the diagram gets the full width and the log goes below it. */
+.wf-run .orch-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wf-incarnation {
+  color: var(--muted);
+  cursor: help;
+  font-size: 13px;
+}
