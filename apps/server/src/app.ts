@@ -1,175 +1,40 @@
-import { HttpError } from './errors.ts'
-import { defaultRootPolicy } from './workspace/policy.ts'
-import { isCodingAgent } from './runtimes/coding/store.ts'
-import { lifecycleOf } from './domain/agent-lifecycle.ts'
-import type { SecureContextOptions, TlsOptions } from 'node:tls'
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
-import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
-import { serverOrigin, type Config } from './config.ts'
+import Fastify, { type FastifyInstance } from 'fastify'
+import { CONTRACT_VERSION } from '@score/contract'
+import { dirname, join, resolve } from 'node:path'
 import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
-import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
-import { registerAgentRoutes } from './http/agents.ts'
-import { registerCodingAgentRoutes } from './http/coding-agents.ts'
-import { hermesPortOf, withCodingAgents } from './runtimes/coding/port.ts'
-import type { CodingRuntime } from './runtimes/coding/service.ts'
-import { registerProfileRoutes } from './http/profiles.ts'
-import { registerAgentContextRoutes } from './http/agent-context.ts'
-import { registerAgentHistoryRoutes } from './http/agent-history.ts'
-import { registerAttemptRoutes } from './http/attempts.ts'
-import { registerAgentTabRoutes } from './http/agent-tabs.ts'
-import { registerRunsOnRoutes } from './http/agent-runs-on.ts'
-import { registerWorkspaceRoutes } from './http/workspace.ts'
-import { registerWorkspacesRoutes } from './http/workspaces.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
-import { ZipStaging } from './knowledge/staging.ts'
-import { registerKnowledgeRoutes } from './http/knowledge.ts'
-import { registerKnowledgeAgentRoutes } from './http/knowledge-agents.ts'
-import { registerMcpAccessRoutes } from './http/mcp-access.ts'
-import { McpAccessStore } from './mcp/access.ts'
-import { registerMcpCredentialGuard, registerMcpRoutes, type McpRouteDeps } from './mcp/routes.ts'
-import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
-import type { KnowledgeVault } from './knowledge/vault.ts'
-import { registerReportRoutes } from './http/reports.ts'
-import { registerRoutineRoutes } from './http/routines.ts'
-import { registerRulesRoutes } from './http/rules.ts'
-import { registerSettingsRoutes } from './http/settings.ts'
-import { registerThemeRoutes } from './http/themes.ts'
-import { registerRoomRoutes } from './http/rooms.ts'
-import { registerTriggerRoutes } from './http/triggers.ts'
-import { loadSealingKey, sealer } from './auth/sealing.ts'
-import { humanGuard } from './auth/human.ts'
-import { setRoomCompatibility } from './domain/rooms.ts'
-import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
-import { registerShareRoutes } from './http/shares.ts'
-import { registerConversationRoutes } from './http/conversations.ts'
-import { registerBriefRoutes } from './http/briefs.ts'
-import { registerTaskRoutes } from './http/tasks.ts'
-import { registerOrchestrationRoutes } from './http/orchestrations.ts'
-import { registerWorkflowRoutes } from './http/workflows.ts'
-import type { Orchestrator } from './domain/orchestration/executor.ts'
-import { registerOneJobRoutes } from './http/one-job.ts'
-import { createBriefControl } from './http/brief-control.ts'
-import { createPlanStarter } from './http/plan-start.ts'
-import { createTaskHolds } from './http/task-holds.ts'
-import type { HoldOwner } from './domain/holds.ts'
-import { teamPausedAt } from './domain/team-pause.ts'
-import { registerTeamPauseRoutes } from './http/team-pause.ts'
-import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { registerNowRoutes } from './http/now.ts'
-import { registerAgentPauseRoutes } from './http/agent-pause.ts'
-import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
+import { registerMediaRoutes } from './http/media.ts'
 import { registerQuestionRoutes } from './http/questions.ts'
 import { registerErrorHandlers } from './errors.ts'
-import { allowedOriginsFor, registerCsrfGuard } from './auth/csrf.ts'
+import { registerCsrfGuard } from './auth/csrf.ts'
 import { registerRemoteGuard } from './auth/remote.ts'
-import { registerTerminalRoutes, type TerminalOptions } from './http/terminal.ts'
-import type { TerminalManager } from './terminal/manager.ts'
-import { registerHttpsGuide } from './http/https-guide.ts'
-import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
-import { PasskeyService } from './auth/passkeys.ts'
-import type { SessionStore } from './auth/session-store.ts'
-import { registerCurrencyRoutes } from './http/currency.ts'
-import { registerLogRoutes } from './http/logs.ts'
-import { registerAboutRoutes } from './http/about.ts'
-import type { UpdateFetcher } from './domain/about.ts'
-import { registerSessionRoutes } from './http/session.ts'
-import { registerSystemRoutes } from './http/system.ts'
-import { registerBotTakeoverRoutes } from './http/bot-takeover.ts'
-import { registerHermesUpdateRoutes } from './http/hermes-update.ts'
-import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
-import type { ScoreDb } from './db/index.ts'
-import type { Ingest } from './hub/ingest.ts'
-import { pidfdSupport } from './runtimes/coding/pidfd-signal.ts'
-import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
+import { registerMcpCredentialGuard } from './mcp/routes.ts'
 import {
-  createFakeHermesUpdates,
   createHermesPort,
-  createLiveHermesUpdates,
-  registerBridgeRoutes,
-  resolveHermesHome,
   registerBridgeCredentialGuard,
-  type BridgeDeps,
-  type HermesPort,
+  registerBridgeRoutes,
 } from './hermes/index.ts'
+import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
+import type { ScoreDb } from './db/index.ts'
+import type { BuildAppOptions } from './app-options.ts'
+import { routePort } from './app-route-port.ts'
+import { registerDataRoutes } from './app-routes-data.ts'
+import { registerCollaborationRoutes } from './app-routes-collaboration.ts'
+import { registerTaskHoldParking } from './app-task-parking.ts'
+import { registerWorkRoutes } from './app-routes-work.ts'
+import { registerSystemAndSessionRoutes } from './app-routes-system.ts'
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    pairing: PairingService
-    // Present when the app has a database; Watch frame capture stores screenshots with media.store().
-    media?: MediaStore
-    // Present when the app has a database. Resolves to the number of held tasks that still need another attempt.
-    recoverTaskHolds?: () => Promise<number>
-    recoverPlanStarts?: () => Promise<number>
-    // Present only when the web terminal is on (SCORE_TERMINAL=1) and its native module loaded.
-    terminals?: TerminalManager
-  }
-}
+export { routePort }
+export { buildBridgeApp } from './app-bridge.ts'
 
-interface BuildAppOptions {
-  config: Config
-  logger?: FastifyServerOptions['logger']
-  clock?: () => number
-  sessionStore?: SessionStore
-  db?: ScoreDb
-  ingest?: Ingest
-  getEpoch?: () => string
-  port?: HermesPort
-  getSystemStatus?: () => SystemStatus
-  /** The update check's network call; tests inject one so they never reach GitHub. */
-  updateFetcher?: UpdateFetcher
-  streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
-  bridge?: BridgeDeps
-  outbox?: ApprovalOutbox
-  media?: MediaStore
-  /** The knowledge vault (started by the caller); without it the Knowledge routes are not served. */
-  knowledge?: KnowledgeVault
-  /** TLS options for the browser listener; `SNICallback` serves named certificates (tls-names.ts). */
-  https?: SecureContextOptions & Pick<TlsOptions, 'SNICallback'>
-  webAssets?: WebAssets
-  /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
-  security?: SecurityPassword
-  /** Coding agents (PLAN 7.2): Claude Code / Codex CLI as team members; without it there are none. */
-  coding?: CodingRuntime
-  /** The orchestration executor (PLAN 7.5a); without it the orchestration routes are not served. */
-  orchestrator?: Orchestrator
-  /** Test hooks for the web terminal: a stand-in PTY, a launch description, limits (the origins come from config). */
-  terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
-}
-
-/**
- * The port the routes see. Live Hermes reads cost seconds per profile, so pages read Hermes agents from Score's
- * projection (5.23); that directory only knows Hermes profiles, so it wraps the Hermes part and the coding agents are
- * added on top of it (otherwise its list hid the coding agents from every live route: rooms, orchestration preflight
- * and create). Coding agents join the team under the same port: rooms, Now, Flow and Reports see one list of agents.
- */
 /** Whether the database file is the one in `home` (an in-memory or elsewhere database owns no home). */
 function databaseInHome(db: ScoreDb, home: string): boolean {
   const file = db.sqlite.location()
   return file !== null && resolve(dirname(file)) === resolve(home)
-}
-
-export function routePort(options: {
-  live: boolean
-  port: HermesPort
-  coding?: CodingRuntime | undefined
-  db?: ScoreDb | undefined
-  ingest?: Ingest | undefined
-  warn?: (error: unknown) => void
-}): HermesPort {
-  const { coding, db, ingest } = options
-  let port = options.port
-  if (options.live && db && ingest) {
-    const hermes = hermesPortOf(port)
-    port = withAgentDirectory(hermes, createAgentDirectory(hermes, db, ingest, options.warn))
-  }
-  if (db && ingest && coding) port = withCodingAgents(port, coding)
-  return port
 }
 
 export function buildApp({
@@ -296,211 +161,51 @@ export function buildApp({
     registerMediaRoutes(app, mediaStore)
   }
   const workspaces = createAgentWorkspaces(port, config)
-  registerTaskRoutes(app, port, ingest, db, clock)
-  registerReportRoutes(app, port, db, clock)
-  registerAgentRoutes(app, port, ingest, db, clock)
   // Start-up cleanups delete what the database doesn't name, so they only run against the home that database lives in:
   // a server built with a test database and the default home must never clear the owner's real ~/.score (2026-10-19).
   const ownsHome = db ? databaseInHome(db, config.home) : false
-  if (db && ingest)
-    registerProfileRoutes(app, {
+  registerDataRoutes({
+    app,
+    port,
+    db,
+    ingest,
+    config,
+    clock,
+    mediaStore,
+    knowledge,
+    workspaces,
+    ownsHome,
+    getSecurityPassword: () => securityPassword,
+  })
+  const collaboration = registerCollaborationRoutes({
+    app,
+    port,
+    db,
+    ingest,
+    config,
+    clock,
+    mediaStore,
+    workspaces,
+    knowledge,
+    ownsHome,
+    orchestrator,
+    bridge,
+  })
+  if (collaboration && ingest) {
+    registerTaskHoldParking(app, ingest, collaboration.holds, collaboration.ownerPaused)
+    registerWorkRoutes({
+      app,
+      port,
       db,
       ingest,
-      port,
       config,
-      ...(clock ? { clock } : {}),
-    })
-  registerAgentTabRoutes(app, port, ingest, db, clock)
-  registerRunsOnRoutes(app, port, db, clock)
-  registerWorkspaceRoutes(app, port, config, undefined, workspaces)
-  if (knowledge) {
-    registerKnowledgeRoutes(
-      app,
-      knowledge,
-      mediaStore,
-      new ZipStaging(join(config.home, 'knowledge-staging'), clock, undefined, ownsHome),
-    )
-    if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
-  }
-  if (db)
-    registerMcpAccessRoutes(app, {
-      access: new McpAccessStore(db, clock),
-      bridgePort: config.remote?.bridgePort,
-      db,
-      port,
-    })
-  registerRoutineRoutes(app, port, db, clock)
-  registerSettingsRoutes(app, port, db, clock, () => securityPassword)
-  if (db)
-    registerThemeRoutes(app, {
-      db,
-      home: config.home,
-      ...(ingest ? { ingest } : {}),
-      ...(clock ? { clock } : {}),
-    })
-  registerCurrencyRoutes(app, db)
-  registerRulesRoutes(app, port, ingest, db, clock)
-  if (db && ingest) {
-    setRoomCompatibility(
-      () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
-    )
-    const dispatch = registerRoomRoutes(
-      app,
-      port,
-      db,
-      ingest,
       clock,
-      mediaStore,
-      workspaces,
-      knowledge,
-    )
-    // 3.28.0 (decision 164): Stop job and the queue of trigger calls waiting for a chat's one job.
-    registerOneJobRoutes(app, {
-      db,
-      ingest,
-      port,
-      dispatch,
-      ...(orchestrator ? { orchestrator } : {}),
-      ...(clock ? { clock } : {}),
-    })
-    registerWorkspacesRoutes(app, { port, db, ingest, config, ...(clock ? { clock } : {}) })
-    // PLAN 11.1d: webhook triggers. Their signing secrets are sealed with a key in Score's home, so only a server that
-    // owns its home (never a test against a borrowed database) serves them.
-    if (ownsHome) {
-      const guard = { preHandler: [humanGuard(app.pairing)] }
-      registerTriggerRoutes(app, {
-        db,
-        ingest,
-        seal: sealer(loadSealingKey(config.home)),
-        guard,
-        origin: serverOrigin(config),
-        redispatch: dispatch,
-        ...(clock ? { clock } : {}),
-      })
-    }
-    registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
-    registerOutsideSessionRoutes(app, { db, ingest, port })
-    const holds = createTaskHolds({
-      port,
-      db,
-      ingest,
-      onInert: (owner, taskIds) =>
-        app.log.warn(
-          { owner, taskIds },
-          'Pause release skipped holds that belong to another Kanban board lineage',
-        ),
-    })
-    const control = createBriefControl({ port, db, ingest, holds, dispatch })
-    // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
-    // server runs this once the adapter has started, and again until nothing is left (Hermes may be unreachable).
-    const ownerPaused = (owner: HoldOwner) =>
-      db.read((sqlite) => {
-        if (owner.kind === 'team') return teamPausedAt(sqlite) !== null
-        return (
-          sqlite
-            .prepare(
-              owner.kind === 'brief'
-                ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
-                : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
-            )
-            .get(owner.id) !== undefined
-        )
-      })
-    app.decorate('recoverTaskHolds', () => holds.recover(ownerPaused))
-    // Tasks that arrive after a Pause get their pending hold in the observation's transaction (deriveBriefEvents);
-    // this parks them once it commits. One pass at a time; a pass that finds more pending rows runs again.
-    let parking: Promise<void> | undefined
-    let retryTimer: NodeJS.Timeout | undefined
-    let retries = 0
-    const retryParking = () => {
-      if (retryTimer) return
-      retryTimer = setTimeout(
-        () => {
-          retryTimer = undefined
-          void park()
-        },
-        Math.min(5_000 * 3 ** retries++, 300_000),
-      )
-      retryTimer.unref()
-    }
-    app.addHook('onClose', async () => clearTimeout(retryTimer))
-    let again = false
-    const park = (): Promise<void> => {
-      if (parking) {
-        again = true
-        return parking
-      }
-      parking = (async () => {
-        do {
-          again = false
-          const failed = await holds.applyPending(ownerPaused).catch(() => 1)
-          // Unchanged tasks emit no upsert, so a failed park needs its own retry or it waits for the next event.
-          if (failed > 0) retryParking()
-          else retries = 0
-        } while (again)
-      })().finally(() => {
-        parking = undefined
-      })
-      return parking
-    }
-    ingest.onCommitted((events) => {
-      if (events.some((event) => event.type === 'task.upserted' || event.type === 'brief.upserted'))
-        return park()
-    })
-    const plans = createPlanStarter({ port, db, ingest })
-    app.decorate('recoverPlanStarts', () => plans.recover())
-    registerBriefRoutes(app, {
-      db,
-      plans,
-      ...(clock ? { clock } : {}),
-    })
-    if (orchestrator) {
-      registerOrchestrationRoutes(app, {
-        orchestrator,
-        db,
-        port,
-        ...(clock ? { clock } : {}),
-        // 3.13: a job with a check runs a command on this computer: the folder is checked and a fresh second factor asked.
-        checkPolicy: (({ home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>) =>
-          defaultRootPolicy([home, resolveHermesHome(hermesHome), resolveHermesHome()]))(config),
-        hostEnrolled: () => securityPassword?.hostIssued() ?? false,
-      })
-      registerWorkflowRoutes(app, {
-        orchestrator,
-        db,
-        port,
-        ...(ingest ? { ingest } : {}),
-        ...(clock ? { clock } : {}),
-      })
-    }
-    registerTeamPauseRoutes(app, {
-      db,
-      ingest,
-      control,
-      holds,
-      dispatch,
-      ...(orchestrator ? { orchestrator } : {}),
-      ...(clock ? { clock } : {}),
-    })
-    registerWatchRoutes(app, { port, db, ingest })
-    registerAgentHistoryRoutes(app, { port, db })
-    registerAttemptRoutes(app, { db })
-    registerAgentContextRoutes(app, { port, db })
-    registerAgentPauseRoutes(app, {
-      db,
-      ingest,
-      port,
-      holds,
-      dispatch,
-      ...(orchestrator ? { orchestrator } : {}),
-      ...(clock ? { clock } : {}),
-    })
-    registerNowRoutes(app, {
-      port,
-      db,
-      ingest,
-      disabled: () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
-      ...(clock ? { clock } : {}),
+      bridge,
+      orchestrator,
+      holds: collaboration.holds,
+      control: collaboration.control,
+      dispatch: collaboration.dispatch,
+      getSecurityPassword: () => securityPassword,
     })
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
@@ -518,143 +223,23 @@ export function buildApp({
           config.mode === 'fake' ? { perSession: 1000, overall: 1000 } : undefined,
         )
       : undefined)
-  if (db && ingest && coding)
-    registerCodingAgentRoutes(app, {
-      coding,
-      port,
-      db,
-      ingest,
-      security: securityPassword,
-      ...(config.mode === 'fake' ? { workspaceBase: join(tmpdir(), 'score-workspaces') } : {}),
-      ...(clock ? { clock } : {}),
-    })
-  let terminalUnavailable: string | null = null
-  if (config.terminal && !https) {
-    // Plain-HTTP listeners (local mode) never get a shell: a terminal needs a TLS connection.
-    terminalUnavailable = 'needs HTTPS (remote mode with a certificate)'
-  } else if (config.terminal) {
-    try {
-      app.decorate(
-        'terminals',
-        registerTerminalRoutes(app, {
-          origins: allowedOriginsFor(config),
-          hostEnrolled: () => securityPassword?.hostIssued() ?? false,
-          // 3.11.0: a live session runs the agent's own CLI (Hermes or a coding CLI), fresh, as this user.
-          agentRun: async (agentId) => {
-            if (db && isCodingAgent(db.sqlite, agentId)) {
-              const command = await coding?.interactiveCommand(agentId)
-              if (!command)
-                throw new HttpError(
-                  409,
-                  'conflict',
-                  'This agent’s CLI or its workspace isn’t available on this computer.',
-                )
-              return command
-            }
-            const life = db ? lifecycleOf(db.sqlite, agentId) : undefined
-            if (life && life.state !== 'ready')
-              throw new HttpError(409, 'conflict', 'This agent isn’t ready for a live session.')
-            const command = port.interactiveCommand?.(agentId) ?? null
-            if (!command) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
-            return command
-          },
-          ...terminal,
-        }),
-      )
-    } catch (error) {
-      terminalUnavailable = 'node-pty not built'
-      app.log.error(
-        { err: error },
-        'SCORE_TERMINAL=1 but the terminal module (node-pty) could not load: the terminal stays off. See docs/SETUP.md.',
-      )
-    }
-  }
-  const pairingOrigin = config.remote || config.serveWeb ? serverOrigin(config) : config.webOrigin
-  registerSessionRoutes(
+  registerSystemAndSessionRoutes({
     app,
-    app.pairing,
-    Boolean(config.remote?.tlsCert),
-    pairingOrigin,
-    securityPassword,
-    config.remote ? config.remote.origins : [pairingOrigin],
-    db ? new PasskeyService(db, clock, allowedOriginsFor(config)) : undefined,
-    { enabled: app.hasDecorator('terminals'), unavailable: terminalUnavailable },
-  )
-  if (db)
-    registerShareRoutes(app, {
-      db,
-      port,
-      security: securityPassword,
-      media: mediaStore,
-      origin: serverOrigin(config),
-      ...(clock ? { clock } : {}),
-    })
-  registerSystemRoutes(app, getSystemStatus)
-  // 3.15.0 (owner): update Hermes from Settings › System (a simulated flow in fake mode).
-  if (db)
-    registerBotTakeoverRoutes(app, {
-      port,
-      db,
-      security: securityPassword,
-      ...(clock ? { clock } : {}),
-    })
-  registerHermesUpdateRoutes(app, {
-    updates:
-      config.mode === 'live' && db
-        ? createLiveHermesUpdates({ db, port, config })
-        : config.mode === 'fake'
-          ? createFakeHermesUpdates()
-          : undefined,
-    security: securityPassword,
-    db,
-    ...(clock ? { clock } : {}),
-  })
-  registerLogRoutes(app, config.logFile)
-  registerAboutRoutes(app, {
     config,
     db,
+    ingest,
+    port,
+    coding,
+    clock,
+    securityPassword,
     getSystemStatus,
-    ...(updateFetcher ? { fetcher: updateFetcher } : {}),
-    ...(clock ? { clock } : {}),
+    getEpoch,
+    updateFetcher,
+    streamOptions,
+    webAssets,
+    mediaStore,
+    https,
+    terminal,
   })
-  if (db && ingest && getEpoch) {
-    registerStreamRoute(app, {
-      db,
-      ingest,
-      getEpoch,
-      getSystemStatus,
-      remote: Boolean(config.remote),
-      ...streamOptions,
-    })
-  }
-  // Which interpreter signals coding-agent processes through pidfds (Y1); shows in Settings > Logs.
-  if (coding)
-    app.addHook('onReady', async () => {
-      const support = pidfdSupport()
-      if (support.python) app.log.info(support.detail)
-      else app.log.warn(support.detail)
-    })
-  if (config.remote) registerHttpsGuide(app, config)
-  if (webAssets) registerWebAssets(app, webAssets, config.remote ? 'tls' : undefined)
-  return app
-}
-
-export function buildBridgeApp(
-  bridge?: BridgeDeps,
-  outbox?: ApprovalOutbox,
-  logger: FastifyServerOptions['logger'] = false,
-  /** Score's MCP server for agents (7.4d): served here, on the loopback bridge listener, and nowhere else. */
-  mcp?: McpRouteDeps,
-): FastifyInstance {
-  const app = Fastify({ logger, trustProxy: false, forceCloseConnections: true })
-  registerErrorHandlers(app)
-  app.addHook('onRequest', async (request, reply) => {
-    if (request.ip !== '127.0.0.1' && request.ip !== '::1')
-      return reply
-        .code(403)
-        .send({ error: { code: 'forbidden', message: 'Loopback listener only' } })
-  })
-  if (bridge) registerBridgeRoutes(app, { ...bridge, ...(outbox ? { outbox } : {}) })
-  if (mcp) registerMcpRoutes(app, mcp)
   return app
 }

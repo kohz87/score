@@ -1,10 +1,5 @@
 [
   {
-    "path": "apps/server/src/app.ts",
-    "lines": 660,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/approvals.ts",
     "lines": 668,
     "reason": "split in CS.2 wave 1"
@@ -152,11 +147,6 @@
   {
     "path": "apps/server/src/hermes/port.ts",
     "lines": 513,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/installation.ts",
-    "lines": 697,
     "reason": "split in CS.2 wave 1"
   },
   {

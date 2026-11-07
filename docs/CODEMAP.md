@@ -311,6 +311,27 @@ likely to be the entry point for a change.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
+- `apps/server/src/app.ts` — Fastify app composition root and public app exports.
+- `apps/server/src/app-options.ts` — `buildApp` options and the Fastify instance decorator types.
+- `apps/server/src/app-route-port.ts` — the route-visible Hermes port with the agent directory and coding agents.
+- `apps/server/src/app-bridge.ts` — the loopback bridge and MCP Fastify app.
+- `apps/server/src/app-routes-data.ts` — task, agent, profile, workspace, knowledge, MCP, settings and theme routes.
+- `apps/server/src/app-routes-collaboration.ts` — rooms, triggers, workspace, conversation and pause-hold route setup.
+- `apps/server/src/app-task-parking.ts` — the committed-event retry loop that parks tasks for paused owners.
+- `apps/server/src/app-routes-work.ts` — brief, orchestration, workflow, team-pause and live team read routes.
+- `apps/server/src/app-terminal.ts` — optional web terminal decoration and coding-agent CLI launch resolution.
+- `apps/server/src/app-routes-system.ts` — coding-agent, session, share, system, update, logs, about, stream and asset routes.
+- `apps/server/src/installation.ts` — installation identity public facade and exports.
+- `apps/server/src/installation-types.ts` — registry, resolution and confirmation types.
+- `apps/server/src/installation-identity.ts` — installation ids, namespaces, file names and legacy journal scopes.
+- `apps/server/src/installation-io.ts` — durable file replacement and directory syncing.
+- `apps/server/src/installation-json.ts` — registry entry parsing and JSON object guards.
+- `apps/server/src/installation-home.ts` — the home's `installation.json` copy.
+- `apps/server/src/installation-registry.ts` — the external registry, manifests, registry lock and legacy cutover reads.
+- `apps/server/src/installation-resolve.ts` — registry recovery, path claims and installation resolution.
+- `apps/server/src/installation-journal.ts` — journal checksums, copied-history inheritance and legacy scope closure.
+- `apps/server/src/installation-confirm.ts` — confirmed moves and confirmed copies.
+- `apps/server/src/installation-restore.ts` — restore-marker and restored-home registry lookups.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
