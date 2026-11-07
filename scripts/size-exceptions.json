@@ -230,21 +230,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/domain/approvals.test.ts",
-    "lines": 950,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/domain/exchange-budgets.test.ts",
-    "lines": 478,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/domain/exchanges.test.ts",
-    "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/domain/reports.test.ts",
     "lines": 469,
     "reason": "split in CS.2 wave 1"
