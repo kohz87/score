@@ -332,7 +332,9 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/theme-files.ts` — read a theme snapshot and rebuild the snapshot after a save.
 - `apps/web/src/routes/customizer/use-customizer-actions.ts` — save, export, use, import, start-from and keyboard actions with their status state.
 - `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
+- `apps/web/src/routes/team/coding-agent-test-helpers.ts` — shared coding-agent test fixtures, default fetch lifecycle and JSON responses.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
+- `apps/web/src/routes/team/workspace-tab-test-helpers.tsx` — shared workspace-tab test state, fetch handler, mount and editor helpers.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.
 - `apps/web/src/routes/knowledge/knowledge-shell.css` — left tree/main card shells, headings, shared controls and actions.

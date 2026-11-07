@@ -275,11 +275,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/team/CodingAgent.test.tsx",
-    "lines": 793,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/team/CodingAgent.tsx",
     "lines": 725,
     "reason": "split in CS.2 wave 1"
@@ -287,11 +282,6 @@
   {
     "path": "apps/web/src/routes/team/team.css",
     "lines": 961,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/team/WorkspaceTab.test.tsx",
-    "lines": 463,
     "reason": "split in CS.2 wave 1"
   },
   {
