@@ -308,6 +308,8 @@ likely to be the entry point for a change.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
 - `apps/server/test/` — server integration tests and recorded fixtures; terminal tests are split by access/transport, shell session and live agent with a shared harness.
+- `apps/server/test/` — server integration tests and recorded fixtures.
+- `apps/server/test/orchestration/` — orchestration executor and HTTP integration tests split by feature; shared setup lives in `fix-h-helpers.ts` and `http-helpers.ts`.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
 
@@ -352,6 +354,8 @@ likely to be the entry point for a change.
 - `apps/server/src/installation-restore.ts` — restore-marker and restored-home registry lookups.
 - `apps/server/test/terminal-helpers.ts` — shared TLS app setup, pairing, ticket, WebSocket, cleanup and process-exit harness for the terminal tests.
 - `apps/server/test/knowledge/audit3-bb-helpers.ts` — shared cleanup, scratch-directory, read and restart helpers for the feature-split audit3-bb rename and recovery suites.
+- `apps/server/test/orchestration/fix-h-helpers.ts` — shared harness lifecycle, fence startup, running-run factory and agent-incarnation fixtures for the fix-h suites.
+- `apps/server/test/orchestration/http-helpers.ts` — shared app and bridge boot, pairing, request, body and MCP client helpers for the orchestration HTTP suites.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.

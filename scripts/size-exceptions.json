@@ -100,16 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/orchestration/fix-h.test.ts",
-    "lines": 622,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/orchestration/http.test.ts",
-    "lines": 628,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/runtimes/coding-process.test.ts",
     "lines": 543,
     "reason": "split in CS.2 wave 1"
