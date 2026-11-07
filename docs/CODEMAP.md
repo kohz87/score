@@ -405,6 +405,16 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
 - `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
+## apps/server/test
+
+### Folders
+
+- `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+
+### Key files
+
+- `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
+
 ## packages/contract/src
 
 ### Folders
