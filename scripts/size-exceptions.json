@@ -25,11 +25,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/message-runs.ts",
-    "lines": 969,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/orchestration/commands.ts",
     "lines": 844,
     "reason": "split in CS.2 wave 1"
@@ -52,11 +47,6 @@
   {
     "path": "apps/server/src/domain/orchestration/ops.ts",
     "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/profiles.ts",
-    "lines": 833,
     "reason": "split in CS.2 wave 1"
   },
   {
