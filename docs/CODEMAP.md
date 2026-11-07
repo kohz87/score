@@ -85,6 +85,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldLibraryDialogs.tsx` — Library dialogs: new note, new folder, move and delete (notes and folders).
 - `apps/web/src/bold/BoldLibrarySearchResults.tsx` — Library search results list.
 - `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
+- `apps/web/src/bold/BoldLibrary-helpers.tsx` — shared Library test harness: state, fetch fixtures, mounting and cleanup.
+- `apps/web/src/bold/BoldLibrary-*.test.tsx` — Library suites split by feature: notes/editor and folders/files.
+- `apps/web/src/bold/BoldScreen-helpers.tsx` — shared agent-screen test harness: agents, frames, approvals and cleanup.
+- `apps/web/src/bold/BoldScreen-*.test.tsx` — agent-screen suites split by feature: approvals and replay/stage.
+- `apps/web/src/bold/BoldSettings-helpers.tsx` — shared Settings test harness: API fixtures, router mounting and cleanup.
+- `apps/web/src/bold/BoldSettings-*.test.tsx` — Settings suites split by feature: sections, system, security and recipes.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
 - `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
