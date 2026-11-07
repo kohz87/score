@@ -902,7 +902,9 @@ likely to be the entry point for a change.
 - `e2e/customizer-saves.spec.ts` — save conflicts, in-use state, replaced pictures and unsaved edits.
 - `e2e/customizer-package-versions.spec.ts` — copies, package revisions, exports, cached looks and replaced assets.
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
+- `e2e/bold-thread-helpers.ts` — thread fixtures, topic navigation, recipe and budget-pause data for bold-thread specs.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
+- `e2e/themes-protection-helpers.ts` — protected-surface theme helpers and readability measurement for protection specs.
 - `e2e/visual-fixtures.ts` — shared visual-test setup.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.
 - `e2e/locks.ts` — cross-worker test locks.
