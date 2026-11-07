@@ -659,6 +659,7 @@ likely to be the entry point for a change.
 - `apps/server/test/hermes/live/sqlite-helpers.ts` — shared fixture lifecycle, reader tracking and source setup for the SQLite suites.
 - `apps/server/test/hermes/live/sse-client-helpers.ts` — shared SSE frames, fake response/connection factories and timer cleanup.
 - `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate suites.
+- `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate and recovery suites.
 
 ### Key files
 
@@ -668,6 +669,7 @@ likely to be the entry point for a change.
 - `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
 - `apps/server/test/hermes/fake-helpers.ts` — shared fake-port test setup, scheduler state, event readers and scenario play helpers.
 - `apps/server/test/hermes/live-port-helpers.ts` — shared live-port test setup, teardown and port factory.
+- `apps/server/test/hermes/live/gateway/recovery-helpers.ts` — shared environment lifecycle, run context and follow setup for the split recovery suites.
 - `apps/server/test/http/` — HTTP route tests for the server API, including agent profiles, rooms, tasks and settings.
 
 ### Key files

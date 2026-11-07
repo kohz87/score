@@ -85,11 +85,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/hermes/live/gateway/recovery.test.ts",
-    "lines": 491,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/http/kanban-attempts-consumers.test.ts",
     "lines": 531,
     "reason": "split in CS.2 wave 1"
