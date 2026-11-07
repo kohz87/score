@@ -423,10 +423,12 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+- `apps/server/test/triggers/` — webhook trigger tests split by delivery, validation, secrets, payload safety, report-back, limits and team routing; shared setup lives in `webhooks-helpers.ts`.
 
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
+- `apps/server/test/triggers/webhooks-helpers.ts` — shared webhook test app, clock, pairing, trigger factory and request/job helpers.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
