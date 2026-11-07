@@ -883,7 +883,14 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
-- `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
+- `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter: state, construction and the method install (methods in the files below).
+- `apps/server/src/hermes/live/live-port-types.ts` — live adapter options, state schema and constants.
+- `apps/server/src/hermes/live/live-port-runtime.ts` — the live adapter's shared runtime type and its method installer.
+- `apps/server/src/hermes/live/live-port-lifecycle.ts` — start, stop, status, the execution hold and Bot Desktop screen.
+- `apps/server/src/hermes/live/live-port-agents.ts` — agents, profiles, routines and model settings.
+- `apps/server/src/hermes/live/live-port-runs.ts` — runs: follow, start, stop, rewind, compact, session context.
+- `apps/server/src/hermes/live/live-port-tasks.ts` — tasks, questions, outside sessions, report-back facts and costs.
+- `apps/server/src/hermes/live/live-port-settings.ts` — providers, models, sign-ins, tool servers and messaging.
 - `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
