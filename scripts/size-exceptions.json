@@ -295,21 +295,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/http/kanban-attempts-consumers.test.ts",
-    "lines": 531,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/http/passkeys.test.ts",
-    "lines": 488,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/http/rewind.test.ts",
-    "lines": 564,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/http/routing.test.ts",
     "lines": 581,
     "reason": "split in CS.2 wave 1"
