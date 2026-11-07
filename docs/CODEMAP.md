@@ -478,6 +478,18 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/knowledge/editor-toolbar-icons.tsx` — toolbar SVG icon set.
 - `apps/web/src/routes/knowledge/editor-toolbar-types.ts` — toolbar props and open panel type.
 - `apps/web/src/routes/knowledge/note-workspace-types.ts` — note session, status and workspace prop types.
+- `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page composition and public re-exports.
+- `apps/web/src/routes/team/CodingAccessCard.tsx` — access card and its permission/quota-floor editor.
+- `apps/web/src/routes/team/CodingAlerts.tsx` — held-program and broken-CLI notices.
+- `apps/web/src/routes/team/CodingDanger.tsx` — remove-agent danger zone.
+- `apps/web/src/routes/team/CodingFacts.tsx` — CLI, workspace and quota facts for the personality card.
+- `apps/web/src/routes/team/CodingModelCard.tsx` — model card, model/effort/advisor editor and advisor select.
+- `apps/web/src/routes/team/CodingPermission.tsx` — read-access warning and permission picker.
+- `apps/web/src/routes/team/coding-agent-permissions.ts` — permission labels, names and read-access helper.
+- `apps/web/src/routes/team/coding-agent-queries.ts` — coding-agent list/runtime queries and patch mutation.
+- `apps/web/src/routes/team/useCodingAgentDraft.ts` — coding-agent create fields, validation, consent and mutation.
+- `apps/web/src/routes/team/WorkspaceBrowser.tsx` — workspace tree, file pane, splitter, file actions and uploads.
+- `apps/web/src/routes/team/WorkspaceTab.tsx` — workspace tab states, folder form and browser entry.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/table-widget.ts` — live-editor table widget facade, grid assembly and public focus/commit commands.
 - `apps/web/src/routes/knowledge/table-widget-types.ts` — table widget hooks and focused-cell request types.
