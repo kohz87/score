@@ -10,16 +10,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/fake/scenario.ts",
-    "lines": 728,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/hermes/fake/team-seed.ts",
-    "lines": 748,
-    "reason": "data list"
-  },
-  {
     "path": "apps/server/src/hermes/live/agent-tabs.ts",
     "lines": 605,
     "reason": "split in CS.2 wave 1"
