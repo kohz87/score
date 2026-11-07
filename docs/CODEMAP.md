@@ -334,6 +334,11 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
+- `apps/web/src/routes/knowledge/table-widget.ts` — live-editor table widget facade, grid assembly and public focus/commit commands.
+- `apps/web/src/routes/knowledge/table-widget-types.ts` — table widget hooks and focused-cell request types.
+- `apps/web/src/routes/knowledge/table-widget-focus.ts` — queued cell focus after a redraw and committing an active cell edit.
+- `apps/web/src/routes/knowledge/table-widget-resize.ts` — table/column width and row-height grips with per-note persistence.
+- `apps/web/src/routes/knowledge/table-widget-cells.ts` — cell rendering, editing, keyboard navigation, range selection and copying.
 - `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.
 - `apps/web/src/routes/knowledge/knowledge-shell.css` — left tree/main card shells, headings, shared controls and actions.
 - `apps/web/src/routes/knowledge/knowledge-note.css` — tree/list, note workspace and side-panel props/history.

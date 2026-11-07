@@ -245,11 +245,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/knowledge/table-widget.ts",
-    "lines": 562,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/orchestrations/LiveDiagram.tsx",
     "lines": 649,
     "reason": "split in CS.2 wave 1"
