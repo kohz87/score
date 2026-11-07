@@ -1,0 +1,202 @@
+[data-ui='bold'] .cz {
+  --card: var(--panel);
+  --ground: var(--bg);
+  --hairline: var(--line);
+  --line-strong: var(--faint);
+  --ink-muted: var(--muted);
+  --subtle: var(--field);
+  --subtle-2: var(--line);
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --radius-pill: 999px;
+  --radius-card: 26px;
+  --radius-14: 18px;
+  --radius-12: 14px;
+  --radius-10: 12px;
+  --agent-coral-text: var(--bad);
+  --agent-saffron-text: var(--warn);
+  --agent-coral-tint: color-mix(in srgb, var(--bad) 16%, transparent);
+  --shadow-rgb: 0 0 0;
+}
+.cz {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--ink);
+}
+.cz-empty {
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+.cz-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.cz-back:focus-visible,
+.cz .cz-btn:focus-visible,
+.cz .cz-tab:focus-visible,
+.cz .cz-seg-option:focus-visible,
+.cz .cz-link:focus-visible,
+.cz .cz-input:focus-visible,
+.cz .cz-select:focus-visible,
+.cz-color-picker:focus-visible,
+.cz-file:focus-within,
+.cz-slider input:focus-visible,
+.cz-panel:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The head: Look / Customizer, the theme being edited, then the actions */
+.cz-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.cz .cz-crumb {
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.cz .cz-crumb:hover {
+  text-decoration: underline;
+}
+.cz-slash {
+  color: var(--faint);
+}
+.cz-title {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+.cz-editing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 14px;
+  font-weight: 700;
+  max-width: 100%;
+}
+.cz-editing small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.cz-editing span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cz-unsaved {
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cz-actions-wrap {
+  display: grid;
+  gap: var(--space-2);
+}
+.cz-inuse {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.cz-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.cz .cz-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cz .cz-btn--primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+.cz .cz-btn--quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.cz .cz-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cz .cz-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cz .cz-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+  text-decoration: none;
+}
+.cz-messages {
+  min-height: 0;
+}
+.cz-status,
+.cz-problem {
+  margin: 0;
+  font-size: 14px;
+}
+.cz-status:empty {
+  display: none;
+}
+.cz-status {
+  color: var(--muted);
+}
+.cz-problem {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-14);
+  background: var(--agent-coral-tint);
+  color: var(--bad);
+  font-weight: 500;
+}
+.cz-switch {
+  display: none;
+}

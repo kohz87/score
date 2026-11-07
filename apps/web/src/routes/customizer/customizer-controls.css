@@ -1,0 +1,143 @@
+/* Controls */
+.cz-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cz .cz-tab {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cz .cz-tab[aria-selected='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+.cz-panel {
+  min-height: 0;
+}
+.cz-use {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 22px;
+  background: var(--deep);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.cz-use-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.cz-lost {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cz-lost kbd {
+  font-family: var(--font-m);
+  background: var(--field);
+  border-radius: 8px;
+  padding: 2px 8px;
+  color: var(--ink2);
+}
+
+.cz-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.cz-section-head {
+  display: grid;
+  gap: var(--space-2);
+}
+.cz-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.cz-note[data-over] {
+  color: var(--agent-coral-text);
+  font-weight: 600;
+}
+.cz-group {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+.cz-group legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cz-field {
+  display: grid;
+  gap: 6px;
+}
+.cz-field-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cz-field-hint {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* Segmented choice */
+.cz-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  align-self: flex-start;
+}
+.cz .cz-seg-option {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cz .cz-seg-option[aria-checked='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.cz-slider {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 13px;
+}
+.cz-slider input {
+  accent-color: var(--ink);
+}
+.cz-slider output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

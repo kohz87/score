@@ -1,0 +1,37 @@
+/* Narrow windows: one pane at a time */
+@media (width < 900px) {
+  .cz-title {
+    font-size: 30px;
+  }
+  .cz-sep {
+    display: none;
+  }
+  .cz-switch {
+    display: block;
+  }
+  .cz-body {
+    display: block;
+  }
+  .cz-controls {
+    max-width: none;
+  }
+  .cz[data-pane='edit'] .cz-preview,
+  .cz[data-pane='preview'] .cz-controls {
+    display: none;
+  }
+  .cz-stage {
+    height: 62dvh;
+  }
+  .cz-color {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+  .cz-color-input {
+    grid-column: 2 / 3;
+  }
+  .cz-import {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cz-modal {
+    padding: var(--space-4);
+  }
+}

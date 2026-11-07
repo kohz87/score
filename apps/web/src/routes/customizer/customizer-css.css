@@ -1,0 +1,53 @@
+/* Custom CSS */
+.cz-code {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+}
+.cz-code .cm-editor {
+  min-height: 260px;
+  max-height: 46vh;
+}
+.cz-code .cm-scroller {
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow: auto;
+}
+.cz-report h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.cz-report ul,
+.cz-report-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.cz-report li code,
+.cz-report-list code {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The allowlist help in the Custom CSS section. */
+.cz-allowed summary {
+  cursor: pointer;
+}
+.cz-allowed ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.cz-allowed code {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
