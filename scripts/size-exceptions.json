@@ -50,11 +50,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/domain/orchestration/journal.ts",
-    "lines": 1025,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/orchestration/ops.ts",
     "lines": 472,
     "reason": "split in CS.2 wave 1"
