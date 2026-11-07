@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, vi } from 'vitest'
 
-export const mocks = vi.hoisted(() => {
+const mocks = vi.hoisted(() => {
   const mocksRelease = vi.fn()
   const db = {
     close: vi.fn(),
@@ -189,3 +189,6 @@ export function setupStartup(feature: string): string {
 
   return home
 }
+
+// Exported separately: Vitest does not allow `export const x = vi.hoisted(...)`.
+export { mocks }
