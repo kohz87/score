@@ -141,6 +141,13 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-knowledge-page.css` — Knowledge page frame and folder rail, folder rows, menus and new-folder control.
 - `apps/web/src/bold/bold-knowledge-list.css` — Knowledge note-list column, search shell, note rows and note actions.
 - `apps/web/src/bold/bold-knowledge-note.css` — Knowledge note and side-panel layout with mid-width and phone page layouts.
+- `apps/web/src/bold/direct/DirectChat.tsx` — one-to-one chat entry: loads the agent's chats and switches between loading, empty and loaded states.
+- `apps/web/src/bold/direct/DirectChatBar.tsx` — the one-to-one header, choosing the phone or desktop bar.
+- `apps/web/src/bold/direct/Welcome.tsx` — the one-to-one welcome with privacy note and starter questions.
+- `apps/web/src/bold/direct/NoRoomYet.tsx` — first-chat creation for an agent with no direct room yet.
+- `apps/web/src/bold/direct/LoadedDirect.tsx` — the loaded one-to-one surface: stream, sharing, composer and chat menus.
+- `apps/web/src/bold/direct/use-direct-topic-commands.ts` — the one-to-one slash-command palette and its `/new` handler.
+- `apps/web/src/bold/direct/direct-chat-props.ts` — props shared by the one-to-one chat parts.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
 - `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
 - `apps/web/src/bold/BoldShell-helpers.tsx` — shared bold shell test harness: state, fetch fixtures, router render and cleanup.

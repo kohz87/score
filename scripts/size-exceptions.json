@@ -75,11 +75,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/direct/DirectChat.tsx",
-    "lines": 508,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/jobmap/jobmap.css",
     "lines": 459,
     "reason": "split in CS.2 wave 1"
