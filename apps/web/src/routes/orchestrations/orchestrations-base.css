@@ -1,0 +1,160 @@
+/* Orchestrator pages (PLAN 7.5b). Tokens from styles/tokens.css; node look follows the Flow cards. */
+.orch-live,
+.orch-room-body,
+.orch-dialog {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.orch-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.orch-mono {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+.orch-error {
+  color: var(--agent-coral-text);
+  font-weight: 600;
+}
+.orch-link {
+  background: none;
+  border: 0;
+  padding: 0 var(--space-1);
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.orch-live button:not(.orch-node),
+.orch-room button,
+.orch-dialog button {
+  font: inherit;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.orch-live button.orch-link,
+.orch-room button.orch-link {
+  border: 0;
+  background: none;
+  padding: 0 var(--space-1);
+  border-radius: 0;
+}
+.orch-live button:focus-visible,
+.orch-room button:focus-visible,
+.orch-dialog button:focus-visible,
+.orch-node:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+.orch-live button:disabled,
+.orch-dialog button:disabled,
+.orch-room button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button.orch-primary,
+.orch-live button.orch-primary,
+.orch-room button.orch-primary,
+.orch-dialog button.orch-primary {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+}
+.orch-live button.orch-danger,
+.orch-room button.orch-danger {
+  border: 2px solid var(--agent-coral-text);
+  color: var(--agent-coral-text);
+  font-weight: 700;
+}
+.orch-live button[aria-pressed='true']:not(.orch-node),
+.orch-speeds button[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+
+/* Heading and status */
+.orch-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.orch-head .orch-title {
+  margin: 0 0 4px;
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+.orch-goal {
+  margin: 0 0 8px;
+  max-width: 70ch;
+  white-space: pre-wrap;
+}
+.orch-head-actions,
+.orch-controls,
+.orch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.orch-head-actions {
+  flex-direction: column;
+  align-items: flex-end;
+}
+.orch-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.orch-badge {
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-3);
+  font-weight: 700;
+  background: var(--subtle-2);
+  border: 1px solid var(--hairline);
+}
+.orch-badge--running,
+.orch-badge--finishing {
+  background: var(--card);
+  border: 2px solid var(--ink-muted);
+}
+.orch-badge--paused,
+.orch-badge--stopping {
+  background: var(--agent-saffron-tint);
+  border: 2px dashed var(--agent-saffron);
+  color: var(--agent-saffron-text);
+}
+.orch-badge--succeeded {
+  background: var(--agent-jade-tint);
+  border-color: var(--agent-jade);
+  color: var(--agent-jade-text);
+}
+.orch-badge--failed,
+.orch-badge--finished_with_unresolved,
+.orch-badge--stopped {
+  background: var(--agent-coral-tint);
+  border-color: var(--agent-coral);
+  color: var(--agent-coral-text);
+}
+.orch-pill {
+  margin-left: 8px;
+  background: var(--ink);
+  color: var(--card);
+  border-radius: var(--radius-pill);
+  padding: 1px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}

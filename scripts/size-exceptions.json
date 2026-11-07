@@ -745,11 +745,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/orchestrations/orchestrations.css",
-    "lines": 1140,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/orchestrations/RunDecisions.tsx",
     "lines": 733,
     "reason": "split in CS.2 wave 1"

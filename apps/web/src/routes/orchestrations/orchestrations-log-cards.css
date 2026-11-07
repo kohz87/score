@@ -1,0 +1,150 @@
+/* Log */
+.orch-log {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.orch-log header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+.orch-log h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+.orch-log-scroll {
+  max-height: 520px;
+  overflow: auto;
+  margin-top: 8px;
+}
+.orch-log-scroll ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.orch-log-scroll li {
+  display: grid;
+  grid-template-columns: 5.5em 4.8em 1fr;
+  gap: var(--space-2);
+  padding: 5px 0;
+  border-top: 1px solid var(--flow-log-border);
+  font-size: 13px;
+}
+.orch-log-scroll time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.orch-log-kind {
+  font-weight: 700;
+  font-size: 12px;
+}
+.orch-log-text {
+  overflow-wrap: anywhere;
+}
+.orch-log-bad .orch-log-text {
+  color: var(--agent-coral-text);
+}
+.orch-jump {
+  position: absolute;
+  bottom: 14px;
+  right: 18px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+}
+
+/* Replay */
+.orch-replay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.orch-replay input[type='range'] {
+  flex: 1 1 200px;
+  min-width: 120px;
+}
+.orch-speeds {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+/* Cards */
+.orch-steps {
+  display: grid;
+  gap: 10px;
+}
+.orch-step {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  padding: 10px 14px;
+  background: var(--card);
+}
+.orch-step--on {
+  border: 2px solid var(--ink);
+}
+.orch-step header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.orch-step-instruction {
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.orch-step summary {
+  cursor: pointer;
+}
+.orch-attempts {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.orch-plan {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+.orch-room {
+  margin: 0 0 12px;
+}
+.orch-room-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  padding: var(--space-2) 14px;
+}
+.orch-room-head .orch-controls {
+  margin-left: auto;
+}
+.orch-room-toggle {
+  border: 0 !important;
+  background: none !important;
+  padding: 0 !important;
+  text-align: left;
+}
+.orch-room-toggle::before {
+  content: '▸ ';
+}
+.orch-room-toggle[aria-expanded='true']::before {
+  content: '▾ ';
+}
+.orch-room-body {
+  padding: var(--space-3) 6px 0;
+}
+.orch-fence-items {
+  padding-left: 18px;
+}
