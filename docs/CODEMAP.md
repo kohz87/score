@@ -459,7 +459,25 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/use-customizer-actions.ts` — save, export, use, import, start-from and keyboard actions with their status state.
 - `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
-- `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
+- `apps/web/src/routes/knowledge/EditorLinkForm.tsx` — toolbar link dialog for web addresses and note wikilinks.
+- `apps/web/src/routes/knowledge/EditorToolbar.tsx` — editor toolbar composition: formatting strip, menus, table actions and image input.
+- `apps/web/src/routes/knowledge/EditorToolbarControls.tsx` — toolbar button and strip primitives with keyboard roving and shortcut labels.
+- `apps/web/src/routes/knowledge/EditorToolbarPanels.tsx` — code-language and table-size toolbar menus.
+- `apps/web/src/routes/knowledge/NoteHeader.tsx` — note title, path, history badge and file actions.
+- `apps/web/src/routes/knowledge/NoteNotices.tsx` — note save status, history, agent-edit, external-change and conflict notices.
+- `apps/web/src/routes/knowledge/NotePane.tsx` — note editor pane state, autosave lifecycle and editor/panel composition.
+- `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace loader, missing-note state and pane replacement.
+- `apps/web/src/routes/knowledge/editor-block-commands.ts` — block insertion, code-block and callout commands.
+- `apps/web/src/routes/knowledge/editor-command-context.ts` — Markdown syntax-tree lookup, line selection and format regexes.
+- `apps/web/src/routes/knowledge/editor-command-types.ts` — editor format, list, callout, link and table types.
+- `apps/web/src/routes/knowledge/editor-commands.ts` — public editor-command facade; re-exports formatting, block, link, image and table commands.
+- `apps/web/src/routes/knowledge/editor-format-commands.ts` — inline, list, quote and heading commands with active-format detection.
+- `apps/web/src/routes/knowledge/editor-image-commands.ts` — image Markdown insertion.
+- `apps/web/src/routes/knowledge/editor-link-commands.ts` — selected-link text and web/note link insertion.
+- `apps/web/src/routes/knowledge/editor-table-commands.ts` — table detection, insertion, editing, alignment, deletion and tab navigation.
+- `apps/web/src/routes/knowledge/editor-toolbar-icons.tsx` — toolbar SVG icon set.
+- `apps/web/src/routes/knowledge/editor-toolbar-types.ts` — toolbar props and open panel type.
+- `apps/web/src/routes/knowledge/note-workspace-types.ts` — note session, status and workspace prop types.
 - `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.
 - `apps/web/src/routes/knowledge/knowledge-shell.css` — left tree/main card shells, headings, shared controls and actions.
 - `apps/web/src/routes/knowledge/knowledge-note.css` — tree/list, note workspace and side-panel props/history.
