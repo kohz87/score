@@ -90,7 +90,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/reports/` — reports pages and journey chart.
 - `apps/web/src/routes/runs/` — helpers for opening a brief as a run.
 - `apps/web/src/routes/settings/` — settings sections for providers, logs, backup and notifications.
-- `apps/web/src/routes/team/` — team and agent pages, coding agent, model and workspace tabs.
+- `apps/web/src/routes/team/` — team and agent pages, coding agent, model and workspace tabs, and ordered stylesheets.
 - `apps/web/src/routes/terminal/` — browser terminal page and key handling.
 - `apps/web/src/routes/watch/` — watch replay timeline, stage and replay model.
 - `apps/web/src/routes/workflows/` — workflow editor, nodes, runs, recipes and previews.
@@ -490,6 +490,11 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/team/useCodingAgentDraft.ts` — coding-agent create fields, validation, consent and mutation.
 - `apps/web/src/routes/team/WorkspaceBrowser.tsx` — workspace tree, file pane, splitter, file actions and uploads.
 - `apps/web/src/routes/team/WorkspaceTab.tsx` — workspace tab states, folder form and browser entry.
+- `apps/web/src/routes/team/team.css` — team style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/routes/team/team-shell.css` — shared cards, agent band, style popover, overview facts and responsive layout.
+- `apps/web/src/routes/team/team-tabs.css` — file editor, routine forms, tab controls and shared profile actions.
+- `apps/web/src/routes/team/team-coding.css` — coding permissions, quota floor and meters, reach and personality.
+- `apps/web/src/routes/team/team-appearance.css` — appearance preview, colour and shape radio cards.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/table-widget.ts` — live-editor table widget facade, grid assembly and public focus/commit commands.
 - `apps/web/src/routes/knowledge/table-widget-types.ts` — table widget hooks and focused-cell request types.
