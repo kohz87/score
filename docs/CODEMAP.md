@@ -304,6 +304,7 @@ likely to be the entry point for a change.
 - `apps/server/test/` — server integration tests and recorded fixtures.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
 - `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
+- `apps/server/test/workspace/` — workspace policy, listing, reading, writing, entry and opening tests split by feature; shared setup lives in `workspace-fixtures.ts`.
 
 ### Key files
 
@@ -314,6 +315,7 @@ likely to be the entry point for a change.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
+- `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
