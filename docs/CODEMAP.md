@@ -271,7 +271,7 @@ likely to be the entry point for a change.
 - `apps/server/src/db/` — Score SQLite open, migrate, lock, FTS and epochs.
 - `apps/server/src/domain/` — room, task, approval, report, profile and other domain rules.
 - `apps/server/src/domain/exchanges/` — exchange requests, budgets, results and workbench state.
-- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
+- `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, helper and vote machinery, state transitions, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, queue and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
@@ -350,6 +350,11 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/executor-workflow-decisions.ts` — human decisions on workflow runs.
 - `apps/server/src/domain/orchestration/executor-workflow-preflight.ts` — workflow validation, preflight and reads.
 - `apps/server/src/domain/orchestration/fence.ts` — decision fences and turn ownership.
+- `apps/server/src/domain/orchestration/helpers.ts` — helper setup, votes and audits facade.
+- `apps/server/src/domain/orchestration/helpers-audit.ts` — automatic audits after the lead's steps.
+- `apps/server/src/domain/orchestration/helpers-auto-votes.ts` — automatic step votes and their cleanup.
+- `apps/server/src/domain/orchestration/helpers-config.ts` — helper configuration, slots, scan setup and sizing.
+- `apps/server/src/domain/orchestration/helpers-votes.ts` — vote records, tallies, settlement and read views.
 - `apps/server/src/domain/orchestration/journal.ts` — execution journal facade: durable append, critical sections, reads, compaction and restore markers.
 - `apps/server/src/domain/orchestration/journal-entry.ts` — execution journal entry schemas and body types.
 - `apps/server/src/domain/orchestration/journal-history.ts` — history-reset and execution-freeze folding.
@@ -360,6 +365,12 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/journal-folds.ts` — generation and coding-record folds used by compaction.
 - `apps/server/src/domain/orchestration/journal-compaction.ts` — compaction planning and permanent tombstones.
 - `apps/server/src/domain/orchestration/journal-paths.ts` — journal file names and the size-alarm constant.
+- `apps/server/src/domain/orchestration/ops.ts` — shared state-transition facade.
+- `apps/server/src/domain/orchestration/ops-admission.ts` — active capacity counts and admission revisions.
+- `apps/server/src/domain/orchestration/ops-finish.ts` — finish barriers and control-history compaction.
+- `apps/server/src/domain/orchestration/ops-refusal.ts` — refusal retry, wait and lifetime transitions.
+- `apps/server/src/domain/orchestration/ops-steps.ts` — step, attempt and gate state transitions.
+- `apps/server/src/domain/orchestration/ops-storage.ts` — storage accounting and coding reserve sizing.
 - `apps/server/src/domain/exchanges/apply.ts` — applies accepted exchange results.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
