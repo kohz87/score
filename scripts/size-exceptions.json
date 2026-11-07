@@ -10,11 +10,6 @@
     "reason": "AGENTS.md D2.1: every call into private Hermes functions lives in this one file and nowhere else (kept whole, decision 172)"
   },
   {
-    "path": "hermes-plugin/score_bridge/spool.py",
-    "lines": 508,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "packages/contract/src/orchestration.ts",
     "lines": 985,
     "reason": "one file per contract section (AGENTS.md layout); declarative zod schemas (decision 172)"

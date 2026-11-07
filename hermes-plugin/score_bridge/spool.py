@@ -13,9 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .client import score_home
+from .spool_directory import _DirectoryCapMixin
+from .spool_format import (DIRECTORY_CAP, FILE_CAP, _invalid_constant, _valid_event, _valid_gap,
+                           _valid_producer, _valid_start, encode, gap_event)
+from .spool_process import process_start
 
-FILE_CAP = 5 * 1024 * 1024
-DIRECTORY_CAP = 50 * 1024 * 1024
 # Close every inherited lock descriptor in the child without acquiring inherited locks.
 _OPEN_FDS: set[int] = set()
 
@@ -29,91 +31,7 @@ def close_inherited_descriptors():
     _OPEN_FDS.clear()
 
 
-def process_start(pid):
-    """Boot id plus the kernel start time of ``pid``: what makes a recycled pid distinguishable.
-
-    None where /proc is unavailable or the process is gone; callers then fall back to the pid alone."""
-    try:
-        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        raw = Path(f"/proc/{int(pid)}/stat").read_text()
-        # comm may contain spaces and parentheses; the fields after the last ")" are fixed.
-        start = int(raw[raw.rindex(")") + 2:].split()[19])
-    except (OSError, ValueError, IndexError):
-        return None
-    return {"boot": boot, "start": start} if boot else None
-
-
-def _valid_start(start):
-    return (isinstance(start, dict) and set(start) == {"boot", "start"}
-            and isinstance(start["boot"], str) and type(start["start"]) is int)
-
-
-def encode(events, producer=None, last_counter=0, *, pending_gap=False, history_evicted=False, start=None):
-    record = {"events": events, "lastCounter": last_counter}
-    if producer is not None:
-        record["producer"] = producer
-    if start is not None:
-        record["start"] = start
-    if pending_gap:
-        record["pendingGap"] = True
-    if history_evicted:
-        record["producerHistoryEvicted"] = True
-    return (json.dumps(record, ensure_ascii=True, allow_nan=False, separators=(",", ":")) + "\n").encode()
-
-
-def _invalid_constant(value):
-    raise ValueError("non-finite JSON number")
-
-
-def gap_event(first: int, last: int, at: str) -> dict:
-    return {"counter": last, "hook": "bridge.gap", "at": at,
-            "sessionKey": None, "sessionId": None, "toolCallId": None,
-            "payload": {"from_counter": first, "to_counter": last, "dropped": last - first + 1}}
-
-
-def _valid_gap(event):
-    payload = event["payload"]
-    first, last, dropped = (payload.get(key) for key in ("from_counter", "to_counter", "dropped"))
-    corrupt = payload.get("corrupt_records", 0)
-    return (type(first) is int and type(last) is int and 0 < first <= last
-            and type(dropped) is int and dropped == last - first + 1
-            and type(corrupt) is int and corrupt >= 0
-            and set(payload) <= {"from_counter", "to_counter", "dropped", "corrupt_records"})
-
-
-def _valid_event(event: object) -> bool:
-    if (not isinstance(event, dict) or type(event.get("counter")) is not int
-            or event["counter"] <= 0 or not isinstance(event.get("hook"), str)
-            or not event["hook"] or not isinstance(event.get("at"), str)
-            or not isinstance(event.get("payload"), dict)):
-        return False
-    for key in ("sessionKey", "sessionId", "toolCallId"):
-        if key not in event or (event[key] is not None and
-                                (not isinstance(event[key], str) or not event[key])):
-            return False
-    if event["hook"] == "bridge.gap" and not _valid_gap(event):
-        return False
-    try:
-        return datetime.fromisoformat(event["at"].replace("Z", "+00:00")).tzinfo is not None
-    except ValueError:
-        return False
-
-
-def _valid_producer(producer: dict, incarnation: str) -> bool:
-    hermes, apis, task = (producer.get(key) for key in ("hermes", "privateApis", "kanbanTaskId"))
-    return (producer.get("incarnation") == incarnation
-            and type(producer.get("pid")) is int and producer["pid"] > 0
-            and isinstance(producer.get("profile"), str) and bool(producer["profile"])
-            and producer.get("isolation") in ("host", "in_process", "unknown")
-            and isinstance(producer.get("pluginVersion"), str)
-            and (task is None or isinstance(task, str) and bool(task))
-            and isinstance(hermes, dict)
-            and all(isinstance(hermes.get(key), str) for key in ("version", "codeSha"))
-            and isinstance(apis, dict)
-            and all(isinstance(key, str) and type(value) is bool for key, value in apis.items()))
-
-
-class Spool:
+class Spool(_DirectoryCapMixin):
     def __init__(self, incarnation, directory=None, *, file_cap=FILE_CAP, directory_cap=DIRECTORY_CAP):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", incarnation):
             raise ValueError("invalid incarnation")
@@ -358,63 +276,6 @@ class Spool:
             self._fit_file(self.path, records)
             self._write(self.path, records)
             self._enforce_directory()
-
-    def _enforce_directory(self):
-        paths = [p for p in self.directory.glob("*.jsonl") if not p.is_symlink()]
-        for path in paths:
-            # Only files that changed since this process last saw them are re-read; and a re-read file is
-            # rewritten only when its bytes are not already what the loss-aware encoding would produce.
-            if self._verified.get(path) == self._signature(path):
-                continue
-            records = self._read(path)
-            self._fit_file(path, records)
-            if not records or self._size(path, records) != path.stat().st_size:
-                self._write(path, records)
-            else:
-                self._verified[path] = self._signature(path)
-        files = {}
-        quarantine = self.directory / "quarantine"
-        quarantined = []
-        if quarantine.exists():
-            self._safe_directory(quarantine)
-            quarantined = sorted(quarantine.glob("*.jsonl"), key=lambda p: p.stat().st_mtime_ns)
-        for path in tuple(quarantined):
-            if path.stat().st_size > self.file_cap:
-                path.unlink()
-                self._fsync_directory(quarantine)
-                quarantined.remove(path)
-                self.dropped += 1
-        def total():
-            return (sum(p.stat().st_size for p in paths if p.exists())
-                    + sum(p.stat().st_size for p in quarantined))
-        if total() > self.directory_cap:
-            # Eviction needs the records; load them only when the directory is actually over its cap.
-            for path in paths:
-                records = self._read(path) if path.exists() else []
-                if records:
-                    files[path] = records
-        while total() > self.directory_cap:
-            self._check_deadline()
-            if quarantined:
-                quarantined.pop(0).unlink()
-                self._fsync_directory(quarantine)
-                self.dropped += 1
-                continue
-            candidates = [p for p, records in files.items() if any(not r.get("pendingGap") for r in records)]
-            if candidates:
-                path = min(candidates, key=lambda p: files[p][0]["events"][0]["at"])
-                self._drop_prefix(files[path])
-                self._write(path, files[path])
-            else:
-                path = min((p for p in files if p != self.path), default=self.path,
-                           key=lambda p: files[p][0]["events"][0]["at"])
-                self.dropped += 1
-                del files[path]
-                self._write(path, [])
-                if files:
-                    retained = self.path if self.path in files else next(iter(files))
-                    files[retained][0]["producerHistoryEvicted"] = True
-                    self._write(retained, files[retained])
 
     @staticmethod
     def _producer_alive(pid, recorded):
