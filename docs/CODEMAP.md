@@ -301,7 +301,7 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/` — coding-agent drivers, split process supervisor, translation and units, quotas and the split coding runtime service.
 - `apps/server/src/shares/` — public share pages, markdown and rate limits.
 - `apps/server/src/terminal/` — PTY terminal manager, tickets and environment.
-- `apps/server/src/themes/` — theme packages, built-ins, CSS validation and storage.
+- `apps/server/src/themes/` — theme packages, built-ins, CSS validation and split storage.
 - `apps/server/src/workspace/` — workspace roots, git, policy and per-agent workspaces.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
@@ -344,6 +344,15 @@ likely to be the entry point for a change.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
+- `apps/server/src/themes/store.ts` — public theme store facade for built-in, imported and custom packages.
+- `apps/server/src/themes/store-types.ts` — theme row and stored-package types, schemas, etag and lock error.
+- `apps/server/src/themes/store-fs.ts` — theme filesystem interface, fsync, swap-path and non-throwing removal helpers.
+- `apps/server/src/themes/store-records.ts` — theme rows, built-in lookup, summaries, upsert and revision counter.
+- `apps/server/src/themes/store-assets.ts` — safe theme asset path resolution, listing and bounded reads.
+- `apps/server/src/themes/store-reads.ts` — theme detail reads and unsettled-package lock checks.
+- `apps/server/src/themes/store-journal.ts` — durable swap-note writes, erasure, settlement and rollback.
+- `apps/server/src/themes/store-transactions.ts` — custom saves, imported asset swaps and journaled deletes.
+- `apps/server/src/themes/store-recovery.ts` — interrupted swap recovery, built-in id reclaim and orphan-folder sweep.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.

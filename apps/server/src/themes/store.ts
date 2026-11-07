@@ -1,303 +1,82 @@
-import { createHash, randomUUID } from 'node:crypto'
-import {
-  chmodSync,
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  fsyncSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import { z } from 'zod'
-import {
-  BUILTIN_THEME_IDS,
-  THEME_ASSET_PATH,
-  ThemeIdSchema,
-  ThemeManifestSchema,
-  type ThemeDetail,
-  type ThemeManifest,
-  type ThemeSummary,
-} from '@score/contract'
+import type { ThemeDetail, ThemeManifest, ThemeSummary } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
+import { realFs, syncThemePath } from './store-fs.ts'
+import { readThemeAsset, themeAssets } from './store-assets.ts'
 import {
-  BUILTIN_UPDATED_AT,
-  builtinAssetRoot,
-  builtinCss,
-  builtinLicenses,
-  builtinManifest,
-  isBuiltinThemeId,
-} from './builtin.ts'
+  assertSettled,
+  reclaimBuiltinIds,
+  recoverInterrupted,
+  sweepOrphanFolders,
+} from './store-recovery.ts'
+import {
+  existsTheme,
+  getTheme,
+  listThemes,
+  lockedIds,
+  themeSummary,
+  upsertTheme,
+} from './store-records.ts'
+import { assertReadable, themeDetail } from './store-reads.ts'
+import { removeTheme, saveCustom, storeImported } from './store-transactions.ts'
+import type { StoredTheme, ThemeContext, ThemeFs } from './store-types.ts'
 
-const RowSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  version: z.string(),
-  manifest_json: z.string(),
-  css: z.string(),
-  licenses_json: z.string(),
-  revision: z.number().int(),
-  source: z.enum(['imported', 'custom']),
-  created_at: z.string(),
-  updated_at: z.string(),
-})
-type Row = z.infer<typeof RowSchema>
-const LicensesSchema = z.record(z.string(), z.string())
-
-export const ASSET_DIRS = ['fonts', 'img'] as const
-
-export interface StoredTheme {
-  manifest: ThemeManifest
-  css: string
-  source: ThemeSummary['source']
-  updatedAt: string
-  /** Licence files of the package (`LICENSE`, `OFL.txt`) -> text; put back into its export. */
-  licenses: Record<string, string>
-  /** Persisted write counter of the row (0 for a built-in); asset bytes can't be hashed cheaply, so it stands for them. */
-  revision: number
-}
-
-/**
- * Conflict-check token for a whole package: the row's write number (every write bumps it, and it is what changes when
- * only assets or licence files change) together with the manifest, CSS and licence texts the row holds.
- */
-export function themeEtag(
-  theme: Pick<StoredTheme, 'manifest' | 'css' | 'licenses' | 'revision'>,
-): string {
-  return createHash('sha256')
-    .update(String(theme.revision))
-    .update('\0')
-    .update(JSON.stringify(theme.manifest))
-    .update('\0')
-    .update(theme.css)
-    .update('\0')
-    .update(JSON.stringify(theme.licenses))
-    .digest('hex')
-}
-
-/**
- * An earlier swap or id move of this theme is not settled yet: its note still stands for an old folder that recovery
- * will put back. Writing the id now would let that later step put old files under a newer row (re-gate finding 2).
- */
-export class ThemeLockedError extends Error {
-  constructor(readonly themeId: string) {
-    super(
-      'This theme is still being put back after an interrupted change. Try again in a moment, or restart Score.',
-    )
-  }
-}
-
-/** The two file-system moves a theme swap is made of; tests replace them to fail at a chosen step. */
-export interface ThemeFs {
-  rename(from: string, to: string): void
-  rm(path: string): void
-  /** Flushes a file or folder to disk (fsync); default: the real one. Tests record or fail it. */
-  sync?(path: string): void
-}
-const realFs: ThemeFs = {
-  rename: renameSync,
-  rm: (path) => rmSync(path, { recursive: true, force: true }),
-  sync: fsyncPath,
-}
-
-/**
- * fsync of a file or folder. A folder is opened read-only and synced to make the names in it (a rename, a new file)
- * durable. Some systems refuse to sync a folder (EINVAL, ENOTSUP, EPERM); that is not a failure of the swap, the
- * guarantee is then only what the system gives. Any other error (EIO, ENOSPC) is real and propagates.
- */
-function fsyncPath(path: string): void {
-  let fd: number | null = null
-  try {
-    fd = openSync(path, constants.O_RDONLY)
-    fsyncSync(fd)
-  } catch (error) {
-    const code = (error as { code?: string }).code
-    if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EPERM') throw error
-  } finally {
-    if (fd !== null) closeSync(fd)
-  }
-}
+export { ThemeLockedError, themeEtag } from './store-types.ts'
+export type { ThemeFs } from './store-types.ts'
 
 /** Rows and asset folders of imported and custom themes; built-ins are constants or shipped packages. */
 export class ThemeStore {
   readonly root: string
+  private readonly context: ThemeContext
 
-  constructor(
-    private readonly db: ScoreDb,
-    home: string,
-    private readonly clock: () => number = Date.now,
-    private readonly fs: ThemeFs = realFs,
-  ) {
+  constructor(db: ScoreDb, home: string, clock: () => number = Date.now, fs: ThemeFs = realFs) {
     this.root = join(home, 'themes')
-  }
-
-  private sync(path: string): void {
-    ;(this.fs.sync ?? fsyncPath)(path)
-  }
-
-  private now(): string {
-    return new Date(this.clock()).toISOString()
-  }
-
-  private rows(): Row[] {
-    return this.db.read((sqlite) =>
-      z.array(RowSchema).parse(sqlite.prepare('SELECT * FROM themes ORDER BY id').all()),
-    )
-  }
-
-  private row(id: string): Row | null {
-    const found = this.db.read((sqlite) =>
-      sqlite.prepare('SELECT * FROM themes WHERE id = ?').get(id),
-    )
-    return found === undefined ? null : RowSchema.parse(found)
-  }
-
-  private parse(row: Row): StoredTheme {
-    return {
-      manifest: ThemeManifestSchema.parse(JSON.parse(row.manifest_json)),
-      css: row.css,
-      source: row.source,
-      updatedAt: row.updated_at,
-      licenses: LicensesSchema.parse(JSON.parse(row.licenses_json)),
-      revision: row.revision,
+    this.context = {
+      db,
+      root: this.root,
+      clock,
+      fs,
+      sync: (path) => syncThemePath(fs, path),
     }
   }
 
   get(id: string): StoredTheme | null {
-    const manifest = builtinManifest(id)
-    if (manifest)
-      return {
-        manifest,
-        css: builtinCss(id),
-        source: 'builtin',
-        updatedAt: BUILTIN_UPDATED_AT,
-        licenses: builtinLicenses(id),
-        revision: 0,
-      }
-    const row = this.row(id)
-    return row ? this.parse(row) : null
+    return getTheme(this.context, id)
   }
 
   exists(id: string): boolean {
-    return this.get(id) !== null
+    return existsTheme(this.context, id)
   }
 
   summary(theme: StoredTheme): ThemeSummary {
-    const { manifest } = theme
-    return {
-      id: manifest.id,
-      name: manifest.name,
-      version: manifest.version,
-      author: manifest.author ?? null,
-      description: manifest.description ?? null,
-      source: theme.source,
-      updatedAt: theme.updatedAt,
-      hasCss: theme.css.length > 0,
-    }
+    return themeSummary(theme)
   }
 
   list(): ThemeSummary[] {
-    const builtins = BUILTIN_THEME_IDS.map((id) => this.get(id)!)
-    return [...builtins, ...this.rows().map((row) => this.parse(row))].map((t) => this.summary(t))
+    return listThemes(this.context)
   }
 
-  /** The folder an id's `fonts/` and `img/` are in: the shipped package for a built-in, else Score's own home. */
-  assetRoot(id: string): string {
-    return builtinAssetRoot(id) ?? join(this.root, id, 'assets')
-  }
-
-  /**
-   * The one place asset paths are resolved (K2 X4). Walks the folders from the theme's own folder down (`<id>`, `assets`,
-   * then `tail`), and refuses the path (null) if any step is a symlink, a missing entry, or the wrong kind, so a link
-   * planted anywhere on the way (a folder as much as the file) is never followed. The themes root and Score's home are
-   * the owner's own and may be links. Built-ins are walked from their shipped folder the same way.
-   */
-  private safeAssetPath(id: string, tail: string[], want: 'file' | 'dir'): string | null {
-    const shipped = builtinAssetRoot(id)
-    let current = shipped ? dirname(shipped) : this.root
-    const steps = shipped ? ['assets', ...tail] : [id, 'assets', ...tail]
-    for (const [index, step] of steps.entries()) {
-      current = join(current, step)
-      let info
-      try {
-        info = lstatSync(current)
-      } catch {
-        return null
-      }
-      const last = index === steps.length - 1
-      if (info.isSymbolicLink() || !(last && want === 'file' ? info.isFile() : info.isDirectory()))
-        return null
-    }
-    return current
-  }
-
-  /** Asset paths as `fonts/x.woff2`, sorted; only regular files, with no symlink on the way (see `safeAssetPath`). */
+  /** Asset paths as `fonts/x.woff2`, sorted; only regular files, with no symlink on the way. */
   assets(id: string): string[] {
-    const found: string[] = []
-    for (const dir of ASSET_DIRS) {
-      const folder = this.safeAssetPath(id, [dir], 'dir')
-      if (!folder) continue
-      for (const name of readdirSync(folder).sort()) {
-        const path = `${dir}/${name}`
-        if (THEME_ASSET_PATH.test(path) && this.safeAssetPath(id, [dir, name], 'file'))
-          found.push(path)
-      }
-    }
-    return found
+    return themeAssets(this.context, id)
   }
 
   /**
    * Package reads (detail, `style.css`, assets, export) of an id with an unsettled note are refused with
-   * `ThemeLockedError` (409 `theme_recovering`), because the folder and the row may then be different versions: the
-   * old row with the new folder's bytes. One of the two coherent answers (the other would be reading the journal's old
-   * folder); this one needs no extra state. A read tries to settle the note first, so a transient fault heals itself.
-   * Built-ins are shipped constants and never locked. Cheap when nothing is pending: one query on a table that is normally empty.
+   * `ThemeLockedError` (409 `theme_recovering`), because the folder and the row may then be different versions.
    */
   assertReadable(id: string): void {
-    if (isBuiltinThemeId(id) || !this.lockedIds().has(id)) return
-    this.assertSettled(id)
+    assertReadable(this.context, id)
   }
 
-  /**
-   * The bytes of one stored asset, or null when the path isn't a well-formed asset path or isn't a regular file with no
-   * symlink on the way. Routes (serve, export) and the save-with-files path all read through here.
-   */
+  /** The bytes of one stored asset, or null when the path isn't a well-formed asset path or a safe file. */
   readAsset(id: string, path: string): Buffer | null {
-    if (!THEME_ASSET_PATH.test(path)) return null
-    const file = this.safeAssetPath(id, path.split('/'), 'file')
-    if (!file) return null
-    let fd: number | null = null
-    try {
-      // O_NOFOLLOW closes the gap between the check and the open for the file itself.
-      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
-      return fstatSync(fd).isFile() ? readFileSync(fd) : null
-    } catch {
-      return null
-    } finally {
-      if (fd !== null) closeSync(fd)
-    }
+    return readThemeAsset(this.context, id, path)
   }
 
   detail(id: string): ThemeDetail | null {
-    this.assertReadable(id)
-    const theme = this.get(id)
-    if (!theme) return null
-    return {
-      summary: this.summary(theme),
-      manifest: theme.manifest,
-      css: theme.css,
-      assets: this.assets(id),
-      licenseFiles: Object.keys(theme.licenses).sort(),
-      etag: themeEtag(theme),
-    }
+    return themeDetail(this.context, id)
   }
 
   /** Inserts or replaces the row of an imported or custom theme. `createdAt` is kept on a replace. */
@@ -308,59 +87,11 @@ export class ThemeStore {
     source: 'imported' | 'custom',
     licenses?: Record<string, string>,
   ): void {
-    const at = this.now()
-    const revision = this.nextRevision(sqlite)
-    sqlite
-      .prepare(
-        `INSERT INTO themes (id, name, version, manifest_json, css, source, created_at, updated_at, licenses_json, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET name = excluded.name, version = excluded.version,
-           manifest_json = excluded.manifest_json, css = excluded.css, source = excluded.source,
-           updated_at = excluded.updated_at, revision = excluded.revision,
-           licenses_json = CASE WHEN ? THEN excluded.licenses_json ELSE themes.licenses_json END`,
-      )
-      .run(
-        manifest.id,
-        manifest.name,
-        manifest.version,
-        JSON.stringify(manifest),
-        css,
-        source,
-        at,
-        at,
-        JSON.stringify(licenses ?? {}),
-        revision,
-        licenses === undefined ? 0 : 1,
-      )
-  }
-
-  /** The next number of the one counter every theme write takes (inside the writer's transaction). */
-  private nextRevision(sqlite: DatabaseSync): number {
-    const row = sqlite
-      .prepare(
-        `INSERT INTO meta (key, value) VALUES ('themes.revision', '1')
-         ON CONFLICT (key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1
-         RETURNING CAST(value AS INTEGER) AS n`,
-      )
-      .get() as { n: number }
-    return row.n
-  }
-
-  /** Ids named by a note that is still standing (recovery could not settle it) (the theme, and the id a move was going to give it). */
-  private lockedIds(): Set<string> {
-    const found = new Set<string>()
-    const rows = this.db.read((sqlite) =>
-      sqlite.prepare('SELECT theme_id, other_id FROM theme_swaps').all(),
-    ) as { theme_id: string; other_id: string | null }[]
-    for (const row of rows) {
-      found.add(row.theme_id)
-      if (row.other_id) found.add(row.other_id)
-    }
-    return found
+    upsertTheme(this.context, sqlite, manifest, css, source, licenses)
   }
 
   unsettledIds(): string[] {
-    return [...this.lockedIds()]
+    return [...lockedIds(this.context)]
   }
 
   /**
@@ -368,343 +99,41 @@ export class ThemeStore {
    * standing. Every write of an id goes through here: replace, custom save, delete (and reclaim, per row).
    */
   assertSettled(id: string): void {
-    this.recoverInterrupted()
-    if (this.lockedIds().has(id)) throw new ThemeLockedError(id)
+    assertSettled(this.context, id)
   }
 
   /** Saves a custom theme's manifest and CSS in one transaction (assets already on disk are kept). */
   saveCustom(manifest: ThemeManifest, css: string): void {
-    this.assertSettled(manifest.id)
-    // A folder with no row is a leftover of a theme that was deleted; this new one must not inherit its files.
-    if (!this.row(manifest.id) && presentOnDisk(join(this.root, manifest.id)))
-      this.fs.rm(join(this.root, manifest.id))
-    this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'custom'))
+    saveCustom(this.context, manifest, css)
   }
 
   /**
-   * Stores an imported theme: the assets are staged in a private folder, swapped in, then the row is written. The swap
-   * is written down first (`theme_swaps`) and erased in the same transaction as the row, so after any failure, or a stop
-   * between two steps, the theme is either wholly the old one or wholly the new one: a failure here puts the old folder
-   * back, and one that also stops the way back is finished by `recoverInterrupted` at the next start. Files are 0600,
-   * folders 0700.
-   *
-   * After a power cut or kernel crash (K2 X5) the same holds, because each step is on disk before the next one starts:
-   * the staged files and folders are fsynced, then the note is committed at `synchronous = FULL`, then each folder move
-   * is followed by an fsync of the themes folder, then the row and the note's erasure are committed at FULL, and only
-   * then is the old folder deleted. So a note that survives always has the old folder (or none, for a new theme) to go
-   * back to, and an old folder is never deleted while the old row could still come back. Not guaranteed: a disk or file
-   * system that lies about fsync, and a system that refuses to sync folders (the swap then relies on that system's own
-   * ordering of renames); any such state is repaired at the next start the same way, but the newest import may be lost.
-   * The cost is a handful of fsyncs per import or delete, and nothing else on the connection runs at FULL.
+   * Stores an imported theme by staging its assets, swapping its folder and then writing the row, with a durable note
+   * that lets recovery finish or undo a stop at any step.
    */
   storeImported(
     manifest: ThemeManifest,
     css: string,
     assets: Map<string, Buffer>,
     licenses: Record<string, string> = {},
-    /** A custom theme saved with files (C4 #2) takes the same swap but stays `custom`. */
     source: 'imported' | 'custom' = 'imported',
   ): void {
-    mkdirSync(this.root, { recursive: true, mode: 0o700 })
-    chmodSync(this.root, 0o700)
-    // Nothing is in flight here (this method is synchronous), so anything still written down is left over: settle it
-    // before it can be mistaken for part of this swap. If this id's note can't be settled, stop: a later recovery would
-    // put the old folder over whatever this swap installs.
-    this.assertSettled(manifest.id)
-    const token = randomUUID()
-    const staged = this.stagingPath(token)
-    const target = join(this.root, manifest.id)
-    const old = this.asidePath(token)
-    try {
-      mkdirSync(join(staged, 'assets'), { recursive: true, mode: 0o700 })
-      for (const dir of ASSET_DIRS) mkdirSync(join(staged, 'assets', dir), { mode: 0o700 })
-      for (const [path, bytes] of assets) {
-        const file = join(staged, 'assets', ...path.split('/'))
-        writeFileSync(file, bytes, { mode: 0o600, flag: 'wx' })
-        chmodSync(file, 0o600)
-        this.sync(file)
-      }
-      // The staged tree is on disk before the swap is written down, so a note never stands for files that were lost.
-      for (const dir of ASSET_DIRS) this.sync(join(staged, 'assets', dir))
-      this.sync(join(staged, 'assets'))
-      this.sync(staged)
-      const hadOld = existsSync(target)
-      this.writeDown(token, 'swap', manifest.id, null, hadOld)
-      try {
-        if (hadOld) {
-          this.fs.rename(target, old)
-          this.sync(this.root)
-        }
-        this.fs.rename(staged, target)
-        this.sync(this.root)
-        this.db.durableTx((sqlite) => {
-          this.upsert(sqlite, manifest, css, source, licenses)
-          this.eraseNote(sqlite, token)
-        })
-      } catch (error) {
-        // Whatever failed, the old state comes back; if even that can't be done, the note stays for the next start.
-        try {
-          this.undoSwap(token, manifest.id, hadOld)
-          this.settleNote(token)
-        } catch {
-          // left to recoverInterrupted
-        }
-        throw error
-      }
-      this.tryRemove(old)
-    } finally {
-      this.tryRemove(staged)
-    }
+    storeImported(this.context, manifest, css, assets, licenses, source)
   }
 
-  private stagingPath(token: string): string {
-    return join(this.root, `.staging-${token}`)
-  }
-  private asidePath(token: string): string {
-    return join(this.root, `.old-${token}`)
-  }
-  /** Removal that never throws: what is left behind is swept at the next start. */
-  private tryRemove(path: string): void {
-    try {
-      this.fs.rm(path)
-    } catch {
-      // swept by recoverInterrupted
-    }
-  }
-
-  private writeDown(
-    token: string,
-    kind: 'swap' | 'reclaim',
-    themeId: string,
-    otherId: string | null,
-    hadFolder: boolean,
-  ): void {
-    this.db.durableTx((sqlite) =>
-      sqlite
-        .prepare(
-          'INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        )
-        .run(token, kind, themeId, otherId, hadFolder ? 1 : 0, this.now()),
-    )
-  }
-  private eraseNote(sqlite: DatabaseSync, token: string): void {
-    sqlite.prepare('DELETE FROM theme_swaps WHERE token = ?').run(token)
-  }
-
-  /**
-   * After a rollback or a recovery step: the folder moves it made are synced before the note goes, and the erase is
-   * durable, so a power cut can't keep the erase and lose the restoration (old row, new bytes, no note to recover from).
-   */
-  private settleNote(token: string): void {
-    if (existsSync(this.root)) this.sync(this.root)
-    this.db.durableTx((sqlite) => this.eraseNote(sqlite, token))
-  }
-
-  /** Puts a swap that did not commit back as it was. Safe to repeat. */
-  private undoSwap(token: string, id: string, hadOld: boolean): void {
-    const target = join(this.root, id)
-    const old = this.asidePath(token)
-    if (hadOld) {
-      // The old folder is aside only if the swap got that far; if not, the target still is the old folder.
-      if (existsSync(old)) {
-        this.fs.rm(target)
-        this.fs.rename(old, target)
-      }
-    } else {
-      // A new theme: the note proves the row was never committed, so whatever stands in the target is the staged folder.
-      this.fs.rm(target)
-    }
-    this.fs.rm(this.stagingPath(token))
-  }
-
-  /**
-   * Run at start (and before every swap): undoes a swap that stopped before its row was committed, finishes an id move
-   * that stopped after its folder moved, and sweeps `.staging-*` and `.old-*` leftovers. The notes name the ids that
-   * were chosen; nothing is inferred from which folders happen to exist. A step that fails again keeps its note for
-   * the next start.
-   */
   recoverInterrupted(): void {
-    if (!existsSync(this.root)) return
-    const notes = this.db.read((sqlite) =>
-      z
-        .array(
-          z.object({
-            token: z.string(),
-            kind: z.enum(['swap', 'reclaim']),
-            theme_id: z.string(),
-            other_id: z.string().nullable(),
-            had_folder: z.number(),
-          }),
-        )
-        .parse(sqlite.prepare('SELECT * FROM theme_swaps ORDER BY created_at, token').all()),
-    )
-    const kept = new Set<string>()
-    for (const note of notes) {
-      try {
-        if (note.kind === 'swap') this.undoSwap(note.token, note.theme_id, note.had_folder === 1)
-        else
-          this.settleReclaim(note.token, note.theme_id, note.other_id ?? '', note.had_folder === 1)
-        this.settleNote(note.token)
-      } catch {
-        kept.add(note.token)
-      }
-    }
-    for (const name of readdirSync(this.root)) {
-      const match = /^\.(?:staging|old)-(.+)$/.exec(name)
-      if (match && !kept.has(match[1]!)) this.tryRemove(join(this.root, name))
-    }
+    recoverInterrupted(this.context)
   }
 
-  /**
-   * An id move that stopped. The note says which id the theme was going to get. If its folder had moved there, the move
-   * is finished; if it had not moved yet, or the folders can't be explained by the note, the note is dropped and the
-   * normal pass plans the move again from scratch.
-   */
-  private settleReclaim(token: string, from: string, to: string, hadFolder: boolean): void {
-    const row = this.row(from)
-    if (!row || this.row(to)) return
-    const fromFolder = existsSync(join(this.root, from))
-    const toFolder = existsSync(join(this.root, to))
-    const moved = hadFolder ? !fromFolder && toFolder : !fromFolder && !toFolder
-    if (moved) this.db.tx((sqlite) => this.commitReclaim(sqlite, row, to, token))
-  }
-
-  /**
-   * Before 9.5 an import or a custom theme could be called harbour, ledger or studio; those ids now belong to built-in
-   * themes, which would shadow it (the list would show two, and detail, export, edit and delete would all reach the
-   * built-in). Run at start: such a row gets a free id (`harbour-mine`, `harbour-mine-2`, …), its asset folder moves
-   * with it, and the shared look follows if it pointed at the old id. The chosen id is written down before the folder
-   * moves, so a stop in between is finished with that id (`recoverInterrupted`), never one guessed from folders. An
-   * id whose folder already exists is not free, whatever it holds.
-   */
   reclaimBuiltinIds(): { from: string; to: string }[] {
-    const moved: { from: string; to: string }[] = []
-    this.recoverInterrupted()
-    for (const row of this.rows().filter((item) => isBuiltinThemeId(item.id))) {
-      // A note still standing for this row (or for an id it would take) is settled first; until then nothing is planned.
-      const locked = this.lockedIds()
-      if (locked.has(row.id)) continue
-      const taken = new Set([...this.rows().map((item) => item.id), ...locked])
-      const oldFolder = join(this.root, row.id)
-      let to = ''
-      for (let n = 1; ; n += 1) {
-        const candidate = n === 1 ? `${row.id}-mine` : `${row.id}-mine-${n}`
-        if (taken.has(candidate) || isBuiltinThemeId(candidate)) continue
-        if (existsSync(join(this.root, candidate))) continue
-        to = candidate
-        break
-      }
-      const newFolder = join(this.root, to)
-      const hadFolder = existsSync(oldFolder)
-      const token = randomUUID()
-      mkdirSync(this.root, { recursive: true, mode: 0o700 })
-      this.writeDown(token, 'reclaim', row.id, to, hadFolder)
-      try {
-        if (hadFolder) {
-          this.fs.rename(oldFolder, newFolder)
-          this.sync(this.root)
-        }
-      } catch {
-        // Nothing moved: forget the plan and leave the theme as it was; the next start tries again.
-        try {
-          this.settleNote(token)
-        } catch {
-          // a note left over is settled at the next start
-        }
-        continue
-      }
-      try {
-        this.db.durableTx((sqlite) => this.commitReclaim(sqlite, row, to, token))
-      } catch (error) {
-        try {
-          if (hadFolder) this.fs.rename(newFolder, oldFolder)
-          this.settleNote(token)
-        } catch {
-          // left to recoverInterrupted, which follows the note
-        }
-        throw error
-      }
-      moved.push({ from: row.id, to })
-    }
-    return moved
+    return reclaimBuiltinIds(this.context)
   }
 
-  private commitReclaim(sqlite: DatabaseSync, row: Row, to: string, token: string): void {
-    let manifestJson = row.manifest_json
-    // "(yours)" tells it apart from the built-in of the same name in the picker.
-    const name = `${row.name.slice(0, 52)} (yours)`
-    try {
-      manifestJson = JSON.stringify({ ...JSON.parse(row.manifest_json), id: to, name })
-    } catch {
-      // A manifest that can't be read keeps its text; the row is still renamed.
-    }
-    sqlite
-      .prepare(
-        'UPDATE themes SET id = ?, name = ?, manifest_json = ?, updated_at = ?, revision = ? WHERE id = ?',
-      )
-      .run(to, name, manifestJson, this.now(), this.nextRevision(sqlite), row.id)
-    sqlite
-      .prepare("UPDATE meta SET value = ? WHERE key = 'look.activeTheme' AND value = ?")
-      .run(to, row.id)
-    this.eraseNote(sqlite, token)
-  }
-
-  /**
-   * Removes the row and the folder; the caller has already refused built-ins and the active theme. Journaled like a
-   * swap whose new folder is nothing (K2 X14): the note is committed, the folder moves aside, the row and the note go in
-   * one transaction, and only then is the old folder deleted. After any failure, or a stop between two steps, the theme
-   * is whole (an interrupted delete is undone by `recoverInterrupted`; delete it again) or gone (what is left is swept).
-   * It is never a row with no folder, nor a folder with no row.
-   */
   remove(id: string): void {
-    this.assertSettled(id)
-    const token = randomUUID()
-    const target = join(this.root, id)
-    const old = this.asidePath(token)
-    const hadOld = presentOnDisk(target)
-    this.writeDown(token, 'swap', id, null, hadOld)
-    try {
-      if (hadOld) {
-        this.fs.rename(target, old)
-        this.sync(this.root)
-      }
-      this.db.durableTx((sqlite) => {
-        sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id)
-        this.eraseNote(sqlite, token)
-      })
-    } catch (error) {
-      try {
-        this.undoSwap(token, id, hadOld)
-        this.settleNote(token)
-      } catch {
-        // left to recoverInterrupted
-      }
-      throw error
-    }
-    this.tryRemove(old)
+    removeTheme(this.context, id)
   }
 
-  /**
-   * Run at start: a folder under the themes root whose id has no row (and no standing note) is what a stop or a failed
-   * delete left behind; a theme later given that id would inherit its files, and the asset routes would serve them.
-   * Dot-folders (`.staging-*`, `.old-*`) belong to `recoverInterrupted`.
-   */
   sweepOrphanFolders(): void {
-    if (!existsSync(this.root)) return
-    const keep = new Set([...this.rows().map((row) => row.id), ...this.lockedIds()])
-    for (const name of readdirSync(this.root)) {
-      if (name.startsWith('.') || keep.has(name) || !ThemeIdSchema.safeParse(name).success) continue
-      this.tryRemove(join(this.root, name))
-    }
-  }
-}
-
-/** True for anything on disk at the path, a dangling symlink included. */
-function presentOnDisk(path: string): boolean {
-  try {
-    lstatSync(path)
-    return true
-  } catch {
-    return false
+    sweepOrphanFolders(this.context)
   }
 }
