@@ -41,6 +41,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state and split room styles.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
+- `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
 - `apps/web/src/components/flow-layout/` — workflow node placement helpers.
 - `apps/web/src/components/model-settings/` — model aliases, effort, speech and fallback controls.
@@ -129,6 +130,14 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-connections.css` — Connection lists, statuses, local models and phone pairing.
 - `apps/web/src/bold/bold-settings-tools.css` — Tool servers, shared buttons and chips, and textarea controls.
 - `apps/web/src/bold/bold-settings-triggers.css` — Webhook trigger cards and the trigger creation wizard.
+- `apps/web/src/bold/triggers/wizard-model.ts` — trigger wizard types, defaults, request shaping and error/display copy.
+- `apps/web/src/bold/triggers/SecretCard.tsx` — signing-secret card and copy action.
+- `apps/web/src/bold/triggers/TriggerCard.tsx` — trigger card actions and trigger state summary.
+- `apps/web/src/bold/triggers/WizardBody.tsx` — trigger wizard shell, step indicator and step dispatch.
+- `apps/web/src/bold/triggers/WizardSetupStep.tsx` — trigger name, app and team setup step.
+- `apps/web/src/bold/triggers/WizardTestStep.tsx` — webhook address, secret and test-call step.
+- `apps/web/src/bold/triggers/WizardMapStep.tsx` — payload field mapping and job wording step.
+- `apps/web/src/bold/triggers/WizardReportStep.tsx` — report-back mode, tool and argument template step.
 - `apps/web/src/bold/bold-settings-look.css` — Visually hidden utility and Look modes, themes, scale and currency controls.
 - `apps/web/src/bold/bold-settings-responsive.css` — Settings frame, grid and section-page responsive rules.
 - `apps/web/src/bold/bold-settings-workspaces.css` — Workspace cards, agent chips and shared folders.
