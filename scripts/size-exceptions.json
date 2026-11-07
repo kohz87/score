@@ -80,11 +80,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/domain/reports.test.ts",
-    "lines": 469,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/execution-freeze.test.ts",
     "lines": 729,
     "reason": "split in CS.2 wave 1"

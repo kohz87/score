@@ -641,6 +641,7 @@ likely to be the entry point for a change.
 - `apps/server/test/domain/approvals-helpers.ts` — shared approval app, outbox, pairing, request, decision and signal helpers.
 - `apps/server/test/domain/exchanges-helpers.ts` — shared exchange database setup, room, turn, action and reply helpers.
 - `apps/server/test/domain/exchange-budgets-helpers.ts` — shared exchange-budget harness and paused-review setup.
+- `apps/server/test/domain/reports-helpers.ts` — shared report fixtures: timezone, timestamps, task, run, approval and report input factories.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
