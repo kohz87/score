@@ -605,11 +605,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/room/BoldTeamRoom.test.tsx",
-    "lines": 1515,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/room/BoldTeamRoom.tsx",
     "lines": 877,
     "reason": "split in CS.2 wave 1"
