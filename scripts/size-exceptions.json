@@ -510,11 +510,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/bold.css",
-    "lines": 1020,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldAddAgent.tsx",
     "lines": 1296,
     "reason": "split in CS.2 wave 1"

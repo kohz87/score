@@ -1,0 +1,155 @@
+/* shell */
+[data-ui='bold'] .top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(14px * var(--bold-d, 1));
+  padding: 14px max(20px, env(safe-area-inset-right, 0px)) 14px
+    max(20px, env(safe-area-inset-left, 0px));
+  /* Board 18: a full-width hairline under the top bar. */
+  border-bottom: 1px solid var(--line);
+}
+
+/* 3.18.0: three section links on a phone's top bar (Recipes, Tasks, Screens) stay on one line beside the avatar. */
+[data-ui='bold'] .bold-top-links {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  /* One row in every configuration (the terminal button on or off): the pills scroll if the room runs out. */
+  flex: 1 1 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+[data-ui='bold'] .bold-top-links .btn.sm {
+  flex: none;
+}
+[data-ui='bold'] .bold-top-links .btn.sm {
+  padding-inline: 8px;
+  font-size: 12.5px;
+}
+
+[data-ui='bold'] .word {
+  font-family: var(--font-d);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.04em;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .nav {
+  display: flex;
+  gap: 2px;
+}
+
+[data-ui='bold'] .nav button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-weight: 600;
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .nav button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .dock {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--bold-d, 1));
+  background: var(--panel);
+  border-radius: 999px;
+  padding: calc(5px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1)) calc(5px * var(--bold-d, 1))
+    calc(5px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .dock-note {
+  margin-left: 6px;
+}
+
+[data-ui='bold'] .ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  /* Named here: the shell's `button { color: inherit }` is unlayered and beats the contrast fallback's layered
+     `color: var(--ink)`, so a ring would keep the failing theme's ink against its own Score fill. */
+  color: var(--ink);
+}
+
+[data-ui='bold'] .ring > span {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+}
+
+[data-ui='bold'] .ring.needs {
+  box-shadow: 0 0 0 2px var(--hi-bg);
+}
+
+[data-ui='bold'] .dock-ring-inner .agent-glyph {
+  width: 22px;
+  height: 22px;
+}
+
+[data-ui='bold'] .searchbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 calc(8px * var(--bold-d, 1)) 0 calc(14px * var(--bold-d, 1));
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .kbd {
+  font-family: var(--font-m);
+  font-size: 12px;
+  background: var(--field);
+  border-radius: calc(8px * var(--bold-r, 1));
+  padding: 2px calc(8px * var(--bold-d, 1));
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex: none;
+}
+
+[data-ui='bold'] .main {
+  padding: 4px max(20px, env(safe-area-inset-right, 0px)) 24px
+    max(20px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .bold-home-loading {
+  min-height: calc(100vh - 110px);
+}
+
+[data-ui='bold'] .bold-tabbar {
+  display: none;
+}

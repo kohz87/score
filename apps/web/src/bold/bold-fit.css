@@ -1,0 +1,36 @@
+/* The room fills the window: the page never scrolls, the room and side panel scroll inside. */
+body.fit {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body.fit [data-ui='bold'].bold-shell {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body.fit [data-ui='bold'] .main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  box-sizing: border-box;
+}
+
+body.fit [data-ui='bold'] .roomgrid {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+body.fit [data-ui='bold'] .roomcol,
+body.fit [data-ui='bold'] .bold-sidecol {
+  min-height: 0;
+}
+
+body.fit [data-ui='bold'] .side {
+  min-height: 0;
+}
+
+body.fit [data-ui='bold'] .stream {
+  min-height: 120px;
+}

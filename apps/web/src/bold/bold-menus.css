@@ -1,0 +1,72 @@
+[data-ui='bold'] .menu {
+  position: absolute;
+  z-index: 30;
+  background: var(--panel);
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: calc(8px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--menu-shadow);
+  min-width: 260px;
+}
+
+[data-ui='bold'] .menu .mi {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  min-height: 44px;
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(14px * var(--bold-r, 1));
+  color: var(--ink);
+  width: 100%;
+  /* rows grow with their content: a scrolling flex menu must not squeeze them */
+  flex: none;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .menu .mi:hover,
+[data-ui='bold'] .menu .mi.sel {
+  background: var(--field);
+}
+
+[data-ui='bold'] .menu .mi.bad {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .menu .sec {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .menu-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+[data-ui='bold'] .menu-copy > b {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-menu-preview {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-menu-preview-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-menu-preview-count {
+  flex: none;
+}
