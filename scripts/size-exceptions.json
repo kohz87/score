@@ -105,11 +105,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/fake/fake-port.ts",
-    "lines": 2426,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/fake/scenario.ts",
     "lines": 728,
     "reason": "split in CS.2 wave 1"

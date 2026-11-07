@@ -108,7 +108,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
-- `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e.
+- `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs and run control.
 - `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
 - `apps/server/src/http/` — API routes, one file per contract section.
@@ -146,7 +146,17 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
 - `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
-- `apps/server/src/hermes/fake/fake-port.ts` — fake Hermes adapter.
+- `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
+- `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
+- `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.
+- `apps/server/src/hermes/fake/fake-port-observations.ts` — applies scenario steps to projected state.
+- `apps/server/src/hermes/fake/fake-port-state.ts` — fake adapter state, lifecycle and event plumbing.
+- `apps/server/src/hermes/fake/fake-port-providers.ts` — fake models, providers, connections, config and files.
+- `apps/server/src/hermes/fake/fake-port-settings.ts` — per-agent approvals, models, skills, memory, workspace and routines.
+- `apps/server/src/hermes/fake/fake-port-agents.ts` — agent directory, profiles, outside sessions and reports.
+- `apps/server/src/hermes/fake/fake-port-tasks.ts` — fake task board reads, writes and actions.
+- `apps/server/src/hermes/fake/fake-port-runs.ts` — fake run start, streaming, questions and transitions.
+- `apps/server/src/hermes/fake/fake-port-run-control.ts` — stop, MCP, bot screen, rewind, compaction, context and decisions.
 - `apps/server/src/knowledge/vault.ts` — knowledge vault operations.
 - `apps/server/src/runtimes/coding/service.ts` — coding runtime service.
 - `apps/server/src/runtimes/coding/units.ts` — coding unit lifecycle.
