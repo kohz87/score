@@ -427,6 +427,7 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
+- `apps/server/test/domain/reports-helpers.ts` — shared report fixtures: timezone, timestamps, task, run, approval and report input factories.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
