@@ -739,7 +739,7 @@ of codes) so it will help with troubleshooting, optimizing and less token wastag
 the code map"; working rules in CLAUDE.md "Ground rules". Coding: DeepSeek v4.1 Flash (NanoGPT); reviews: Sonnet with
 an Opus advisor; the machine kept at about 80% while building.
 
-**CS.1 Code maps and the size limit** (brief docs/briefs/CS.1-codemap-limits.md). `docs/CODEMAP.md` (web, server,
+**CS.1 Code maps and the size limit** (brief docs/briefs/CS.1.md). `docs/CODEMAP.md` (web, server,
 contract, plugin, scripts, e2e: one line per folder and per key file); ESLint `max-lines` 450 with
 `scripts/size-exceptions.json` (today's larger files, each with a reason; the list only shrinks); a `pnpm check` step
 that fails when a source folder is missing from the map or a file over 450 lines is not on the list. Done when
