@@ -1,13 +1,12 @@
 import type { AgentSummary } from '@score/contract'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { statusSegments } from '../../live/status-line.ts'
-import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
+import { loadAnime, usePrefersReducedMotion } from '../../motion/motion.ts'
 import { layoutFlow, type Point } from '../../components/flow-layout/layout.ts'
 import { withPositions, type PositionMap } from '../../components/flow-layout/free-layout.ts'
 import {
-  EffectQueue,
   visualLabel,
   type Effect,
   type EffectTone,
@@ -15,92 +14,19 @@ import {
   type GraphNode,
   type NodeVisual,
 } from './orch-model.ts'
+import { Dot, type DotRoute } from './live-diagram-dot.tsx'
+import { EFFECT_GAP_MS, useEffectPlayer, type ActiveEffect } from './live-diagram-effects.ts'
+import { NODE_H, NODE_W, nodeSize, shapedWord, toneClass } from './live-diagram-node.ts'
+import { NodeShape } from './NodeShape.tsx'
+import { useNodeTransitions } from './use-node-transitions.ts'
 
 // The live diagram: SVG edges, HTML nodes, CSS animation. Dots are the playback of real events (see orch-model.ts).
 
-const NODE_W = 196
-const NODE_H = 68
-
-/** Workflow nodes (7.1b) keep the agent card's size; the local nodes are smaller and shaped for what they are. */
-export const nodeSize = (node: Pick<GraphNode, 'shape'>): { w: number; h: number } => {
-  switch (node.shape) {
-    case 'gate':
-      return { w: 176, h: 96 }
-    case 'branch':
-      return { w: 176, h: 76 }
-    case 'join':
-    case 'end':
-      return { w: 132, h: 52 }
-    default:
-      return { w: NODE_W, h: NODE_H }
-  }
-}
-/** Each effect starts at least this long after the previous one (owner: dots paced at 300 ms or more). */
-export const EFFECT_GAP_MS = 300
-const DOT_MS = 800
-const PULSE_MS = 900
-
 export { usePrefersReducedMotion }
-
-export type ActiveEffect = { key: number; effect: Effect; durationMs: number }
-
-/**
- * Plays queued effects one at a time with a minimum gap. With reduced motion a dot does not travel: the edge and both
- * nodes are highlighted instead for the same time. Returns what is on screen right now.
- */
-export function useEffectPlayer(reducedMotion: boolean, gapMs = EFFECT_GAP_MS) {
-  const queue = useRef(new EffectQueue(gapMs))
-  const [active, setActive] = useState<ActiveEffect[]>([])
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const counter = useRef(0)
-  const alive = useRef(true)
-  const reduced = useRef(reducedMotion)
-  useEffect(() => {
-    reduced.current = reducedMotion
-  }, [reducedMotion])
-
-  const pump = useCallback(function pump() {
-    if (timer.current !== undefined) clearTimeout(timer.current)
-    timer.current = undefined
-    if (!alive.current) return
-    const now = performance.now()
-    const next = queue.current.take(now)
-    if (next) {
-      const key = ++counter.current
-      const durationMs = reduced.current || next.kind === 'pulse' ? PULSE_MS : DOT_MS
-      setActive((list) => [...list, { key, effect: next, durationMs }])
-      setTimeout(() => {
-        if (alive.current) setActive((list) => list.filter((item) => item.key !== key))
-      }, durationMs)
-    }
-    if (queue.current.length > 0)
-      timer.current = setTimeout(pump, Math.max(16, queue.current.wait(performance.now())))
-  }, [])
-
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-      if (timer.current !== undefined) clearTimeout(timer.current)
-    }
-  }, [])
-
-  const enqueue = useCallback(
-    (effects: Effect[]) => {
-      if (effects.length === 0) return
-      queue.current.push(effects)
-      pump()
-    },
-    [pump],
-  )
-  const reset = useCallback(() => {
-    queue.current.clear()
-    setActive([])
-  }, [])
-  return { active, enqueue, reset, queue }
-}
-
-const toneClass = (tone: EffectTone) => `orch-tone--${tone}`
+export { EFFECT_GAP_MS, useEffectPlayer }
+export type { ActiveEffect }
+export { nodeSize, shapedWord }
+export { NodeShape }
 
 /** A node's second line; a tool name in a status line is shown in code style. */
 function Caption({ text }: { text: string }) {
@@ -117,234 +43,6 @@ const named = (word: string, status?: string) =>
   status ? `${word}: ${status.replaceAll('`', '')}` : word
 
 const SHAPE_NAME = { gate: 'Gate', branch: 'Branch', join: 'Join', end: 'End' } as const
-
-/** The word under a workflow node's title: a gate is approved, not "succeeded". */
-export function shapedWord(shape: NonNullable<GraphNode['shape']>, visual: NodeVisual): string {
-  if (shape === 'gate') {
-    if (visual === 'succeeded') return 'approved'
-    if (visual === 'failed') return 'rejected'
-  }
-  if (shape === 'end' && visual === 'succeeded') return 'reached'
-  if ((shape === 'branch' || shape === 'join') && visual === 'succeeded') return 'passed on'
-  return visualLabel[visual]
-}
-
-/** The outline of a local node, drawn behind its text: a diamond for a gate, a hexagon for a branch, a pill otherwise. */
-export function NodeShape({
-  shape,
-  w,
-  h,
-}: {
-  shape: NonNullable<GraphNode['shape']>
-  w: number
-  h: number
-}) {
-  const inset = 2
-  const points =
-    shape === 'gate'
-      ? `${w / 2},${inset} ${w - inset},${h / 2} ${w / 2},${h - inset} ${inset},${h / 2}`
-      : shape === 'branch'
-        ? `${h / 3},${inset} ${w - h / 3},${inset} ${w - inset},${h / 2} ${w - h / 3},${h - inset} ${h / 3},${h - inset} ${inset},${h / 2}`
-        : null
-  return (
-    <svg
-      className="orch-node__shape"
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {points ? (
-        <polygon points={points} strokeLinejoin="round" />
-      ) : (
-        <rect
-          x={inset}
-          y={inset}
-          width={w - inset * 2}
-          height={h - inset * 2}
-          rx={shape === 'end' ? (h - inset * 2) / 2 : 14}
-        />
-      )}
-    </svg>
-  )
-}
-
-interface DotRoute {
-  points: Point[]
-  /** The drawn edge this dot rides on, when there is one; `reverse` when the hand-off goes against its direction. */
-  edge: string | null
-  reverse: boolean
-}
-
-/**
- * A dot rides the real SVG edge path (anime.js motion path), so it follows the routed corners exactly. Without a drawn
- * edge (a straight fallback) it rides a hidden path of the same points. Not rendered at all with reduced motion.
- */
-function Dot({
-  route: given,
-  durationMs,
-  tone,
-}: {
-  route: DotRoute
-  durationMs: number
-  tone: EffectTone
-}) {
-  const ref = useRef<SVGCircleElement>(null)
-  // Fixed at mount: a re-render of the diagram must not restart a dot that is already travelling.
-  const [route] = useState(given)
-  useLayoutEffect(() => {
-    const circle = ref.current
-    const svgRoot = circle?.ownerSVGElement
-    if (!circle || !svgRoot) return
-    let temp: SVGPathElement | null = null
-    const stop = playMotion(({ animate, svg }) => {
-      let path: SVGPathElement | null = route.edge
-        ? svgRoot.querySelector<SVGPathElement>(`path[data-edge="${CSS.escape(route.edge)}"]`)
-        : null
-      if (!path) {
-        const ordered = route.reverse ? [...route.points].reverse() : route.points
-        temp = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-        temp.setAttribute('d', ordered.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' '))
-        temp.setAttribute('fill', 'none')
-        svgRoot.appendChild(temp)
-        path = temp
-      }
-      if (typeof path.getTotalLength !== 'function') return
-      const reversed = path === temp ? false : route.reverse
-      circle.style.opacity = '1'
-      const animation = animate(circle, {
-        ...svg.createMotionPath(path),
-        rotate: 0,
-        duration: durationMs,
-        ease: 'inOutQuad',
-        reversed,
-      })
-      return () => {
-        animation.cancel()
-      }
-    })
-    return () => {
-      stop()
-      temp?.remove()
-    }
-  }, [route, durationMs])
-  return (
-    <circle
-      ref={ref}
-      className={`orch-dot ${toneClass(tone)}`}
-      r="6"
-      cx="0"
-      cy="0"
-      style={{ opacity: 0 }}
-    />
-  )
-}
-
-const CHECK_PATH = 'M4 11 L9 16 L18 5'
-
-/**
- * Node state changes (queued → running → done / failed): a short settle of the node, a ring that flows out of it and,
- * for done, a check that draws itself. Several nodes changing at once start in a short stagger. The first render, and
- * nodes that merely appear, do not animate; neither does a quiet diagram (reduced motion, fast replay).
- */
-function useNodeTransitions(
-  root: React.RefObject<HTMLDivElement | null>,
-  visuals: ReadonlyMap<string, NodeVisual>,
-  quiet: boolean,
-) {
-  const previous = useRef<Map<string, NodeVisual> | null>(null)
-  const running = useRef(new Set<() => void>())
-  useEffect(() => {
-    const before = previous.current
-    previous.current = new Map(visuals)
-    if (!before || quiet || !root.current) return
-    const changed: Array<{ id: string; to: NodeVisual }> = []
-    for (const [id, to] of visuals) {
-      const was = before.get(id)
-      if (was !== undefined && was !== to) changed.push({ id, to })
-    }
-    if (changed.length === 0) return
-    const container = root.current
-    const stop = playMotion(({ animate, svg }) => {
-      const cleanups: Array<() => void> = []
-      const nodes = changed.flatMap(({ id, to }) => {
-        const node = container.querySelector<HTMLElement>(`[data-node="${CSS.escape(id)}"]`)
-        return node ? [{ node, to }] : []
-      })
-      nodes.forEach(({ node, to }, index) => {
-        const start = index * MOTION.stagger
-        const ring = document.createElement('span')
-        ring.className = 'orch-node__ring'
-        ring.setAttribute('aria-hidden', 'true')
-        node.appendChild(ring)
-        const settle = animate(node, {
-          scale: [
-            { to: 1.045, duration: 160 },
-            { to: 1, duration: 300 },
-          ],
-          delay: start,
-          ease: MOTION.ease,
-          onComplete: () => node.style.removeProperty('transform'),
-        })
-        const flow = animate(ring, {
-          opacity: [0.45, 0],
-          scale: [1, 1.12],
-          duration: MOTION.slow,
-          delay: start,
-          ease: MOTION.ease,
-          onComplete: () => ring.remove(),
-        })
-        cleanups.push(() => {
-          settle.cancel()
-          flow.cancel()
-          node.style.removeProperty('transform')
-          ring.remove()
-        })
-        if (to === 'succeeded') {
-          const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-          mark.setAttribute('class', 'orch-node__check')
-          mark.setAttribute('viewBox', '0 0 22 22')
-          mark.setAttribute('aria-hidden', 'true')
-          const tick = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-          tick.setAttribute('d', CHECK_PATH)
-          mark.appendChild(tick)
-          node.appendChild(mark)
-          const [drawable] = svg.createDrawable(tick)
-          const draw = animate(drawable!, {
-            draw: ['0 0', '0 1'],
-            duration: MOTION.base,
-            delay: start + 120,
-            ease: MOTION.ease,
-          })
-          const fade = animate(mark, {
-            opacity: [1, 0],
-            duration: MOTION.fast,
-            delay: start + 120 + MOTION.base + 500,
-            ease: 'linear',
-            onComplete: () => mark.remove(),
-          })
-          cleanups.push(() => {
-            draw.cancel()
-            fade.cancel()
-            mark.remove()
-          })
-        }
-      })
-      const all = () => cleanups.forEach((fn) => fn())
-      running.current.add(all)
-      window.setTimeout(() => running.current.delete(all), 3000)
-    })
-    running.current.add(stop)
-  }, [visuals, quiet, root])
-  useEffect(() => {
-    const live = running.current
-    return () => {
-      live.forEach((fn) => fn())
-      live.clear()
-    }
-  }, [])
-}
 
 export interface DiagramProps {
   nodes: GraphNode[]

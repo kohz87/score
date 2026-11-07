@@ -70,21 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/orchestrations/LiveDiagram.tsx",
-    "lines": 649,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/orchestrations/NewOrchestrationDialog.tsx",
-    "lines": 510,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/orchestrations/RunDecisions.tsx",
-    "lines": 733,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/orchestrations/RunPanel.tsx",
     "lines": 470,
     "reason": "split in CS.2 wave 1"

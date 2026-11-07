@@ -86,6 +86,20 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/` — theme customizer, its area stylesheets and live preview.
 - `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images, tables and feature-split page tests.
 - `apps/web/src/routes/orchestrations/` — orchestration run panels, decisions and live diagram.
+- `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images and tables.
+- `apps/web/src/routes/orchestrations/` — orchestration run panels, decision-card modules, start dialog parts and split live diagram.
+- `apps/web/src/routes/orchestrations/NodeShape.tsx` — gate, branch and pill outlines for diagram nodes.
+- `apps/web/src/routes/orchestrations/live-diagram-node.ts` — diagram node sizes, state words and tone classes.
+- `apps/web/src/routes/orchestrations/live-diagram-effects.ts` — queued effect playback for diagram dots and pulses.
+- `apps/web/src/routes/orchestrations/live-diagram-dot.tsx` — a hand-off dot travelling along a routed edge.
+- `apps/web/src/routes/orchestrations/use-node-transitions.ts` — node settle, ring and completion-check animations.
+- `apps/web/src/routes/orchestrations/new-orchestration-checks.tsx` — coding-worker reach, acknowledgement and preflight lists.
+- `apps/web/src/routes/orchestrations/new-orchestration-errors.ts` — plain-word orchestration start errors.
+- `apps/web/src/routes/orchestrations/run-decision-types.ts` — narrow run shapes read by the shared decision cards.
+- `apps/web/src/routes/orchestrations/gate-decision-cards.tsx` — gate approval and lead inquiry cards.
+- `apps/web/src/routes/orchestrations/limit-decision-card.tsx` — budget, deadline and quota-floor card.
+- `apps/web/src/routes/orchestrations/fence-decision-cards.tsx` — unconfirmed-end and stopped-step cards.
+- `apps/web/src/routes/orchestrations/remap-decision-card.tsx` — replaced-agent decision card.
 - `apps/web/src/routes/pair/` — pairing and sign-in page.
 - `apps/web/src/routes/reports/` — reports pages and journey chart.
 - `apps/web/src/routes/runs/` — helpers for opening a brief as a run.
