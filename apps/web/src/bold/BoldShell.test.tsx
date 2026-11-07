@@ -747,8 +747,8 @@ test('the phone top bar keeps wordmark, section pills, terminal button and avata
 
   // jsdom has no layout, so the rules that keep it on one row are read from the stylesheet: the bar never wraps on a
   // phone, the pills take only the room that is left and scroll, and the other three parts never shrink.
-  const css = readFileSync(`${__dirname}/bold.css`, 'utf8')
-  const phoneRules = css.slice(css.indexOf('@media (max-width: 860px)'))
+  const css = readFileSync(`${__dirname}/bold-topbar.css`, 'utf8')
+  const phoneRules = readFileSync(`${__dirname}/bold-responsive.css`, 'utf8')
   expect(phoneRules).toMatch(/\.top \{[^}]*flex-wrap: nowrap/)
   expect(css).toMatch(/\.bold-top-links \{[^}]*flex: 1 1 0;[^}]*overflow-x: auto/)
   const chatsCss = readFileSync(`${__dirname}/chats/chats-conversation.css`, 'utf8')

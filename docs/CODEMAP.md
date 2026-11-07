@@ -83,6 +83,15 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
+- `apps/web/src/bold/bold.css` — bold shell style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/bold-base.css` — scoped resets, shared utilities and the button and icon controls.
+- `apps/web/src/bold/bold-topbar.css` — top bar, section links, wordmark, navigation, dock, search and avatar.
+- `apps/web/src/bold/bold-room-layout.css` — room grid, header, stream, page frame and the info side panel.
+- `apps/web/src/bold/bold-menus.css` — floating menu primitives and room-picker preview rows.
+- `apps/web/src/bold/bold-fit.css` — full-window room layout under `body.fit`.
+- `apps/web/src/bold/bold-motion.css` — live and pulse animations with the reduced-motion reset.
+- `apps/web/src/bold/bold-responsive.css` — laptop, phone and tablet shell, room layout and touch targets.
+- `apps/web/src/bold/bold-notices.css` — fence and update notices, project and archive surfaces, and the classic primary-button fix.
 - `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.
 - `apps/web/src/bold/BoldRecipeEditor.tsx` — recipe editor composition and export dialog.

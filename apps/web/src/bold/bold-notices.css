@@ -1,0 +1,84 @@
+/* The fence notice: a light "for you" object above the page, like the room's Needs-you card. */
+[data-ui='bold'] .bold-fence-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  margin: 0 0 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 600;
+}
+
+/* The update banner (3.0.0): a light object, for you, in the frame's flow at the top (like the other notices), so it covers nothing: not the composer, the tab bar or a request card. */
+[data-ui='bold'] .update-banner {
+  flex: none;
+  align-self: center;
+  margin: 8px 16px 0;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  padding: calc(8px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1))
+    calc(20px * var(--bold-d, 1));
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 600;
+  box-shadow: var(--menu-shadow);
+}
+
+[data-ui='bold'] .update-banner button {
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(16px * var(--bold-d, 1));
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-room-project-list,
+[data-ui='bold'] .bold-room-project-colours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+[data-ui='bold'] .bold-room-project-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-room-archived {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  /* On a narrow phone header it wraps under the title instead of squeezing it. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-room-kind-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 3.8.4 (owner: "the button is unseeable"): the classic primary button keeps its light ink fill in the new shell, but
+   its text used the classic --card (white), which the new shell doesn't set. Dark text on the light fill, everywhere
+   (the doubled class outranks the classic `.orch-room button.orch-primary` rules wherever this file loads). */
+[data-ui='bold'] button.orch-primary.orch-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}

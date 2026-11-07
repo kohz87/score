@@ -1,0 +1,222 @@
+/* room */
+[data-ui='bold'] .roomgrid {
+  display: flex;
+  gap: calc(20px * var(--bold-d, 1));
+  align-items: stretch;
+  min-height: calc(100vh - 110px);
+}
+
+[data-ui='bold'] .roomcol {
+  flex: 1 1 440px;
+  max-width: 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-sidecol {
+  flex: 999 1 520px;
+  min-width: 0;
+  display: flex;
+}
+
+[data-ui='bold'] .roomhead {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+  position: relative;
+}
+
+[data-ui='bold'] .roomtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  border: 0;
+  background: none;
+  padding: 0;
+  min-height: 44px;
+  font-family: var(--font-d);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-chat-title {
+  margin: 0;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-room-kind {
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .bold-room-kind {
+    display: none;
+  }
+}
+
+[data-ui='bold'] .bold-room-switch-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-room-grow {
+  flex: 1 1 auto;
+}
+
+[data-ui='bold'] .bold-room-menu-wrap,
+[data-ui='bold'] .bold-job-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-job-menu-wrap {
+  align-self: center;
+}
+
+[data-ui='bold'] .bold-room-switch {
+  left: 0;
+  top: 52px;
+  width: min(420px, 92vw);
+  max-height: min(620px, calc(100dvh - 180px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+[data-ui='bold'] .bold-room-menu,
+[data-ui='bold'] .bold-job-menu {
+  right: 0;
+  top: 44px;
+  width: min(300px, calc(100vw - 28px));
+}
+
+[data-ui='bold'] .bold-room-menu a,
+[data-ui='bold'] .bold-job-menu a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-menu-note {
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-room-dot,
+[data-ui='bold'] .bold-outside-glyph {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--faint);
+}
+
+[data-ui='bold'] .bold-room-dot.team {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-outside-glyph {
+  width: 22px;
+  height: 22px;
+  margin-inline: 0 2px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+[data-ui='bold'] .stream {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 260px;
+  padding: calc(14px * var(--bold-d, 1)) 2px calc(4px * var(--bold-d, 1)) 0;
+  mask-image: linear-gradient(to bottom, transparent 0, var(--stream-mask) 22px);
+}
+
+[data-ui='bold'] .bold-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-block: calc(44px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-page h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-page p {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* side panel */
+[data-ui='bold'] .side {
+  flex: 1;
+  background: var(--deep);
+  border-radius: calc(30px * var(--bold-r, 1));
+  box-shadow: 0 0 0 1px var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 560px;
+  position: relative;
+}
+
+[data-ui='bold'] .sidehead {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  position: relative;
+}
+
+[data-ui='bold'] .sidebody {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(18px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+  min-height: 0;
+}
+
+[data-ui='bold'] .side-toggle {
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .side-privacy {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .sideclose {
+  margin-left: auto;
+}

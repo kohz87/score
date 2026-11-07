@@ -1,0 +1,39 @@
+/* motion, as the prototype defines it; the frame itself rests until a screen uses these classes. */
+@keyframes live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--glow-soft);
+  }
+}
+
+[data-ui='bold'] .livedot {
+  animation: live 1.6s ease-in-out infinite;
+}
+
+[data-ui='bold'] .glow {
+  animation: pulse 2.2s ease-in-out infinite;
+  border-radius: calc(10px * var(--bold-r, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'],
+  [data-ui='bold'] *,
+  [data-ui='bold'] *::before,
+  [data-ui='bold'] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
