@@ -423,6 +423,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+- `apps/server/test/hermes/live/` — live Hermes adapter tests, including feature-split SQLite and SSE suites.
 
 ### Key files
 
@@ -438,6 +439,8 @@ likely to be the entry point for a change.
 
 - `apps/server/test/runtimes/coding-fixtures.ts` — recorded coding-driver CLI fixture lines.
 - `apps/server/test/runtimes/coding-drivers-helpers.ts` — shared coding-driver test setup: fixture parsing, deny/base options, verdict extraction and Codex record factories.
+- `apps/server/test/hermes/live/sqlite-helpers.ts` — shared fixture lifecycle, reader tracking and source setup for the SQLite suites.
+- `apps/server/test/hermes/live/sse-client-helpers.ts` — shared SSE frames, fake response/connection factories and timer cleanup.
 - `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate suites.
 
 ### Key files
