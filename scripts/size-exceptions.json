@@ -410,11 +410,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/themes/routes.test.ts",
-    "lines": 1302,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/themes/store-swap.test.ts",
     "lines": 492,
     "reason": "split in CS.2 wave 1"
