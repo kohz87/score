@@ -1179,7 +1179,9 @@ likely to be the entry point for a change.
 - `e2e/bold-room-fixtures.ts` — contract-shaped room routes and page-opening helpers used by bold-room specs.
 - `e2e/bold-room-spec-helpers.ts` — shared room viewport setup and composer, job and message helpers.
 - `e2e/bold-room-menu-spec-helpers.ts` — shared menu viewport setup and room/job menu helpers.
+- `e2e/bold-thread-helpers.ts` — thread fixtures, topic navigation, recipe and budget-pause data for bold-thread specs.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
+- `e2e/themes-protection-helpers.ts` — protected-surface theme helpers and readability measurement for protection specs.
 - `e2e/visual-fixtures.ts` — shared visual-test setup.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.
 - `e2e/locks.ts` — cross-worker test locks.
