@@ -2,6 +2,14 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
+import { readFileSync } from 'node:fs'
+
+const sizeExceptions = JSON.parse(
+  readFileSync(new URL('./scripts/size-exceptions.json', import.meta.url), 'utf8'),
+)
+const sizeExceptionSources = sizeExceptions
+  .map((entry) => entry.path)
+  .filter((path) => /^(?:apps|packages|scripts|e2e)\//.test(path) && /\.(?:ts|tsx|mjs)$/.test(path))
 
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', 'playwright-report/**', 'test-results/**'] },
@@ -10,6 +18,21 @@ export default tseslint.config(
   {
     files: ['**/*.{ts,tsx,js,mjs}'],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    files: [
+      'apps/**/*.{ts,tsx,mjs,js}',
+      'packages/**/*.{ts,tsx,mjs,js}',
+      'scripts/**/*.{ts,tsx,mjs,js}',
+      'e2e/**/*.{ts,tsx,mjs,js}',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 450, skipBlankLines: false, skipComments: false }],
+    },
+  },
+  {
+    files: sizeExceptionSources,
+    rules: { 'max-lines': 'off' },
   },
   {
     // The service worker and offline page are plain scripts served from public/.
