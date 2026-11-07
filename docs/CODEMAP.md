@@ -375,6 +375,15 @@ likely to be the entry point for a change.
 - `scripts/license-check.mjs` — dependency license gate.
 - `scripts/license-policy.mjs` — allowed license policy.
 - `scripts/start.mjs` — production launcher for the built app.
+- `scripts/bold-frame-compare.mjs` — browser entry for the bold prototype-versus-app screenshot and metric run.
+- `scripts/bold-frame-paths.mjs` — output, build and prototype/board paths for the bold frame comparison.
+- `scripts/bold-frame-fixtures.mjs` — visual, room, search and recipe fixtures that stand in for the server.
+- `scripts/bold-frame-serve.mjs` — routes Chromium requests to comparison fixtures and built web files.
+- `scripts/bold-frame-parts-frame.mjs` — shell, team-room and empty-room selector tables.
+- `scripts/bold-frame-parts-settings.mjs` — usage, rules and system selector tables.
+- `scripts/bold-frame-parts-dialogs.mjs` — search and recipe dialog selector tables.
+- `scripts/bold-frame-measure.mjs` — computed-style measurement and prototype settings navigation.
+- `scripts/bold-frame-report.mjs` — writes the comparison's JSON and Markdown metric reports.
 - `scripts/restore.mjs` — backup restore command.
 - `scripts/capacity.mjs` — machine load report.
 - `scripts/set-password.mjs` — security-password setter.
