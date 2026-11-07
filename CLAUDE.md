@@ -9,8 +9,9 @@
    Sonnet coder. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
    release gates, and fixes found in review that are a few lines.
 2. **Reviews are Sonnet with an Opus advisor**: a headless Claude Code run, read-only, findings only —
-   `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*)" "<review prompt>"`
-   (the prompt carries the brief, the diff command and the checks). Every task and every fix round gets one before
+   `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git log:*)" < review-prompt.md`,
+   run in the task's worktree. The prompt goes on stdin: `--allowedTools` takes a list and would swallow a prompt
+   argument. The prompt carries the brief, the diff command and the checks. Every task and every fix round gets one before
    the lead's merge checks; the lead verifies each finding.
 3. **Machine load is measured for the whole system, and 80% is a safety ceiling** (the owner's other projects share
    this VM; the point is that it never crashes). Before starting or adding any task, run `node scripts/capacity.mjs`
