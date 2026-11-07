@@ -70,16 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/themes-safety.spec.ts",
-    "lines": 613,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "e2e/visual-fixtures.ts",
-    "lines": 593,
-    "reason": "data list"
-  },
-  {
     "path": "e2e/workflow-fixtures.ts",
     "lines": 822,
     "reason": "data list"
