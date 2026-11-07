@@ -250,6 +250,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
 - `apps/server/src/http/` — API routes, one file per contract section.
+- `apps/server/src/http/rooms/` — split room catalogue, message, rewind, summary and version route groups.
 - `apps/server/src/hub/` — ordered event ingest, projections, SSE fan-out, snapshots and retention.
 - `apps/server/src/knowledge/` — vault files, notes, extraction, links, export and staging.
 - `apps/server/src/locks/` — OS-level lock helpers.
@@ -274,7 +275,17 @@ likely to be the entry point for a change.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
-- `apps/server/src/http/rooms.ts` — room, message and room-action routes.
+- `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
+- `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
+- `apps/server/src/http/rooms/route-schemas.ts` — zod schemas for room, message and query inputs.
+- `apps/server/src/http/rooms/room-routes.ts` — room catalogue, team-room, create/update/delete and room-detail routes.
+- `apps/server/src/http/rooms/message-read-routes.ts` — message page reads, deletion and clearing a direct thread.
+- `apps/server/src/http/rooms/message-post-routes.ts` — posting a message, attachments, routing and message persistence.
+- `apps/server/src/http/rooms/message-run-routes.ts` — retry and stop for a message's run.
+- `apps/server/src/http/rooms/rewind-routes.ts` — rewind plan and rewind routes.
+- `apps/server/src/http/rooms/rewind-guard.ts` — shared rewind-in-progress guard.
+- `apps/server/src/http/rooms/summary-routes.ts` — room summary generate, edit and delete routes.
+- `apps/server/src/http/rooms/version-routes.ts` — room version list and version-message reads.
 - `apps/server/src/http/stream.ts` — stream route.
 - `apps/server/src/domain/orchestration/executor.ts` — public Orchestrator facade, constructor state and re-exports.
 - `apps/server/src/domain/orchestration/executor-admission.ts` — choosing queued work and admitting runs.
