@@ -26,6 +26,9 @@
    what is unnecessary in scope (unused files, exports, functions, removed-feature code and tests, stale fixtures and
    baselines), with proof per item; proven-unused code is removed first, then the rest is split. Briefs include the
    step; the lead checks each removal's proof (the line comparison must show only the listed removals beyond moves).
+6. **No pre-fix checks** (owner, 2026-11-07, repeating 2026-10-24): coders run lint and typecheck only, never tests; before
+   review the lead runs only static proofs (line comparison, compiled-CSS comparison, structure check); the full check
+   runs once, on main, after the reviewed and fixed batch is merged, and gates the push.
 
 ## Roles (decided by the owner, 2026-10-06)
 - **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,
