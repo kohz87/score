@@ -350,21 +350,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/bold-connections-look.spec.ts",
-    "lines": 475,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "e2e/bold-library-editor.spec.ts",
-    "lines": 597,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "e2e/bold-library.spec.ts",
-    "lines": 550,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "e2e/bold-needs-you.spec.ts",
     "lines": 845,
     "reason": "split in CS.2 wave 1"

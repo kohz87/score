@@ -901,6 +901,9 @@ likely to be the entry point for a change.
 - `e2e/customizer-import-and-shell.spec.ts` — import preview and errors, roles/focus, settings shell and phone layout.
 - `e2e/customizer-saves.spec.ts` — save conflicts, in-use state, replaced pictures and unsaved edits.
 - `e2e/customizer-package-versions.spec.ts` — copies, package revisions, exports, cached looks and replaced assets.
+- `e2e/bold-connections-look-helpers.ts` — shared setup and journey helpers for the bold Connections, Tools and Look specs.
+- `e2e/bold-library-editor-helpers.ts` — shared library-editor navigation, note creation and zip-reading helpers.
+- `e2e/bold-library-helpers.ts` — shared bold Library navigation, note, file and zip helpers.
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
 - `e2e/themes-fixtures.ts` — theme packages and screenshots used by theme specs.
 - `e2e/visual-fixtures.ts` — shared visual-test setup.
