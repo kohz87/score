@@ -1,0 +1,245 @@
+/* Stop is an icon (a red rounded square): the reply's own Stop is a small round button. Centred with flex, which the
+   protected list keeps under a custom theme. */
+.chat-stop-reply,
+.chat-send--stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-stop-reply {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.chat-send--stop[aria-busy='true'] .stop-icon,
+.chat-stop-reply[aria-busy='true'] .stop-icon {
+  opacity: 0.5;
+}
+.chat-send--stop {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.chat-voice {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-voice[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+.chat-send-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.chat-meter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+/* Context ring and popover (PLAN 5.36) */
+.chat-ctx {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chat-ctx-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-ctx-ring svg {
+  position: absolute;
+  inset: 4px;
+}
+.chat-ctx-track {
+  fill: none;
+  stroke: var(--hairline);
+  stroke-width: 3;
+}
+.chat-ctx-fill {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.chat-ctx-ring--warn .chat-ctx-fill {
+  stroke: var(--agent-saffron);
+}
+.chat-ctx-ring--high .chat-ctx-fill {
+  stroke: var(--agent-coral);
+}
+.chat-ctx-text {
+  position: relative;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.chat-ctx-ring--warn .chat-ctx-text {
+  color: var(--agent-saffron-text);
+}
+.chat-ctx-ring--high .chat-ctx-text {
+  color: var(--agent-coral-text);
+}
+.chat-ctx-ring:focus-visible,
+.chat-ctx-panel button:focus-visible,
+.chat-ctx-panel input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.chat-ctx-status {
+  color: var(--ink-muted);
+}
+.chat-ctx-panel {
+  /* Anchored to the rings beside Send: opens upward, right-aligned, never wider than the screen. */
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 3;
+  width: min(380px, calc(100vw - 32px));
+  padding: var(--space-4) 18px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-22);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 18px 48px rgb(var(--shadow-rgb) / 14%);
+  font-size: 13px;
+}
+.chat-ctx-panel h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.chat-ctx-panel h4 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-ctx-panel p {
+  margin: 4px 0;
+}
+.chat-ctx-meta,
+.chat-ctx-note {
+  color: var(--ink-muted);
+}
+.chat-ctx-summary {
+  font-weight: 600;
+}
+.chat-ctx-bar {
+  display: flex;
+  height: 8px;
+  margin-top: 10px;
+  border-radius: 4px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+.chat-ctx-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.chat-ctx-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chat-ctx-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.chat-ctx-part {
+  flex: 1;
+  min-width: 0;
+}
+.chat-ctx-tokens {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.chat-ctx-result {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-14);
+  background: var(--subtle);
+}
+.chat-ctx-confirm input {
+  width: 4.5ch;
+  padding: 2px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-8);
+  font: inherit;
+}
+.chat-ctx-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: 12px;
+}
+.chat-ctx-actions button {
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-ctx-actions .chat-ctx-primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--card);
+}
+.chat-ctx-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-usage-card {
+  white-space: pre-wrap;
+}
+.chat-message-body,
+.chat-message-parts,
+.chat-md,
+.chat-code {
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-edit-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-workspace-link {
+  font-family: var(--font-code);
+  font-size: 0.92em;
+}

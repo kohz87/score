@@ -1,0 +1,219 @@
+/* Room summary (PLAN 7.4a) */
+.chat-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 14px;
+  border-style: dashed;
+  color: var(--ink);
+}
+.chat-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) 10px;
+}
+.chat-summary-by {
+  color: var(--ink-muted);
+}
+.chat-summary-badge {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--agent-jade-tint);
+  color: var(--agent-jade-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.chat-summary-badge--stale {
+  background: var(--agent-saffron-tint);
+  color: var(--agent-saffron-text);
+}
+.chat-summary-note {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.chat-summary-text {
+  max-height: 320px;
+  overflow: auto;
+}
+.chat-summary-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.chat-summary-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+.chat-summary-edit textarea {
+  padding: var(--space-2) 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-10);
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  resize: vertical;
+}
+.chat-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chat-summary-actions button {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-summary-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-stalled {
+  font-size: 13px;
+  color: var(--ink-muted, var(--ink));
+  max-width: 52ch;
+}
+.chat-model-failed {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-14);
+  background: var(--ground);
+  font-size: 14px;
+}
+.chat-via-mcp {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Phone and tablet (PLAN 5.34): the list is a drawer next to an open room; the room gets the full width. */
+@media (width < 1024px) {
+  .chat-thread {
+    flex-basis: 100%;
+  }
+}
+@media (width < 600px) {
+  .chat-thread {
+    border-radius: var(--radius-20);
+    height: max(480px, calc(100dvh - 150px));
+  }
+}
+@media (width < 1024px) {
+  /* With the list shown inline there is nothing to add below it. */
+}
+
+/* 5.34 phone composer: two rows — recipients, then Plan first + attach + mic + Send — and a smaller box. */
+@media (width < 600px) {
+  .chat-composer-box {
+    padding: 10px 10px 10px 14px;
+    gap: var(--space-2);
+    border-radius: var(--radius-22);
+  }
+  .chat-composer textarea {
+    font-size: 16px;
+  }
+  .chat-composer-row {
+    gap: 6px;
+  }
+  .chat-composer-row > .chat-grow {
+    flex-basis: 100%;
+    height: 0;
+  }
+  .chat-composer-row .chat-send {
+    padding: 0 var(--space-4);
+  }
+  /* The context ring joined this row (beside Send): keep Plan first, attach, mic, ring and Send on one line. */
+  .chat-composer-row .chat-plan-toggle {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .chat-composer-row .chat-meter {
+    gap: var(--space-1);
+  }
+}
+
+/* "Also save to Knowledge" on an attachment chip (PLAN 6.6) */
+.chat-attachment.has-save {
+  height: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+  padding: var(--space-1) var(--space-2) var(--space-1) 6px;
+  border-radius: var(--radius-22);
+}
+.chat-attachment-save {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px var(--space-2);
+  max-width: none !important;
+  white-space: normal !important;
+  overflow: visible !important;
+}
+.chat-attachment-save label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.chat-attachment-save label span {
+  max-width: none;
+  white-space: nowrap;
+}
+.chat-attachment-save input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.chat-attachment-save .kn-folder-input {
+  width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Rename and delete a room (PLAN 5.36) */
+.chat-rename--title input {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.chat-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chat-delete-confirm input {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  font: inherit;
+}
+.chat-delete-confirm input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The status line under a reply that is being written, and the working agents in the room header. */
+.chat-message-body > .live-status {
+  margin-top: 6px;
+}

@@ -1,0 +1,294 @@
+.chat-composer {
+  padding: 0 var(--space-6) var(--space-6);
+  max-width: 868px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+}
+.chat-composer-box:focus-within {
+  /* The textarea has no outline of its own; the box shows keyboard focus. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.chat-composer-box {
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-26);
+  padding: 14px 14px var(--space-3) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--card);
+}
+.chat-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.chat-composer textarea {
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+}
+.chat-composer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--muted);
+}
+.chat-composer-default {
+  font-size: 13px;
+}
+.chat-grow {
+  flex: 1;
+}
+.chat-chip {
+  height: 36px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chat-chip button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.chat-add {
+  position: relative;
+}
+.chat-add-trigger {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--profile-dashed);
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.chat-add-trigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.chat-add-list {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 2;
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  min-width: 180px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-22);
+  box-shadow: 0 18px 48px rgb(var(--shadow-rgb) / 14%);
+}
+.chat-add-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-14);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-add-list button:hover {
+  background: var(--subtle-2);
+}
+.chat-plan-toggle {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 0;
+  background: var(--subtle-2);
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+.chat-switch {
+  width: 28px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--profile-dashed);
+  position: relative;
+  display: inline-block;
+}
+.chat-switch::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+}
+.chat-plan-toggle[aria-pressed='true'] .chat-switch {
+  background: var(--ink);
+}
+.chat-plan-toggle[aria-pressed='true'] .chat-switch::after {
+  left: auto;
+  right: 2px;
+}
+.chat-attach {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-attach:disabled {
+  opacity: 0.5;
+}
+.chat-send {
+  height: 44px;
+  padding: 0 22px;
+  border-radius: var(--radius-pill);
+  border: 0;
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-menu {
+  position: absolute;
+  left: 24px;
+  bottom: calc(100% - 14px);
+  z-index: 2;
+  width: min(420px, calc(100% - 48px));
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-22);
+  padding: var(--space-2);
+  box-shadow: 0 18px 48px rgb(var(--shadow-rgb) / 14%);
+  display: flex;
+  flex-direction: column;
+}
+.chat-menu button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-14);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-menu button[aria-selected='true'] {
+  background: var(--subtle-2);
+}
+.chat-menu-command {
+  font-family: var(--font-code);
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 90px;
+  color: var(--ink);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* One line per option, however long an agent's description is (full text on hover). */
+.chat-menu-detail {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-composer-notice {
+  margin-bottom: 10px;
+  padding: 10px var(--space-4);
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  font-size: 14px;
+}
+.chat-composer-notice--error {
+  background: var(--agent-coral-tint);
+  color: var(--agent-coral-text);
+}
+.chat-side-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-24);
+  padding: 18px var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-side-card a {
+  /* chat.png: links in the side cards are ink, underlined, semibold */
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-side-card h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+}
+.chat-side-card p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--chat-text);
+}
+.chat-side-card a {
+  font-size: 14px;
+  font-weight: 600;
+}
+@media (width < 880px) {
+  .chat-thread {
+    flex-basis: 100%;
+  }
+}
+@media (width < 480px) {
+  .chat-composer {
+    padding: 0 var(--space-3) var(--space-4);
+  }
+  .chat-message {
+    gap: 10px;
+  }
+}

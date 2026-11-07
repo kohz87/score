@@ -323,7 +323,7 @@ const reply: Message = {
   createdAt: '2026-10-08T10:00:02.000Z',
 }
 test('actions show on hover or focus and always on touch devices', () => {
-  const css = readFileSync('src/routes/chat/chat.css', 'utf8')
+  const css = readFileSync('src/routes/chat/chat-message-actions.css', 'utf8')
   expect(css).toMatch(/\.chat-message:hover \.chat-message-actions[^{]*\{\s*opacity: 1/)
   expect(css).toMatch(/\.chat-message:focus-within \.chat-message-actions/)
   expect(css).toMatch(/@media \(hover: none\) \{\s*\.chat-message-actions \{\s*opacity: 1/)
