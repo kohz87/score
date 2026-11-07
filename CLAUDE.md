@@ -22,6 +22,10 @@
    full test run gets the machine to itself: no new coders while it runs.
 4. **450 lines and the code map** (AGENTS.md "File size and the code map"): every brief repeats the rule, every review
    checks it, and every task that adds, moves or removes a file updates `docs/CODEMAP.md`.
+5. **Audit before splitting or cleaning up** (owner, 2026-11-07, decision 171): every split or cleanup starts by finding
+   what is unnecessary in scope (unused files, exports, functions, removed-feature code and tests, stale fixtures and
+   baselines), with proof per item; proven-unused code is removed first, then the rest is split. Briefs include the
+   step; the lead checks each removal's proof (the line comparison must show only the listed removals beyond moves).
 
 ## Roles (decided by the owner, 2026-10-06)
 - **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,

@@ -64,6 +64,12 @@ docs/                plan, architecture, contract, setup, spike, design referenc
   over the limit are on that exception list, which only shrinks (a file leaves it once split, and never comes back).
 - **Splits change no behaviour.** A split moves code only: no logic, naming or API changes in the same change, the
   tests green before and after. Behaviour changes go in their own change.
+- **Audit before you split or clean up** (owner, 2026-11-07). First find what is unnecessary in scope: files nothing
+  uses, exports nothing imports, functions nothing calls, code and tests of removed features, fixtures and screenshot
+  baselines nothing loads, skipped tests. List each with its proof (a search showing no caller, the commit that removed
+  the feature). Remove only what is proven unused, and say so in the report as its own section; then split what
+  remains. Anything used only by tests, loaded dynamically, or named in a config is not unused: list it, don't remove
+  it. Splitting dead code is wasted work.
 - **Every package keeps its code map** (`docs/CODEMAP.md`): one line per folder and per key file — what it owns and
   where to look for what. A change that adds, moves, renames or deletes a source file updates the map in the same
   change; `pnpm check` fails when a source folder is not in the map. Read the map before searching the tree.

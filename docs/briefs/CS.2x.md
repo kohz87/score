@@ -4,6 +4,11 @@ PLAN "Code structure" CS.2 wave 2 (owner 2026-11-07, decision 168). `apps/web/sr
 limit (AGENTS.md "File size and the code map"). Split it into files of at most 450 lines, one job each.
 
 ## Do
+0. **Audit first** (AGENTS.md "Audit before you split or clean up"). Before moving anything, find what in this file is
+   unnecessary: exports nothing imports (search the whole repo, including tests, scripts, e2e and configs), private
+   functions nothing calls, code for removed features. Remove only what is proven unused, and start your report with a
+   "Removed as unused" section listing each item with its proof (the search and its empty result). Anything used only
+   by tests, loaded dynamically or named in a config stays: list it under "Kept". Then split what remains.
 1. Read the file and `docs/CODEMAP.md`. Start your report with the planned split (which parts go where).
 2. Split by area of the screen into stylesheets imported from the original file (which becomes a list of `@import`s in the original rule order), so callers keep importing the same file. Keep every selector, value and media query exactly; the order of the rules must not change.
 3. Every new file is at or under 450 lines, and so is what stays in the original. Remove the original's entry from
@@ -15,7 +20,7 @@ limit (AGENTS.md "File size and the code map"). Split it into files of at most 4
 `pnpm check`, `pnpm test` for the whole repo, or e2e: the lead runs those. Call tools only through the tool interface.
 
 ## Rules
-Follow AGENTS.md. A split moves code only: no fixes or refactors (note anything you'd change in the report). No new
+Follow AGENTS.md. Apart from the audited removals, a split moves code only: no fixes or refactors (note anything you'd change in the report). No new
 dependencies; don't edit docs/API-CONTRACT.md or docs/ARCHITECTURE.md; don't commit. Never run pkill/killall, never
 touch ports 8740/8741, never read ~/.hermes or ~/.score, never git stash.
 
