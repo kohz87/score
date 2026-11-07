@@ -423,10 +423,12 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+- `apps/server/test/hub/` — ingest test suites split by commit, listeners, snapshot, lifecycle, checkpoints, sync safety and projection order, plus their shared harness.
 
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
+- `apps/server/test/hub/ingest-helpers.ts` — shared ingest test harness: temp database, migrations, ingest setup and teardown, event and observation factories, row readers and second connections.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
