@@ -1,0 +1,104 @@
+@media (max-width: 860px) {
+  [data-ui='bold'] .grid2,
+  [data-ui='bold'] .grid3,
+  [data-ui='bold'] .grid4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .span2 {
+    grid-column: auto;
+  }
+
+  [data-ui='bold'] .bold-team .pagehead {
+    align-items: center;
+  }
+
+  [data-ui='bold'] .bold-team .pagehead .big {
+    font-size: 28px;
+    letter-spacing: -0.03em;
+  }
+
+  [data-ui='bold'] .bold-team-grid {
+    gap: calc(10px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-team-grid .agentcard {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 2px calc(14px * var(--bold-d, 1));
+    border-radius: calc(22px * var(--bold-r, 1));
+    padding: calc(14px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-agentcard-top {
+    display: contents;
+  }
+
+  [data-ui='bold'] .bold-agentcard-top > .agent-glyph,
+  [data-ui='bold'] .bold-agentcard-glow {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  [data-ui='bold'] .bold-agentcard-name {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  [data-ui='bold'] .bold-agentcard-name a {
+    font-size: 19px;
+  }
+
+  [data-ui='bold'] .bold-agentcard-state {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 0.87em;
+  }
+
+  [data-ui='bold'] .bold-agentcard-engine,
+  [data-ui='bold'] .bold-glimpse {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-agentcard-actions {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    margin: 0;
+    padding: 0;
+    flex-wrap: nowrap;
+  }
+
+  [data-ui='bold'] .bold-agentcard-actions .btn:not(.primary) {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-pause {
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(12px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-pause .btn {
+    width: 100%;
+  }
+
+  [data-ui='bold'] .bold-agent .pagehead .big {
+    font-size: 34px;
+  }
+
+  [data-ui='bold'] .bold-agent-role {
+    flex-basis: 100%;
+  }
+
+  [data-ui='bold'] .bold-agent-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  [data-ui='bold'] .bold-agent-actions .btn {
+    flex: 1 1 auto;
+  }
+}

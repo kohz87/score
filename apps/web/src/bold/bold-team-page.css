@@ -1,0 +1,196 @@
+[data-ui='bold'] .page {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20px * var(--bold-d, 1));
+  padding-top: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .pagehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .pagehead .big {
+  margin: 0;
+}
+
+/* A text link keeps its 32px touch height; its text sits on the row's bottom line like the "/" next to it (an anchor
+   would otherwise draw its text at the top of that box, higher than its neighbours). */
+[data-ui='bold'] .pagehead > .link {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+[data-ui='bold'] .big {
+  font-family: var(--font-d);
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+[data-ui='bold'] .grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .span2 {
+  grid-column: span 2;
+}
+
+[data-ui='bold'] .card {
+  background: var(--panel);
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .btn.primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .btn.ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .btn.danger {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bad);
+  color: var(--bad);
+}
+
+[data-ui='bold'] .btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+[data-ui='bold'] .link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 32px;
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .chip {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-size: 0.87em;
+  font-weight: 700;
+  background: var(--panel);
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .chip.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+[data-ui='bold'] .field {
+  background: var(--field);
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  min-height: 46px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  width: 100%;
+}
+
+[data-ui='bold'] textarea.field {
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  resize: vertical;
+  min-height: 90px;
+}
+
+[data-ui='bold'] .lab {
+  font-size: 0.87em;
+  font-weight: 600;
+  color: var(--muted);
+  display: block;
+}
+
+[data-ui='bold'] .check {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  min-height: 44px;
+}
+
+[data-ui='bold'] .check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+[data-ui='bold'] .seg {
+  display: inline-flex;
+  gap: calc(4px * var(--bold-d, 1));
+  background: var(--field);
+  border-radius: 999px;
+  padding: calc(4px * var(--bold-d, 1));
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .seg button {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-weight: 700;
+  font-size: 0.87em;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .seg button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .listrow {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  background: var(--field);
+  border-radius: calc(14px * var(--bold-r, 1));
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  min-height: 44px;
+}
