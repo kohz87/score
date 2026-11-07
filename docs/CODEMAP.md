@@ -917,6 +917,12 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/settings-base.ts` — shared settings state, CLI reads and pooled credentials.
 - `apps/server/src/hermes/live/settings-providers.ts` — provider listing, sign-in, key and local-provider management.
 - `apps/server/src/hermes/live/settings-connections.ts` — tool server and messaging connections.
+- `apps/server/src/hermes/live/translate.ts` — Hermes run event translation facade and re-exports.
+- `apps/server/src/hermes/live/translate-types.ts` — run context, metrics and thinking-size types and constants.
+- `apps/server/src/hermes/live/translate-payloads.ts` — zod schemas for Hermes run event and approval payloads.
+- `apps/server/src/hermes/live/translate-runs.ts` — run rows, lifecycle, summaries and guarded updates.
+- `apps/server/src/hermes/live/translate-events.ts` — run SSE event translation into Score observations.
+- `apps/server/src/hermes/live/translate-observations.ts` — polled status, approval, lost and recovered run observations.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
 - `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.

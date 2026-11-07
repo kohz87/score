@@ -20,11 +20,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/live/translate.ts",
-    "lines": 641,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/live/updates.ts",
     "lines": 499,
     "reason": "split in CS.2 wave 1"
