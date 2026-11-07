@@ -368,7 +368,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner pass modules, runs and split view modules.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, ingest and retention.
-- `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs and run control.
+- `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs, run control, the demo timeline and team-room seed.
 - `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
 - `apps/server/src/http/` — API routes, one file per contract section.
@@ -636,6 +636,19 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/fake/fake-port-tasks.ts` — fake task board reads, writes and actions.
 - `apps/server/src/hermes/fake/fake-port-runs.ts` — fake run start, streaming, questions and transitions.
 - `apps/server/src/hermes/fake/fake-port-run-control.ts` — stop, MCP, bot screen, rewind, compaction, context and decisions.
+- `apps/server/src/hermes/fake/scenario.ts` — public demo-timeline export facade and scenario composer.
+- `apps/server/src/hermes/fake/scenario-types.ts` — scenario step event union.
+- `apps/server/src/hermes/fake/scenario-fixtures.ts` — example agents, status, runs and scenario duration.
+- `apps/server/src/hermes/fake/scenario-context.ts` — shared ids, timestamps, task, run and approval state for scenario segments.
+- `apps/server/src/hermes/fake/scenario-main-steps.ts` — core demo-timeline events, approvals, frames and run transitions.
+- `apps/server/src/hermes/fake/scenario-review-steps.ts` — review pass, room activity and interleaved run updates.
+- `apps/server/src/hermes/fake/scenario-brief-steps.ts` — brief, plan and build-to-review handoff events.
+- `apps/server/src/hermes/fake/scenario-docs-steps.ts` — secondary docs task and its approval events.
+- `apps/server/src/hermes/fake/team-seed.ts` — public team-room seed facade and idempotent startup orchestration.
+- `apps/server/src/hermes/fake/team-seed-helpers.ts` — seed timestamps, message/read helpers and turn/action plumbing.
+- `apps/server/src/hermes/fake/team-seed-chats.ts` — direct rooms and seeded one-to-one chat histories.
+- `apps/server/src/hermes/fake/team-seed-activity-feed.ts` — activity-feed job turns, workbench frames and package approval.
+- `apps/server/src/hermes/fake/team-seed-jobs.ts` — release-notes, queue-research and pinned-decision seed data.
 - `apps/server/src/knowledge/documents.ts` — public document upload facade; composition of the document modules.
 - `apps/server/src/knowledge/knowledge-document-model.ts` — document row schemas, prepared/unpacked types and shared path/name helpers.
 - `apps/server/src/knowledge/knowledge-document-index.ts` — document rows, reads, search and index maintenance.
