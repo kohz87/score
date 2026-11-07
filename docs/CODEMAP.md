@@ -34,7 +34,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/web/src/` — SPA bootstrap, root router and the classic/bold shell choice.
-- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles.
+- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, recipe test suites and other bold-only styles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
@@ -93,6 +93,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-responsive.css` — laptop, phone and tablet shell, room layout and touch targets.
 - `apps/web/src/bold/bold-notices.css` — fence and update notices, project and archive surfaces, and the classic primary-button fix.
 - `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
+- `apps/web/src/bold/BoldRecipes-helpers.tsx` — shared fetch setup, mount and fixtures helpers for the Recipes test suites.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.
 - `apps/web/src/bold/BoldRecipeEditor.tsx` — recipe editor composition and export dialog.
 - `apps/web/src/bold/BoldRecipeEditorHeader.tsx` — recipe name, view tabs, preview, save and More menu.
