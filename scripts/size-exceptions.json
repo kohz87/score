@@ -100,11 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/knowledge/audit3-bb.test.ts",
-    "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/mcp/mcp.test.ts",
     "lines": 719,
     "reason": "split in CS.2 wave 1"

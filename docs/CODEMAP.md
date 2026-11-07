@@ -351,6 +351,7 @@ likely to be the entry point for a change.
 - `apps/server/src/installation-confirm.ts` — confirmed moves and confirmed copies.
 - `apps/server/src/installation-restore.ts` — restore-marker and restored-home registry lookups.
 - `apps/server/test/terminal-helpers.ts` — shared TLS app setup, pairing, ticket, WebSocket, cleanup and process-exit harness for the terminal tests.
+- `apps/server/test/knowledge/audit3-bb-helpers.ts` — shared cleanup, scratch-directory, read and restart helpers for the feature-split audit3-bb rename and recovery suites.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
