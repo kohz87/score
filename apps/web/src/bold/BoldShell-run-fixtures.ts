@@ -1,0 +1,50 @@
+// 3.23.0: a topic that holds a run shows its card, a Graph tab and the graph; `?run=` lands there.
+export const runTopic = {
+  id: 'job-run',
+  title: 'Review and ship',
+  state: 'working' as const,
+  isDefault: false,
+  recipe: { kind: 'orchestration' as const, ref: 'orch-1' },
+}
+export const runSummary = {
+  id: 'orch-1',
+  title: 'Review and ship',
+  status: 'running',
+  pauseReason: null,
+  leadAgentId: 'lead',
+  roomId: 'team-room',
+  briefId: 'brief-1',
+  gatePolicy: 'lead-asks',
+  revision: 1,
+  ownership: 'owned',
+  steps: { total: 4, active: 1, succeeded: 2, failed: 0 },
+  leadTurnsUsed: 1,
+  maxLeadTurns: 8,
+  needsYou: [],
+  createdAt: '2026-10-24T09:00:00.000Z',
+  updatedAt: '2026-10-24T10:00:00.000Z',
+  endedAt: null,
+}
+export const fullTopic = (job: typeof runTopic) => ({
+  roomId: 'team-room',
+  holderAgentId: 'lead',
+  exchangeBudget: 8,
+  jobTurnLimit: 40,
+  unread: 0,
+  activeAgents: [],
+  lastMessageAt: null,
+  messageCount: 0,
+  summary: null,
+  source: null,
+  reportBack: null,
+  spendCapUsd: null,
+  createdAt: '2026-10-24T09:00:00.000Z',
+  updatedAt: '2026-10-24T09:00:00.000Z',
+  ...job,
+})
+export const plainTopic = {
+  id: 'job-plain',
+  title: 'Plain',
+  state: 'working' as const,
+  isDefault: false,
+}

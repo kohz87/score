@@ -83,6 +83,9 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
+- `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
+- `apps/web/src/bold/BoldShell-helpers.tsx` — shared bold shell test harness: state, fetch fixtures, router render and cleanup.
+- `apps/web/src/bold/BoldShell-run-fixtures.ts` — shared run topic and run summary fixtures for the bold shell suites.
 - `apps/web/src/bold/bold.css` — bold shell style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-base.css` — scoped resets, shared utilities and the button and icon controls.
 - `apps/web/src/bold/bold-topbar.css` — top bar, section links, wordmark, navigation, dock, search and avatar.

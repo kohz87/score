@@ -545,11 +545,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldShell.test.tsx",
-    "lines": 1207,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldShell.tsx",
     "lines": 530,
     "reason": "split in CS.2 wave 1"
