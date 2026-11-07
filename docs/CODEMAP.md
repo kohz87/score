@@ -402,6 +402,16 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
 - `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
+## apps/server/test
+
+### Folders
+
+- `apps/server/test/hermes/live/gateway/` — fake-gateway and live gateway tests, including the feature-split translate suites.
+
+### Key files
+
+- `apps/server/test/hermes/live/gateway/translate-helpers.ts` — shared setup, admitted run and room-reply fixtures for the translate suites.
+
 ## packages/contract/src
 
 ### Folders
