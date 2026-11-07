@@ -2,7 +2,7 @@ import type * as contract from '../src/index.ts'
 import { ORCH_ACKNOWLEDGEMENT_TEXT } from '../src/index.ts'
 import * as f from './fixtures.ts'
 
-// Valid and invalid fixtures for contract §15 (schemas.test.ts requires a pair for every exported schema).
+// Valid and invalid fixtures for contract §15 (schemas-coverage.test.ts requires a pair for every exported schema).
 
 const at = f.at
 const policyId = 'a'.repeat(64)

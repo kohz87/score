@@ -355,6 +355,42 @@ likely to be the entry point for a change.
 - `packages/contract/src/workflows.ts` — workflow schemas and types.
 - `packages/contract/src/themes.ts` — theme schemas and types.
 
+## packages/contract/test
+
+### Folders
+
+- `packages/contract/test/` — Vitest contract specs with schema cases and fixtures split by feature.
+
+### Key files
+
+- `packages/contract/test/schemas-helpers.ts` — shared schema fixtures and case data.
+- `packages/contract/test/schemas-cases.ts` — all cases, aggregated for the exported-schema coverage check.
+- `packages/contract/test/schemas-coverage.test.ts` — the exported-schema coverage check.
+- `packages/contract/test/schemas-cases-agents.ts` — agent, profile, room, chat and session cases.
+- `packages/contract/test/schemas-agents.test.ts` — agent, profile, room, chat and session schema tests.
+- `packages/contract/test/schemas-cases-now-tasks.ts` — Now, tasks, questions, approvals and attempts cases.
+- `packages/contract/test/schemas-now-tasks.test.ts` — Now, tasks, questions, approvals and attempts schema tests.
+- `packages/contract/test/schemas-cases-watch-stream.ts` — Watch, stream and bridge cases.
+- `packages/contract/test/schemas-watch-stream.test.ts` — Watch, stream and bridge schema tests.
+- `packages/contract/test/schemas-cases-security-settings.ts` — security, terminal, providers, connections, rules, skills and channels cases.
+- `packages/contract/test/schemas-security-settings.test.ts` — security, terminal, providers, connections, rules, skills and channels schema tests.
+- `packages/contract/test/schemas-cases-workspaces.ts` — shared workspaces, workbench and workspace files cases.
+- `packages/contract/test/schemas-workspaces.test.ts` — shared workspaces, workbench and workspace files schema tests.
+- `packages/contract/test/schemas-cases-knowledge.ts` — Knowledge notes, documents, history and bridge cases.
+- `packages/contract/test/schemas-knowledge.test.ts` — Knowledge notes, documents, history and bridge schema tests.
+- `packages/contract/test/schemas-cases-orchestration.ts` — orchestration, MCP and workflow cases.
+- `packages/contract/test/schemas-orchestration.test.ts` — orchestration, MCP and workflow schema tests.
+- `packages/contract/test/schemas-cases-model-config.ts` — model settings, agent history and config cases.
+- `packages/contract/test/schemas-model-config.test.ts` — model settings, agent history and config schema tests.
+- `packages/contract/test/schemas-cases-maintenance.ts` — Hermes updates, plugins, rewind and compaction cases.
+- `packages/contract/test/schemas-maintenance.test.ts` — Hermes updates, plugins, rewind and compaction schema tests.
+- `packages/contract/test/schemas-cases-coding.ts` — coding runtimes, quotas, agents and models cases.
+- `packages/contract/test/schemas-coding.test.ts` — coding runtimes, quotas, agents and models schema tests.
+- `packages/contract/test/schemas-cases-themes.ts` — theme manifests, saves and look settings cases.
+- `packages/contract/test/schemas-themes.test.ts` — theme manifests, saves, protected labels and look settings schema tests.
+- `packages/contract/test/schemas-cases-exchanges.ts` — jobs, exchanges, triggers and queues cases.
+- `packages/contract/test/schemas-exchanges.test.ts` — jobs, exchanges, triggers and queues schema tests.
+
 ## hermes-plugin/score_bridge
 
 ### Folders

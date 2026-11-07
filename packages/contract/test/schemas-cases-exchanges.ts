@@ -1,0 +1,177 @@
+import * as f from './fixtures.ts'
+import { exchange, job, xtc } from './schemas-helpers.ts'
+
+// PLAN 11.1b: jobs, exchanges and agent actions.
+export const exchangeCases = [
+  ['ExchangeActionKindSchema', 'send_back', 'merge'],
+  [
+    'ExchangeActionSchema',
+    { action: 'review', to: 'reviewer', note: 'Check the cursor' },
+    { action: 'approve', note: 'ok', extra: 1 },
+  ],
+  [
+    'BridgeExchangeActionRequestSchema',
+    { capability: xtc, commandId: 'c-1', action: { action: 'reply', text: 'Yes' } },
+    { capability: 'orc_short', commandId: 'c-1', action: { action: 'reply', text: 'Yes' } },
+  ],
+  [
+    'ExchangeReceiptSchema',
+    { status: 'staged', commandId: 'c-1', action: 'handoff', message: 'Will go to builder' },
+    { status: 'applied', commandId: 'c-1', action: 'handoff', message: 'x' },
+  ],
+  ['JobSchema', job, { ...job, state: 'paused' }],
+  ['ExchangeKindSchema', 'ask', 'approve'],
+  ['ExchangeStateSchema', 'paused_budget', 'paused'],
+  ['ExchangeSchema', exchange, { ...exchange, round: 0 }],
+  ['JobsResponseSchema', { asOfSeq: 1, items: [job] }, { items: [job] }],
+  [
+    'TasksSnapshotSchema',
+    { asOfSeq: 1, columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] } },
+    { asOfSeq: 1, columns: { someday: [] } },
+  ],
+  ['JobRenameRequestSchema', { title: 'Release notes 2.5' }, { title: '   ' }],
+  ['JobDeletedSchema', { id: 'job_1', roomId: 'room-team' }, { id: '' }],
+  ['JobCreateRequestSchema', { title: 'Release notes' }, { title: '  ' }],
+  ['ExchangesResponseSchema', { asOfSeq: 1, items: [exchange] }, { asOfSeq: 1, items: [job] }],
+  ['ExchangePauseReasonSchema', 'asker_gone', 'tired'],
+  [
+    'TeamRoomResponseSchema',
+    { asOfSeq: 1, room: f.room, jobs: [job] },
+    { asOfSeq: 1, jobs: [job] },
+  ],
+  ['DirectChatsResponseSchema', { asOfSeq: 1, room: null, chats: [] }, { asOfSeq: 1, chats: [] }],
+  ['ChatCreateRequestSchema', { title: 'Websockets or SSE' }, { title: '' }],
+  ['ShareToJobRequestSchema', { jobId: 'job_1' }, { jobId: '' }],
+  [
+    'RoomPinSchema',
+    { messageId: 'm1', text: 'Cursor is (created_at, id).', pinnedAt: '2026-10-24T00:00:00.000Z' },
+    { messageId: 'm1' },
+  ],
+  ['RoomPinsResponseSchema', { items: [] }, { items: [{}] }],
+  ['RoomPinsChangedSchema', { roomId: 'r1' }, {}],
+  ['TriggerMappingSchema', { ref: 'ticket.id', title: 'ticket.title' }, { ref: 'ticket..id' }],
+  [
+    'ReportBackSchema',
+    { mode: 'fixed', tool: 'add_comment', args: '{"id":"{{source.ref}}"}' },
+    { mode: 'fixed' },
+  ],
+  [
+    'TriggerSchema',
+    {
+      id: 'trg_1',
+      name: 'New ticket',
+      app: 'Tickets app',
+      mapping: { ref: 'ticket.id' },
+      template: 'Fix {{ticket.title}}',
+      reportBack: { mode: 'off' },
+      url: null,
+      sample: null,
+      lastCalledAt: null,
+      createdAt: '2026-10-24T00:00:00.000Z',
+      teamRoomId: null,
+    },
+    { id: 'trg_1' },
+  ],
+  [
+    'TriggerCreateRequestSchema',
+    { name: 'x', app: 'y', mapping: { ref: 'a' }, template: 'z', reportBack: { mode: 'off' } },
+    { name: 'x' },
+  ],
+  ['TriggerUpdateRequestSchema', { name: 'Renamed' }, { other: 1 }],
+  ['TriggerSecretSchema', { secret: 'whsec_AAAA' }, { secret: 'plain' }],
+  [
+    'TriggerCreatedSchema',
+    {
+      trigger: {
+        id: 'trg_1',
+        name: 'New ticket',
+        app: 'Tickets app',
+        mapping: { ref: 'ticket.id' },
+        template: 'Fix it',
+        reportBack: { mode: 'off' },
+        url: null,
+        sample: null,
+        lastCalledAt: null,
+        createdAt: '2026-10-24T00:00:00.000Z',
+        teamRoomId: null,
+      },
+      secret: 'whsec_AAAA',
+    },
+    { secret: 's' },
+  ],
+  ['TriggersResponseSchema', { items: [] }, { items: [{}] }],
+  [
+    'JobSourceSchema',
+    { app: 'Tickets', ref: 'TCK-1', title: null, link: null, triggerId: 'trg_1', missing: [] },
+    { app: 'Tickets' },
+  ],
+  // 3.28.0: a trigger call waiting for its team room's job (Next up), its list, and the 409 job_running details.
+  [
+    'QueueItemSchema',
+    {
+      id: 'q_1',
+      roomId: 'team',
+      title: 'TCK-1 · Login fails',
+      source: { app: 'Tickets', ref: 'TCK-1', title: 'Login fails', triggerId: 'trg_1' },
+      createdAt: '2026-11-04T09:00:00.000Z',
+    },
+    { id: 'q_1', roomId: 'team', title: 'x', source: { app: 'Tickets' }, createdAt: 'yesterday' },
+  ],
+  [
+    'RoomQueueResponseSchema',
+    {
+      asOfSeq: 3,
+      items: [
+        {
+          id: 'q_1',
+          roomId: 'team',
+          title: 'TCK-1 · Login fails',
+          source: { app: 'Tickets', ref: 'TCK-1', title: 'Login fails', triggerId: 'trg_1' },
+          createdAt: '2026-11-04T09:00:00.000Z',
+        },
+      ],
+    },
+    { asOfSeq: -1, items: [] },
+  ],
+  [
+    'JobRunningDetailsSchema',
+    { jobId: 'job_1', title: 'Ship the feed' },
+    { jobId: '', title: 'x' },
+  ],
+  [
+    'JobReportBackSchema',
+    { state: 'confirmed', tool: 'add_comment', at: null },
+    { state: 'done', tool: null, at: null },
+  ],
+  [
+    'ResultChangeLineSchema',
+    { text: 'Approved by reviewer', by: 'reviewer', caught: false },
+    { text: 'x' },
+  ],
+  [
+    'ResultCardSchema',
+    {
+      kind: 'preview',
+      id: 'p1',
+      agentId: 'builder',
+      url: 'http://localhost:5173',
+      title: null,
+      imageUrl: null,
+      live: true,
+      at: '2026-10-24T00:00:00.000Z',
+    },
+    { kind: 'code', id: 'x' },
+  ],
+  [
+    'JobResultsSchema',
+    { asOfSeq: 1, items: [], screens: [] },
+    { asOfSeq: 1, items: [{ kind: 'draft' }], screens: [] },
+  ],
+  ['ExchangeOptionSchema', 'answer_to_lead', 'shrug'],
+  [
+    'ExchangeDecisionRequestSchema',
+    { option: 'more_turns', turns: 4 },
+    { option: 'more_turns', turns: 50 },
+  ],
+  ['JobRecipeSchema', { kind: 'workflow', ref: 'run_1' }, { kind: 'routine', ref: 'r' }],
+] as const
