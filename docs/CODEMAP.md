@@ -119,7 +119,7 @@ likely to be the entry point for a change.
 - `apps/server/src/media/` — upload storage, multipart parsing and type sniffing.
 - `apps/server/src/runtimes/` — agent runtime implementations.
 - `apps/server/src/runtimes/check/` — spawn-based check command runner.
-- `apps/server/src/runtimes/coding/` — coding-agent drivers, process supervisor, units and quotas.
+- `apps/server/src/runtimes/coding/` — coding-agent drivers, process supervisor, units, quotas and the split coding runtime service.
 - `apps/server/src/shares/` — public share pages, markdown and rate limits.
 - `apps/server/src/terminal/` — PTY terminal manager, tickets and environment.
 - `apps/server/src/themes/` — theme packages, built-ins, CSS validation and storage.
@@ -148,7 +148,19 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
 - `apps/server/src/hermes/fake/fake-port.ts` — fake Hermes adapter.
 - `apps/server/src/knowledge/vault.ts` — knowledge vault operations.
-- `apps/server/src/runtimes/coding/service.ts` — coding runtime service.
+- `apps/server/src/runtimes/coding/service.ts` — public coding runtime import path and re-export facade.
+- `apps/server/src/runtimes/coding/service-types.ts` — coding runtime dependencies, run/attempt types, row schemas and shared helpers.
+- `apps/server/src/runtimes/coding/service-base.ts` — shared runtime state, backend status, accessors and shutdown assertion.
+- `apps/server/src/runtimes/coding/service-cli.ts` — CLI refusal, version/help checks and policy deny lists.
+- `apps/server/src/runtimes/coding/service-processes.ts` — process/member records, reaping, held groups and release.
+- `apps/server/src/runtimes/coding/service-views.ts` — agent views/details, quota readings and model listings.
+- `apps/server/src/runtimes/coding/service-workers.ts` — coding-worker facts, reports and policy checks.
+- `apps/server/src/runtimes/coding/service-delivery.ts` — durable terminal-result delivery and retry.
+- `apps/server/src/runtimes/coding/service-launch.ts` — room/job helpers, run wrapper and unit/process launch attempts.
+- `apps/server/src/runtimes/coding/service-execution.ts` — the per-turn preparation, attempt loop and terminal decision.
+- `apps/server/src/runtimes/coding/service-admission.ts` — idempotent run admission and unresolved-run checks.
+- `apps/server/src/runtimes/coding/service-stops.ts` — Stop controls for live, recorded and queued runs.
+- `apps/server/src/runtimes/coding/service-recovery.ts` — restart recovery, shutdown and the final `CodingRuntime` class.
 - `apps/server/src/runtimes/coding/units.ts` — coding unit lifecycle.
 
 ## packages/contract/src
