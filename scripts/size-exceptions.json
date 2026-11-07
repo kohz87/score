@@ -540,16 +540,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/jobmap/jobmap.css",
-    "lines": 459,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/jobmap/JobMap.tsx",
-    "lines": 481,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/recipe-model.test.ts",
     "lines": 598,
     "reason": "split in CS.2 wave 1"

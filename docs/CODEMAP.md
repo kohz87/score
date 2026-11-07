@@ -42,7 +42,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
-- `apps/web/src/bold/jobmap/` — job map and step graph for a running job.
+- `apps/web/src/bold/jobmap/` — job map graph, worker nodes and split map styles for a running job.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
@@ -173,6 +173,15 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/chats-conversation.css` — topic divider, system line, composer palette, context bar, side tabs and top-bar links.
 - `apps/web/src/bold/chats/chats-topic.css` — This topic, context details, Graph tab, phone chat menu and phone topic targets.
 - `apps/web/src/bold/chats/chats-files.css` — Info files rows and the viewer sheet.
+- `apps/web/src/bold/jobmap/JobMap.tsx` — job-map public entry, loaded-data graph view and live-job wrapper.
+- `apps/web/src/bold/jobmap/WorkerBox.tsx` — worker layer node with its coding program, recent step chips and advisor asks.
+- `apps/web/src/bold/jobmap/Node.tsx` — selectable job-map layer node shell with pressed and pulse states.
+- `apps/web/src/bold/jobmap/Line.tsx` — connector line and moving dot between job-map layers.
+- `apps/web/src/bold/jobmap/Pill.tsx` — toned step and status pill.
+- `apps/web/src/bold/jobmap/jobmap.css` — job-map style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/jobmap/jobmap-base.css` — job-map shell, layer nodes, text blocks, advisor marks and pills.
+- `apps/web/src/bold/jobmap/jobmap-layers.css` — vote rows, swarm and worker layout, stop rows and check lines.
+- `apps/web/src/bold/jobmap/jobmap-lines-log.css` — connector lines and dots, session log, phone layout and motion.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/BoldTeamRoom-helpers.tsx` — shared fixtures, setup and DOM probes for the split BoldTeamRoom tests.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
