@@ -1179,6 +1179,7 @@ likely to be the entry point for a change.
 - `hermes-plugin/score_bridge/client.py` — HTTP client for Score.
 - `hermes-plugin/score_bridge/spool.py` — bounded on-disk spool for failed delivery.
 - `hermes-plugin/score_bridge/hermes_private.py` — the only calls into private Hermes functions.
+- `hermes-plugin/tests/` — pytest suite for the plugin; `conftest.py` holds fixtures shared by the split review-regression tests.
 - `hermes-plugin/score_bridge/approvals.py` — gateway approval handling.
 - `hermes-plugin/score_bridge/decisions.py` — decision delivery.
 - `hermes-plugin/score_bridge/redact.py` — redaction before anything leaves a hook.
