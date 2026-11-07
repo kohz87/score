@@ -1138,7 +1138,9 @@ likely to be the entry point for a change.
 ### Key files
 
 - `hermes-plugin/score_bridge/__init__.py` — plugin entry and Hermes hook registration.
-- `hermes-plugin/score_bridge/sender.py` — event batching and delivery.
+- `hermes-plugin/score_bridge/sender.py` — event batching, persistence and delivery.
+- `hermes-plugin/score_bridge/sender_capture.py` — bounded hook preparation: Watch capture, screenshot paths and argument digests.
+- `hermes-plugin/score_bridge/sender_queue.py` — bounded hook admission queue and loss accounting.
 - `hermes-plugin/score_bridge/client.py` — HTTP client for Score.
 - `hermes-plugin/score_bridge/spool.py` — bounded on-disk spool for failed delivery.
 - `hermes-plugin/score_bridge/hermes_private.py` — the only calls into private Hermes functions.

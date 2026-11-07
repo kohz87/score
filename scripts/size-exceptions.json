@@ -65,11 +65,6 @@
     "reason": "AGENTS.md D2.1: every call into private Hermes functions lives in this one file and nowhere else (kept whole, decision 172)"
   },
   {
-    "path": "hermes-plugin/score_bridge/sender.py",
-    "lines": 525,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "hermes-plugin/score_bridge/spool.py",
     "lines": 508,
     "reason": "split in CS.2 wave 1"
