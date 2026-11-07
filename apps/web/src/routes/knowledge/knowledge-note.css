@@ -1,0 +1,152 @@
+/* Tree and lists */
+.kn-note ul,
+.kn-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Note */
+.kn-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 290px);
+  gap: var(--space-5);
+  align-items: start;
+}
+.kn-note-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.kn-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kn-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kn-banner {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-14);
+  background: var(--subtle);
+  font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.kn-banner.is-warn {
+  background: var(--agent-saffron-tint);
+  color: var(--ink);
+}
+.kn-banner p {
+  margin: 0;
+}
+.kn-banner > div {
+  flex-basis: 100%;
+}
+.kn-note-main > .kn-banner {
+  margin: 0;
+}
+.kn-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.kn-edit-area {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  padding: var(--space-3) var(--space-4);
+  min-height: 320px;
+  background: var(--card);
+}
+.kn-editor-host {
+  min-height: 300px;
+}
+.kn-side a {
+  color: var(--ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.kn-missing {
+  color: var(--agent-coral-text);
+  text-decoration: underline dashed;
+}
+
+/* Side panels */
+.kn-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.kn-panel {
+  padding: 14px var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--card);
+  font-size: 14px;
+}
+.kn-panel li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.kn-props {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.kn-props dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.kn-props dd {
+  margin: 0;
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.kn-history-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 0;
+}
+.kn-history-list li[aria-current='true'] button {
+  font-weight: 700 !important;
+}
+.kn-version {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.kn-version-body,
+.kn-diff {
+  margin: 0;
+  padding: 10px;
+  max-height: 260px;
+  overflow: auto;
+  background: var(--subtle);
+  border-radius: var(--radius-14);
+  font-family: var(--font-code);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.kn-empty {
+  padding: var(--space-6) var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.kn-empty p {
+  margin: 0;
+}

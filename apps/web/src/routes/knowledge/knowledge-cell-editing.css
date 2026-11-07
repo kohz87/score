@@ -1,0 +1,46 @@
+.kn-version-body {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  padding: var(--space-1) 10px;
+}
+.kn-version-body .kn-editor-host,
+.kn-version-body .kn-editor-host .cm-editor {
+  min-height: 0;
+}
+
+/* Table cells are edited in place (PLAN 6.8): focus is a subtle ring, not the ink of primary actions */
+.cm-lp-cell:empty::before {
+  content: '\200b';
+}
+.cm-lp-table .cm-lp-cell:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+.cm-lp-table .cm-lp-cell:has(.cm-lp-cell-input) {
+  padding: 0;
+}
+.kn-main .cm-lp-cell-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: inherit;
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+/* The editor's own focus outline (from the shared theme) is ink; here it is a quiet ring. */
+.kn-editor-host .cm-editor.cm-focused {
+  outline: 2px solid var(--line-strong);
+  outline-offset: 2px;
+}

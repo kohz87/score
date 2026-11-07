@@ -139,6 +139,17 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/chat-theme.css` — theme overrides for room and message presentation.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
+- `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.
+- `apps/web/src/routes/knowledge/knowledge-shell.css` — left tree/main card shells, headings, shared controls and actions.
+- `apps/web/src/routes/knowledge/knowledge-note.css` — tree/list, note workspace and side-panel props/history.
+- `apps/web/src/routes/knowledge/knowledge-dialogs.css` — dialog frame/form layout and Settings › Knowledge rows.
+- `apps/web/src/routes/knowledge/knowledge-editor-frame.css` — CodeMirror host sizing and responsive page layout.
+- `apps/web/src/routes/knowledge/knowledge-editor-preview.css` — live-preview typography, markdown widgets, rendered tables and resizers.
+- `apps/web/src/routes/knowledge/knowledge-files.css` — file manager, document view, file tables and upload dialogs.
+- `apps/web/src/routes/knowledge/knowledge-toolbar.css` — Source toggle and editor toolbar controls.
+- `apps/web/src/routes/knowledge/knowledge-images.css` — embedded image rendering, alt editing and source chips.
+- `apps/web/src/routes/knowledge/knowledge-cell-editing.css` — version-body sizing, in-place table-cell editing and editor focus.
+- `apps/web/src/routes/knowledge/knowledge-upload.css` — upload progress card.
 - `apps/web/src/routes/watch/watch-model.ts` — watch timeline and replay model.
 - `apps/web/src/themes/guard.ts` — protected-surface and theme guard.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.

@@ -1,0 +1,48 @@
+/* Dialogs */
+.kn-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.kn-dialog {
+  width: min(480px, 100%);
+  padding: var(--space-6) 26px;
+  border-radius: var(--radius-card);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.kn-dialog h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+.kn-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.kn-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.kn-dialog p {
+  margin: 0;
+}
+
+/* Settings › Knowledge */
+.kn-settings dt {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.kn-settings code {
+  font-family: var(--font-code);
+  font-size: 13px;
+}
