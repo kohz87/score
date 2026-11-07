@@ -75,6 +75,18 @@ likely to be the entry point for a change.
 - `apps/web/src/main.tsx` — browser bootstrap: routers, providers, stream, theme and service worker.
 - `apps/web/src/App.tsx` — route table and classic/bold shell choice.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
+- `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
+- `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.
+- `apps/web/src/bold/BoldRecipeEditor.tsx` — recipe editor composition and export dialog.
+- `apps/web/src/bold/BoldRecipeEditorHeader.tsx` — recipe name, view tabs, preview, save and More menu.
+- `apps/web/src/bold/BoldRecipeEditorStatus.tsx` — problems, notices, conflicts, version-view note and delete-with-runs dialog.
+- `apps/web/src/bold/BoldRecipeWorkspace.tsx` — graph and text panels, recipe details and settings pane.
+- `apps/web/src/bold/BoldRecipeInspector.tsx` — selected graph node or text step settings.
+- `apps/web/src/bold/DeleteWithRunsDialog.tsx` — name-confirmed recipe and runs deletion dialog.
+- `apps/web/src/bold/bold-recipe-editor-model.ts` — editor props, problem types, deduplication and error copy.
+- `apps/web/src/bold/use-bold-recipe-editor-state.ts` — editor draft, queries, validation, history and derived state.
+- `apps/web/src/bold/use-bold-recipe-editor-focus.ts` — step focus, card focus and narrow-sheet behaviour.
+- `apps/web/src/bold/use-bold-recipe-editor-actions.ts` — recipe edits, save, version, archive and delete commands.
 - `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
