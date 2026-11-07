@@ -405,6 +405,20 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/journal-compaction.ts` — compaction planning and permanent tombstones.
 - `apps/server/src/domain/orchestration/journal-paths.ts` — journal file names and the size-alarm constant.
 - `apps/server/src/domain/exchanges/apply.ts` — applies accepted exchange results.
+- `apps/server/src/domain/message-runs.ts` — run domain facade re-exporting turn, stream, card, completion, context and failure modules.
+- `apps/server/src/domain/message-runs-turns.ts` — run schema, reservation, retry, cancellation and run-to-message attachment.
+- `apps/server/src/domain/message-runs-stream.ts` — streamed reply redaction holding, append and progress.
+- `apps/server/src/domain/message-runs-cards.ts` — approval, tool, reasoning and live activity message parts.
+- `apps/server/src/domain/message-runs-complete.ts` — reply completion, plans, hand-offs, summaries and exchange settlement.
+- `apps/server/src/domain/message-runs-context.ts` — room context input for a run.
+- `apps/server/src/domain/message-runs-failure.ts` — failed turn notices and exchange settlement.
+- `apps/server/src/domain/profiles.ts` — profile operations facade: class state, get and method installation.
+- `apps/server/src/domain/profiles-runtime.ts` — profile operation method runtime, public typing and installation.
+- `apps/server/src/domain/profiles-support.ts` — operation schemas, step lists, lifecycle helpers and retry rules.
+- `apps/server/src/domain/profiles-preview.ts` — create, delete and import previews with their hashes.
+- `apps/server/src/domain/profiles-begin.ts` — starting operations, imports and upload retention.
+- `apps/server/src/domain/profiles-controls.ts` — recovery, retry, confirm, refresh, delete safety and close.
+- `apps/server/src/domain/profiles-run.ts` — operation step execution, saving, rebaselining and retirement.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
