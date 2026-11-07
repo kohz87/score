@@ -160,11 +160,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/http/rooms.ts",
-    "lines": 1086,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/installation.ts",
     "lines": 697,
     "reason": "split in CS.2 wave 1"
