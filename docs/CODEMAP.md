@@ -322,6 +322,27 @@ likely to be the entry point for a change.
 - `apps/server/src/http/rooms/summary-routes.ts` — room summary generate, edit and delete routes.
 - `apps/server/src/http/rooms/version-routes.ts` — room version list and version-message reads.
 - `apps/server/src/http/stream.ts` — stream route.
+- `apps/server/src/domain/reports.ts` — public report facade for aggregation, range and row-read exports.
+- `apps/server/src/domain/reports-types.ts` — report fact, input, run, attempt, approval and window types.
+- `apps/server/src/domain/reports-time.ts` — local day keys, report ranges, day boundaries and custom-range checks.
+- `apps/server/src/domain/reports-metrics.ts` — cache rates, medians, interval math, waits, percentages and scalar aggregates.
+- `apps/server/src/domain/reports-compute.ts` — report aggregation over tasks, runs, attempts and approvals.
+- `apps/server/src/domain/reports-read.ts` — run, approval and attempt row reads with their schemas.
+- `apps/server/src/domain/rooms.ts` — public room and message facade for the split domain modules.
+- `apps/server/src/domain/rooms-rows.ts` — room and message row schemas, name tags, import metadata and row lookup.
+- `apps/server/src/domain/rooms-activity.ts` — compatibility state, stream/approval activity index, members and busy agents.
+- `apps/server/src/domain/rooms-read.ts` — room, room-list and room-id reads.
+- `apps/server/src/domain/rooms-write.ts` — room names, inserts, agent retirement and room-update events.
+- `apps/server/src/domain/rooms-events.ts` — changed-room detection and ingest-driven room updates.
+- `apps/server/src/domain/rooms-messages.ts` — message row mapping and store, update, delete and clear lifecycle.
+- `apps/server/src/domain/rooms-pages.ts` — message cursors, pages, unread-job reads and mark-read updates.
+- `apps/server/src/domain/watch-frames.ts` — public Watch frame facade for the split domain modules.
+- `apps/server/src/domain/watch-types.ts` — frame, tool input, watch info and replay page types.
+- `apps/server/src/domain/watch-sensitive.ts` — sensitive tool names and credential-file path detection.
+- `apps/server/src/domain/watch-output.ts` — output byte cap and UTF-8-safe tail clipping.
+- `apps/server/src/domain/watch-tool-frames.ts` — pure tool-hook frame derivation and captions.
+- `apps/server/src/domain/watch-store.ts` — redacted frame persistence, call keys and media references.
+- `apps/server/src/domain/watch-read.ts` — replay frame, marker and liveness reads.
 - `apps/server/src/domain/orchestration/executor.ts` — public Orchestrator facade, constructor state and re-exports.
 - `apps/server/src/domain/orchestration/executor-admission.ts` — choosing queued work and admitting runs.
 - `apps/server/src/domain/orchestration/executor-capacity.ts` — capacity and storage usage reads.
