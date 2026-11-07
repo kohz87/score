@@ -1197,6 +1197,12 @@ likely to be the entry point for a change.
 - `e2e/visual-fixtures-settings.ts` — provider, connection, plugin, rules and config-search fixtures.
 - `e2e/visual-fixtures-knowledge.ts` — knowledge info, tree, documents, notes, history and archive-preview fixtures.
 - `e2e/workflow-fixtures.ts` — workflow definitions and runs for e2e.
+- `e2e/workflow-fixtures.ts` — fixture barrel and fake API route map for workflows and runs.
+- `e2e/workflow-fixtures-helpers.ts` — shared workflow fixture factories.
+- `e2e/workflow-fixtures-definitions.ts` — workflow definitions, versions, details, validation and preflight fixtures.
+- `e2e/workflow-fixtures-runs.ts` — workflow run summary, snapshot and event fixtures.
+- `e2e/workflow-fixtures-coding.ts` — coding workflow team, definition, run and preflight fixtures.
+- `e2e/workflow-fixtures-graphs.ts` — routed failure, rejection and join workflow graph fixtures.
 - `e2e/locks.ts` — cross-worker test locks.
 - `e2e/global-teardown.ts` — shared fake-server teardown.
 - `e2e/now-fixture.ts` — deterministic clock fixture.

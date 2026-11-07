@@ -70,11 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "e2e/workflow-fixtures.ts",
-    "lines": 822,
-    "reason": "data list"
-  },
-  {
     "path": "hermes-plugin/score_bridge/hermes_private.py",
     "lines": 669,
     "reason": "split in CS.2 wave 1"
