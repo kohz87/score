@@ -495,11 +495,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/bold-team.test.tsx",
-    "lines": 1310,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/bold-workbench.css",
     "lines": 549,
     "reason": "split in CS.2 wave 1"
