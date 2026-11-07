@@ -429,6 +429,12 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/http/rooms-helpers.ts` — rooms test setup, contract schemas, writable fixture bindings and shared factories.
+- `apps/server/test/runtimes/` — runtime tests and recorded coding-driver fixtures, split by parser output, configuration, verdicts, loss handling and sub-agents.
+
+### Key files
+
+- `apps/server/test/runtimes/coding-fixtures.ts` — recorded coding-driver CLI fixture lines.
+- `apps/server/test/runtimes/coding-drivers-helpers.ts` — shared coding-driver test setup: fixture parsing, deny/base options, verdict extraction and Codex record factories.
 
 ## packages/contract/src
 
