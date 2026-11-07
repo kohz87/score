@@ -1,34 +1,33 @@
 import { createHmac } from 'node:crypto'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { makeTeam } from './one-job-helpers.ts'
-import { pair } from './pair.ts'
 
 // PLAN 11.9a: Connections, Tools and triggers, and Look under the bold tokens at both review sizes.
 
-const viewports = [
+export const viewports = [
   { width: 1440, height: 900, provider: 'openrouter', channel: 'discord' },
   { width: 390, height: 844, provider: 'local', channel: 'slack' },
 ] as const
 
-async function expectNoOverflow(page: Page, where: string) {
+export async function expectNoOverflow(page: Page, where: string) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   )
   expect(overflow, `${where} overflows horizontally`).toBeLessThanOrEqual(0)
 }
 
-async function expectReducedMotion(page: Page) {
+export async function expectReducedMotion(page: Page) {
   await expect(page.locator('html')).toHaveAttribute('data-liveliness', 'still')
 }
 
-async function openBoldSettings(page: Page, section: string) {
+export async function openBoldSettings(page: Page, section: string) {
   await page.goto('/?ui=bold')
   await expect(page).toHaveURL('/b')
   await page.goto(`/b/settings/${section}`)
   await expect(page.locator('[data-ui="bold"] .setgrid .setnav')).toBeVisible({ timeout: 20_000 })
 }
 
-async function connectProvider(page: Page, provider: 'openrouter' | 'local') {
+export async function connectProvider(page: Page, provider: 'openrouter' | 'local') {
   if (provider === 'openrouter') {
     const row = page.locator('[data-provider-id="openrouter"]')
     // The card shows a few providers first; the rest sit behind "Show all".
@@ -64,7 +63,7 @@ async function connectProvider(page: Page, provider: 'openrouter' | 'local') {
   await expect(page.getByText(name, { exact: true })).toBeVisible()
 }
 
-async function connectChannel(page: Page, platform: 'discord' | 'slack') {
+export async function connectChannel(page: Page, platform: 'discord' | 'slack') {
   const row = page.locator(`[data-channel="${platform}"]`)
   const label = platform === 'discord' ? 'Discord' : 'Slack'
   const connect = row.getByRole('button', { name: `Connect ${label}`, exact: true })
@@ -85,7 +84,7 @@ async function connectChannel(page: Page, platform: 'discord' | 'slack') {
   await expect(row).toContainText('Connected')
 }
 
-async function addToolServer(page: Page) {
+export async function addToolServer(page: Page) {
   const name = `tickets-${Date.now().toString(36)}`
   const form = page.getByRole('form', { name: 'Add a tool server' })
   await form.getByLabel('Name').fill(name)
@@ -121,7 +120,7 @@ async function callHook(page: Page, id: string, secret: string, body: string, we
 }
 
 // 3.28.0: the trigger starts its jobs in a team room of its own: the seeded one holds two, so its calls would only queue.
-async function addTriggerThroughFourSteps(page: Page) {
+export async function addTriggerThroughFourSteps(page: Page) {
   const team = await makeTeam(page, 'Tickets')
   const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`
   const name = `Support ticket ${tag}`
@@ -226,7 +225,7 @@ async function addTriggerThroughFourSteps(page: Page) {
   return { id: id!, secret, name, ref }
 }
 
-async function rotateTrigger(
+export async function rotateTrigger(
   page: Page,
   trigger: Awaited<ReturnType<typeof addTriggerThroughFourSteps>>,
 ) {
@@ -260,7 +259,7 @@ async function rotateTrigger(
   expect(newCall.status()).toBe(202) // the trigger's team still has its first job running: the call waits
 }
 
-async function mockSharedLook(page: Page) {
+export async function mockSharedLook(page: Page) {
   let shared = { active: 'score', mode: 'system' }
   await page.route('**/api/themes', async (route) => {
     // The page can go away while the request is in flight (a navigation, the test ending); Playwright then disposes
@@ -282,7 +281,7 @@ async function mockSharedLook(page: Page) {
   return () => shared
 }
 
-async function mockCurrency(page: Page) {
+export async function mockCurrency(page: Page) {
   let currency = { code: 'USD', rate: 1 }
   await page.route('**/api/settings/currency', async (route) => {
     const request = route.request()
@@ -292,7 +291,7 @@ async function mockCurrency(page: Page) {
   return () => currency
 }
 
-async function exerciseLook(page: Page, shared: () => { active: string; mode: string }) {
+export async function exerciseLook(page: Page, shared: () => { active: string; mode: string }) {
   await openBoldSettings(page, 'look')
   await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
   const shell = page.locator('[data-ui="bold"]')
@@ -367,109 +366,3 @@ async function exerciseLook(page: Page, shared: () => { active: string; mode: st
   await expectNoOverflow(page, 'Look')
   await expectReducedMotion(page)
 }
-
-test.describe('bold Connections, Tools and Look', () => {
-  test.use({ reducedMotion: 'reduce', colorScheme: 'dark' })
-
-  for (const viewport of viewports) {
-    test(`works at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
-      await page.setViewportSize(viewport)
-      const shared = await mockSharedLook(page)
-      const currency = await mockCurrency(page)
-      await pair(page)
-
-      await openBoldSettings(page, 'connections')
-      await expect(page.getByRole('heading', { name: 'Connections', exact: true })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Hermes', exact: true })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Model providers' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Your phone' })).toBeVisible()
-      await connectProvider(page, viewport.provider)
-      await connectChannel(page, viewport.channel)
-      await expectNoOverflow(page, 'Connections')
-      await expectReducedMotion(page)
-      await page.screenshot({
-        path: testInfo.outputPath(`bold-connections-${viewport.width}.png`),
-        fullPage: true,
-      })
-
-      await openBoldSettings(page, 'tools')
-      await expect(page.getByRole('heading', { name: 'Tools and triggers' })).toBeVisible()
-      await expect(page.getByText('files', { exact: true })).toBeVisible()
-      await addToolServer(page)
-      const trigger = await addTriggerThroughFourSteps(page)
-      await rotateTrigger(page, trigger)
-      const triggerCard = page.locator(`[data-trigger-id="${trigger.id}"]`)
-      await triggerCard.getByRole('button', { name: 'Edit' }).click()
-      const edit = page.getByRole('dialog', { name: 'Edit trigger' })
-      await expect(edit).toHaveAttribute('data-trigger-step', '3')
-      await expect(edit.locator('[data-payload-path="id"]')).toHaveCount(1)
-      await edit.getByRole('button', { name: 'Next' }).click()
-      await edit.getByLabel(/Post with a tool every time/).check()
-      await edit.getByLabel('Tool name').fill('add_comment')
-      await edit.getByLabel('Arguments template (JSON)').fill('{"id": "{{source.ref}}"}')
-      await edit.getByRole('button', { name: 'Save changes' }).click()
-      await expect(edit).toBeHidden()
-      await expect(triggerCard).toContainText('Reports back with add_comment.')
-      await expectNoOverflow(page, 'Tools and triggers')
-      await expectReducedMotion(page)
-      await page.screenshot({
-        path: testInfo.outputPath(`bold-tools-${viewport.width}.png`),
-        fullPage: true,
-      })
-      await triggerCard.getByRole('button', { name: 'Delete' }).click()
-      const remove = page.getByRole('alertdialog', { name: 'Delete this trigger?' })
-      await remove.getByRole('button', { name: 'Delete trigger' }).click()
-      await expect(triggerCard).toHaveCount(0)
-
-      await exerciseLook(page, shared)
-      await page.screenshot({
-        path: testInfo.outputPath(`bold-look-${viewport.width}.png`),
-        fullPage: true,
-      })
-
-      // The same pairing card under the bold tokens: the consent surface does not change.
-      await page.goto('/pair')
-      const frame = page.locator('.bold-pair-page')
-      await expect(frame).toBeVisible()
-      await expect(frame).toHaveAttribute('data-ui', 'bold')
-      await expect(page.getByRole('heading', { name: 'Pair this browser' })).toBeVisible()
-      await expect(page.getByText(/Open the pairing link printed/)).toBeVisible()
-      await expect(page.locator('.pair-card')).toHaveAttribute('data-protected', 'block')
-      await expectNoOverflow(page, 'pairing')
-      await page.screenshot({
-        path: testInfo.outputPath(`bold-pair-${viewport.width}.png`),
-        fullPage: true,
-      })
-
-      expect(currency()).toEqual({ code: 'EUR', rate: 0.92 })
-    })
-  }
-})
-
-test('closing a new trigger before it is saved offers to delete the live address', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await pair(page)
-  await openBoldSettings(page, 'tools')
-  const name = `Unfinished ${Date.now().toString(36)}`
-  await page.getByRole('button', { name: 'New trigger' }).click()
-  const dialog = page.getByRole('dialog', { name: 'New trigger' })
-  await dialog.getByLabel('Name').fill(name)
-  await dialog.getByLabel('App it comes from').fill('Tickets app')
-  await dialog.getByRole('button', { name: 'Create the address' }).click()
-  await dialog.getByRole('button', { name: 'Close secret' }).click()
-  await dialog.getByRole('button', { name: 'Finish later' }).click()
-  const confirm = page.getByRole('alertdialog', { name: 'Keep this unfinished trigger?' })
-  await expect(confirm).toContainText('already live')
-  await confirm.getByRole('button', { name: 'Delete trigger' }).click()
-  await expect(confirm).toBeHidden()
-  await expect
-    .poll(async () => {
-      const response = await page.request.get('/api/triggers')
-      const body = (await response.json()) as { items: { name: string }[] }
-      return body.items.some((trigger) => trigger.name === name)
-    })
-    .toBe(false)
-})
