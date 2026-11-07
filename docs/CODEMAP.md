@@ -75,6 +75,13 @@ likely to be the entry point for a change.
 - `apps/web/src/main.tsx` — browser bootstrap: routers, providers, stream, theme and service worker.
 - `apps/web/src/App.tsx` — route table and classic/bold shell choice.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
+- `apps/web/src/bold/BoldAddAgent.tsx` — Add agent trigger, dialog flow and coding tool panel.
+- `apps/web/src/bold/BoldAddAgentAdded.tsx` — joined-team result and where-an-agent-runs summary.
+- `apps/web/src/bold/BoldAddAgentAppearance.tsx` — agent shape and colour picker with live glyph preview.
+- `apps/web/src/bold/BoldAddAgentImportPanel.tsx` — Hermes profile archive upload, inspection and import form.
+- `apps/web/src/bold/BoldAddAgentNewPanel.tsx` — new Hermes agent form and review-changes block.
+- `apps/web/src/bold/BoldAddAgentRuns.tsx` — where-an-agent-runs fields, save hook and progress state.
+- `apps/web/src/bold/bold-add-agent-types.ts` — Add agent dialog, runs and result types with option labels.
 - `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
