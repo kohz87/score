@@ -45,7 +45,7 @@ likely to be the entry point for a change.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
 - `apps/web/src/components/flow-layout/` — workflow node placement helpers.
 - `apps/web/src/components/model-settings/` — model aliases, effort, speech and fallback controls.
-- `apps/web/src/data/` — REST and SSE clients, session, query helpers and app-wide data utilities.
+- `apps/web/src/data/` — REST and SSE clients, session, query helpers, app-wide data utilities and their feature-split tests.
 - `apps/web/src/live/` — live status, activity and recently-resolved widgets.
 - `apps/web/src/motion/` — animation helpers and arrival/tween components.
 - `apps/web/src/notifications/` — browser notifications, preferences and click routing.
@@ -193,6 +193,7 @@ likely to be the entry point for a change.
 - `apps/web/src/data/api.ts` — API request wrapper and session handling.
 - `apps/web/src/data/stream.ts` — resumable browser SSE client.
 - `apps/web/src/data/query-client.ts` — query client and stream context.
+- `apps/web/src/data/stream-helpers.ts` — shared fake EventSource, stream fixtures and query-registry setup for the stream tests.
 - `apps/web/src/routes/chat/Composer.tsx` — classic chat composer and send flow.
 - `apps/web/src/routes/chat/composer-types.ts` — composer props, notice/snapshot types and shared draft types.
 - `apps/web/src/routes/chat/composer-local-command.ts` — `/compress`, `/usage` and `/model` handling.
