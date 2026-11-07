@@ -294,7 +294,7 @@ likely to be the entry point for a change.
 - `apps/server/src/media/` — upload storage, multipart parsing and type sniffing.
 - `apps/server/src/runtimes/` — agent runtime implementations.
 - `apps/server/src/runtimes/check/` — spawn-based check command runner.
-- `apps/server/src/runtimes/coding/` — coding-agent drivers, process supervisor, units, quotas and the split coding runtime service.
+- `apps/server/src/runtimes/coding/` — coding-agent drivers, split process supervisor, translation and units, quotas and the split coding runtime service.
 - `apps/server/src/shares/` — public share pages, markdown and rate limits.
 - `apps/server/src/terminal/` — PTY terminal manager, tickets and environment.
 - `apps/server/src/themes/` — theme packages, built-ins, CSS validation and storage.
@@ -406,7 +406,31 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/service-admission.ts` — idempotent run admission and unresolved-run checks.
 - `apps/server/src/runtimes/coding/service-stops.ts` — Stop controls for live, recorded and queued runs.
 - `apps/server/src/runtimes/coding/service-recovery.ts` — restart recovery, shutdown and the final `CodingRuntime` class.
-- `apps/server/src/runtimes/coding/units.ts` — coding unit lifecycle.
+- `apps/server/src/runtimes/coding/supervisor.mjs` — in-unit supervisor entry point, wire protocol and re-export facade.
+- `apps/server/src/runtimes/coding/supervisor-child.mjs` — child-exit waiting and process-group signals.
+- `apps/server/src/runtimes/coding/supervisor-cgroup.mjs` — the real cgroup boundary and payload controls.
+- `apps/server/src/runtimes/coding/supervisor-drain.mjs` — payload draining, survivor cleanup and the ended receipt.
+- `apps/server/src/runtimes/coding/supervisor-frames.mjs` — supervisor control-frame handling.
+- `apps/server/src/runtimes/coding/supervisor-output.mjs` — CLI output pumping, chunking, EOF and backpressure.
+- `apps/server/src/runtimes/coding/supervisor-protocol.mjs` — wire protocol constants, spec hash and process start time.
+- `apps/server/src/runtimes/coding/supervisor-receipts.mjs` — durable receipt writers and readers.
+- `apps/server/src/runtimes/coding/supervisor-run.mjs` — the supervised launch state machine and control loop.
+- `apps/server/src/runtimes/coding/supervisor-spec.mjs` — supervisor spec loading and validation.
+- `apps/server/src/runtimes/coding/supervisor-watchdog.mjs` — systemd watchdog notification.
+- `apps/server/src/runtimes/coding/translate.ts` — coding event translation facade and re-exports.
+- `apps/server/src/runtimes/coding/translate-events.ts` — CLI event observations, tool rows and sub-agent summaries.
+- `apps/server/src/runtimes/coding/translate-frames.ts` — Watch frames from translated tool details.
+- `apps/server/src/runtimes/coding/translate-runs.ts` — run status updates and the running observation.
+- `apps/server/src/runtimes/coding/translate-terminal.ts` — terminal run results and room replies.
+- `apps/server/src/runtimes/coding/translate-types.ts` — translation state types, sizes and constructors.
+- `apps/server/src/runtimes/coding/units.ts` — coding unit plumbing facade and re-exports.
+- `apps/server/src/runtimes/coding/unit-actions.ts` — InvocationID-gated stop and reset actions.
+- `apps/server/src/runtimes/coding/unit-capability.ts` — manager identity and host capability checks.
+- `apps/server/src/runtimes/coding/unit-cgroup.ts` — cgroup population parsing and reads.
+- `apps/server/src/runtimes/coding/unit-launch.ts` — systemd-run properties and argv construction.
+- `apps/server/src/runtimes/coding/unit-names.ts` — unit-name validation, prefixes and construction.
+- `apps/server/src/runtimes/coding/unit-systemctl.ts` — systemctl output parsing, unit lookups and environment names.
+- `apps/server/src/runtimes/coding/unit-systemd-types.ts` — systemd runner types, command paths and the environment deny list.
 - `apps/server/src/runtimes/coding/unit-backend.ts` — the systemd unit backend (`UnitBackend`), the end of the class chain below, and its public exports.
 - `apps/server/src/runtimes/coding/unit-backend-types.ts` — unit backend types: status, deps, launch request, outcomes, recovery report.
 - `apps/server/src/runtimes/coding/unit-backend-helpers.ts` — unit backend constants, file schemas and pure helpers (fence barrier, forced fallback, stop causes).
