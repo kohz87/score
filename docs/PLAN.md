@@ -762,6 +762,10 @@ coverage where another test keeps the behaviour. A read-only audit lists each ca
 item by item; DeepSeek removes the approved list. No test that guards live behaviour is deleted or weakened. Done when
 `pnpm check` and a full e2e run are green and the TASKLOG lists every removal with its reason.
 
+**CS.5 The specs that still fail in a full run** (after CS.3): bold-room-tools at 390 (Unpin), orchestrations job-map dots,
+themes-bold(-visual), terminal, bold-room-files, bold-message-actions, bold-try-another, and the stale README screenshot
+spec. Same method as CS.3; brief `docs/briefs/CS.5.md`. Done when two full runs have none of them failing.
+
 **CS.3 Independent e2e specs.** The specs that pass alone but fail in a full run (bold-room-menu, one-to-ones,
 room-chat, team choice, workspace, tablet, + menu, take-over) stop depending on what other specs leave on the shared
 fake server: their own rooms, agents and state. Done when three full runs in a row have no such failure.
