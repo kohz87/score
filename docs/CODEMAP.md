@@ -645,10 +645,14 @@ likely to be the entry point for a change.
 - `apps/server/test/domain/exchange-budgets-helpers.ts` — shared exchange-budget harness and paused-review setup.
 - `apps/server/test/domain/reports-helpers.ts` — shared report fixtures: timezone, timestamps, task, run, approval and report input factories.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
+- `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, Kanban attempts, passkeys and rewind suites are split by feature with their shared fixtures.
 
 ### Key files
 
 - `apps/server/test/http/rooms-helpers.ts` — rooms test setup, contract schemas, writable fixture bindings and shared factories.
+- `apps/server/test/http/kanban-attempts-consumers-helpers.ts` — Kanban attempt consumer test setup, seeded world, request helper and consumer URLs.
+- `apps/server/test/http/passkeys-helpers.ts` — passkeys test app setup, pairing, registration, sign-in and cleanup helpers.
+- `apps/server/test/http/rewind-helpers.ts` — rewind test setup, room and turn factories, event reads and request helpers.
 - `apps/server/test/runtimes/` — runtime tests and recorded coding-driver fixtures, split by parser output, configuration, verdicts, loss handling and sub-agents.
 
 ### Key files
