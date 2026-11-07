@@ -298,7 +298,7 @@ likely to be the entry point for a change.
 - `apps/server/src/shares/` — public share pages, markdown and rate limits.
 - `apps/server/src/terminal/` — PTY terminal manager, tickets and environment.
 - `apps/server/src/themes/` — theme packages, built-ins, CSS validation and storage.
-- `apps/server/src/workspace/` — workspace roots, git, policy and per-agent workspaces.
+- `apps/server/src/workspace/` — workspace roots, git, policy, per-agent workspaces, and workspace file access, reads and mutations.
 - `apps/server/migrations/` — forward-only numbered SQL migrations.
 - `apps/server/scripts/` — server maintenance scripts.
 - `apps/server/test/` — server integration tests and recorded fixtures.
@@ -310,6 +310,13 @@ likely to be the entry point for a change.
 - `apps/server/src/index.ts` — process entry and signal handling.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
+- `apps/server/src/workspace/workspace.ts` — public Workspace facade, root opening and re-exported workspace constants, etag helper and write-event type.
+- `apps/server/src/workspace/workspace-access.ts` — root containment checks and safe directory handles.
+- `apps/server/src/workspace/workspace-content.ts` — file hashing, blocked-name checks, raw-media detection and text decoding.
+- `apps/server/src/workspace/workspace-fs.ts` — filesystem error mapping, bounded reads and protected tree removal.
+- `apps/server/src/workspace/workspace-mutations.ts` — write, upload, create, move and remove operations.
+- `apps/server/src/workspace/workspace-reader.ts` — workspace listing and file reads.
+- `apps/server/src/workspace/workspace-types.ts` — workspace limits and tree, read-result and write-event types.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
