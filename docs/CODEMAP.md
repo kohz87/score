@@ -311,6 +311,7 @@ likely to be the entry point for a change.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
+- `apps/server/test/knowledge/audit3-bb-helpers.ts` — shared cleanup, scratch-directory, read and restart helpers for the feature-split audit3-bb rename and recovery suites.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.

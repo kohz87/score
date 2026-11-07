@@ -330,11 +330,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/knowledge/audit3-bb.test.ts",
-    "lines": 472,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/launcher-service.test.ts",
     "lines": 701,
     "reason": "split in CS.2 wave 1"
