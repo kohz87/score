@@ -451,6 +451,27 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/workflows/StartWorkflowChecks.tsx` — start dialog's preflight checks, problems and coding warnings.
 - `apps/web/src/routes/workflows/StartWorkflowInputs.tsx` — start dialog's workflow input fields.
 - `apps/web/src/routes/workflows/start-workflow-error.ts` — start-run conflict and definition error copy.
+- `apps/web/src/routes/workflows/WorkflowDecisions.tsx` — workflow run needs-you list and re-exported decision cards.
+- `apps/web/src/routes/workflows/NodeGateCard.tsx` — a workflow node gate decision.
+- `apps/web/src/routes/workflows/RetryCard.tsx` — retry or stop a workflow step whose try was given up.
+- `apps/web/src/routes/workflows/RefusalCard.tsx` — retry or stop a step Hermes refused repeatedly.
+- `apps/web/src/routes/workflows/WorkflowRemapCard.tsx` — approve a replaced agent for a running workflow.
+- `apps/web/src/routes/workflows/workflow-decision-model.ts` — workflow decision action type and node-label lookup.
+- `apps/web/src/routes/workflows/workflow-model.ts` — graph editing model facade and public re-exports.
+- `apps/web/src/routes/workflows/workflow-model-types.ts` — draft types, node labels, conditions and ports.
+- `apps/web/src/routes/workflows/workflow-model-ids.ts` — free node, edge and branch-rule ids.
+- `apps/web/src/routes/workflows/workflow-model-helpers.ts` — draft equality, safe value lookup and regex escaping.
+- `apps/web/src/routes/workflows/workflow-nodes.ts` — node defaults, starter draft and node add/update/remove/rename.
+- `apps/web/src/routes/workflows/workflow-connections.ts` — edges, connection validation and graph ancestry.
+- `apps/web/src/routes/workflows/workflow-add-steps.ts` — steps added after, before or between connected nodes.
+- `apps/web/src/routes/workflows/workflow-branches.ts` — branch rule add, update and remove.
+- `apps/web/src/routes/workflows/workflow-inputs.ts` — workflow input add, remove and rename.
+- `apps/web/src/routes/workflows/workflow-outline.ts` — text outline and reading order of a workflow draft.
+- `apps/web/src/routes/workflows/recipe-layers.css` — ordered entry for the recipe layer stylesheets.
+- `apps/web/src/routes/workflows/recipe-layers-cards.css` — recipe layer cards, variants and card text.
+- `apps/web/src/routes/workflows/recipe-layers-flow.css` — recipe lines, groups, rows, joins and add menus.
+- `apps/web/src/routes/workflows/recipe-layers-responsive.css` — recipe narrow-screen and reduced-motion rules.
+- `apps/web/src/routes/workflows/recipe-layers-orphans.css` — recipe steps that are not connected.
 - `apps/web/src/routes/customizer/Customizer.tsx` — customizer composition: probe, derived values, early states and page layout.
 - `apps/web/src/routes/customizer/CustomizerBar.tsx` — header, undo/save/export/import actions, messages and edit/preview switch.
 - `apps/web/src/routes/customizer/CustomizerModals.tsx` — save-as, start-from confirmation, import and leave-without-saving dialogs.

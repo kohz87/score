@@ -1,0 +1,119 @@
+/* Lines are 1px; a bracket spreads one line over the steps that run at the same time. */
+[data-ui='bold'] .rl-line {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  background: var(--faint);
+}
+[data-ui='bold'] .rl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+}
+[data-ui='bold'] .rl-bracket {
+  flex: none;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--faint);
+}
+[data-ui='bold'] .rl-bracket--down {
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+[data-ui='bold'] .rl-bracket--up {
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+[data-ui='bold'] .rl-simul {
+  display: none;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 4px 0 6px;
+}
+[data-ui='bold'] .rl-row {
+  display: grid;
+  grid-template-columns: repeat(var(--rl-n, 2), 260px);
+  gap: 40px;
+  align-items: stretch;
+  justify-content: center;
+}
+[data-ui='bold'] .rl-row[data-count='3'] {
+  --rl-n: 3;
+}
+[data-ui='bold'] .rl-row[data-count='4'] {
+  --rl-n: 4;
+}
+[data-ui='bold'] .rl-row .rl-card {
+  width: auto;
+  padding: 14px 16px;
+}
+[data-ui='bold'] .rl-join {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The + between two layers. */
+[data-ui='bold'] .rl-add {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+[data-ui='bold'] .rl-plus {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-ui='bold'] .rl-plus:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+[data-ui='bold'] .rl-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow:
+    inset 0 0 0 1px var(--faint),
+    var(--menu-shadow);
+}
+[data-ui='bold'] .rl-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+[data-ui='bold'] .rl-menu button:hover,
+[data-ui='bold'] .rl-menu button:focus-visible {
+  background: var(--field);
+}

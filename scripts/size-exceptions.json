@@ -100,21 +100,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/workflows/recipe-layers.css",
-    "lines": 451,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/workflows/workflow-model.ts",
-    "lines": 621,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/workflows/WorkflowDecisions.tsx",
-    "lines": 557,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/workflows/workflows.css",
     "lines": 670,
     "reason": "split in CS.2 wave 1"
