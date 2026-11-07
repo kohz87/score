@@ -338,6 +338,16 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
 - `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
+## apps/server/test
+
+### Folders
+
+- `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
+
+### Key files
+
+- `apps/server/test/http/rooms-helpers.ts` — rooms test setup, contract schemas, writable fixture bindings and shared factories.
+
 ## packages/contract/src
 
 ### Folders

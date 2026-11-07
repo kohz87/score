@@ -330,11 +330,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/http/rooms.test.ts",
-    "lines": 1393,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/http/routing.test.ts",
     "lines": 581,
     "reason": "split in CS.2 wave 1"
