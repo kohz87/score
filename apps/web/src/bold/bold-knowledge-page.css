@@ -1,0 +1,177 @@
+[data-ui='bold'] .bold-knowledge {
+  /* 3.24.1: no fixed cap; the columns follow the window (folders 240, list 260-360, note the rest, right column 280-320). */
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+[data-ui='bold'] .sidebody.bold-library.is-page {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  min-height: calc(100vh - 120px);
+  padding: 0;
+  border-top: 1px solid var(--line);
+  /* The page scrolls, not this box: with overflow auto the note toolbar's sticky top stuck to a box that never scrolls.
+     `clip` (not a scroll container, so sticky still works) keeps a wide note or table from pushing the page sideways. */
+  overflow: visible;
+  overflow-x: clip;
+}
+
+[data-ui='bold'] .is-page > .bold-knowledge-rail {
+  flex: 0 0 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  padding: calc(16px * var(--bold-d, 1));
+  border-right: 1px solid var(--line);
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-knowledge-railhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-railhead h1 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-knowledge-plus {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-knowledge-folder {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-folder.is-on {
+  background: var(--field);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-knowledge-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* 3.27.1: each folder row carries a ⋯ (Rename, Move, Delete); "New folder" sits under the list. */
+[data-ui='bold'] .bold-knowledge-frow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-knowledge-frow > .bold-knowledge-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-knowledge-scrim,
+[data-ui='bold'] .bold-knowledge-menu-head {
+  display: none;
+}
+
+[data-ui='bold'] .bold-knowledge-fmenu {
+  position: relative;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-knowledge-dots {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+  /* Space stays reserved so rows don't jump; the button shows on hover, focus and while its menu is open. */
+  opacity: 0;
+}
+
+[data-ui='bold'] .bold-knowledge-frow:hover .bold-knowledge-dots,
+[data-ui='bold'] .bold-knowledge-frow:focus-within .bold-knowledge-dots,
+[data-ui='bold'] .bold-knowledge-dots[aria-expanded='true'] {
+  opacity: 1;
+}
+
+[data-ui='bold'] .bold-knowledge-dots:hover,
+[data-ui='bold'] .bold-knowledge-dots[aria-expanded='true'] {
+  background: var(--field);
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  [data-ui='bold'] .bold-knowledge-dots {
+    opacity: 1;
+  }
+}
+
+[data-ui='bold'] .bold-knowledge-menu {
+  top: 100%;
+  right: 0;
+  min-width: 180px;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border: 1px dashed var(--line);
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder-hint {
+  margin: 4px 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-knowledge-newfolder:hover {
+  background: var(--field);
+  color: var(--ink);
+}

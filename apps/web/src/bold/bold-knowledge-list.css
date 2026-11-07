@@ -1,0 +1,108 @@
+/* The panel's own mid/wide rule (bold-library.css, 200px) is more specific than `.is-page > nav`; `.sidebody` here makes
+   the page's list column win: it grows between 260 and 360px. */
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
+  flex: 1 1 300px;
+  min-width: 260px;
+  max-width: 360px;
+  padding: calc(16px * var(--bold-d, 1));
+  border-right: 1px solid var(--line);
+  box-sizing: border-box;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .is-page .bold-library-search {
+  min-height: 42px;
+  margin-bottom: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 0 calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-knowledge-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  /* Long names wrap between words and break inside a long word; never past the column. */
+  overflow-wrap: anywhere;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-row.is-on {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-knowledge-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-knowledge-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-main {
+  flex: 999 1 420px;
+  min-width: 0;
+  padding: calc(8px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .is-page > .bold-library-main[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-knowledge-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-knowledge-actions button,
+[data-ui='bold'] .bold-knowledge-back {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-knowledge-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-knowledge-actions .bold-knowledge-edit {
+  border-color: transparent;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-knowledge-back {
+  margin-bottom: calc(8px * var(--bold-d, 1));
+}

@@ -1,0 +1,45 @@
+/* Restored (2.0.9 review): the files view, tables, version diff and dialog layering keep the bold surface. */
+[data-ui='bold'] .bold-library .kn-toolbar {
+  top: 0;
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-library .kn-files,
+[data-ui='bold'] .bold-library .kn-doc {
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library .kn-files h2,
+[data-ui='bold'] .bold-library .kn-doc h2 {
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library .kn-table-wrap {
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-table th {
+  border-bottom-color: var(--line);
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-table td {
+  border-bottom-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-doc-props,
+[data-ui='bold'] .bold-library .kn-version-body,
+[data-ui='bold'] .bold-library .kn-diff {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-backdrop {
+  z-index: 70;
+}
+
+[data-ui='bold'] .bold-library .kn-upload-progress {
+  z-index: 70;
+}

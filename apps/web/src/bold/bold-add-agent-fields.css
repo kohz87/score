@@ -1,0 +1,74 @@
+[data-ui='bold'] .bold-add-fields {
+  flex: 1 1 280px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-fields > label,
+[data-ui='bold'] .bold-add-works > label,
+[data-ui='bold'] .bold-add-ssh > label,
+[data-ui='bold'] .bold-add-dialog .model-picker > label {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-dialog .field,
+[data-ui='bold'] .bold-add-dialog .model-picker input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-add-dialog textarea.field {
+  min-height: 90px;
+  padding: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(16px * var(--bold-r, 1));
+  resize: vertical;
+}
+
+[data-ui='bold'] .bold-add-dialog .bold-add-name {
+  min-height: 50px;
+  padding: 0 calc(16px * var(--bold-d, 1));
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-add-dialog .lab {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(12px * var(--bold-d, 1));
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-add-works {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-ssh {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-ssh .span2 {
+  grid-column: span 2;
+}

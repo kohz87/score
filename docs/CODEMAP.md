@@ -86,6 +86,17 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldLibrarySearchResults.tsx` — Library search results list.
 - `apps/web/src/bold/BoldLibraryByline.tsx` — who wrote a note, and the selected note's byline.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
+- `apps/web/src/bold/bold-library.css` — Library style entry; imports the panel stylesheets in cascade order.
+- `apps/web/src/bold/bold-library-panel.css` — Library panel surface, navigation, search, groups, note rows, byline and empty list.
+- `apps/web/src/bold/bold-library-tools.css` — Library list tools, search results and result snippets.
+- `apps/web/src/bold/bold-library-main.css` — Library main pane, blank state and classic note, editor and side panels.
+- `apps/web/src/bold/bold-library-files.css` — Library note toolbar, files and document headings, tables, versions and dialog layering.
+- `apps/web/src/bold/bold-library-layout.css` — Library width-driven note and side-panel layouts and phone layout bases.
+- `apps/web/src/bold/bold-library-fold.css` — Library folder picker and toggle, and the folded phone notes bar.
+- `apps/web/src/bold/bold-knowledge.css` — Knowledge page style entry; imports the page stylesheets in cascade order.
+- `apps/web/src/bold/bold-knowledge-page.css` — Knowledge page frame and folder rail, folder rows, menus and new-folder control.
+- `apps/web/src/bold/bold-knowledge-list.css` — Knowledge note-list column, search shell, note rows and note actions.
+- `apps/web/src/bold/bold-knowledge-note.css` — Knowledge note and side-panel layout with mid-width and phone page layouts.
 - `apps/web/src/bold/BoldShell.tsx` — bold frame, navigation and route outlet.
 - `apps/web/src/bold/BoldShell-*.test.tsx` — bold shell suites split by feature: frame, navigation, side panel, run graph and files/results.
 - `apps/web/src/bold/BoldShell-helpers.tsx` — shared bold shell test harness: state, fetch fixtures, router render and cleanup.
@@ -119,6 +130,15 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldAddAgentNewPanel.tsx` — new Hermes agent form and review-changes block.
 - `apps/web/src/bold/BoldAddAgentRuns.tsx` — where-an-agent-runs fields, save hook and progress state.
 - `apps/web/src/bold/bold-add-agent-types.ts` — Add agent dialog, runs and result types with option labels.
+- `apps/web/src/bold/bold-add-agent.css` — Add agent style entry; imports the form stylesheets in cascade order.
+- `apps/web/src/bold/bold-add-agent-dialog.css` — Add agent dialog surface, header, source switch and form/main shell.
+- `apps/web/src/bold/bold-add-agent-appearance.css` — Add agent glyph preview, shape and colour pickers and appearance hint.
+- `apps/web/src/bold/bold-add-agent-fields.css` — Add agent fields, labels and workspace and SSH grid layout.
+- `apps/web/src/bold/bold-add-agent-sections.css` — Add agent review, archive, footer, tool picker, team import and coding-permission sections.
+- `apps/web/src/bold/bold-add-agent-responsive.css` — Add agent narrow-screen touch targets for source, tool and shape controls.
+- `apps/web/src/bold/bold-add-agent-outcomes.css` — Add agent coding reach, operation status, errors, confirmation, upload and added result.
+- `apps/web/src/bold/bold-add-agent-narrow.css` — Add agent phone dialog and footer layout.
+- `apps/web/src/bold/bold-add-agent-blockers.css` — Add agent blockers panel and list.
 - `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.

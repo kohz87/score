@@ -1,0 +1,82 @@
+[data-ui='bold'] .bold-add-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 80px);
+  overflow: auto;
+  margin: 40px auto;
+  padding: calc(26px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(30px * var(--bold-r, 1));
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 50%);
+  display: flex;
+  flex-direction: column;
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-dialog::backdrop {
+  background: rgb(5 6 9 / 62%);
+}
+
+[data-ui='bold'] .bold-add-head {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-head h2 {
+  flex: 1;
+  font-size: 32px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-add-from {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  max-width: 100%;
+  gap: calc(4px * var(--bold-d, 1));
+  padding: calc(4px * var(--bold-d, 1));
+  border-radius: 999px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-from button {
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-add-from button b {
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-add-from button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-add-from button:disabled,
+[data-ui='bold'] .bold-add-shapes label:has(input:disabled),
+[data-ui='bold'] .bold-add-colours label:has(input:disabled),
+[data-ui='bold'] .bold-add-tools label:has(input:disabled) {
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(22px * var(--bold-d, 1));
+}
