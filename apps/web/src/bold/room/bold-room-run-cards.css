@@ -1,0 +1,167 @@
+/* The classic run cards keep their decision logic and only take the pin's colours and spacing. */
+[data-ui='bold'] .bold-run-request .orch-decision {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-decision h3 {
+  color: var(--hi-ink);
+  font-family: var(--font-d);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-run-request .orch-decision h3 small,
+[data-ui='bold'] .bold-run-request .orch-muted,
+[data-ui='bold'] .bold-run-request .orch-facts dt {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-run-request .orch-quote,
+[data-ui='bold'] .bold-run-request .orch-pre,
+[data-ui='bold'] .bold-run-request .orch-ack {
+  background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-field > span,
+[data-ui='bold'] .bold-run-request .orch-field > legend {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-run-request .orch-field input,
+[data-ui='bold'] .bold-run-request .orch-field textarea,
+[data-ui='bold'] .bold-run-request .orch-field select {
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  background: transparent;
+  color: var(--hi-ink);
+  box-shadow: inset 0 0 0 1.5px var(--hi-ink);
+  font: inherit;
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button.orch-primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button:disabled {
+  opacity: 0.55;
+}
+
+[data-ui='bold'] .bold-capsules {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-capsules:empty {
+  display: none;
+}
+
+[data-ui='bold'] .bold-capsule {
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  margin-left: 36px;
+}
+
+[data-ui='bold'] .bold-capsule.is-paused {
+  border-color: var(--warn);
+}
+
+[data-ui='bold'] .bold-capsule-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(7px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-capsule-faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-capsule-faces .agent-glyph + .agent-glyph {
+  margin-left: -5px;
+}
+
+[data-ui='bold'] .bold-capsule-status {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-capsule.is-paused .bold-capsule-status {
+  color: var(--warn);
+}
+
+[data-ui='bold'] .bold-capsule-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-capsule-aside-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+  margin-left: 36px;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 calc(12px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip:disabled {
+  opacity: 0.6;
+}
+
+[data-ui='bold'] .bold-capsule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-capsule-thread {
+  border: 0;
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 0 calc(11px * var(--bold-d, 1));
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-capsule-thread:hover {
+  background: var(--field);
+  color: var(--ink);
+}

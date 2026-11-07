@@ -1,0 +1,179 @@
+/* PLAN 11.4d: one of the agents' own chats, read-only until it is brought into a team job. */
+[data-ui='bold'] .bold-elsewhere {
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-note {
+  align-self: flex-start;
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-elsewhere-title {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-title h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-elsewhere-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--bold-d, 1));
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-elsewhere-card b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-elsewhere-actions {
+  margin-top: auto;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-elsewhere-preview {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-preview-label {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-elsewhere-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-mine {
+  align-self: flex-end;
+  max-width: 84%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(3px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-bub {
+  margin: 0;
+  border-radius: 20px 20px 6px 20px;
+  padding: calc(9px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs {
+  display: flex;
+  gap: calc(10px * var(--bold-d, 1));
+  align-items: flex-end;
+  max-width: 90%;
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs > div {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs .bold-elsewhere-bub {
+  border-radius: 20px 20px 20px 6px;
+  background: var(--field);
+  color: var(--ink);
+}
+
+/* Board 09: a fresh team room. */
+[data-ui='bold'] .bold-empty-room {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(20px * var(--bold-d, 1));
+  overflow-y: auto;
+  padding: calc(18px * var(--bold-d, 1)) 2px;
+}
+
+[data-ui='bold'] .bold-empty-copy {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-empty-copy h2 {
+  font-size: clamp(38px, 4.2vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-empty-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+[data-ui='bold'] .bold-starters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-starter {
+  border: 0;
+  text-align: left;
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: calc(20px * var(--bold-r, 1));
+  padding: calc(16px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-starter:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-starter b {
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-starter > span:last-child {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-starter-glyphs {
+  display: inline-flex;
+  min-height: 18px;
+}
+
+[data-ui='bold'] .bold-starter-glyphs .agent-glyph {
+  width: 18px;
+  height: 18px;
+}
+
+[data-ui='bold'] .bold-starter-glyphs .agent-glyph + .agent-glyph {
+  margin-left: -4px;
+}

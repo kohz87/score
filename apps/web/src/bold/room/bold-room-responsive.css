@@ -1,0 +1,257 @@
+@media (hover: none) {
+  [data-ui='bold'] .bold-acts {
+    display: flex;
+  }
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .roomcol {
+    max-width: none;
+  }
+
+  /* PLAN 11.10a: board 18's job list, then board 03's full-screen job chat. The shell's tab bar stays under both. */
+  [data-ui='bold'] .bold-phone-chat-head {
+    gap: calc(8px * var(--bold-d, 1));
+    padding: 0 2px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-head {
+    display: flex;
+    align-items: center;
+    gap: calc(8px * var(--bold-d, 1));
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools button,
+  [data-ui='bold'] .bold-phone-chat-tools .icon-btn.sm {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-state-mark {
+    margin-left: auto;
+  }
+
+  [data-ui='bold'] .bold-phone-state-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-phone-state-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 999px;
+  }
+
+  [data-ui='bold'] .bold-phone-state-check {
+    display: inline-grid;
+    place-items: center;
+    color: var(--ok);
+  }
+
+  [data-ui='bold'] .bold-phone-chat-head {
+    padding: 0 2px 0 0;
+  }
+
+  [data-ui='bold'] .bold-phone-back {
+    background: transparent;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id b {
+    font-family: var(--font-d);
+    font-size: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id > span {
+    color: var(--muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: calc(4px * var(--bold-d, 1));
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .bold-filter,
+  [data-ui='bold'] .bold-phone-chat-tools .bold-job-thread {
+    min-height: 44px;
+    padding-inline: calc(12px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .bold-deleted-toggle {
+    margin-left: auto;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-open {
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-label {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-open,
+  [data-ui='bold'] .bold-phone-chat-tools .icon-btn.sm {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room .chat-attach,
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room .chat-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room > textarea {
+    min-height: 44px;
+  }
+
+  /* Sheets and message tools are reached by finger too. */
+  [data-ui='bold'] .bold-approval-menu button,
+  [data-ui='bold'] .bold-act,
+  [data-ui='bold'] .bold-history,
+  [data-ui='bold'] .bold-request-form input,
+  [data-ui='bold'] .bold-request-form select,
+  [data-ui='bold'] .chat-composer-box--room .chat-attach-list button,
+  [data-ui='bold'] .chat-composer-box--room .chat-attachment > button {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .chat-composer-box--room .chat-attachment > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-thread-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools,
+  [data-ui='bold'] .bold-phone-chat-head {
+    scroll-margin-bottom: 104px;
+  }
+
+  [data-ui='bold'] .bold-job-tabs,
+  [data-ui='bold'] .bold-job-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  [data-ui='bold'] .bold-job-tabs::-webkit-scrollbar,
+  [data-ui='bold'] .bold-job-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Board 18 (phone): the card is full width and its buttons are 44px tall, side by side. */
+  [data-ui='bold'] .bold-needs-slot .bold-request {
+    max-width: none;
+    margin-left: 0;
+    border-radius: 20px;
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  [data-ui='bold'] .bold-needs-slot .bold-request .bold-approval-actions .btn {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-starters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-empty-room {
+    justify-content: flex-start;
+    padding-top: calc(10px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-empty-copy h2 {
+    font-size: clamp(34px, 10vw, 46px);
+  }
+
+  [data-ui='bold'] .bold-empty-copy p {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  [data-ui='bold'] .bold-room-tools {
+    margin-top: -2px;
+  }
+
+  [data-ui='bold'] .chat-composer-box--room {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'plus text send'
+      'attach attach attach';
+    border-radius: 999px;
+    gap: calc(6px * var(--bold-d, 1));
+    padding: calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1))
+      calc(6px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .chat-composer-box--room > .chat-composer-room-to {
+    display: none;
+  }
+
+  [data-ui='bold'] .chat-composer-box--room > textarea {
+    font-size: 17px;
+    padding: calc(9px * var(--bold-d, 1)) 0;
+  }
+
+  [data-ui='bold'] .chat-composer-box--room .chat-attach,
+  [data-ui='bold'] .chat-composer-box--room .chat-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-message .chat-message-body {
+    max-width: 92%;
+    flex-basis: 92%;
+  }
+
+  [data-ui='bold'] .bold-message .chat-message--you .chat-message-body {
+    max-width: 88%;
+  }
+
+  [data-ui='bold'] .bold-capsule {
+    margin-left: 32px;
+  }
+
+  [data-ui='bold'] .bold-request-head {
+    align-items: flex-start;
+  }
+
+  [data-ui='bold'] .bold-request-job {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
