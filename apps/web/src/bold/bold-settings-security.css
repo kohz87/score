@@ -1,0 +1,78 @@
+/* Remote access and security. */
+.bold-settings-page .bold-security {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-security > h2,
+.bold-settings-page .bold-system > h2 {
+  font-size: 38px;
+  line-height: 1.1;
+}
+
+.bold-settings-page .settings-remote h3 {
+  margin-top: calc(4px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-agent-where-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bold-settings-page .bold-agent-where {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+}
+
+.bold-settings-page .bold-agent-where-name {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-agent-where .badge {
+  margin-left: auto;
+}
+
+.bold-settings-page .bold-look-customize {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-look-customize > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  min-width: 200px;
+}
+
+.bold-settings-page .settings-password {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .settings-password input {
+  background: var(--field);
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  min-height: 46px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  color: var(--ink);
+}

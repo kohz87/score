@@ -34,7 +34,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/web/src/` — SPA bootstrap, root router and the classic/bold shell choice.
-- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look and bold-only styles.
+- `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
@@ -95,6 +95,18 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/start-job-checks.ts` — room and preflight check conversion.
 - `apps/web/src/bold/start-job-copy.ts` — size text and start/auth error messages.
 - `apps/web/src/bold/bold-start-job.ts` — start-job model and request shaping.
+- `apps/web/src/bold/bold-settings-shell.css` — Settings frame and shared classic card, form and control surfaces.
+- `apps/web/src/bold/bold-settings-rules.css` — Rules mode, columns, forms and save surfaces.
+- `apps/web/src/bold/bold-settings-advanced.css` — Advanced search, staged values, tray and diff.
+- `apps/web/src/bold/bold-settings-security.css` — Remote access and security lists, password and customize link.
+- `apps/web/src/bold/bold-settings-system.css` — System cards, logs, pause and about facts.
+- `apps/web/src/bold/bold-settings-usage.css` — Usage summary, charts, tables and spending bars.
+- `apps/web/src/bold/bold-settings-connections.css` — Connection lists, statuses, local models and phone pairing.
+- `apps/web/src/bold/bold-settings-tools.css` — Tool servers, shared buttons and chips, and textarea controls.
+- `apps/web/src/bold/bold-settings-triggers.css` — Webhook trigger cards and the trigger creation wizard.
+- `apps/web/src/bold/bold-settings-look.css` — Visually hidden utility and Look modes, themes, scale and currency controls.
+- `apps/web/src/bold/bold-settings-responsive.css` — Settings frame, grid and section-page responsive rules.
+- `apps/web/src/bold/bold-settings-workspaces.css` — Workspace cards, agent chips and shared folders.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
 - `apps/web/src/bold/room/RoomMenus.tsx` — room and message action menus.

@@ -1,0 +1,139 @@
+/* Connections, Tools and Look (PLAN 11.9a), from the prototype's sConn(), sTools() and sLook(). */
+.bold-settings-page .bold-connections,
+.bold-settings-page .bold-tools,
+.bold-settings-page .bold-look {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-connections > h2,
+.bold-settings-page .bold-tools > h2,
+.bold-settings-page .bold-look > h2 {
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.bold-settings-page .bold-connections .card h3,
+.bold-settings-page .bold-tools .card h3,
+.bold-settings-page .bold-look .card h3 {
+  font-size: 22px;
+}
+
+.bold-settings-page .bold-connect-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-connect-status[data-status='ok'] {
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-connect-status[data-status='error'] {
+  color: var(--bad);
+}
+
+.bold-settings-page .bold-connect-detail {
+  color: var(--ink2);
+  font-size: 0.93em;
+}
+
+.bold-settings-page .dot[data-status='ok'] {
+  background: var(--ok);
+}
+
+.bold-settings-page .dot[data-status='warn'] {
+  background: var(--warn);
+}
+
+.bold-settings-page .dot[data-status='error'] {
+  background: var(--bad);
+}
+
+.bold-settings-page .dot[data-status='off'] {
+  background: var(--faint);
+}
+
+.bold-settings-page .bold-connect-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bold-settings-page .bold-connect-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(10px * var(--bold-d, 1));
+  min-height: 40px;
+  padding-block: calc(4px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-connect-name {
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-connect-name[data-missing='true'] {
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-connect-panel,
+.bold-settings-page .bold-remove-confirm,
+.bold-settings-page .bold-local-model {
+  flex: 1 0 100%;
+}
+
+.bold-settings-page .bold-local-model {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-local-model label,
+.bold-settings-page .bold-look-shared-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-local-model .field,
+.bold-settings-page .bold-look-shared-fields select {
+  background: var(--field);
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  color: var(--ink);
+  min-height: 40px;
+  padding: 0 calc(12px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-phone {
+  flex-direction: row;
+  gap: calc(18px * var(--bold-d, 1));
+  align-items: flex-start;
+}
+
+.bold-settings-page .bold-phone .grow {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-phone-mark {
+  width: 120px;
+  height: 120px;
+  flex: none;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--ink2);
+  display: grid;
+  place-items: center;
+}

@@ -1,0 +1,312 @@
+.bold-settings-page .usage {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+.bold-settings-page .usage-head {
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+.bold-settings-page .usage-head h2 {
+  font-size: 38px;
+  line-height: 1.1;
+}
+
+.bold-settings-page .usage-head > a.btn {
+  text-decoration: none;
+}
+
+.bold-settings-page .usage-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.bold-settings-page .usage-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bold-settings-page .usage-custom input {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.bold-settings-page .usage-custom-problem {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.bold-settings-page .usage-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.bold-settings-page .usage-agent-table {
+  min-width: 560px;
+  font-size: 13px;
+}
+
+.bold-settings-page .usage-agent-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bold-settings-page .usage-agent-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bold-settings-page .usage-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+  transition: opacity 0.15s;
+}
+
+.bold-settings-page .usage-body--stale {
+  opacity: 0.55;
+}
+
+.bold-settings-page .usage-stats {
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+.bold-settings-page .usage-stat {
+  gap: 2px;
+}
+
+.bold-settings-page .usage-stat b {
+  font-family: var(--font-d);
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.bold-settings-page .usage-figure {
+  margin: 0;
+}
+
+.bold-settings-page .usage-figure-head {
+  gap: calc(10px * var(--bold-d, 1));
+  align-items: baseline;
+}
+
+.bold-settings-page .usage-figure-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.bold-settings-page .usage-figure-head .link {
+  margin-left: auto;
+}
+
+.bold-settings-page .usage-empty,
+.bold-settings-page .usage-loading,
+.bold-settings-page .usage-error,
+.bold-settings-page .usage-note {
+  margin: 0;
+}
+
+.bold-settings-page .usage-loading,
+.bold-settings-page .usage-empty {
+  color: var(--muted);
+}
+
+.bold-settings-page .usage-error {
+  padding: calc(14px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+}
+
+.bold-settings-page .usage-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: usage-spin 0.7s linear infinite;
+}
+
+@keyframes usage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bold-settings-page .usage-jobs-chart {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+.bold-settings-page .usage-jobs-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 180px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bold-settings-page .usage-jobs-column {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.bold-settings-page .usage-jobs-value {
+  margin-bottom: calc(4px * var(--bold-d, 1));
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.bold-settings-page .usage-jobs-bar {
+  display: block;
+  flex: none;
+  width: 60%;
+  border-radius: 4px 4px 0 0;
+  background: var(--ink2);
+  opacity: 0.7;
+}
+
+.bold-settings-page .usage-jobs-bar--busiest {
+  background: var(--ink);
+  opacity: 1;
+}
+
+.bold-settings-page .usage-jobs-labels {
+  display: flex;
+  gap: 2px;
+  padding: 0 calc(4px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.bold-settings-page .usage-jobs-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bold-settings-page .usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bold-settings-page .usage-table th,
+.bold-settings-page .usage-table td {
+  padding: calc(6px * var(--bold-d, 1));
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.bold-settings-page .usage-table thead th {
+  border-top: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.bold-settings-page .usage-table tbody th {
+  font-weight: 600;
+}
+
+.bold-settings-page .usage-table caption {
+  padding-bottom: calc(6px * var(--bold-d, 1));
+  color: var(--muted);
+  text-align: left;
+}
+
+.bold-settings-page .usage-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  table-layout: fixed;
+  white-space: nowrap;
+  border: 0;
+}
+
+.bold-settings-page .usage-spend {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+  padding-top: calc(6px * var(--bold-d, 1));
+}
+
+.bold-settings-page .usage-spend-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+.bold-settings-page .usage-spend-name {
+  width: 104px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bold-settings-page .usage-spend-bar-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+.bold-settings-page .usage-spend-bar {
+  display: block;
+  height: 20px;
+  border-radius: 0 4px 4px 0;
+  /* 3.7.13: the bar gives way so a long amount ("$0.49 estimated") always fits beside it. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.bold-settings-page .usage-spend-value {
+  flex: none;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bold-settings-page .usage-note {
+  font-size: 13px;
+  color: var(--muted);
+}

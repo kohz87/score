@@ -1,0 +1,86 @@
+.bold-settings-page .bold-tool-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bold-settings-page .bold-tool-server {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(10px * var(--bold-d, 1));
+  min-height: 48px;
+  padding-block: calc(6px * var(--bold-d, 1));
+  border-top: 1px solid var(--line);
+}
+
+.bold-settings-page .bold-tool-server:first-child {
+  border-top: 0;
+}
+
+.bold-settings-page .bold-tool-name {
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-tool-agents {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-tool-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+  padding-top: calc(6px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-tool-add label {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.bold-settings-page .bold-tool-add label:last-of-type {
+  flex: 2 1 240px;
+}
+
+.bold-settings-page .bold-tool-add .field {
+  min-width: 0;
+}
+
+.bold-settings-page .btn.primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .btn.ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.bold-settings-page .btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bold-settings-page .chip {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-size: 0.87em;
+  font-weight: 700;
+  background: var(--field);
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--bold-d, 1));
+}
+
+.bold-settings-page textarea.field {
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  resize: vertical;
+  min-height: 90px;
+}

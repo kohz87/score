@@ -1,0 +1,79 @@
+/* System: the board's two-up cards, with logs and Pause everyone across both columns. */
+.bold-settings-page .bold-system {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-system .settings-card h2 {
+  font-size: 22px;
+}
+
+.bold-settings-page .bold-system .system-logs {
+  grid-column: span 2;
+}
+
+.bold-settings-page .system-pause {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* The prototype's 36px control height on desktop; the phone rule at the end raises it to a 44px touch target. */
+.bold-settings-page .system-pause .btn {
+  min-height: 36px;
+}
+
+.bold-settings-page .rules-save .rules-link,
+.bold-settings-page .advanced-tray .settings-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+}
+
+.bold-settings-page .settings-banner h2 {
+  font-size: 22px;
+}
+
+.bold-settings-page .logs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(10px * var(--bold-d, 1));
+  align-items: flex-end;
+}
+
+.bold-settings-page .logs-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bold-settings-page .logs-controls label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+}
+
+.bold-settings-page .logs-scroll {
+  background: var(--code-bg);
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  color: var(--code-ink);
+  font-family: var(--font-m);
+  font-size: 12px;
+}
+
+.bold-settings-page .logs-table {
+  color: inherit;
+}
+
+.bold-settings-page .about-facts dt,
+.bold-settings-page .about-facts dd {
+  color: var(--ink);
+}
+
+.bold-settings-page .about-facts dt {
+  color: var(--muted);
+}

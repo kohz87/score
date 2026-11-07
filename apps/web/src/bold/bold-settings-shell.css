@@ -1,0 +1,294 @@
+/* Settings frame, copied from docs/design/bold/prototype.html (.setgrid/.setnav/.setmain/.seg) and extended with the
+   Usage content from sUsage(). Scoped to the bold page so the classic Settings page keeps its own layout. */
+
+.bold-settings-page.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20px * var(--bold-d, 1));
+  padding-top: calc(8px * var(--bold-d, 1));
+}
+
+.bold-settings-page .setgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(28px * var(--bold-d, 1));
+  align-items: flex-start;
+}
+
+.bold-settings-page .setnav {
+  flex: 1 1 200px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+}
+
+.bold-settings-page .setnav h1 {
+  font-size: 34px;
+  margin: 0 0 12px 12px;
+  letter-spacing: -0.03em;
+}
+
+.bold-settings-page .setnav button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+}
+
+.bold-settings-page .setnav button.on {
+  background: var(--panel);
+}
+
+.bold-settings-page .setnav button b {
+  font-weight: 600;
+}
+
+.bold-settings-page .setmain {
+  flex: 999 1 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--bold-d, 1));
+}
+
+.bold-settings-page .seg {
+  display: inline-flex;
+  gap: calc(4px * var(--bold-d, 1));
+  background: var(--field);
+  border-radius: 999px;
+  padding: calc(4px * var(--bold-d, 1));
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .seg button {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-weight: 700;
+  font-size: 0.87em;
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+.bold-settings-page .seg button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .grid2,
+.bold-settings-page .grid3,
+.bold-settings-page .grid4 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+.bold-settings-page .grid3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bold-settings-page .grid4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bold-settings-page .span2 {
+  grid-column: span 2;
+}
+
+.bold-settings-page .card {
+  background: var(--panel);
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+.bold-settings-page .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 32px;
+  font-size: 0.93em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.bold-settings-page .field {
+  background: var(--field);
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  min-height: 46px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  width: 100%;
+}
+
+.bold-settings-page .check {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1));
+  min-height: 44px;
+}
+
+.bold-settings-page .check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+.bold-settings-page .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+/* The classic rules card, approvals and diffs wear a "panel" pair (tokens.css: dark ink on a white card, drawn for the
+   classic ground). On the bold ground that pair put dark ink on dark: here the panel pair is bold's own. */
+.bold-settings-page {
+  --panel-ink: var(--ink);
+  --panel-card: var(--panel);
+}
+
+/* The classic Settings cards keep their data and behaviour; the bold shell changes only their surface. */
+.bold-settings-page .settings-card {
+  background: var(--panel);
+  border: 0;
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
+  color: var(--ink);
+}
+
+.bold-settings-page .settings-card h2 {
+  font-family: var(--font-d);
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.bold-settings-page .settings-card h3 {
+  font-family: var(--font-d);
+  font-size: 22px;
+}
+
+.bold-settings-page .settings-muted,
+.bold-settings-page .settings-muted-strong,
+.bold-settings-page .settings-detail {
+  color: var(--muted);
+}
+
+.bold-settings-page .settings-pill,
+.bold-settings-page .settings-primary,
+.bold-settings-page .rules-pill,
+.bold-settings-page .rules-primary {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-weight: 700;
+  font-size: 0.87em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8px * var(--bold-d, 1));
+  background: var(--field);
+  color: var(--ink);
+}
+
+.bold-settings-page .settings-primary,
+.bold-settings-page .rules-primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .settings-pill:disabled,
+.bold-settings-page .settings-primary:disabled,
+.bold-settings-page .rules-pill:disabled,
+.bold-settings-page .rules-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bold-settings-page .settings-link,
+.bold-settings-page .rules-link,
+.bold-settings-page .rules-remove {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bold-settings-page .settings-form {
+  background: var(--field);
+  border-radius: calc(16px * var(--bold-r, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+.bold-settings-page .settings-form label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .settings-form input,
+.bold-settings-page .advanced-edit input,
+.bold-settings-page .rules-forms input,
+.bold-settings-page .rules-forms select,
+.bold-settings-page .logs-controls select,
+.bold-settings-page .logs-controls input[type='search'] {
+  background: var(--panel);
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  color: var(--ink);
+  min-height: 40px;
+  padding: 0 calc(12px * var(--bold-d, 1));
+}
+
+.bold-settings-page .settings-command {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: calc(18px * var(--bold-r, 1));
+}
+
+.bold-settings-page .settings-origins {
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+}
+
+.bold-settings-page .settings-check {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  min-height: 44px;
+}
+
+.bold-settings-page .settings-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}

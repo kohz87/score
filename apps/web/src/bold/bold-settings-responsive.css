@@ -1,0 +1,113 @@
+@media (max-width: 860px) {
+  .bold-settings-page .setnav {
+    max-width: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .bold-settings-page .setnav h1 {
+    flex: 0 0 100%;
+    margin-bottom: calc(8px * var(--bold-d, 1));
+  }
+
+  .bold-settings-page .setmain {
+    flex-basis: 100%;
+  }
+
+  .bold-settings-page .grid2,
+  .bold-settings-page .grid3,
+  .bold-settings-page .grid4,
+  .bold-settings-page .bold-look-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-look-reset {
+    margin-left: 0;
+  }
+
+  .bold-settings-page .span2,
+  .bold-settings-page .bold-system .system-logs,
+  .bold-settings-page .system-pause {
+    grid-column: auto;
+  }
+
+  .bold-settings-page .rules-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .usage-head h2 {
+    flex-basis: 100%;
+  }
+
+  .bold-settings-page .usage-spend-name {
+    width: 88px;
+  }
+}
+
+@media (max-width: 640px) {
+  .bold-settings-page .settings-pill,
+  .bold-settings-page .settings-primary,
+  .bold-settings-page .rules-pill,
+  .bold-settings-page .rules-primary,
+  .bold-settings-page .system-pause .btn,
+  .bold-settings-page .rules-save .rules-link,
+  .bold-settings-page .advanced-tray .settings-link {
+    min-height: 44px;
+  }
+}
+
+.bold-settings-page .bold-remove-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--deep);
+  border: 1px solid var(--line);
+}
+
+.bold-settings-page .bold-remove-confirm p {
+  margin: 0;
+  color: var(--ink2);
+}
+
+/* A section page that is a tool of its own (the Customizer) on a phone: the editor first, a way back to the list. */
+.bold-settings-page .bold-settings-all {
+  display: none;
+}
+/* 3.29.0: the recipe editor is a page of its own at every width (mock-up 23-recipes-edit): no Settings list beside it. */
+.bold-settings-page .setgrid[data-section-page='editor'] .setnav {
+  display: none;
+}
+.bold-settings-page.page--wide {
+  max-width: none;
+}
+@media (max-width: 860px) {
+  .bold-settings-page .setgrid[data-section-page] .setnav {
+    display: none;
+  }
+  .bold-settings-page .bold-settings-all {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    min-height: 44px;
+    padding: 0 calc(14px * var(--bold-d, 1)) 0 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+  }
+}
+
+/* 3.7.0: a portrait tablet is wide enough for two cards per row (the phone rule above stacks them one per row). */
+@media (min-width: 601px) and (max-width: 860px) {
+  .bold-settings-page .grid2,
+  .bold-settings-page .grid3,
+  .bold-settings-page .grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bold-settings-page .span2 {
+    grid-column: span 2;
+  }
+}
