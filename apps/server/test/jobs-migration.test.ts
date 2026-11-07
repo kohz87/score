@@ -236,7 +236,7 @@ test('no Score session id is built outside domain/job-sessions.ts', () => {
   const allowed = new Map([
     ['http/conversations.ts', 1],
     ['hermes/live/settings.ts', 1],
-    ['runtimes/coding/units.ts', 1],
+    ['runtimes/coding/unit-names.ts', 1],
     ['domain/job-sessions.ts', 2],
   ])
   const found = new Map<string, number>()

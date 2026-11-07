@@ -31,7 +31,9 @@ export interface FakeState {
 // The scenario's room is a room people talk in, so it routes with exchanges (11.11) and its messages emit job.upserted.
 export const SCENARIO_JOB_EVENTS = 5
 
-export function createFakeState(): FakeState {
+/** `currentIngest` is the ingest the test file holds now: a test that restarts swaps it, and the sink follows, as the
+ * original single file's module-level `ingest` did. */
+export function createFakeState(currentIngest?: () => Ingest): FakeState {
   const directory = mkdtempSync(join(tmpdir(), 'score-fake-'))
   const db = openDatabase(join(directory, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
@@ -42,7 +44,7 @@ export function createFakeState(): FakeState {
   const sink: ObservationSink = {
     async submit(observation) {
       observations.push(observation)
-      const result = await ingest.submit(observation)
+      const result = await (currentIngest?.() ?? ingest).submit(observation)
       results.push(result)
       return result
     },
@@ -56,7 +58,7 @@ export function installFakeHooks(
   assign: (state: FakeState) => void,
   current: () => FakeState,
 ): void {
-  beforeEach(() => assign(createFakeState()))
+  beforeEach(() => assign(createFakeState(() => current().ingest)))
   afterEach(async () => {
     const state = current()
     await state.port.stop()
