@@ -1,245 +1,39 @@
-import {
-  CodingAgentsResponseSchema,
-  JobSchema,
-  ORCH_ACKNOWLEDGEMENT_TEXT,
-  ORCH_DEFAULTS,
-  suggestedCodingSteps,
-  ORCH_LIMITS,
-  OrchestrationCreatedSchema,
-  RoutineSummarySchema,
-  TriggerCreatedSchema,
-  WorkflowRunCreatedSchema,
-  WorkflowVersionSchema,
-  type AgentSummary,
-  type CostSource,
-  type OrchestrationCheck,
-  type RunTopicRequest,
-  type WorkflowRunCreate,
-} from '@score/contract'
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
-import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { apiFetch, ApiError } from '../data/api.ts'
-import { copyText } from '../data/clipboard.ts'
-import { passkeysSupportedHere, signInWithPasskey } from '../data/passkeys.ts'
-import { newId } from '../data/ids.ts'
-import { useStreamQuery } from '../data/query-client.ts'
-import { activeJobs, isEveryoneRoom } from './room/room-model.ts'
-import { teamRoomQuery, teamRoomsQuery, roomJobsQuery } from './room/room-queries.ts'
-import { BusyDialog, jobRunningOf, type BusyStart } from './room/BusyDialog.tsx'
-import { pairingProblem } from './bold-errors.ts'
-import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
-import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
-import {
-  usePreflight,
-  type OrchestrationCreateBody,
-} from '../routes/orchestrations/orchestration-queries.ts'
-import { sourceName } from '../routes/orchestrations/decision-parts.tsx'
-import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
-import {
-  useWorkflow,
-  useWorkflowPreflight,
-  useWorkflows,
-} from '../routes/workflows/workflow-queries.ts'
+import { useId, type ReactNode, type RefObject } from 'react'
 import { CloseIcon } from './BoldIcons.tsx'
+import { StartJobChatPick, StartJobRecipe, StartJobWhat } from './BoldStartJobFields.tsx'
+import { HelperFields, StartJobLaunches } from './BoldStartJobHelperFields.tsx'
+import { CheckFields } from './BoldStartJobCheckFields.tsx'
 import {
-  deadlineIso,
-  oneStepRecipe,
-  orchestrationPolicy,
-  orchestrationTitleOf,
-  scheduleLabel,
-  scheduleValue,
-  SCHEDULES,
-  titleOf,
-  triggerNameOf,
-  triggerRequest,
-  workflowPolicy,
-  type Ask,
-  type StartCheck,
-  type When,
-} from './bold-start-job.ts'
+  LimitsFields,
+  MoreOptionsFields,
+  StartJobInputs,
+  StartJobUnknownCost,
+} from './BoldStartJobLimitFields.tsx'
+import {
+  AskChoices,
+  StartJobAdvisor,
+  StartJobLead,
+  StartJobWhen,
+} from './BoldStartJobPlanFields.tsx'
+import {
+  AuthFields,
+  ChecklistContent,
+  ChecklistRows,
+  CloseConfirm,
+  CopyButton,
+  StartJobActions,
+  StartJobResult,
+  StartJobScheduled,
+} from './BoldStartJobParts.tsx'
 import { ReloadMcp } from './ReloadMcp.tsx'
+import { BusyDialog } from './room/BusyDialog.tsx'
+import type { Result, StartJobOptions } from './start-job-types.ts'
+import { useStartJobRefs } from './use-start-job-refs.ts'
+import { useStartJobView, type StartJobView } from './use-start-job-view.ts'
 import './bold-start.css'
 
-type RecipeChoice =
-  { kind: 'lead' } | { kind: 'none' } | { kind: 'workflow'; id: string; name: string }
-
-type Result =
-  | { kind: 'job'; title: string; jobId: string; orchestrationId?: string }
-  | { kind: 'workflow'; title: string; runId: string; jobId?: string }
-  | { kind: 'routine'; title: string; schedule: string }
-  | { kind: 'trigger'; title: string; url: string | null; secret: string }
-
-type JobLimits = {
-  exchangeBudget?: number
-  jobTurnLimit?: number
-  spendCapUsd?: number
-}
-
-const NO_AGENTS: AgentSummary[] = []
-/** The contract's default for a job's whole turn budget; a plain job's exchange slider is per back-and-forth. */
-const JOB_TURN_LIMIT = 40
-
-/** 3.23.0: where Start a job starts, when the opener knows (a chat's own button, `/run`). */
-export type StartJobOptions = {
-  /** The chat the run starts in; without it, the team room the address names. */
-  roomId?: string
-  /** `/run <name>`: the saved recipe to preselect (case-insensitive). */
-  recipeName?: string
-  /** 3.28.0: ask which chat it starts in ("Start in another chat…" from the busy dialog). */
-  pickChat?: boolean
-  /** The chat the person is leaving (it has a job running); the picker doesn't list it. */
-  exceptRoomId?: string
-}
-
-export const StartJobContext = createContext<{
-  openStartJob: (options?: StartJobOptions) => void
-} | null>(null)
-
-/** What the box takes for anything but a lead job (the earlier limit, kept). */
-const WHAT_CHARS = 4000
-function sizeText(n: number, unit: 'KB' | 'characters'): string {
-  return unit === 'KB' ? `${(n / 1024).toFixed(1)} KB` : `${n.toLocaleString()} characters`
-}
-
-export function useStartJob() {
-  return useContext(StartJobContext)
-}
-
-function checkOf(query: { isPending: boolean; isError: boolean }): StartCheck {
-  if (query.isPending)
-    return { key: 'team-room', status: 'pending', text: 'Checking the team room' }
-  if (query.isError)
-    return { key: 'team-room', status: 'fail', text: 'The team room could not be read' }
-  return { key: 'team-room', status: 'ok', text: 'The team room is ready' }
-}
-
-function checksFromPreflight(
-  pending: boolean,
-  failed: boolean,
-  checks: { id: string; status: 'ok' | 'fail' | 'unknown'; message: string }[] | undefined,
-  error?: unknown,
-): StartCheck[] {
-  if (pending)
-    return [{ key: 'preflight', status: 'pending', text: 'Checking Hermes and the team' }]
-  // The server's own reason in plain words, not "could not be read": a coding agent on a computer that can't run it as a
-  // service, or one that can't take job steps (3.13.2, owner: full-access agents showed only "could not be read").
-  if (
-    failed &&
-    error instanceof ApiError &&
-    ['coding_workers_need_units', 'unsupported_agent'].includes(error.code)
-  )
-    return [{ key: 'preflight', status: 'fail', text: describeCreateError(error) }]
-  if (failed || !checks)
-    return [{ key: 'preflight', status: 'fail', text: 'The checks could not be read' }]
-  return checks.map((check) => ({
-    key: check.id,
-    status: check.status === 'ok' ? 'ok' : 'fail',
-    text: check.status === 'unknown' ? `${check.message} (could not be checked)` : check.message,
-    ...(check.id === 'tool_readiness' && check.status !== 'ok' ? { reload: true } : {}),
-  }))
-}
-
-function Dot({ status }: { status: StartCheck['status'] }) {
-  return (
-    <span
-      className={`dot start-dot start-dot--${status}`}
-      style={{
-        background:
-          status === 'ok' ? 'var(--ok)' : status === 'fail' ? 'var(--bad)' : 'var(--warn)',
-      }}
-      aria-hidden="true"
-    />
-  )
-}
-
-function Checklist({
-  checks,
-  reload,
-  children,
-}: {
-  checks: StartCheck[]
-  /** What a line that offers Reload MCP shows next to its text. */
-  reload?: ReactNode
-  children?: ReactNode
-}) {
-  return (
-    <section className="inner start-checks" aria-label="Before it starts" data-protected="block">
-      <span className="lab">Before it starts</span>
-      <ul>
-        {checks.map((check) => (
-          <li key={check.key} className="row small">
-            <Dot status={check.status} />
-            <span className="grow">
-              {check.text}
-              {check.reload && reload && <span className="start-check-action">{reload}</span>}
-            </span>
-            <span className="sr">
-              {check.status === 'ok'
-                ? 'Passed'
-                : check.status === 'fail'
-                  ? 'Blocks starting'
-                  : 'Checking'}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {children}
-    </section>
-  )
-}
-
-function AgentPick({
-  agents,
-  leadId,
-  chosen,
-  onChange,
-}: {
-  agents: AgentSummary[]
-  leadId: string
-  chosen: string[]
-  onChange: (next: string[]) => void
-}) {
-  const options = agents.filter((agent) => agent.id !== leadId)
-  return (
-    <fieldset className="bold-agent-pick" data-protected="flex">
-      <legend className="lab">Agents allowed</legend>
-      <p className="small muted start-pick-note">
-        lead plans the work. Only these agents may take a step.
-      </p>
-      <div className="row wrap start-pick">
-        {options.map((agent) => {
-          const checked = chosen.includes(agent.id)
-          return (
-            <label key={agent.id} className="chip start-agent-chip">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  onChange(checked ? chosen.filter((id) => id !== agent.id) : [...chosen, agent.id])
-                }
-              />
-              <AgentGlyph agent={agent} size="sm" bare decorative />
-              <span>{agent.name}</span>
-            </label>
-          )
-        })}
-      </div>
-    </fieldset>
-  )
-}
+export { StartJobContext, useStartJob } from './start-job-context.ts'
+export type { StartJobOptions } from './start-job-types.ts'
 
 /** The Start a job dialog (PLAN 11.10c), rebuilt from the prototype's mStart and the trigger wizard. */
 export function BoldStartJob({
@@ -249,960 +43,20 @@ export function BoldStartJob({
   onClose: () => void
   options?: StartJobOptions
 }) {
-  const dialog = useRef<HTMLDivElement>(null)
-  const closeButton = useRef<HTMLButtonElement>(null)
+  const refs = useStartJobRefs()
+  const view = useStartJobView(onClose, options, refs)
   const titleId = useId()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const queryClient = useQueryClient()
-  const allAgents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
-  // Only agents that can take work: one still being set up, being deleted or removed is never offered (as in Add agent).
-  const agents = useMemo(
-    () => allAgents.filter((agent) => !agent.lifecycle || agent.lifecycle.state === 'ready'),
-    [allAgents],
-  )
-  const workflows = useWorkflows()
-  // The same stream-kept read of the team room as the room and Results (one cache entry, one reducer).
-  const teamRoomState = useStreamQuery(teamRoomQuery(null))
-  // 3.4.0: a job starts in the team room that is open (`?room=` names a team the person made), else the first one.
-  const teamRoomsState = useStreamQuery(teamRoomsQuery)
-  const openRoomId = new URLSearchParams(location.search).get('room')
-  const chosenTeam = openRoomId
-    ? teamRoomsState.data?.find((item) => item.id === openRoomId && !isEveryoneRoom(item))
-    : undefined
-  // 3.23.0: a chat that asks (its button, `/run`) names its room: a team or a group chat. A direct chat holds no run.
-  const allRoomsState = useStreamQuery(roomsQuery)
-  const allRooms = allRoomsState.data
-  const askedFound = options?.roomId
-    ? [...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].find(
-        (item) => item.id === options.roomId,
-      )
-    : undefined
-  const askedRoom = askedFound && !askedFound.archived ? askedFound : null
-  const askedArchived = Boolean(askedFound?.archived)
-  const askedDirect =
-    options?.roomId !== undefined &&
-    askedFound === undefined &&
-    (allRooms?.directs ?? []).some((item) => item.id === options.roomId)
-  // A named chat that is archived or unknown never falls back to the team room: the run would start in the wrong place.
-  const askedLoading =
-    options?.roomId !== undefined &&
-    askedFound === undefined &&
-    !askedDirect &&
-    (allRoomsState.status === 'pending' || teamRoomsState.status === 'pending')
-  const askedMissing =
-    options?.roomId !== undefined && askedFound === undefined && !askedDirect && !askedLoading
-  const askedBlocked = askedArchived || askedMissing || askedLoading
-  // 3.28.0: "Start in another chat…" asks which chat (null = not asking). The chat that is busy isn't offered.
-  const [chatPick, setChatPick] = useState<string | null>(options?.pickChat ? '' : null)
-  const [leftRoomId, setLeftRoomId] = useState<string | null>(options?.exceptRoomId ?? null)
-  const chatChoices = [...(teamRoomsState.data ?? []), ...(allRooms?.rooms ?? [])].filter(
-    (item, index, all) =>
-      !item.archived &&
-      item.id !== leftRoomId &&
-      all.findIndex((other) => other.id === item.id) === index,
-  )
-  const defaultRoom = askedBlocked
-    ? null
-    : (askedRoom ?? chosenTeam ?? teamRoomState.data?.room ?? null)
-  const startRoom =
-    chatPick === null ? defaultRoom : (chatChoices.find((item) => item.id === chatPick) ?? null)
-  // The room's jobs: one job per chat, so a start into a chat that is busy asks first.
-  const startRoomJobs = useStreamQuery(roomJobsQuery(startRoom?.id ?? null)).data
-  const runningJob = activeJobs(startRoomJobs ?? [])[0] ?? null
-  const [busyStart, setBusyStart] = useState<BusyStart | null>(null)
-  const teamRoom = {
-    data: teamRoomState.data,
-    isPending: teamRoomState.status === 'pending',
-    isError: teamRoomState.status === 'error',
-  }
-
-  const [what, setWhat] = useState('')
-  // When the dialog opened: a deadline before it is already past (read once, not on every render).
-  const [openedAt] = useState(() => Date.now())
-  const [recipe, setRecipe] = useState<RecipeChoice>({ kind: 'lead' })
-  const [when, setWhen] = useState<When>('once')
-  const [ask, setAsk] = useState<Ask>('risky')
-  const [turns, setTurns] = useState(8)
-  const [cap, setCap] = useState(5)
-  // 3.27.0: a lead-decides run keeps going until the person stops it; that choice needs a spend cap.
-  const [untilStoppedChoice, setUntilStopped] = useState(true)
-  const [deadlineEnabled, setDeadlineEnabled] = useState(false)
-  const [deadline, setDeadline] = useState('')
-  const [schedule, setSchedule] = useState<string>(SCHEDULES[0].label)
-  const [triggerApp, setTriggerApp] = useState('Another app')
-  const [triggerName, setTriggerName] = useState('')
-  const [unknownSpend, setUnknownSpend] = useState<'pause' | 'continue'>('pause')
-  const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
-  const [ack, setAck] = useState(false)
-  // The policy ids the person accepted the reach of, as one key: a changed id is not covered and is asked again.
-  const [reachAcceptedKey, setReachAcceptedKey] = useState<string | null>(null)
-  // Recipe options under "More options"; blank/null = the preflight's own defaults (the classic start dialog's).
-  // Raw text, so an empty field is invalid rather than 0; null = untouched = the preflight's default.
-  const [codingSteps, setCodingSteps] = useState<string | null>(null)
-  const [quotaFloor, setQuotaFloor] = useState('')
-  const [concurrent, setConcurrent] = useState<string | null>(null)
-  const [estimate, setEstimate] = useState<string | null>(null)
-  const [saveRecipe, setSaveRecipe] = useState(false)
-  const [inputs, setInputs] = useState<Record<string, string>>({})
-  const [allowed, setAllowed] = useState<string[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<Result | null>(null)
-  const [saveWarning, setSaveWarning] = useState<string | null>(null)
-  const [dirty, setDirty] = useState(false)
-  const [confirmClose, setConfirmClose] = useState(false)
-  // One key for one start attempt; a retry of the job step replays instead of making a second run or job.
-  const attemptKey = useRef<string | null>(null)
-  /** The running job "Stop the job and start this" just ended: not asked about again while the room catches up. */
-  const stoppedForStart = useRef<string | null>(null)
-  const starting = useRef(false)
-  const savedRecipeName = useRef<string | null>(null)
-  const returnFocus = useRef<HTMLElement | null>(null)
-  const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
-
-  const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
-  const askedProblem =
-    chatPick !== null
-      ? null
-      : askedDirect
-        ? 'Runs start in a group chat.'
-        : askedArchived
-          ? 'This chat is archived; unarchive it to start a run here.'
-          : askedMissing
-            ? 'Couldn’t find that chat.'
-            : null
-  const roomCheck: StartCheck = askedProblem
-    ? { key: 'team-room', status: 'fail', text: askedProblem }
-    : chatPick !== null
-      ? startRoom
-        ? { key: 'team-room', status: 'ok', text: `The job opens in ${startRoom.name}` }
-        : { key: 'team-room', status: 'fail', text: 'Choose a chat to start this in' }
-      : askedLoading
-        ? { key: 'team-room', status: 'pending', text: 'Checking the chat' }
-        : checkOf(teamRoom)
-  const roomProblem =
-    askedProblem ??
-    (chatPick !== null ? 'Choose a chat to start this in.' : 'The team room is not ready yet.')
-  const teamLead = startRoom?.leadAgentId ?? null
-  // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
-  const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
-  const [planner, setPlanner] = useState<string | null>(null)
-  // 3.13: the oracle. The folder stays derived (the first chosen coding agent's workspace) until the person types one.
-  const [checkCommand, setCheckCommand] = useState('')
-  // 3.14: the advisor; '' = none. Derived below so a lead change to the same agent clears it.
-  const [advisorPick, setAdvisorPick] = useState('')
-  // 3.15: who the advisor helps. On call (default) also lets a Claude Code worker ask it while it works.
-  const [checkFolder, setCheckFolder] = useState<string | null>(null)
-  // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
-  const [helperPick, setHelperPick] = useState<string[]>([])
-  // 3.13.1: who answers votes; empty = the helpers.
-  const [voterPick, setVoterPick] = useState<string[]>([])
-  // 3.13.1: raw text; null = follows the suggestion until the person types.
-  const [launchesText, setLaunchesText] = useState<string | null>(null)
-  const [helperConcurrent, setHelperConcurrent] = useState('3')
-  const [helperSteps, setHelperSteps] = useState('20')
-  // 3.14: no helper limit (until the job ends), and the automatic votes and audits.
-  const [helperNoLimit, setHelperNoLimit] = useState(false)
-  const [autoVote, setAutoVote] = useState(false)
-  const [autoVoteK, setAutoVoteK] = useState('3')
-  const [autoAudit, setAutoAudit] = useState(false)
-  const [helperScan, setHelperScan] = useState(false)
-  const [helperFolder, setHelperFolder] = useState<string | null>(null)
-  const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
-  const [checkEachStep, setCheckEachStep] = useState(false)
-  const [checkMinutes, setCheckMinutes] = useState('10')
-  const [authNeeded, setAuthNeeded] = useState(false)
-  const [authPassword, setAuthPassword] = useState('')
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [authBusy, setAuthBusy] = useState(false)
-  const authInput = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (!authNeeded) return
-    const input = authInput.current
-    input?.focus()
-    // jsdom has no scrollIntoView.
-    input?.scrollIntoView?.({ block: 'center' })
-  }, [authNeeded])
-  const leadId =
-    (teamLead && !leadIsCoding
-      ? teamLead
-      : planner && hermesAgents.some((agent) => agent.id === planner)
-        ? planner
-        : hermesAgents[0]?.id) ?? ''
-  // A pick that became the lead is dropped for good, so it doesn't come back when the lead changes again.
-  const [seenLead, setSeenLead] = useState(leadId)
-  if (seenLead !== leadId) {
-    setSeenLead(leadId)
-    if (advisorPick === leadId) setAdvisorPick('')
-    if (helperPick.includes(leadId)) setHelperPick(helperPick.filter((id) => id !== leadId))
-    if (voterPick.includes(leadId)) setVoterPick(voterPick.filter((id) => id !== leadId))
-  }
-  const roomLeadName = teamLead
-    ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
-    : null
-  const defaultAllowed = agents.filter((agent) => agent.id !== leadId).map((agent) => agent.id)
-  // The planner is never also a step's agent, even after the person changed who plans (3.7.5 review).
-  const allowedFor = (allowed ?? defaultAllowed).filter((id) => id !== leadId)
-  const leadAgent = agents.find((agent) => agent.id === leadId)
-
-  const selectedWorkflowId = recipe.kind === 'workflow' ? recipe.id : undefined
-  const workflow = useWorkflow(selectedWorkflowId)
-  const workflowDefinition = workflow.data?.latest.definition
-  const workflowVersion = workflow.data?.latestVersion
-  const workflowPreflight = useWorkflowPreflight(selectedWorkflowId, workflowVersion)
-  const advisorId =
-    advisorPick !== '' && advisorPick !== leadId && agents.some((agent) => agent.id === advisorPick)
-      ? advisorPick
-      : ''
-  const helperIds = helperPick.filter(
-    (id) => id !== leadId && agents.some((agent) => agent.id === id),
-  )
-  const voterIds = voterPick.filter(
-    (id) => id !== leadId && agents.some((agent) => agent.id === id),
-  )
-  // The advisor, the helpers and the voters run as steps, so the preflight checks them like allowed agents (policy and reach included).
-  const preflightAgents = [
-    ...allowedFor,
-    ...(advisorId !== '' ? [advisorId] : []),
-    ...helperIds,
-    ...voterIds,
-  ].filter((id, index, all) => all.indexOf(id) === index)
-  const orchestrationPreflight = usePreflight(leadId, preflightAgents)
-  const codingAgents = useQuery({
-    queryKey: ['coding', 'agents'],
-    queryFn: async ({ signal }) =>
-      CodingAgentsResponseSchema.parse(await apiFetch('coding-agents', { signal })).items,
-    retry: false,
-  })
-  const codingWorkspace = (codingAgents.data ?? []).find((item) =>
-    allowedFor.includes(item.id),
-  )?.workspace
-  const checkFolderNow = checkFolder ?? codingWorkspace ?? ''
-  // The scan folder follows the check's folder until the person types one.
-  const helperFolderNow = helperFolder ?? checkFolderNow
-  const helperConcurrentNumber = Number(helperConcurrent)
-  const helperStepsNumber = Number(helperSteps)
-  const autoVoteKNumber = Number(autoVoteK)
-  // Under "approve every step" the votes are you, so Score doesn't vote first.
-  const autoVoteBlocked = ask === 'plan'
-  const autoVoteOn = autoVote && !autoVoteBlocked
-
-  const routineQueries = useQueries({
-    queries: agents.map((agent) => ({
-      queryKey: routinesKey(agent.id),
-      queryFn: ({ signal }: { signal: AbortSignal }) => fetchRoutines(agent.id, signal),
-      retry: false,
-    })),
-  })
-  const scheduled = routineQueries.flatMap((query, index) => {
-    const agentId = agents[index]?.id
-    return agentId ? (query.data ?? []).map((routine) => ({ ...routine, agentId })) : []
-  })
-
-  useEffect(() => {
-    returnFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null
-    dialog.current?.focus()
-    return () => {
-      const opener = returnFocus.current
-      if (opener?.isConnected) opener.focus()
-    }
-  }, [])
-
-  const orchestrationWorkers = orchestrationPreflight.data?.workers ?? []
-  const workflowWorkers = workflowPreflight.data?.workers ?? []
-  const orchestrationReach = orchestrationWorkers.flatMap((worker) =>
-    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
-  )
-  const workflowReach = workflowWorkers.flatMap((worker) =>
-    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
-  )
-  // A routine or a trigger starts its work through the lead later; only a run started now uses these workers and their
-  // reach. Keeping them out of that decision stops a check for a run that is not being started.
-  const workersAtStake =
-    when === 'once'
-      ? recipe.kind === 'workflow'
-        ? workflowWorkers
-        : recipe.kind === 'lead'
-          ? orchestrationWorkers
-          : []
-      : []
-  const reachAtStake = workersAtStake.flatMap((worker) =>
-    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
-  )
-  const reachKey = [...reachAtStake].sort().join('|')
-  const reachAccepted = reachKey !== '' && reachAcceptedKey === reachKey
-  const reachCovered = reachAtStake.length === 0 || reachAccepted
-  const quotaFloorValid =
-    quotaFloor.trim() === '' ||
-    (Number.isInteger(Number(quotaFloor)) && Number(quotaFloor) >= 0 && Number(quotaFloor) <= 50)
-  const textIn = (text: string | null, min: number, max: number, whole: boolean) =>
-    text === null ||
-    (text.trim() !== '' &&
-      Number.isFinite(Number(text)) &&
-      Number(text) >= min &&
-      Number(text) <= max &&
-      (!whole || Number.isInteger(Number(text))))
-  const concurrentValid = textIn(concurrent, 1, 3, true)
-  const estimateValid = textIn(estimate, 0.01, 1000, false)
-  const codingStepsValid = textIn(codingSteps, 1, ORCH_LIMITS.maxCodingSteps, true)
-  const checkMinutesNumber = Number(checkMinutes)
-  const checkMinutesValid =
-    Number.isInteger(checkMinutesNumber) && checkMinutesNumber >= 1 && checkMinutesNumber <= 60
-  const checkOn = checkCommand.trim() !== ''
-  const checkProblem = !checkOn
-    ? null
-    : !checkFolderNow.startsWith('/')
-      ? 'The check needs an absolute folder, like /home/you/project'
-      : !checkMinutesValid
-        ? 'The check timeout must be 1 to 60 minutes'
-        : null
-  const helpersOn = helperIds.length > 0
-  const isCodingAgent = (id: string) => {
-    const runtime = agents.find((agent) => agent.id === id)?.runtime
-    return runtime !== undefined && runtime !== 'hermes'
-  }
-  const codingHelpersNow = [...helperIds, ...voterIds].some(isCodingAgent)
-  const codingAdvisorNow = advisorId !== '' && isCodingAgent(advisorId)
-  const launchesInUse =
-    orchestrationWorkers.length > 0 ||
-    allowedFor.some(isCodingAgent) ||
-    codingHelpersNow ||
-    codingAdvisorNow
-  const launchesSuggested = suggestedCodingSteps({
-    codingHelpers: codingHelpersNow,
-    helperSteps: helperNoLimit
-      ? null
-      : Number.isInteger(helperStepsNumber)
-        ? helperStepsNumber
-        : 20,
-    codingAdvisor: codingAdvisorNow,
-  })
-  const launchesNow = launchesText ?? String(launchesSuggested)
-  const launchesValid = textIn(launchesNow, 1, ORCH_LIMITS.maxCodingSteps, true)
-  const launchesProblem =
-    launchesInUse && !launchesValid
-      ? `Coding-agent launches must be a whole number from 1 to ${ORCH_LIMITS.maxCodingSteps}`
-      : null
-  const helperProblem = !helpersOn
-    ? voterIds.length > 0
-      ? 'Pick at least one helper, or clear the voters'
-      : null
-    : !(
-          Number.isInteger(helperConcurrentNumber) &&
-          helperConcurrentNumber >= 1 &&
-          helperConcurrentNumber <= 6
-        )
-      ? 'Helpers at once must be 1 to 6'
-      : !helperNoLimit &&
-          !(
-            Number.isInteger(helperStepsNumber) &&
-            helperStepsNumber >= 1 &&
-            helperStepsNumber <= 60
-          )
-        ? 'Helper steps must be 1 to 60'
-        : autoVoteOn &&
-            !(Number.isInteger(autoVoteKNumber) && autoVoteKNumber >= 3 && autoVoteKNumber <= 7)
-          ? 'Voters per vote must be 3 to 7'
-          : helperScan && !helperFolderNow.trim().startsWith('/')
-            ? 'The scan needs an absolute folder, like /home/you/project'
-            : null
-  const optionProblems = [
-    ...(concurrentValid ? [] : ['Steps at the same time must be 1 to 3']),
-    ...(estimateValid ? [] : ['Estimate per step must be above 0 and at most 1000']),
-    ...(workflowWorkers.length > 0 && !codingStepsValid
-      ? [`Most coding steps must be 1 to ${ORCH_LIMITS.maxCodingSteps}`]
-      : []),
-    ...(workflowWorkers.length > 0 && !quotaFloorValid
-      ? ['Quota floor must be a whole number from 0 to 50, or blank']
-      : []),
-  ]
-
-  const nowOnce = when === 'once'
-  const isLead = nowOnce && recipe.kind === 'lead'
-  const isPlain = nowOnce && recipe.kind === 'none'
-  const untilStopped = isLead && untilStoppedChoice
-  const capProblem =
-    untilStopped && cap <= 0
-      ? 'Set a spend cap. A run that keeps going until you stop it needs one, so it can’t run up a bill.'
-      : null
-  const isSavedRecipe = nowOnce && recipe.kind === 'workflow'
-  const showWhat = !isSavedRecipe
-  const showRecipe = nowOnce
-  const showAsk = nowOnce && !isPlain
-  const showDeadline = nowOnce && !isPlain
-  const showUnknownCost = nowOnce && isSavedRecipe
-  const showSaveRecipe = nowOnce && !isSavedRecipe
-  const jobTitle = isSavedRecipe && nowOnce ? titleOf(recipe.name) : titleOf(what)
-  const saveName = orchestrationTitleOf(what)
-  const deadlineAt = deadlineEnabled ? deadlineIso(deadline) : undefined
-  const deadlinePast = deadlineAt !== undefined && Date.parse(deadlineAt) <= openedAt
-
-  const missingInputs =
-    isSavedRecipe && workflowDefinition
-      ? workflowDefinition.inputs.filter(
-          (input) => input.required && (inputs[input.name] ?? '').trim() === '',
-        )
-      : []
-
-  let checks: StartCheck[] = []
-  if (isSavedRecipe) {
-    const preflight = workflowPreflight.data
-    checks = [
-      roomCheck,
-      ...checksFromPreflight(
-        workflow.isPending || workflowPreflight.isPending,
-        workflow.isError || workflowPreflight.isError,
-        preflight?.checks,
-      ),
-      ...(preflight?.issues ?? [])
-        .filter((issue) => issue.severity === 'error')
-        .map((issue) => ({
-          key: `issue-${issue.code}-${issue.nodeId ?? ''}`,
-          status: 'fail' as const,
-          text: issue.message,
-        })),
-      ...(optionProblems.length
-        ? [{ key: 'options', status: 'fail' as const, text: `More options: ${optionProblems[0]}` }]
-        : []),
-      ...(missingInputs.length
-        ? [
-            {
-              key: 'inputs',
-              status: 'fail' as const,
-              text: `Fill in ${missingInputs.map((input) => input.label).join(', ')}`,
-            },
-          ]
-        : []),
-    ]
-  } else if (isLead && nowOnce) {
-    const preflight = orchestrationPreflight.data
-    checks = [
-      roomCheck,
-      ...checksFromPreflight(
-        orchestrationPreflight.isPending,
-        orchestrationPreflight.isError,
-        preflight?.checks,
-        orchestrationPreflight.error,
-      ),
-      ...(allowedFor.length === 0
-        ? [
-            {
-              key: 'agents',
-              status: 'fail' as const,
-              text: 'Choose at least one agent for the steps',
-            },
-          ]
-        : []),
-    ]
-  } else if (nowOnce) {
-    checks = [roomCheck, { key: 'job', status: 'ok', text: 'The job opens in the team room' }]
-  } else if (when === 'schedule') {
-    checks.push(
-      leadId
-        ? { key: 'schedule-agent', status: 'ok', text: `The schedule runs as ${leadId}` }
-        : { key: 'schedule-agent', status: 'fail', text: 'No agent is available for the schedule' },
-      schedule
-        ? { key: 'schedule', status: 'ok', text: `It repeats ${schedule.toLowerCase()}` }
-        : { key: 'schedule', status: 'fail', text: 'Choose when it repeats' },
-    )
-  } else {
-    checks.push(
-      titleOf(what) === 'New job'
-        ? {
-            key: 'trigger-name',
-            status: 'fail',
-            text: 'Give the trigger a name or describe the work',
-          }
-        : {
-            key: 'trigger-name',
-            status: 'ok',
-            text: `It is called ${triggerNameOf(triggerName, what)}`,
-          },
-      triggerApp.trim()
-        ? { key: 'trigger-app', status: 'ok', text: `Calls come from ${triggerApp.trim()}` }
-        : { key: 'trigger-app', status: 'fail', text: 'Name the app it comes from' },
-    )
-  }
-  if (showDeadline && deadlineEnabled) {
-    checks.push({
-      key: 'deadline',
-      status: deadlineAt && !deadlinePast ? 'ok' : 'fail',
-      text: !deadlineAt
-        ? 'Pick a deadline date and time'
-        : deadlinePast
-          ? 'Pick a deadline in the future'
-          : 'The run stops if that deadline passes',
-    })
-  }
-  if (!reachCovered)
-    checks.push({
-      key: 'reach',
-      status: 'fail',
-      text: 'Accept what the coding agents can read before you start',
-    })
-
-  const checksPass = checks.length > 0 && checks.every((check) => check.status === 'ok')
-  const hasWhat = (isSavedRecipe && nowOnce) || what.trim().length > 0
-  // 3.13.2 (owner: a long prompt was cut at 4,000 characters without a word). A job the lead runs carries the text as its
-  // goal, which the server takes up to 8 KB; the other paths keep 4,000 characters. Nothing is cut: Start says why.
-  const whatLimit =
-    isLead && !isSavedRecipe
-      ? {
-          size: new TextEncoder().encode(what.trim()).length,
-          max: ORCH_LIMITS.goalBytes,
-          unit: 'KB' as const,
-        }
-      : {
-          // UTF-16 units, as the server's limit and the trigger's own cut count them.
-          size: what.trim().length,
-          max: WHAT_CHARS,
-          unit: 'characters' as const,
-        }
-  const whatProblem =
-    whatLimit.size > whatLimit.max
-      ? `That’s too long (${sizeText(whatLimit.size, whatLimit.unit)} of ${sizeText(whatLimit.max, whatLimit.unit)}). Put the details in a file the agents can read, and point to it here.`
-      : null
-  const needsLead = isLead || when === 'schedule'
-  const canStart =
-    !busy &&
-    !result &&
-    hasWhat &&
-    whatProblem === null &&
-    ack &&
-    checksPass &&
-    reachCovered &&
-    (!isSavedRecipe || optionProblems.length === 0) &&
-    capProblem === null &&
-    (!isLead || (checkProblem === null && helperProblem === null && launchesProblem === null)) &&
-    missingInputs.length === 0 &&
-    (!needsLead || leadId !== '')
-
-  // An archived recipe is not offered (3.8.0); a `?recipe=` link to one falls back to lead decides with a notice.
-  const savedRecipes = (workflows.data?.items ?? []).filter((item) => !item.archivedAt)
-  // `?recipe=<id>` (the Recipes page's Run) opens the dialog with that saved recipe already chosen, once.
-  const wantedRecipe = new URLSearchParams(location.search).get('recipe')
-  const appliedWanted = useRef(false)
-  // `/run <name>` preselects by name; several or none leave "lead decides" and say so (below).
-  const namedMatches = options?.recipeName
-    ? savedRecipes.filter((item) => item.name.toLowerCase() === options.recipeName?.toLowerCase())
-    : []
-  const wantedItem = wantedRecipe
-    ? savedRecipes.find((item) => item.id === wantedRecipe)
-    : namedMatches.length === 1
-      ? namedMatches[0]
-      : undefined
-  const nameNotice =
-    options?.recipeName && !wantedRecipe && workflows.data && namedMatches.length !== 1
-      ? namedMatches.length > 1
-        ? `More than one recipe is called “${options.recipeName}”. Pick one below.`
-        : `No saved recipe is called “${options.recipeName}”. Pick one below.`
-      : null
-  const wantedArchived =
-    wantedRecipe !== null &&
-    (workflows.data?.items ?? []).some((item) => item.id === wantedRecipe && item.archivedAt)
-  useEffect(() => {
-    if (!wantedItem || appliedWanted.current) return
-    appliedWanted.current = true
-    setRecipe({ kind: 'workflow', id: wantedItem.id, name: wantedItem.name })
-  }, [wantedItem])
-  const recipeOptions: { key: string; label: string; choice: RecipeChoice }[] = [
-    { key: 'lead', label: 'lead decides', choice: { kind: 'lead' } },
-    { key: 'none', label: 'None', choice: { kind: 'none' } },
-    ...savedRecipes.map((item) => ({
-      key: `workflow:${item.id}`,
-      label: item.name,
-      choice: { kind: 'workflow' as const, id: item.id, name: item.name },
-    })),
-  ]
-
-  /** A real radio group: one tab stop, arrows move and choose the next chip. */
-  function onRecipeKeyDown(event: KeyboardEvent<HTMLButtonElement>, key: string) {
-    const index = recipeOptions.findIndex((option) => option.key === key)
-    if (index < 0) return
-    const last = recipeOptions.length - 1
-    let next: number
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
-      next = index === last ? 0 : index + 1
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
-      next = index === 0 ? last : index - 1
-    else if (event.key === 'Home') next = 0
-    else if (event.key === 'End') next = last
-    else return
-    event.preventDefault()
-    const option = recipeOptions[next]
-    if (!option) return
-    chooseRecipe(option.choice)
-    recipeButtons.current.get(option.key)?.focus()
-  }
-
-  function touch() {
-    setDirty(true)
-    setConfirmClose(false)
-    attemptKey.current = null
-  }
-
-  /** One key for one attempt: a replayed request returns the first answer, and a retry never makes a second run. */
-  function attemptPost(path: string, body: unknown) {
-    const key = attemptKey.current ?? newId()
-    attemptKey.current = key
-    return apiFetch(path, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': key },
-      body: JSON.stringify(body),
-    })
-  }
-
-  function requestClose() {
-    if ((result?.kind === 'trigger' && !confirmClose) || (!result && dirty)) {
-      setConfirmClose(true)
-      return
-    }
-    onClose()
-  }
-
-  function onDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      requestClose()
-      return
-    }
-    if (event.key !== 'Tab') return
-    const controls = [
-      ...(dialog.current?.querySelectorAll<HTMLElement>(
-        'input:not([disabled]), button:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
-      ) ?? []),
-    ].filter((element) => element.tabIndex >= 0)
-    const first = controls[0]
-    const last = controls[controls.length - 1]
-    if (!first || !last) return
-    const active = document.activeElement
-    if (event.shiftKey && (active === first || active === dialog.current)) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && (active === last || active === dialog.current)) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
-  function chooseRecipe(next: RecipeChoice) {
-    setRecipe(next)
-    setReachAcceptedKey(null)
-    setCodingSteps(null)
-    setQuotaFloor('')
-    setConcurrent(null)
-    setEstimate(null)
-    setError(null)
-    setResult(null)
-    touch()
-  }
-
-  function jobLimits(): JobLimits {
-    if (!nowOnce || isSavedRecipe) return {}
-    return {
-      exchangeBudget: turns,
-      jobTurnLimit: JOB_TURN_LIMIT,
-      ...(cap > 0 ? { spendCapUsd: cap } : {}),
-    }
-  }
-
-  /** The topic a run makes in the chat, in the run's own request: its title and the limits a plain job takes. */
-  function runTopic(title: string): RunTopicRequest {
-    if (!startRoom) throw new Error(roomProblem)
-    return { roomId: startRoom.id, title, ...jobLimits() }
-  }
-
-  async function createJob(title: string, limits: JobLimits) {
-    if (!startRoom) throw new Error(roomProblem)
-    return JobSchema.parse(
-      await attemptPost(`rooms/${encodeURIComponent(startRoom.id)}/jobs`, { title, ...limits }),
-    )
-  }
-
-  async function startOrchestration(topic: RunTopicRequest) {
-    const data = orchestrationPreflight.data
-    if (!data) throw new Error('The checks are not ready yet.')
-    const codingPolicies = Object.fromEntries(
-      orchestrationWorkers.flatMap((worker) =>
-        worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
-      ),
-    )
-    const body: OrchestrationCreateBody = {
-      title: orchestrationTitleOf(what),
-      topic,
-      goal: what.trim(),
-      leadAgentId: leadId,
-      allowedAgents: allowedFor,
-      ...(advisorId !== '' ? { advisorAgentId: advisorId } : {}),
-      ...(helpersOn
-        ? {
-            helpers: {
-              agentIds: helperIds,
-              maxConcurrent: helperConcurrentNumber,
-              maxSteps: helperNoLimit ? null : helperStepsNumber,
-              autoVote: autoVoteOn,
-              autoVoteK: autoVoteOn ? autoVoteKNumber : 3,
-              autoAudit,
-              scan: helperScan,
-              ...(helperScan ? { scanFolder: helperFolderNow.trim() } : {}),
-              splitTo: helperSplit,
-              ...(voterIds.length > 0 ? { voterIds } : {}),
-            },
-          }
-        : {}),
-      gatePolicy: orchestrationPolicy(ask),
-      ...(cap > 0 ? { budgetUsd: cap } : {}),
-      ...(deadlineAt ? { deadlineAt } : {}),
-      maxSteps: ORCH_DEFAULTS.maxSteps,
-      maxLeadTurns: turns,
-      ...(untilStopped ? { untilStopped: true } : {}),
-      maxConcurrentSteps: ORCH_DEFAULTS.maxConcurrentSteps,
-      leadTurnEstimateUsd: ORCH_DEFAULTS.leadTurnEstimateUsd,
-      stepEstimateUsd: ORCH_DEFAULTS.stepEstimateUsd,
-      acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
-      ...(checkOn
-        ? {
-            check: {
-              command: checkCommand.trim(),
-              workspace: checkFolderNow.trim(),
-              timeoutSec: checkMinutesNumber * 60,
-              when: checkEachStep ? 'each_step' : 'finish',
-            } satisfies OrchestrationCheck,
-          }
-        : {}),
-      ...(launchesInUse ? { codingSteps: Number(launchesNow) } : {}),
-      ...(orchestrationWorkers.length > 0
-        ? {
-            codingPolicies,
-            ...(orchestrationReach.length > 0
-              ? { acknowledgeCodingReach: { policyIds: orchestrationReach } }
-              : {}),
-          }
-        : {}),
-    }
-    return OrchestrationCreatedSchema.parse(await attemptPost('orchestrations', body))
-  }
-
-  async function startWorkflow(topic: RunTopicRequest) {
-    if (recipe.kind !== 'workflow') throw new Error('The recipe is not ready yet.')
-    if (!workflowDefinition || workflowVersion === undefined || !workflowPreflight.data)
-      throw new Error('The recipe is not ready yet.')
-    const data = workflowPreflight.data
-    const codingPolicies = Object.fromEntries(
-      workflowWorkers.flatMap((worker) =>
-        worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
-      ),
-    )
-    const body: WorkflowRunCreate = {
-      workflowId: recipe.id,
-      version: workflowVersion,
-      topic,
-      inputs: Object.fromEntries(
-        workflowDefinition.inputs.flatMap((input) => {
-          const value = (inputs[input.name] ?? '').trim()
-          return value ? [[input.name, value] as const] : []
-        }),
-      ),
-      agentMap: data.mapping.map(({ agentId, incarnation }) => ({ agentId, incarnation })),
-      gatePolicy: workflowPolicy(ask),
-      ...(cap > 0 ? { budgetUsd: cap } : {}),
-      ...(deadlineAt ? { deadlineAt } : {}),
-      unknownSpend,
-      maxConcurrentSteps:
-        concurrent === null ? data.defaults.maxConcurrentSteps : Number(concurrent),
-      stepEstimateUsd: estimate === null ? data.defaults.stepEstimateUsd : Number(estimate),
-      acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
-      ...(workflowWorkers.length > 0
-        ? {
-            codingPolicies,
-            codingSteps:
-              codingSteps === null ? (data.defaults.codingSteps ?? 1) : Number(codingSteps),
-            ...(quotaFloor.trim() !== '' && quotaFloorValid
-              ? { quotaFloorPercent: Number(quotaFloor) }
-              : {}),
-            ...(workflowReach.length > 0
-              ? { acknowledgeCodingReach: { policyIds: workflowReach } }
-              : {}),
-            ...(unknownSpend === 'pause' && unknownCost.length > 0
-              ? { acceptUnknownCost: unknownCost }
-              : {}),
-          }
-        : {}),
-    }
-    return WorkflowRunCreatedSchema.parse(await attemptPost('workflow-runs', body))
-  }
-
-  /** Saving a recipe happens after the work exists: a failed start must not leave a recipe behind. */
-  async function saveRecipeAfterStart() {
-    if (!saveRecipe || !showSaveRecipe || !leadId) return
-    if (savedRecipeName.current === saveName) return
-    savedRecipeName.current = saveName
-    try {
-      await attemptPost('workflows', {
-        definition: oneStepRecipe({ name: saveName, instruction: what, agentId: leadId }),
-      }).then((body) => WorkflowVersionSchema.parse(body))
-      await queryClient.invalidateQueries({ queryKey: ['workflows'] })
-      if (savedRecipes.some((item) => item.name === saveName))
-        setSaveWarning(`Saved “${saveName}” again; a recipe with that name already existed.`)
-    } catch (failure) {
-      setSaveWarning(`It started, but saving the recipe failed: ${startError(failure)}`)
-    }
-  }
-
-  /** One job per chat (3.28.0): the busy dialog names the running job and what was being started. */
-  function askBusy(running: { id: string; title: string }, note?: string) {
-    setBusyStart({
-      running,
-      chatName: startRoom?.name ?? 'This chat',
-      starting: isSavedRecipe && nowOnce ? `${jobTitle} · run “${recipe.name}”` : jobTitle,
-      ...(note ? { note } : {}),
-    })
-  }
-
-  async function start(proved = false) {
-    if (!canStart || starting.current) return
-    // A start into a chat that already has a job asks first. After "Stop the job and start this" the read of the room
-    // may not have caught up yet, so the job just stopped isn't asked about again: the server answers 409 while it is
-    // still stopping. The stop never stands in for the password step below (3.28.0 review).
-    if (nowOnce && startRoom && runningJob && runningJob.id !== stoppedForStart.current) {
-      attemptKey.current = null
-      askBusy(runningJob)
-      return
-    }
-    // 3.13: a check runs a command as this user, so starting needs the password or passkey first.
-    if (isLead && checkOn && !proved) {
-      setAuthError(null)
-      setAuthNeeded(true)
-      return
-    }
-    starting.current = true
-    setBusy(true)
-    setError(null)
-    setSaveWarning(null)
-    try {
-      const title = jobTitle
-      if (when === 'webhook') {
-        const made = TriggerCreatedSchema.parse(
-          await attemptPost(
-            'triggers',
-            triggerRequest({ name: triggerName, app: triggerApp, what }),
-          ),
-        )
-        setResult({
-          kind: 'trigger',
-          title: made.trigger.name,
-          url: made.trigger.url,
-          secret: made.secret,
-        })
-        return
-      }
-
-      if (when === 'schedule') {
-        const made = RoutineSummarySchema.parse(
-          await attemptPost(`agents/${encodeURIComponent(leadId)}/routines`, {
-            title,
-            schedule: scheduleValue(schedule),
-            prompt: what.trim(),
-          }),
-        )
-        await queryClient.invalidateQueries({ queryKey: routinesKey(leadId), exact: true })
-        setResult({ kind: 'routine', title: made.title, schedule })
-        return
-      }
-
-      if (isSavedRecipe) {
-        // 3.23.0: the run and its topic in the chat are made by one call, so there is no half-made state to repair.
-        const made = await startWorkflow(runTopic(title))
-        setResult({
-          kind: 'workflow',
-          title: made.run.title,
-          runId: made.run.id,
-          jobId: made.topicId,
-        })
-      } else if (isLead) {
-        const made = await startOrchestration(runTopic(title))
-        if (!made.topicId)
-          throw new Error('The run started but Score didn’t get its topic; open it from Recipes.')
-        setResult({
-          kind: 'job',
-          title,
-          jobId: made.topicId,
-          orchestrationId: made.orchestration.id,
-        })
-      } else {
-        const job = await createJob(title, jobLimits())
-        setResult({ kind: 'job', title, jobId: job.id })
-      }
-      await saveRecipeAfterStart()
-    } catch (failure) {
-      const running = jobRunningOf(failure)
-      if (running) {
-        // The server's answer is not replayed for a new try: the next start is a new attempt.
-        attemptKey.current = null
-        askBusy(
-          running,
-          running.id === stoppedForStart.current
-            ? 'Still stopping… try again in a moment.'
-            : undefined,
-        )
-        return
-      }
-      if (failure instanceof ApiError && failure.code === 'fresh_auth_required') {
-        setAuthError(startError(failure))
-        setAuthNeeded(true)
-        return
-      }
-      // A coding agent changed meanwhile: look again, and ask again where the reach changed.
-      if (failure instanceof ApiError && ['policy_changed', 'conflict'].includes(failure.code)) {
-        attemptKey.current = null
-        void workflowPreflight.refetch()
-        void orchestrationPreflight.refetch()
-      }
-      setError(startError(failure))
-    } finally {
-      starting.current = false
-      setBusy(false)
-    }
-  }
-
-  async function confirmThenStart(proof: () => Promise<unknown>) {
-    if (authBusy) return
-    setAuthBusy(true)
-    setAuthError(null)
-    try {
-      await proof()
-    } catch (failure) {
-      setAuthError(authProblem(failure))
-      setAuthBusy(false)
-      return
-    }
-    setAuthPassword('')
-    setAuthNeeded(false)
-    setAuthBusy(false)
-    await start(true)
-  }
-
-  function submitAuth(event: FormEvent) {
-    event.preventDefault()
-    void confirmThenStart(() =>
-      apiFetch('session/security/check', {
-        method: 'POST',
-        body: JSON.stringify({ password: authPassword }),
-      }),
-    )
-  }
+  const { authInputRef, attemptKeyRef, closeButtonRef, dialogRef, stoppedForStartRef } = refs
 
   return (
     <div
       className="bold-start-scrim"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) requestClose()
+        if (event.target === event.currentTarget) view.requestClose()
       }}
     >
       <div
-        ref={dialog}
+        ref={dialogRef}
         className="dialog bold-start-dialog"
         role="dialog"
         aria-modal="true"
@@ -1210,1159 +64,105 @@ export function BoldStartJob({
         tabIndex={-1}
         data-protected="block"
         data-decision
-        onKeyDown={onDialogKeyDown}
+        onKeyDown={view.onDialogKeyDown}
       >
         <div className="row">
           <h2 id={titleId} className="grow start-title">
             Start a job
           </h2>
           <button
-            ref={closeButton}
+            ref={closeButtonRef}
             type="button"
             className="icon-btn"
             aria-label="Close"
-            onClick={requestClose}
+            onClick={view.requestClose}
           >
             <CloseIcon />
           </button>
         </div>
 
-        {confirmClose && (
+        {view.confirmClose && (
           <CloseConfirm
-            secret={result?.kind === 'trigger'}
-            onKeep={() => setConfirmClose(false)}
+            secret={view.result?.kind === 'trigger'}
+            onKeep={() => view.setConfirmClose(false)}
             onClose={onClose}
           />
         )}
 
-        {busyStart && (
+        {view.busyStart && (
           <BusyDialog
-            busy={busyStart}
+            busy={view.busyStart}
             onStopAndStart={async () => {
-              stoppedForStart.current = busyStart.running.id
-              setBusyStart(null)
-              attemptKey.current = null
-              await start()
+              if (!view.busyStart) return
+              stoppedForStartRef.current = view.busyStart.running.id
+              view.setBusyStart(null)
+              attemptKeyRef.current = null
+              await view.start()
             }}
             onAnotherChat={() => {
               // The work stays as typed; only the chat changes. The busy chat is not offered again.
-              setLeftRoomId(startRoom?.id ?? null)
-              setChatPick('')
-              setBusyStart(null)
-              attemptKey.current = null
+              view.setLeftRoomId(view.startRoom?.id ?? null)
+              view.setChatPick('')
+              view.setBusyStart(null)
+              attemptKeyRef.current = null
             }}
-            onCancel={() => setBusyStart(null)}
+            onCancel={() => view.setBusyStart(null)}
           />
         )}
 
-        {result ? (
-          <ResultCard result={result} saveWarning={saveWarning} onClose={onClose} />
+        {view.result ? (
+          view.result.kind === 'trigger' ? (
+            <TriggerResult result={view.result} onClose={onClose} />
+          ) : (
+            <StartJobResult result={view.result} saveWarning={view.saveWarning} onClose={onClose} />
+          )
         ) : (
           <>
-            {chatPick !== null && (
-              <div>
-                <label htmlFor="start-chat" className="lab">
-                  Start it in
-                </label>
-                <select
-                  id="start-chat"
-                  className="field"
-                  value={chatPick}
-                  onChange={(event) => {
-                    setChatPick(event.target.value)
-                    attemptKey.current = null
-                    touch()
-                  }}
-                >
-                  <option value="">Choose a chat…</option>
-                  {chatChoices.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {showWhat && (
-              <div>
-                <label htmlFor="start-what" className="lab">
-                  What should the team do?
-                </label>
-                <textarea
-                  id="start-what"
-                  className="field start-what"
-                  rows={Math.min(
-                    14,
-                    Math.max(2, what.split('\n').length + Math.floor(what.length / 90)),
-                  )}
-                  aria-describedby="start-what-size"
-                  aria-invalid={whatProblem !== null}
-                  value={what}
-                  onChange={(event) => {
-                    setWhat(event.target.value)
-                    touch()
-                  }}
-                  autoFocus
-                />
-                {whatLimit.size > whatLimit.max * 0.75 && (
-                  <span
-                    id="start-what-size"
-                    className="small muted start-what-size"
-                    role={whatProblem ? 'alert' : undefined}
-                  >
-                    {whatProblem ??
-                      `${sizeText(whatLimit.size, whatLimit.unit)} of ${sizeText(whatLimit.max, whatLimit.unit)}`}
-                  </span>
-                )}
-              </div>
-            )}
+            {view.chatPick !== null && <StartJobChatPick view={view} />}
+            {view.showWhat && <StartJobWhat view={view} />}
+            {view.showRecipe && <StartJobRecipe view={view} />}
 
-            {showRecipe && (
-              <div>
-                <span className="lab">Recipe</span>
-                {nameNotice && (
-                  <p className="small muted" role="status">
-                    {nameNotice}
-                  </p>
-                )}
-                {wantedArchived && (
-                  <p className="small muted" role="status">
-                    That recipe is archived. Unarchive it in Recipes to use it.
-                  </p>
-                )}
-                <div className="row wrap" role="radiogroup" aria-label="Recipe">
-                  {recipeOptions.map((option) => {
-                    const chosen =
-                      option.choice.kind === 'workflow'
-                        ? isSavedRecipe &&
-                          recipe.kind === 'workflow' &&
-                          recipe.id === option.choice.id
-                        : recipe.kind === option.choice.kind
-                    return (
-                      <RecipeChip
-                        key={option.key}
-                        chosen={chosen}
-                        label={option.label}
-                        tabIndex={chosen ? 0 : -1}
-                        buttonRef={(element) => {
-                          if (element) recipeButtons.current.set(option.key, element)
-                          else recipeButtons.current.delete(option.key)
-                        }}
-                        onKeyDown={(event) => onRecipeKeyDown(event, option.key)}
-                        onClick={() => chooseRecipe(option.choice)}
-                      />
-                    )
-                  })}
-                  <Link
-                    className="link"
-                    to="/b/settings/recipes"
-                    onClick={() => {
-                      onClose()
-                      void navigate('/b/settings/recipes')
-                    }}
-                  >
-                    Edit recipes
-                  </Link>
-                </div>
-                {isSavedRecipe && workflowDefinition && (
-                  <div className="inner start-recipe-preview">
-                    <span className="small muted">
-                      {recipe.kind === 'workflow' ? recipe.name : 'Recipe'} · version{' '}
-                      {workflowVersion}
-                    </span>
-                    <span className="small">
-                      {workflowDefinition.nodes
-                        .filter((node) => node.kind === 'agent')
-                        .map((node) => node.label)
-                        .join(' → ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isLead && (
-              <>
-                <div className="row wrap start-lead">
-                  {leadIsCoding && hermesAgents.length > 0 ? (
-                    <label className="start-planner">
-                      <span className="lab">Who plans it</span>
-                      <select
-                        value={leadId}
-                        onChange={(event) => {
-                          setPlanner(event.target.value)
-                          touch()
-                        }}
-                      >
-                        {hermesAgents.map((agent) => (
-                          <option key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    leadAgent && (
-                      <span className="chip start-agent-chip">
-                        <AgentGlyph agent={leadAgent} size="sm" bare decorative />
-                        <span>{leadAgent.name} plans</span>
-                      </span>
-                    )
-                  )}
-                  <span className="small muted">
-                    {leadIsCoding
-                      ? `${roomLeadName} leads this room, but a coding agent can’t plan a “lead decides” job yet: a Hermes agent plans it.`
-                      : 'The lead decides the steps and hands them out.'}
-                  </span>
-                </div>
-                <AgentPick
-                  agents={agents}
-                  leadId={leadId}
-                  chosen={allowedFor}
-                  onChange={(next) => {
-                    setAllowed(next)
-                    touch()
-                  }}
-                />
-              </>
-            )}
+            {view.isLead && <StartJobLead view={view} />}
 
             <div
-              className={`start-controls start-controls--${!nowOnce ? 1 : showAsk ? 3 : 2} start-when`}
+              className={`start-controls start-controls--${!view.nowOnce ? 1 : view.showAsk ? 3 : 2} start-when`}
             >
-              <fieldset className="inner" style={{ border: 0, margin: 0 }}>
-                <legend className="lab start-legend">When</legend>
-                <div className="start-clear">
-                  {(
-                    [
-                      ['once', 'Now, once'],
-                      ['schedule', 'On a schedule'],
-                      ['webhook', 'When another app calls'],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <label className="check" key={id}>
-                      <input
-                        type="radio"
-                        name="start-when"
-                        checked={when === id}
-                        onChange={() => {
-                          setWhen(id)
-                          setError(null)
-                          setResult(null)
-                          touch()
-                        }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                {when === 'schedule' && (
-                  <label className="start-field">
-                    <span className="sr">Schedule</span>
-                    <select
-                      className="field"
-                      aria-label="Schedule"
-                      value={schedule}
-                      onChange={(event) => {
-                        setSchedule(event.target.value)
-                        touch()
-                      }}
-                    >
-                      {SCHEDULES.map((option) => (
-                        <option key={option.label}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {when === 'webhook' && (
-                  <div className="start-trigger-fields">
-                    <label className="start-field">
-                      <span className="lab">Trigger name</span>
-                      <input
-                        className="field"
-                        maxLength={100}
-                        value={triggerName}
-                        placeholder="e.g. New support ticket"
-                        onChange={(event) => {
-                          setTriggerName(event.target.value)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <label className="start-field">
-                      <span className="lab">The app it comes from</span>
-                      <input
-                        className="field"
-                        maxLength={100}
-                        value={triggerApp}
-                        onChange={(event) => {
-                          setTriggerApp(event.target.value)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <span className="small muted">
-                      Calls send <code>ref</code>, and may send <code>title</code>,{' '}
-                      <code>link</code> and <code>details</code>. The address and secret are made
-                      when you start.
-                    </span>
-                  </div>
-                )}
-              </fieldset>
+              <StartJobWhen view={view} />
 
-              {showAsk && (
-                <fieldset
-                  className="inner start-ask"
-                  data-protected="block"
-                  style={{ border: 0, margin: 0 }}
-                >
-                  <legend className="lab start-legend">Ask me before</legend>
-                  <div className="start-clear">
-                    {(
-                      [
-                        ['plan', 'The plan starts'],
-                        ['handoff', 'Every hand-off'],
-                        ['risky', 'Only risky actions'],
-                      ] as const
-                    ).map(([id, label]) => (
-                      <label className="check" key={id}>
-                        <input
-                          type="radio"
-                          name="start-ask"
-                          checked={ask === id}
-                          onChange={() => {
-                            setAsk(id)
-                            touch()
-                          }}
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              )}
+              {view.showAsk && <AskSection view={view} />}
 
-              {isLead && (
-                <div className="start-field start-advisor">
-                  <label htmlFor="start-advisor-select">Advisor</label>
-                  <select
-                    id="start-advisor-select"
-                    aria-describedby="start-advisor-help"
-                    value={advisorId}
-                    onChange={(event) => {
-                      setAdvisorPick(event.target.value)
-                      touch()
-                    }}
-                  >
-                    <option value="">None</option>
-                    {agents
-                      .filter((agent) => agent.id !== leadId)
-                      .map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="small muted" id="start-advisor-help">
-                    A strong model Score asks before the plan, when a failure repeats, and before it
-                    finishes. Its advice goes to the lead; the lead decides. Choose an agent set up
-                    for reviewing: it runs with its own tools.
-                  </span>
-                </div>
-              )}
+              {view.isLead && <StartJobAdvisor view={view} />}
 
-              {isLead && (
-                <details
-                  className="inner start-helpers"
-                  data-protected="block"
-                  open={helperProblem ? true : undefined}
-                >
-                  <summary>
-                    Helpers
-                    {helpersOn && (
-                      <span className="small muted">
-                        {' '}
-                        · {helperIds.length} {helperIds.length === 1 ? 'helper' : 'helpers'}
-                        {helperScan && <> · scans {helperFolderNow.trim() || 'no folder yet'}</>}
-                      </span>
-                    )}
-                  </summary>
-                  <div className="start-clear">
-                    <fieldset className="start-field">
-                      <legend>Helper agents (1 to 4)</legend>
-                      {agents
-                        .filter((agent) => agent.id !== leadId)
-                        .map((agent) => {
-                          const on = helperIds.includes(agent.id)
-                          return (
-                            <label className="check small" key={agent.id}>
-                              <input
-                                type="checkbox"
-                                checked={on}
-                                disabled={!on && helperIds.length >= 4}
-                                onChange={(event) => {
-                                  setHelperPick(
-                                    event.target.checked
-                                      ? [...helperIds, agent.id]
-                                      : helperIds.filter((id) => id !== agent.id),
-                                  )
-                                  touch()
-                                }}
-                              />
-                              {agent.name}
-                            </label>
-                          )
-                        })}
-                    </fieldset>
-                    <fieldset className="start-field">
-                      <legend>Who votes (up to 4)</legend>
-                      <span className="small muted" id="start-voters-help">
-                        {voterIds.length === 0 ? 'The helpers vote. ' : ''}Votes go only to these
-                        agents, for example the model you keep for small decisions; the helpers keep
-                        searching, grepping and auditing.
-                      </span>
-                      {agents
-                        .filter((agent) => agent.id !== leadId)
-                        .map((agent) => {
-                          const on = voterIds.includes(agent.id)
-                          return (
-                            <label className="check small" key={agent.id}>
-                              <input
-                                type="checkbox"
-                                aria-label={`Votes: ${agent.name}`}
-                                aria-describedby="start-voters-help"
-                                checked={on}
-                                disabled={!on && voterIds.length >= 4}
-                                onChange={(event) => {
-                                  setVoterPick(
-                                    event.target.checked
-                                      ? [...voterIds, agent.id]
-                                      : voterIds.filter((id) => id !== agent.id),
-                                  )
-                                  touch()
-                                }}
-                              />
-                              {agent.name}
-                            </label>
-                          )
-                        })}
-                    </fieldset>
-                    <label className="start-field">
-                      <span>At once (1 to 6)</span>
-                      <input
-                        className="field"
-                        type="number"
-                        min={1}
-                        max={6}
-                        value={helperConcurrent}
-                        onChange={(event) => {
-                          setHelperConcurrent(event.target.value)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <label className="start-field">
-                      <span>Helper steps (1 to 60)</span>
-                      <input
-                        className="field"
-                        type="number"
-                        min={1}
-                        max={60}
-                        value={helperSteps}
-                        disabled={helperNoLimit}
-                        onChange={(event) => {
-                          setHelperSteps(event.target.value)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        aria-describedby="start-helper-nolimit-help"
-                        checked={helperNoLimit}
-                        onChange={(event) => {
-                          setHelperNoLimit(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      No limit (until the job ends)
-                    </label>
-                    <span className="small muted" id="start-helper-nolimit-help">
-                      Still bounded by the job&apos;s budget, coding-agent launches and the
-                      lead&apos;s turns: set a budget.
-                    </span>
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        aria-describedby="start-auto-vote-help"
-                        checked={autoVoteOn}
-                        disabled={autoVoteBlocked}
-                        onChange={(event) => {
-                          setAutoVote(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      Vote on every step before it starts
-                    </label>
-                    <span className="small muted" id="start-auto-vote-help">
-                      {autoVoteBlocked
-                        ? 'Not available when you approve every step: the vote is then yours. '
-                        : ''}
-                      Before each step the lead assigns starts, the voters judge the agent and
-                      approach. A clear no stops it and the lead reassigns; a split goes to the lead
-                      or to you.
-                    </span>
-                    {autoVoteOn && (
-                      <label className="start-field">
-                        <span>Voters per vote (3 to 7)</span>
-                        <input
-                          className="field"
-                          type="number"
-                          min={3}
-                          max={7}
-                          value={autoVoteK}
-                          onChange={(event) => {
-                            setAutoVoteK(event.target.value)
-                            touch()
-                          }}
-                        />
-                      </label>
-                    )}
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        aria-describedby="start-auto-audit-help"
-                        checked={autoAudit}
-                        onChange={(event) => {
-                          setAutoAudit(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      Audit every step after it finishes
-                    </label>
-                    <span className="small muted" id="start-auto-audit-help">
-                      A helper checks each finished step&apos;s change; its findings go to the lead.
-                    </span>
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        checked={helperScan}
-                        onChange={(event) => {
-                          setHelperScan(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      Scan the project first
-                    </label>
-                    {helperScan && (
-                      <label className="start-field">
-                        <span>Scan folder</span>
-                        <input
-                          className="field start-check-command"
-                          value={helperFolderNow}
-                          placeholder="/home/you/project"
-                          spellCheck={false}
-                          autoComplete="off"
-                          onChange={(event) => {
-                            setHelperFolder(event.target.value)
-                            touch()
-                          }}
-                        />
-                      </label>
-                    )}
-                    <fieldset className="start-field">
-                      <legend>When the helpers split on a vote</legend>
-                      {(
-                        [
-                          ['lead', 'The lead decides'],
-                          ['person', 'Ask me'],
-                        ] as const
-                      ).map(([id, label]) => (
-                        <label className="check small" key={id}>
-                          <input
-                            type="radio"
-                            name="start-helper-split"
-                            checked={helperSplit === id}
-                            onChange={() => {
-                              setHelperSplit(id)
-                              touch()
-                            }}
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </fieldset>
-                    <span className="small muted">
-                      Cheap agents for narrow, read-only work: the lead hands them searches, greps
-                      and audits, and asks them to vote on small choices. A clear majority (70% or
-                      more) is taken; a split goes to the lead or to you. They run with their own
-                      tools, so choose agents set up for reading.
-                    </span>
-                    {helperProblem && (
-                      <span className="small" role="alert">
-                        {helperProblem}
-                      </span>
-                    )}
-                  </div>
-                </details>
-              )}
+              {view.isLead && <HelpersSection view={view} />}
 
-              {isLead && launchesInUse && (
-                <div className="start-field start-launches" data-protected="block">
-                  <label htmlFor="start-launches-input">Coding-agent launches (1–100)</label>
-                  <input
-                    id="start-launches-input"
-                    className="field"
-                    type="number"
-                    min={1}
-                    max={ORCH_LIMITS.maxCodingSteps}
-                    value={launchesNow}
-                    aria-invalid={!launchesValid}
-                    aria-describedby="start-launches-help"
-                    onChange={(event) => {
-                      setLaunchesText(event.target.value)
-                      touch()
-                    }}
-                  />
-                  <span className="small muted" id="start-launches-help">
-                    Each step, helper step, vote answer and advisor consult on a coding agent is one
-                    launch.
-                  </span>
-                  {launchesProblem && (
-                    <span className="small" role="alert">
-                      {launchesProblem}
-                    </span>
-                  )}
-                </div>
-              )}
+              {view.isLead && view.launchesInUse && <StartJobLaunches view={view} />}
 
-              {isLead && (
-                <details
-                  className="inner start-check"
-                  data-protected="block"
-                  open={checkProblem ? true : undefined}
-                >
-                  <summary>
-                    Check before it finishes
-                    {/* The folder stays in sight when the section is folded: the command runs there as you. */}
-                    {checkCommand.trim() !== '' && (
-                      <span className="small muted start-check-where">
-                        {' '}
-                        · runs in {checkFolderNow.trim() || 'no folder yet'}
-                      </span>
-                    )}
-                  </summary>
-                  <div className="start-clear">
-                    <label className="start-field">
-                      <span>Command</span>
-                      <input
-                        className="field start-check-command"
-                        value={checkCommand}
-                        placeholder="pnpm test"
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(event) => {
-                          setCheckCommand(event.target.value)
-                          setAuthNeeded(false)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <label className="start-field">
-                      <span>Folder</span>
-                      <input
-                        className="field start-check-command"
-                        value={checkFolderNow}
-                        placeholder="/home/you/project"
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(event) => {
-                          setCheckFolder(event.target.value)
-                          setAuthNeeded(false)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        checked={checkEachStep}
-                        onChange={(event) => {
-                          setCheckEachStep(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      Also run after every step
-                    </label>
-                    <label className="start-field">
-                      <span>Timeout (minutes, 1 to 60)</span>
-                      <input
-                        className="field"
-                        type="number"
-                        min={1}
-                        max={60}
-                        value={checkMinutes}
-                        aria-invalid={!checkMinutesValid}
-                        onChange={(event) => {
-                          setCheckMinutes(event.target.value)
-                          touch()
-                        }}
-                      />
-                    </label>
-                    <span className="small muted">
-                      Score runs this command in the folder, without a shell, as your user (it runs
-                      the project’s own code, as when you run the tests yourself). The job can only
-                      finish as a success after it passes. Only you can change it.
-                    </span>
-                    {checkProblem && (
-                      <span className="small" role="alert">
-                        {checkProblem}
-                      </span>
-                    )}
-                  </div>
-                </details>
-              )}
+              {view.isLead && <CheckSection view={view} />}
 
-              {nowOnce && (
-                <div className="inner start-limits" data-protected="block">
-                  <span className="lab">{isSavedRecipe ? 'Budget and deadline' : 'Limits'}</span>
-                  {isLead && (
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        checked={untilStoppedChoice}
-                        onChange={(event) => {
-                          setUntilStopped(event.target.checked)
-                          touch()
-                        }}
-                      />
-                      Keep going until I stop it
-                    </label>
-                  )}
-                  {untilStopped && (
-                    <span className="small muted">
-                      No step or turn limit: the lead keeps planning until the work is done, you
-                      press Stop, or the spend cap is reached.
-                    </span>
-                  )}
-                  {!isSavedRecipe && !untilStopped && (
-                    <>
-                      <label htmlFor="start-turns" className="row small">
-                        <span className="grow">Turns per back-and-forth</span>
-                        <b>{turns}</b>
-                      </label>
-                      <input
-                        id="start-turns"
-                        type="range"
-                        min={2}
-                        max={20}
-                        value={turns}
-                        onChange={(event) => {
-                          setTurns(Number(event.target.value))
-                          touch()
-                        }}
-                        style={{ accentColor: 'var(--ink)' }}
-                      />
-                    </>
-                  )}
-                  <label htmlFor="start-cap" className="row small">
-                    <span className="grow">Spend cap{untilStopped ? ' (required)' : ''}</span>
-                    <b>{cap > 0 ? `$${cap.toFixed(2)}` : 'No cap'}</b>
-                  </label>
-                  <input
-                    id="start-cap"
-                    type="range"
-                    required={untilStopped}
-                    aria-invalid={capProblem !== null}
-                    min={0}
-                    max={20}
-                    value={cap}
-                    onChange={(event) => {
-                      setCap(Number(event.target.value))
-                      touch()
-                    }}
-                    style={{ accentColor: 'var(--ink)' }}
-                  />
-                  {capProblem && (
-                    <span className="small" role="alert">
-                      {capProblem}
-                    </span>
-                  )}
-                  {isSavedRecipe && cap > 0 && (
-                    <span className="small muted">
-                      With a spend cap, a step whose cost Hermes doesn’t report pauses the run so
-                      you can decide.
-                    </span>
-                  )}
-                  {showDeadline && (
-                    <div className="start-deadline-block">
-                      <div className="row small">
-                        <span className="grow">Deadline</span>
-                        <b>
-                          {deadlineEnabled ? deadline || 'Pick a date and time' : 'No deadline'}
-                        </b>
-                      </div>
-                      <label className="check small">
-                        <input
-                          type="checkbox"
-                          checked={deadlineEnabled}
-                          onChange={(event) => {
-                            setDeadlineEnabled(event.target.checked)
-                            touch()
-                          }}
-                        />
-                        Set a deadline
-                      </label>
-                      {deadlineEnabled && (
-                        <input
-                          id="start-deadline"
-                          type="datetime-local"
-                          className="field"
-                          aria-label="Deadline date and time"
-                          value={deadline}
-                          onChange={(event) => {
-                            setDeadline(event.target.value)
-                            touch()
-                          }}
-                        />
-                      )}
-                      <span className="small muted">If the deadline passes, the run stops.</span>
-                    </div>
-                  )}
-                  {isPlain && (
-                    <span className="small muted">
-                      A plain job has no plan to approve and no run deadline.
-                    </span>
-                  )}
-                </div>
-              )}
+              {view.nowOnce && <LimitsSection view={view} />}
             </div>
 
-            {isSavedRecipe && (
-              <details className="inner start-more" data-protected="block">
-                <summary>More options</summary>
-                <div className="start-clear">
-                  <label className="start-field">
-                    <span>Steps at the same time (1 to 3)</span>
-                    <input
-                      className="field"
-                      type="number"
-                      min={1}
-                      max={3}
-                      value={
-                        concurrent ??
-                        String(workflowPreflight.data?.defaults.maxConcurrentSteps ?? 2)
-                      }
-                      aria-invalid={!concurrentValid}
-                      onChange={(event) => {
-                        setConcurrent(event.target.value)
-                        touch()
-                      }}
-                    />
-                  </label>
-                  <label className="start-field">
-                    <span>Estimate per step (USD)</span>
-                    <input
-                      className="field"
-                      type="number"
-                      min={0.01}
-                      step={0.01}
-                      value={
-                        estimate ?? String(workflowPreflight.data?.defaults.stepEstimateUsd ?? 0.5)
-                      }
-                      aria-invalid={!estimateValid}
-                      onChange={(event) => {
-                        setEstimate(event.target.value)
-                        touch()
-                      }}
-                    />
-                  </label>
-                  {workflowWorkers.length > 0 && (
-                    <>
-                      <label className="start-field">
-                        <span>Most coding steps</span>
-                        <input
-                          className="field"
-                          type="number"
-                          min={1}
-                          max={ORCH_LIMITS.maxCodingSteps}
-                          value={
-                            codingSteps ?? String(workflowPreflight.data?.defaults.codingSteps ?? 1)
-                          }
-                          aria-invalid={!codingStepsValid}
-                          onChange={(event) => {
-                            setCodingSteps(event.target.value)
-                            touch()
-                          }}
-                        />
-                      </label>
-                      <label className="start-field">
-                        <span>Quota floor (%): leave blank to use each coding agent’s own</span>
-                        <input
-                          className="field"
-                          type="number"
-                          min={0}
-                          max={50}
-                          inputMode="numeric"
-                          value={quotaFloor}
-                          aria-invalid={!quotaFloorValid}
-                          onChange={(event) => {
-                            setQuotaFloor(event.target.value)
-                            touch()
-                          }}
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-              </details>
-            )}
+            {view.isSavedRecipe && <MoreOptionsSection view={view} />}
 
-            {showUnknownCost && (
-              <fieldset className="inner start-unknown" data-protected="block">
-                <legend className="lab start-legend">
-                  When Hermes doesn’t say what a step cost
-                </legend>
-                <div className="start-clear">
-                  <label className="check small">
-                    <input
-                      type="radio"
-                      name="start-unknown"
-                      checked={unknownSpend === 'pause'}
-                      onChange={() => {
-                        setUnknownSpend('pause')
-                        touch()
-                      }}
-                    />
-                    Pause the run and ask me (when a budget is set)
-                  </label>
-                  <label className="check small">
-                    <input
-                      type="radio"
-                      name="start-unknown"
-                      checked={unknownSpend === 'continue'}
-                      onChange={() => {
-                        setUnknownSpend('continue')
-                        touch()
-                      }}
-                    />
-                    Keep going (unknown spend is never counted as zero)
-                  </label>
-                  {workflowPreflight.data && (
-                    <span className="small muted">{workflowPreflight.data.spendNote}</span>
-                  )}
-                  {unknownSpend === 'pause' &&
-                    [...new Set(workflowWorkers.map((worker) => worker.runtime))].map((source) => (
-                      <label key={source} className="check small">
-                        <input
-                          type="checkbox"
-                          checked={unknownCost.includes(source)}
-                          onChange={(event) => {
-                            setUnknownCost((list) =>
-                              event.target.checked
-                                ? [...list, source]
-                                : list.filter((item) => item !== source),
-                            )
-                            touch()
-                          }}
-                        />
-                        Keep going when the cost of {sourceName(source)} is unknown
-                      </label>
-                    ))}
-                </div>
-              </fieldset>
-            )}
+            {view.showUnknownCost && <StartJobUnknownCost view={view} />}
 
-            {isSavedRecipe && workflowDefinition?.inputs.length ? (
-              <fieldset className="inner start-inputs">
-                <legend className="lab start-legend">Inputs</legend>
-                {workflowDefinition.inputs.map((input) => (
-                  <label key={input.name} className="start-field">
-                    <span>
-                      {input.label}
-                      {input.required ? '' : ' (optional)'}
-                    </span>
-                    <textarea
-                      className="field"
-                      rows={input.maxChars > 200 ? 3 : 1}
-                      maxLength={input.maxChars}
-                      required={input.required}
-                      value={inputs[input.name] ?? ''}
-                      onChange={(event) => {
-                        setInputs((current) => ({ ...current, [input.name]: event.target.value }))
-                        touch()
-                      }}
-                    />
-                  </label>
-                ))}
-              </fieldset>
-            ) : null}
+            {view.isSavedRecipe && <StartJobInputs view={view} />}
 
-            <Checklist
-              checks={checks}
-              reload={
-                leadId ? (
-                  <ReloadMcp
-                    agentId={leadId}
-                    agentName={leadAgent?.name ?? leadId}
-                    onReloaded={() => void orchestrationPreflight.refetch()}
-                  />
-                ) : undefined
-              }
-            >
-              {workersAtStake.length > 0 && (
-                <div className="start-reach" data-protected="block">
-                  <b className="small">Coding agents in this job</b>
-                  {workersAtStake.map((worker) => (
-                    <span key={worker.agentId} className="small muted">
-                      {worker.agentId}: {worker.reach ?? worker.detail ?? worker.readiness}
-                    </span>
-                  ))}
-                  {reachAtStake.length > 0 && (
-                    <label className="check small">
-                      <input
-                        type="checkbox"
-                        checked={reachAccepted}
-                        onChange={(event) => {
-                          setReachAcceptedKey(event.target.checked ? reachKey : null)
-                          touch()
-                        }}
-                      />
-                      I understand what these coding agents can read, and I accept it for this job.
-                    </label>
-                  )}
-                </div>
-              )}
-              <label className="check small start-ack">
-                <input
-                  type="checkbox"
-                  checked={ack}
-                  onChange={(event) => {
-                    setAck(event.target.checked)
-                    touch()
-                  }}
-                />
-                {ORCH_ACKNOWLEDGEMENT_TEXT}
-              </label>
+            <Checklist view={view}>
+              <ChecklistContent view={view} />
             </Checklist>
 
-            {scheduled.length > 0 && (
-              <section className="inner start-scheduled" aria-label="Scheduled">
-                <span className="lab">Scheduled</span>
-                <ul>
-                  {scheduled.map((item) => (
-                    <li key={item.id} className="row small">
-                      <span className="grow">{item.title}</span>
-                      <span className="muted">
-                        {item.agentId} · {scheduleLabel(item.schedule)}
-                        {item.enabled ? '' : ' · paused'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            <StartJobScheduled view={view} />
 
-            {error && (
+            {view.error && (
               <p className="start-error" role="alert">
-                {error}
+                {view.error}
               </p>
             )}
 
-            {authNeeded && (
-              <form
-                className="inner start-check start-check-auth"
-                data-protected="block"
-                aria-label="Confirm it’s you"
-                onSubmit={submitAuth}
-              >
-                <span className="lab">Confirm it’s you</span>
-                <span className="small muted">
-                  The check runs a command on the Score machine as its user. Confirm your security
-                  password or passkey to start the job.
-                </span>
-                <label className="start-field">
-                  <span>Security password</span>
-                  <input
-                    className="field"
-                    type="password"
-                    ref={authInput}
-                    autoComplete="current-password"
-                    value={authPassword}
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                  />
-                </label>
-                <div className="row wrap">
-                  <button
-                    type="submit"
-                    className="btn primary"
-                    disabled={authBusy || authPassword.length < 8}
-                  >
-                    Confirm and start
-                  </button>
-                  {passkeysSupportedHere() && (
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={authBusy}
-                      onClick={() => void confirmThenStart(() => signInWithPasskey())}
-                    >
-                      Use a passkey
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => {
-                      setAuthNeeded(false)
-                      setAuthPassword('')
-                    }}
-                  >
-                    Not now
-                  </button>
-                </div>
-                {authError && (
-                  <p className="start-error" role="alert">
-                    {authError}
-                  </p>
-                )}
-              </form>
-            )}
+            {view.authNeeded && <AuthSection view={view} inputRef={authInputRef} />}
 
-            <div className="row wrap start-actions">
-              {showSaveRecipe && (
-                <div className="start-save-recipe">
-                  <label className="check small">
-                    <input
-                      type="checkbox"
-                      checked={saveRecipe}
-                      onChange={(event) => {
-                        setSaveRecipe(event.target.checked)
-                        touch()
-                      }}
-                    />
-                    Save as a recipe
-                  </label>
-                  {saveRecipe && savedRecipes.some((item) => item.name === saveName) && (
-                    <span className="small muted" role="status">
-                      A recipe called “{saveName}” already exists; saving adds another.
-                    </span>
-                  )}
-                </div>
-              )}
-              <button type="button" className="btn ghost start-cancel" onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn primary start-go"
-                disabled={!canStart}
-                onClick={() => void start()}
-              >
-                {busy ? 'Starting…' : 'Start the job'}
-              </button>
-            </div>
+            <StartJobActions view={view} />
           </>
         )}
       </div>
@@ -2370,98 +170,145 @@ export function BoldStartJob({
   )
 }
 
-function RecipeChip({
-  chosen,
-  label,
-  onClick,
-  tabIndex,
-  buttonRef,
-  onKeyDown,
-}: {
-  chosen: boolean
-  label: string
-  onClick: () => void
-  tabIndex: number
-  buttonRef: (element: HTMLButtonElement | null) => void
-  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
-}) {
+function AskSection({ view }: { view: StartJobView }) {
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      className={`chip ${chosen ? 'on' : ''}`}
-      role="radio"
-      aria-checked={chosen}
-      tabIndex={tabIndex}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-      style={{ background: chosen ? undefined : 'var(--field)' }}
-    >
-      {label}
-    </button>
+    <fieldset className="inner start-ask" data-protected="block" style={{ border: 0, margin: 0 }}>
+      <legend className="lab start-legend">Ask me before</legend>
+      <AskChoices view={view} />
+    </fieldset>
   )
 }
 
-function ResultCard({
+function HelpersSection({ view }: { view: StartJobView }) {
+  return (
+    <details
+      className="inner start-helpers"
+      data-protected="block"
+      open={view.helperProblem ? true : undefined}
+    >
+      <summary>
+        Helpers
+        {view.helpersOn && (
+          <span className="small muted">
+            {' '}
+            · {view.helperIds.length} {view.helperIds.length === 1 ? 'helper' : 'helpers'}
+            {view.helperScan && <> · scans {view.helperFolderNow.trim() || 'no folder yet'}</>}
+          </span>
+        )}
+      </summary>
+      <HelperFields view={view} />
+    </details>
+  )
+}
+
+function CheckSection({ view }: { view: StartJobView }) {
+  return (
+    <details
+      className="inner start-check"
+      data-protected="block"
+      open={view.checkProblem ? true : undefined}
+    >
+      <summary>
+        Check before it finishes
+        {/* The folder stays in sight when the section is folded: the command runs there as you. */}
+        {view.checkCommand.trim() !== '' && (
+          <span className="small muted start-check-where">
+            {' '}
+            · runs in {view.checkFolderNow.trim() || 'no folder yet'}
+          </span>
+        )}
+      </summary>
+      <CheckFields view={view} />
+    </details>
+  )
+}
+
+function LimitsSection({ view }: { view: StartJobView }) {
+  return (
+    <div className="inner start-limits" data-protected="block">
+      <LimitsFields view={view} />
+    </div>
+  )
+}
+
+function MoreOptionsSection({ view }: { view: StartJobView }) {
+  return (
+    <details className="inner start-more" data-protected="block">
+      <summary>More options</summary>
+      <MoreOptionsFields view={view} />
+    </details>
+  )
+}
+
+function AuthSection({
+  view,
+  inputRef,
+}: {
+  view: StartJobView
+  inputRef: RefObject<HTMLInputElement | null>
+}) {
+  return (
+    <form
+      className="inner start-check start-check-auth"
+      data-protected="block"
+      aria-label="Confirm it’s you"
+      onSubmit={view.submitAuth}
+    >
+      <AuthFields view={view} inputRef={inputRef} />
+    </form>
+  )
+}
+
+function Checklist({ view, children }: { view: StartJobView; children: ReactNode }) {
+  return (
+    <section className="inner start-checks" aria-label="Before it starts" data-protected="block">
+      <span className="lab">Before it starts</span>
+      <ChecklistRows
+        checks={view.checks}
+        reload={
+          view.leadId ? (
+            <ReloadMcp
+              agentId={view.leadId}
+              agentName={view.leadAgent?.name ?? view.leadId}
+              onReloaded={() => void view.orchestrationPreflight.refetch()}
+            />
+          ) : undefined
+        }
+      />
+      {children}
+    </section>
+  )
+}
+
+function TriggerResult({
   result,
-  saveWarning,
   onClose,
 }: {
-  result: Result
-  saveWarning: string | null
+  result: Extract<Result, { kind: 'trigger' }>
   onClose: () => void
 }) {
-  if (result.kind === 'trigger') {
-    return (
-      <div className="start-result">
-        <h3>Trigger created</h3>
-        <p className="muted">
-          Send the app’s calls to this address. The secret is shown once; copy it now.
-        </p>
-        <div className="inner start-secret" data-protected="block">
-          <span className="lab">Address</span>
-          <div className="row wrap">
-            <code className="grow">{result.url ?? 'Score is reachable only on this machine'}</code>
-            {result.url && <CopyButton text={result.url} label="Copy address" />}
-          </div>
-          <span className="lab">Signing secret</span>
-          <div className="row wrap">
-            <code className="grow">{result.secret}</code>
-            <CopyButton text={result.secret} label="Copy secret" />
-          </div>
-          <span className="small muted">
-            Calls must be signed with the secret and arrive within five minutes. You can show the
-            secret again from Settings › Tools and triggers.
-          </span>
-        </div>
-        <div className="row wrap start-actions">
-          <button type="button" className="btn primary start-cancel" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </div>
-    )
-  }
-  const detail =
-    result.kind === 'job'
-      ? result.orchestrationId
-        ? 'The lead is planning it in an orchestration.'
-        : 'It is waiting in the team room for you.'
-      : result.kind === 'workflow'
-        ? 'The recipe is running in its own room.'
-        : `It repeats ${result.schedule.toLowerCase()}.`
   return (
     <div className="start-result">
-      <h3>{result.kind === 'routine' ? 'Scheduled' : 'Started'}</h3>
-      <p>
-        <b>{result.title}</b>
+      <h3>Trigger created</h3>
+      <p className="muted">
+        Send the app’s calls to this address. The secret is shown once; copy it now.
       </p>
-      <p className="muted">{detail}</p>
-      {saveWarning && (
-        <p className="small muted" role="status">
-          {saveWarning}
-        </p>
-      )}
+      <div className="inner start-secret" data-protected="block">
+        <span className="lab">Address</span>
+        <div className="row wrap">
+          <code className="grow">{result.url ?? 'Score is reachable only on this machine'}</code>
+          {result.url && <CopyButton text={result.url} label="Copy address" />}
+        </div>
+        <span className="lab">Signing secret</span>
+        <div className="row wrap">
+          <code className="grow">{result.secret}</code>
+          <CopyButton text={result.secret} label="Copy secret" />
+        </div>
+        <span className="small muted">
+          Calls must be signed with the secret and arrive within five minutes. You can show the
+          secret again from Settings › Tools and triggers.
+        </span>
+      </div>
       <div className="row wrap start-actions">
         <button type="button" className="btn primary start-cancel" onClick={onClose}>
           Done
@@ -2469,76 +316,4 @@ function ResultCard({
       </div>
     </div>
   )
-}
-
-function CloseConfirm({
-  secret,
-  onKeep,
-  onClose,
-}: {
-  secret: boolean
-  onKeep: () => void
-  onClose: () => void
-}) {
-  return (
-    <div
-      className="inner start-confirm"
-      role="alertdialog"
-      aria-label={secret ? 'Close without saving the secret?' : 'Discard this job?'}
-      data-protected="block"
-    >
-      <b>{secret ? 'The secret is shown only once.' : 'Discard this job?'}</b>
-      <span className="small muted">
-        {secret
-          ? 'Close without copying it? You can show it again from Settings › Tools and triggers.'
-          : 'Nothing has been started yet.'}
-      </span>
-      <div className="row wrap">
-        <button type="button" className="btn ghost" onClick={onKeep}>
-          {secret ? 'Keep the secret open' : 'Keep editing'}
-        </button>
-        <button type="button" className="btn primary" onClick={onClose}>
-          {secret ? 'Close anyway' : 'Discard'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  return (
-    <button type="button" className="btn sm" onClick={() => void copyText(text)}>
-      {label}
-    </button>
-  )
-}
-
-function startError(error: unknown): string {
-  // Checked first: the server answers it with a 403, which pairingProblem would call "pair this browser".
-  if (error instanceof ApiError && error.code === 'fresh_auth_required')
-    return 'Confirm your password or passkey again, then start the job.'
-  const pairing = pairingProblem(error)
-  if (pairing) return pairing
-  if (error instanceof ApiError) {
-    if (error.code === 'conflict') return error.message
-    // A coding agent changed, or its reach wasn't accepted: the plain words say what to look at and do.
-    if (error.code === 'policy_changed' || error.code === 'reach_not_acknowledged')
-      return describeCreateError(error)
-    if (error.code === 'paused') return 'Work is paused. Resume the team or the agent first.'
-    if (error.code === 'no_lead') return 'This team has no lead yet.'
-    if (error.code === 'invalid_check' || error.code === 'second_factor_not_enrolled')
-      return error.message
-    if (error.code === 'fresh_auth_required')
-      return 'Confirm your password or passkey again, then start the job.'
-  }
-  if (error instanceof Error && error.message) return error.message
-  return describeCreateError(error)
-}
-
-function authProblem(error: unknown): string {
-  const code = error instanceof ApiError ? error.code : null
-  if (code === 'wrong_password') return 'That is not the security password.'
-  if (code === 'too_many_attempts') return 'Too many wrong passwords. Try again later.'
-  if (code === 'password_not_set') return 'Set a security password in Settings first.'
-  return 'Couldn’t confirm that. Try again.'
 }

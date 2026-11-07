@@ -1,0 +1,1047 @@
+[
+  {
+    "path": "apps/server/src/app.ts",
+    "lines": 660,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/approvals.ts",
+    "lines": 668,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/briefs.ts",
+    "lines": 523,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/exchanges/apply.ts",
+    "lines": 631,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/exchanges/store.ts",
+    "lines": 483,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/message-runs.ts",
+    "lines": 969,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/commands.ts",
+    "lines": 844,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/decisions.ts",
+    "lines": 863,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/fence.ts",
+    "lines": 1177,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/helpers.ts",
+    "lines": 595,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/journal.ts",
+    "lines": 1025,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/orchestration/ops.ts",
+    "lines": 472,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/profiles.ts",
+    "lines": 833,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/reports.ts",
+    "lines": 581,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/rooms.ts",
+    "lines": 801,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/triggers/triggers.ts",
+    "lines": 454,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/watch-frames.ts",
+    "lines": 539,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/workflows/planner.ts",
+    "lines": 909,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/domain/workflows/views.ts",
+    "lines": 830,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/bridge/translate.ts",
+    "lines": 515,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/fake/scenario.ts",
+    "lines": 728,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/fake/team-seed.ts",
+    "lines": 748,
+    "reason": "data list"
+  },
+  {
+    "path": "apps/server/src/hermes/live/agent-tabs.ts",
+    "lines": 605,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/bot-screen.ts",
+    "lines": 744,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/gateway.ts",
+    "lines": 569,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/kanban-attempts/writer.ts",
+    "lines": 700,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/live-port.ts",
+    "lines": 1207,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/profile-management.ts",
+    "lines": 602,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/settings.ts",
+    "lines": 675,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/translate.ts",
+    "lines": 641,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/live/updates.ts",
+    "lines": 499,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/hermes/port.ts",
+    "lines": 513,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/http/rooms.ts",
+    "lines": 1086,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/installation.ts",
+    "lines": 697,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/knowledge/documents.ts",
+    "lines": 954,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/knowledge/links.ts",
+    "lines": 455,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/knowledge/vault.ts",
+    "lines": 1910,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/claude.ts",
+    "lines": 693,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/codex.ts",
+    "lines": 486,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/coding-socket.ts",
+    "lines": 889,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/process.ts",
+    "lines": 485,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/supervisor.mjs",
+    "lines": 793,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/translate.ts",
+    "lines": 535,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/unit-backend.ts",
+    "lines": 2048,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/runtimes/coding/units.ts",
+    "lines": 541,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/start-server.ts",
+    "lines": 710,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/themes/store.ts",
+    "lines": 710,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/src/workspace/workspace.ts",
+    "lines": 619,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/db-startup.test.ts",
+    "lines": 557,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/db.test.ts",
+    "lines": 599,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/domain/approvals.test.ts",
+    "lines": 950,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/domain/exchange-budgets.test.ts",
+    "lines": 478,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/domain/exchanges.test.ts",
+    "lines": 472,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/domain/reports.test.ts",
+    "lines": 469,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/execution-freeze.test.ts",
+    "lines": 729,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/fake.test.ts",
+    "lines": 552,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live-port.test.ts",
+    "lines": 479,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/agent-tabs.test.ts",
+    "lines": 502,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/gateway/recovery.test.ts",
+    "lines": 491,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/gateway/translate.test.ts",
+    "lines": 1040,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/kanban-attempts-projection.test.ts",
+    "lines": 641,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/profile-management.test.ts",
+    "lines": 474,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/sqlite.test.ts",
+    "lines": 540,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hermes/live/sse-client.test.ts",
+    "lines": 822,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/kanban-attempts-consumers.test.ts",
+    "lines": 531,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/passkeys.test.ts",
+    "lines": 488,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/profiles.test.ts",
+    "lines": 1033,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/rewind.test.ts",
+    "lines": 564,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/rooms.test.ts",
+    "lines": 1393,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/routing.test.ts",
+    "lines": 581,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/rules.test.ts",
+    "lines": 491,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/http/shares.test.ts",
+    "lines": 624,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/hub/ingest.test.ts",
+    "lines": 985,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/knowledge/audit3-bb.test.ts",
+    "lines": 472,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/launcher-service.test.ts",
+    "lines": 701,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/mcp/mcp.test.ts",
+    "lines": 719,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/orchestration/coding-journal.test.ts",
+    "lines": 597,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/orchestration/coding-workers-f1.test.ts",
+    "lines": 480,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/orchestration/coding-workers-release.test.ts",
+    "lines": 517,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/orchestration/fix-h.test.ts",
+    "lines": 622,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/orchestration/http.test.ts",
+    "lines": 628,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/remote.test.ts",
+    "lines": 995,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-drivers.test.ts",
+    "lines": 1203,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-process.test.ts",
+    "lines": 543,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-runtime.test.ts",
+    "lines": 2781,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-socket.test.ts",
+    "lines": 753,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-supervisor.test.ts",
+    "lines": 626,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/runtimes/coding-units-runtime.test.ts",
+    "lines": 2310,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/terminal.test.ts",
+    "lines": 753,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/themes/routes.test.ts",
+    "lines": 1302,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/themes/store-swap.test.ts",
+    "lines": 492,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/triggers/webhooks.test.ts",
+    "lines": 798,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/workflows/http.test.ts",
+    "lines": 561,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/server/test/workspace/workspace.test.ts",
+    "lines": 696,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/agent-more/agent-more.test.tsx",
+    "lines": 680,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-add-agent.css",
+    "lines": 677,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-knowledge.css",
+    "lines": 471,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-library.css",
+    "lines": 484,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-recipes.css",
+    "lines": 1181,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-screen.css",
+    "lines": 753,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-settings.css",
+    "lines": 2039,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-tasks.css",
+    "lines": 935,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-team.css",
+    "lines": 926,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-team.test.tsx",
+    "lines": 1310,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold-workbench.css",
+    "lines": 549,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/bold.css",
+    "lines": 1020,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldAddAgent.tsx",
+    "lines": 1296,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldConnections.tsx",
+    "lines": 586,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldHermesUpdates.tsx",
+    "lines": 485,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldLibrary.test.tsx",
+    "lines": 535,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldLibrary.tsx",
+    "lines": 1034,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldRecipes.test.tsx",
+    "lines": 1024,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldRecipes.tsx",
+    "lines": 1493,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldRecipeText.tsx",
+    "lines": 501,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldRoom.tsx",
+    "lines": 530,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldScreen.test.tsx",
+    "lines": 499,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldScreen.tsx",
+    "lines": 834,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldSearch.tsx",
+    "lines": 472,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldSettings.test.tsx",
+    "lines": 639,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldShell.test.tsx",
+    "lines": 1207,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldShell.tsx",
+    "lines": 530,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldStartJob.test.tsx",
+    "lines": 1575,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldTaskEdit.tsx",
+    "lines": 506,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldTasks.test.tsx",
+    "lines": 636,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldTasks.tsx",
+    "lines": 832,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldTriggers.tsx",
+    "lines": 1060,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldUsage.tsx",
+    "lines": 793,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/BoldWorkbench.tsx",
+    "lines": 665,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/chats/chats.css",
+    "lines": 1173,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/direct/DirectChat.test.tsx",
+    "lines": 656,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/direct/DirectChat.tsx",
+    "lines": 508,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/jobmap/jobmap.css",
+    "lines": 459,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/jobmap/JobMap.tsx",
+    "lines": 481,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/recipe-model.test.ts",
+    "lines": 598,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/recipe-model.ts",
+    "lines": 710,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/bold-room.css",
+    "lines": 2231,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/bold-thread.css",
+    "lines": 555,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/BoldTeamRoom.test.tsx",
+    "lines": 1515,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/BoldTeamRoom.tsx",
+    "lines": 877,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RoomMenus.tsx",
+    "lines": 1850,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RoomMessageStream.test.tsx",
+    "lines": 778,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RoomMessageStream.tsx",
+    "lines": 522,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RoomRequests.test.tsx",
+    "lines": 875,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RoomRequests.tsx",
+    "lines": 885,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/bold/room/RunSafetyRequests.tsx",
+    "lines": 496,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/data/stream.test.tsx",
+    "lines": 1003,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/chat/chat.css",
+    "lines": 2037,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/chat/Composer.tsx",
+    "lines": 1482,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/chat/ContextMeter.tsx",
+    "lines": 483,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/chat/MessageItem.tsx",
+    "lines": 695,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/customizer/customizer.css",
+    "lines": 826,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/customizer/Customizer.tsx",
+    "lines": 1093,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/editor-commands.ts",
+    "lines": 533,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/EditorToolbar.tsx",
+    "lines": 883,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/knowledge.css",
+    "lines": 1304,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/knowledge.test.tsx",
+    "lines": 647,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/NoteWorkspace.tsx",
+    "lines": 569,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/knowledge/table-widget.ts",
+    "lines": 562,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/orchestrations/LiveDiagram.tsx",
+    "lines": 649,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/orchestrations/NewOrchestrationDialog.tsx",
+    "lines": 510,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/orchestrations/orchestrations.css",
+    "lines": 1140,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/orchestrations/RunDecisions.tsx",
+    "lines": 733,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/orchestrations/RunPanel.tsx",
+    "lines": 470,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/settings/settings.css",
+    "lines": 830,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/team/CodingAgent.test.tsx",
+    "lines": 793,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/team/CodingAgent.tsx",
+    "lines": 725,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/team/team.css",
+    "lines": 961,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/team/WorkspaceTab.test.tsx",
+    "lines": 463,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/team/WorkspaceTab.tsx",
+    "lines": 531,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/watch/watch.css",
+    "lines": 600,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/NodeInspector.tsx",
+    "lines": 528,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/recipe-layers.css",
+    "lines": 451,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/RecipeLayers.tsx",
+    "lines": 472,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/StartWorkflowDialog.tsx",
+    "lines": 470,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/workflow-model.ts",
+    "lines": 621,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/WorkflowDecisions.tsx",
+    "lines": 557,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/workflows.css",
+    "lines": 670,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/routes/workflows/workflows.test.tsx",
+    "lines": 464,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "apps/web/src/themes/guard.ts",
+    "lines": 719,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-connections-look.spec.ts",
+    "lines": 475,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-library-editor.spec.ts",
+    "lines": 597,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-library.spec.ts",
+    "lines": 550,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-needs-you.spec.ts",
+    "lines": 845,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-recipes.spec.ts",
+    "lines": 777,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-room-fixtures.ts",
+    "lines": 630,
+    "reason": "data list"
+  },
+  {
+    "path": "e2e/bold-room-menu.spec.ts",
+    "lines": 704,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-room.spec.ts",
+    "lines": 521,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/bold-thread.spec.ts",
+    "lines": 578,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/customizer.spec.ts",
+    "lines": 1255,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/themes-consent.spec.ts",
+    "lines": 593,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/themes-protection.spec.ts",
+    "lines": 484,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/themes-safety.spec.ts",
+    "lines": 613,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "e2e/visual-fixtures.ts",
+    "lines": 593,
+    "reason": "data list"
+  },
+  {
+    "path": "e2e/workflow-fixtures.ts",
+    "lines": 822,
+    "reason": "data list"
+  },
+  {
+    "path": "hermes-plugin/score_bridge/hermes_private.py",
+    "lines": 669,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "hermes-plugin/score_bridge/sender.py",
+    "lines": 525,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "hermes-plugin/score_bridge/spool.py",
+    "lines": 508,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "packages/contract/src/orchestration.ts",
+    "lines": 985,
+    "reason": "data list"
+  },
+  {
+    "path": "packages/contract/src/theme-css.ts",
+    "lines": 836,
+    "reason": "data list"
+  },
+  {
+    "path": "packages/contract/src/types.ts",
+    "lines": 662,
+    "reason": "data list"
+  },
+  {
+    "path": "packages/contract/src/workflows.ts",
+    "lines": 1062,
+    "reason": "data list"
+  },
+  {
+    "path": "packages/contract/test/fixtures.ts",
+    "lines": 492,
+    "reason": "data list"
+  },
+  {
+    "path": "packages/contract/test/schemas.test.ts",
+    "lines": 2824,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "packages/contract/test/workflow-cases.ts",
+    "lines": 497,
+    "reason": "data list"
+  },
+  {
+    "path": "scripts/bold-frame-compare.mjs",
+    "lines": 1295,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "scripts/compare/11.10a.mjs",
+    "lines": 604,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "scripts/compare/11.4d.mjs",
+    "lines": 507,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "scripts/compare/11.6b.mjs",
+    "lines": 547,
+    "reason": "split in CS.2 wave 1"
+  },
+  {
+    "path": "scripts/load-test.ts",
+    "lines": 585,
+    "reason": "split in CS.2 wave 1"
+  }
+]
