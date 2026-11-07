@@ -663,6 +663,7 @@ likely to be the entry point for a change.
 - `apps/server/test/domain/reports-helpers.ts` — shared report fixtures: timezone, timestamps, task, run, approval and report input factories.
 - `apps/server/test/hub/ingest-helpers.ts` — shared ingest test harness: temp database, migrations, ingest setup and teardown, event and observation factories, row readers and second connections.
 - `apps/server/test/triggers/webhooks-helpers.ts` — shared webhook test app, clock, pairing, trigger factory and request/job helpers.
+- `apps/server/test/workflows/http-helpers.ts` — shared workflow HTTP app setup, paired-session request helpers and default definition factory.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms, Kanban attempts, passkeys and rewind suites are split by feature with their shared fixtures.
 - `apps/server/test/mcp/mcp-helpers.ts` — shared app, database, vault, access and MCP client harness for the MCP suites.
