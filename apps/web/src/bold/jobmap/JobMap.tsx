@@ -1,7 +1,6 @@
 import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { runtimeLabel } from '../../components/runtime-label.ts'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { usePrefersReducedMotion } from '../../motion/motion.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
@@ -15,7 +14,6 @@ import {
   useNow,
   type StopStepAction,
 } from '../../routes/orchestrations/StepStop.tsx'
-import { visualLabel } from '../../routes/orchestrations/orch-model.ts'
 import { useFramed } from '../../shell/framed-paths.tsx'
 import {
   buildJobMap,
@@ -23,8 +21,11 @@ import {
   logFor,
   type LayerId,
   type JobMapModel,
-  type WorkerNode,
 } from './job-map-model.ts'
+import { Line } from './Line.tsx'
+import { Node } from './Node.tsx'
+import { Pill } from './Pill.tsx'
+import { WorkerBox } from './WorkerBox.tsx'
 import './jobmap.css'
 
 // 3.15 (decision 151): the job's main view is a layered graph, rebuilt from docs/design/jobmap/graph-desktop.html and
@@ -33,129 +34,6 @@ import './jobmap.css'
 
 const clockOf = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-
-/** The quiet part of a line between two nodes; dots run along it only while work flows into the layer below. */
-/** Step chips shown on one worker node before the rest are counted. */
-const CHIP_LIMIT = 12
-
-function Line({
-  active,
-  still,
-  dashed,
-  horizontal,
-  label,
-}: {
-  active?: boolean
-  still: boolean
-  dashed?: boolean
-  horizontal?: boolean
-  label?: string
-}) {
-  return (
-    <span
-      className="jobmap-line"
-      data-dashed={dashed ? '' : undefined}
-      data-horizontal={horizontal ? '' : undefined}
-      aria-hidden="true"
-    >
-      {label && <span className="jobmap-line-label">{label}</span>}
-      {active && !still && <span className="jobmap-dot" />}
-    </span>
-  )
-}
-
-function Node({
-  layer,
-  selected,
-  onPick,
-  label,
-  tone,
-  pulse,
-  children,
-  className,
-}: {
-  layer: LayerId
-  selected: LayerId | null
-  onPick: (layer: LayerId) => void
-  label: string
-  tone: string
-  pulse?: boolean
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <button
-      type="button"
-      className={`jobmap-node ${className ?? ''}`}
-      data-layer={layer}
-      data-tone={tone}
-      data-pulse={pulse ? '' : undefined}
-      aria-label={label}
-      aria-pressed={selected === layer}
-      onClick={() => onPick(layer)}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Pill({ tone, children }: { tone: string; children: ReactNode }) {
-  return (
-    <span className="jobmap-pill" data-tone={tone}>
-      {children}
-    </span>
-  )
-}
-
-function WorkerBox({
-  worker,
-  agent,
-  selected,
-  onPick,
-}: {
-  worker: WorkerNode
-  agent: AgentSummary | undefined
-  selected: LayerId | null
-  onPick: (layer: LayerId) => void
-}) {
-  // A long job stays readable: the latest 12 steps as chips, the rest counted (review: 40 chips made a tall node).
-  const shown = worker.chips.slice(-CHIP_LIMIT)
-  const hidden = worker.chips.length - shown.length
-  const counts = new Map<string, number>()
-  for (const chip of worker.chips)
-    counts.set(visualLabel[chip.visual], (counts.get(visualLabel[chip.visual]) ?? 0) + 1)
-  const states = [...counts].map(([label, n]) => `${n} ${label}`)
-  const asked = worker.asked
-  const program = runtimeLabel(agent?.runtime)
-  return (
-    <div className="jobmap-worker" data-asked={asked ? '' : undefined}>
-      <Node
-        layer="workers"
-        selected={selected}
-        onPick={onPick}
-        tone="work"
-        pulse={worker.running}
-        label={`Workers layer: ${worker.name}${program ? ` (${program})` : ''}, steps ${states.join(', ')}${asked ? `, asked its advisor ${asked.count} times` : ''}`}
-      >
-        <span className="jobmap-kicker">
-          {agent && <AgentGlyph agent={agent} size="xs" bare decorative />}
-          Worker · {worker.name}
-          {/* 3.29.1: which program a coding worker runs (the retired step diagram showed it). */}
-          {program && <span className="jobmap-program"> · {program}</span>}
-        </span>
-        <span className="jobmap-chips">
-          {hidden > 0 && <Pill tone="muted">+{hidden} earlier</Pill>}
-          {shown.map((chip) => (
-            <Pill key={chip.stepId} tone={chip.tone}>
-              {chip.label}
-            </Pill>
-          ))}
-        </span>
-        {asked && <span className="jobmap-asked">asked its advisor {asked.count}×</span>}
-      </Node>
-    </div>
-  )
-}
 
 /** The desktop top row's width plus room to breathe: you 260 + line 48 + lead 320, and + line 64 + advisor 320. */
 const TOP_ROW_WIDTH = { lead: 700, advisor: 1060 }

@@ -1,0 +1,87 @@
+/* ---- votes ---- */
+[data-ui='bold'] .jobmap-vote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 74px;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  margin-top: 4px;
+}
+[data-ui='bold'] .jobmap-vote-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-ui='bold'] .jobmap-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+[data-ui='bold'] .jobmap-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ok);
+}
+[data-ui='bold'] .jobmap-vote[data-status='split'] .jobmap-bar > span,
+[data-ui='bold'] .jobmap-vote[data-status='voting'] .jobmap-bar > span {
+  background: var(--jm-lead);
+}
+[data-ui='bold'] .jobmap-vote[data-status='failed'] .jobmap-bar > span {
+  background: var(--bad);
+}
+
+/* ---- swarm and workers ---- */
+[data-ui='bold'] .jobmap-swarm,
+[data-ui='bold'] .jobmap-workers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 100%;
+}
+[data-ui='bold'] .jobmap-workers {
+  align-items: flex-start;
+}
+[data-ui='bold'] .jobmap-worker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+[data-ui='bold'] .jobmap-swarm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+[data-ui='bold'] .jobmap-role {
+  color: var(--jm-swarm);
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-ui='bold'] .jobmap-stops {
+  margin-top: 12px;
+  max-width: 600px;
+  width: 100%;
+  border-radius: 20px;
+  padding: 10px 12px;
+}
+[data-ui='bold'] .jobmap-stop-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+[data-ui='bold'] .jobmap-check-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+[data-ui='bold'] .jobmap-check-line code {
+  font-family: var(--font-m);
+  font-size: 13px;
+}
