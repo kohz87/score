@@ -751,8 +751,9 @@ green before and after, the map and the exception list updated in the same chang
 `server/runtimes/coding/service.ts`, `server/runtimes/coding/unit-backend.ts`, `web/bold/room/bold-room.css`,
 `web/bold/bold-settings.css`, `web/routes/chat/chat.css`. Wave 2, 1000–2000 lines (vault, RoomMenus, BoldRecipes,
 Composer, knowledge.css, BoldAddAgent, live-port, bold-recipes.css, fence, chats.css, orchestrations.css, Customizer,
-http/rooms, BoldTriggers, BoldLibrary, journal, bold.css). Wave 3, the large test files (split by feature). The rest
-(450–1000) when a task touches them.
+http/rooms, BoldTriggers, BoldLibrary, journal, bold.css). Wave 3, the large test files (split by feature). Wave 4 (owner 2026-11-07): every remaining file of 451–999
+lines (about 100 source, 70 tests), batched by folder (two to four related files per task), so the exception list ends
+empty except for the long declarative lists the rule allows (schemas, fixtures, data tables).
 
 **CS.3 Independent e2e specs.** The specs that pass alone but fail in a full run (bold-room-menu, one-to-ones,
 room-chat, team choice, workspace, tablet, + menu, take-over) stop depending on what other specs leave on the shared
