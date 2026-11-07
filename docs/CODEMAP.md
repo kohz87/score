@@ -303,7 +303,7 @@ likely to be the entry point for a change.
 - `apps/server/scripts/` — server maintenance scripts.
 - `apps/server/test/` — server integration tests and recorded fixtures.
 - `apps/server/test/runtimes/` — coding runtime integration tests split by feature; shared setup lives in `coding-runtime-helpers.ts`.
-- `apps/server/test/themes/` — theme route tests split by access/assets, import, recovery, custom saves, export/look/built-ins and revisions/events, plus shared package fixtures.
+- `apps/server/test/themes/` — theme route and store tests split by feature, plus shared package fixtures and store-swap fault-injection helpers.
 
 ### Key files
 
@@ -311,6 +311,7 @@ likely to be the entry point for a change.
 - `apps/server/src/start-server.ts` — server, database, adapter and background services wiring.
 - `apps/server/src/app.ts` — Fastify app and route registration.
 - `apps/server/test/runtimes/coding-runtime-helpers.ts` — shared fake-CLI app, agent, room and process-recovery harness for the coding runtime tests.
+- `apps/server/test/themes/store-swap-helpers.ts` — shared temporary store, database hooks and fault-injection helpers for the store swap tests.
 - `apps/server/src/config.ts` — environment configuration.
 - `apps/server/src/db/index.ts` — database open and migration surface.
 - `apps/server/test/themes/routes-helpers.ts` — shared Fastify app setup and request helpers for the theme route tests.
