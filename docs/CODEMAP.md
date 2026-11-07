@@ -632,6 +632,11 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/fake/` — scripted fake Hermes for development, tests and e2e: state, providers, settings, agents, tasks, runs, run control, the demo timeline and team-room seed.
 - `apps/server/src/hermes/live/` — live Hermes adapter: gateway, SQLite, CLI, profiles and tasks.
 - `apps/server/src/hermes/live/kanban-attempts/` — read, project and associate Kanban attempts.
+- `apps/server/src/hermes/live/kanban-attempts/writer.ts` — stable facade for the Kanban attempt writer exports.
+- `apps/server/src/hermes/live/kanban-attempts/history-store.ts` — source rows, history lifecycle and observation boundaries.
+- `apps/server/src/hermes/live/kanban-attempts/page-store.ts` — capture-page ledger and page outcomes.
+- `apps/server/src/hermes/live/kanban-attempts/attempt-observer.ts` — classifies and persists one observed Kanban attempt.
+- `apps/server/src/hermes/live/kanban-attempts/capture-apply.ts` — capture transaction: judges history, applies rows and advances cursors.
 - `apps/server/src/http/` — API routes, one file per contract section.
 - `apps/server/src/http/rooms/` — split room catalogue, message, rewind, summary and version route groups.
 - `apps/server/src/hub/` — ordered event ingest, projections, SSE fan-out, snapshots and retention.
