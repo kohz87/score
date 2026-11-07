@@ -1,0 +1,67 @@
+import type * as Contract from '../src/index.ts'
+import { at, later } from './fixtures-common.ts'
+
+export const orchestrationSummary = {
+  id: 'orch-1',
+  title: 'Ship the release notes',
+  status: 'running',
+  pauseReason: null,
+  leadAgentId: 'lead',
+  roomId: 'room-orch-1',
+  briefId: 'brief-orch-1',
+  gatePolicy: 'every-step',
+  revision: 3,
+  ownership: 'owned',
+  steps: { total: 2, active: 1, succeeded: 1, failed: 0 },
+  leadTurnsUsed: 1,
+  maxLeadTurns: 20,
+  untilStopped: false,
+  needsYou: [{ kind: 'gate', gateId: 'g2', stepId: 's2' }],
+  createdAt: at,
+  updatedAt: later,
+  endedAt: null,
+} satisfies Contract.OrchestrationSummary
+
+export const workflowRunSummary = {
+  id: 'wf-run-1',
+  title: 'Release notes',
+  workflowId: 'wf-1',
+  workflowName: 'Release notes',
+  version: 2,
+  status: 'running',
+  pauseReason: null,
+  graphOutcome: null,
+  outcomeNote: null,
+  gatePolicy: 'gates-only',
+  roomId: 'room-wf-1',
+  briefId: 'brief-wf-1',
+  revision: 4,
+  ownership: 'owned',
+  nodes: {
+    total: 4,
+    waiting: 1,
+    ready: 0,
+    running: 1,
+    gateOpen: 0,
+    succeeded: 2,
+    failed: 0,
+    skipped: 0,
+    unresolved: 0,
+  },
+  needsYou: [{ kind: 'gate', gateId: 'g1', gateKind: 'node', nodeId: 'approve' }],
+  unconfirmed: 0,
+  rerunOf: null,
+  createdAt: at,
+  updatedAt: later,
+  endedAt: null,
+} satisfies Contract.WorkflowRunSummary
+
+export const globalFence = {
+  fenced: true,
+  reason: 'journal_mismatch',
+  untrustedHistory: false,
+  revision: 2,
+  since: at,
+  items: [{ kind: 'attempt', ref: 'orc-1-s1-1', detail: 'In the journal, not in the database' }],
+  journal: { ok: true, entries: 4, bytes: 512, sizeAlarm: false },
+} satisfies Contract.GlobalFence

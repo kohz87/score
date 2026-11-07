@@ -105,16 +105,6 @@
     "reason": "data list"
   },
   {
-    "path": "packages/contract/test/fixtures.ts",
-    "lines": 492,
-    "reason": "data list"
-  },
-  {
-    "path": "packages/contract/test/workflow-cases.ts",
-    "lines": 497,
-    "reason": "data list"
-  },
-  {
     "path": "scripts/compare/11.10a.mjs",
     "lines": 604,
     "reason": "split in CS.2 wave 1"

@@ -1074,10 +1074,20 @@ likely to be the entry point for a change.
 
 ### Folders
 
-- `packages/contract/test/` — Vitest contract specs with schema cases and fixtures split by feature.
+- `packages/contract/test/` — Vitest contract specs with schema case and fixture modules split by feature; barrels preserve their shared import surfaces.
 
 ### Key files
 
+- `packages/contract/test/fixtures.ts` — barrel for the feature-split contract fixture modules.
+- `packages/contract/test/fixtures-common.ts` — shared contract fixture timestamps.
+- `packages/contract/test/fixtures-agents.ts` — agent, profile, routine and room fixtures.
+- `packages/contract/test/fixtures-now-tasks.ts` — Now, task, approval, message, run, attempt and handoff fixtures.
+- `packages/contract/test/fixtures-watch-stream.ts` — Watch, stream and bridge fixtures.
+- `packages/contract/test/fixtures-orchestration.ts` — orchestration, workflow-run and fence fixtures.
+- `packages/contract/test/workflow-cases.ts` — barrel for the feature-split workflow schema cases.
+- `packages/contract/test/workflow-cases-helpers.ts` — shared workflow definition fixtures and the workflow case tuple type.
+- `packages/contract/test/workflow-cases-definitions.ts` — workflow definition, version, validation and export cases.
+- `packages/contract/test/workflow-cases-runs.ts` — workflow run, node, gate, preflight, event and decision cases.
 - `packages/contract/test/schemas-helpers.ts` — shared schema fixtures and case data.
 - `packages/contract/test/schemas-cases.ts` — all cases, aggregated for the exported-schema coverage check.
 - `packages/contract/test/schemas-coverage.test.ts` — the exported-schema coverage check.
