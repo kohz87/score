@@ -506,6 +506,11 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/workflows/recipe-layers-flow.css` — recipe lines, groups, rows, joins and add menus.
 - `apps/web/src/routes/workflows/recipe-layers-responsive.css` — recipe narrow-screen and reduced-motion rules.
 - `apps/web/src/routes/workflows/recipe-layers-orphans.css` — recipe steps that are not connected.
+- `apps/web/src/routes/workflows/workflows.css` — ordered entry for the workflow stylesheets.
+- `apps/web/src/routes/workflows/workflows-base.css` — shared accessibility helper, editor/run typography, buttons and links.
+- `apps/web/src/routes/workflows/workflows-inspector.css` — step settings, template suggestions, connections, rules, problems, outline and inputs.
+- `apps/web/src/routes/workflows/workflows-run.css` — run outcomes, evidence/input lists, export diffs and the full-width run layout.
+- `apps/web/src/routes/workflows/workflows-live.css` — live-overlay line, run preview and the chat graph-tab outcome.
 - `apps/web/src/routes/customizer/Customizer.tsx` — customizer composition: probe, derived values, early states and page layout.
 - `apps/web/src/routes/customizer/CustomizerBar.tsx` — header, undo/save/export/import actions, messages and edit/preview switch.
 - `apps/web/src/routes/customizer/CustomizerModals.tsx` — save-as, start-from confirmation, import and leave-without-saving dialogs.
