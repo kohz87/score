@@ -390,11 +390,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/runtimes/coding-drivers.test.ts",
-    "lines": 1203,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/runtimes/coding-process.test.ts",
     "lines": 543,
     "reason": "split in CS.2 wave 1"

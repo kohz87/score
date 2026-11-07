@@ -402,6 +402,17 @@ likely to be the entry point for a change.
 - `apps/server/src/runtimes/coding/unit-backend-lifecycle.ts` — settling runs and launches, holds, reaping and ending records.
 - `apps/server/src/runtimes/coding/unit-backend-recovery.ts` — recovery after a restart and its report.
 
+## apps/server/test
+
+### Folders
+
+- `apps/server/test/runtimes/` — runtime tests and recorded coding-driver fixtures, split by parser output, configuration, verdicts, loss handling and sub-agents.
+
+### Key files
+
+- `apps/server/test/runtimes/coding-fixtures.ts` — recorded coding-driver CLI fixture lines.
+- `apps/server/test/runtimes/coding-drivers-helpers.ts` — shared coding-driver test setup: fixture parsing, deny/base options, verdict extraction and Codex record factories.
+
 ## packages/contract/src
 
 ### Folders
