@@ -886,6 +886,12 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
 - `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
+- `apps/server/src/hermes/live/bot-screen.ts` — public Bot Screen facade and its existing re-exports.
+- `apps/server/src/hermes/live/bot-screen-types.ts` — Bot Screen states, frame/status and takeover types, options and limits.
+- `apps/server/src/hermes/live/bot-screen-protocol.ts` — RFB 3.8 wire messages, parser and one live screen session.
+- `apps/server/src/hermes/live/bot-screen-png.ts` — RGBX framebuffer to PNG encoding.
+- `apps/server/src/hermes/live/bot-screen-lease.ts` — Hermes lease and sandbox marker reads.
+- `apps/server/src/hermes/live/bot-screen-screens.ts` — per-profile screen registry, frame serving and takeover input.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
 - `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.
