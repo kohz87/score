@@ -137,6 +137,17 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/chat-documents.css` — attach menus, file chips, document preview and workspace picker.
 - `apps/web/src/routes/chat/chat-room.css` — room summary/status, compact layout, attachment saving and room actions.
 - `apps/web/src/routes/chat/chat-theme.css` — theme overrides for room and message presentation.
+- `apps/web/src/routes/customizer/Customizer.tsx` — customizer composition: probe, derived values, early states and page layout.
+- `apps/web/src/routes/customizer/CustomizerBar.tsx` — header, undo/save/export/import actions, messages and edit/preview switch.
+- `apps/web/src/routes/customizer/CustomizerModals.tsx` — save-as, start-from confirmation, import and leave-without-saving dialogs.
+- `apps/web/src/routes/customizer/CustomizerPanel.tsx` — section tabs and the active theme section panel.
+- `apps/web/src/routes/customizer/CustomizerPreview.tsx` — preview page/size controls, frame, contrast checks and use buttons.
+- `apps/web/src/routes/customizer/CustomizerTabs.tsx` — customizer tab list, ids and keyboard navigation.
+- `apps/web/src/routes/customizer/customizer-helpers.ts` — system colour mode, zip download and manifest-settings check.
+- `apps/web/src/routes/customizer/customizer-types.ts` — customizer target, source, busy and pane types.
+- `apps/web/src/routes/customizer/theme-files.ts` — read a theme snapshot and rebuild the snapshot after a save.
+- `apps/web/src/routes/customizer/use-customizer-actions.ts` — save, export, use, import, start-from and keyboard actions with their status state.
+- `apps/web/src/routes/customizer/use-theme-loader.ts` — open the addressed theme, copy built-ins and own history/target/load state.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page.
 - `apps/web/src/routes/knowledge/NoteWorkspace.tsx` — note editor workspace.
 - `apps/web/src/routes/knowledge/knowledge.css` — ordered entry for the classic knowledge stylesheets.

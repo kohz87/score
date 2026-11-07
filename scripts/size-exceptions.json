@@ -730,11 +730,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/customizer/Customizer.tsx",
-    "lines": 1093,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/knowledge/editor-commands.ts",
     "lines": 533,
     "reason": "split in CS.2 wave 1"
