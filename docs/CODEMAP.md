@@ -558,6 +558,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/watch/watch-approval.css` — protected approval bar and its actions.
 - `apps/web/src/routes/watch/watch-replay.css` — replay controls, scrub track, markers and legend.
 - `apps/web/src/routes/watch/watch-responsive.css` — phone layout overrides for the stage and approval bar.
+- `apps/web/src/routes/workflows/workflows-test-helpers.tsx` — shared fetch, stream, mount and fixture helpers for the split workflow tests.
 - `apps/web/src/themes/guard.ts` — protected-surface and theme guard.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
