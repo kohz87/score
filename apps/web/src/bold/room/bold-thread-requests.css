@@ -1,0 +1,169 @@
+[data-ui='bold'] .bold-thread .bold-request {
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(20px * var(--bold-d, 1)) calc(22px * var(--bold-d, 1));
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread .bold-request-title {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+[data-ui='bold'] .bold-thread .bold-request-head {
+  gap: calc(7px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(18px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-thread-recipe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-recipe-head > b {
+  font-family: var(--font-d);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+[data-ui='bold'] .bold-thread-eyebrow {
+  flex-basis: 100%;
+}
+
+[data-ui='bold'] .bold-thread-recipe-status {
+  margin-left: auto;
+  color: var(--ink2);
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-recipe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-link {
+  color: var(--ink2);
+  font-size: 0.87em;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room {
+  margin: 4px 0 0;
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room-head {
+  background: var(--field);
+  border-color: var(--line);
+  border-radius: calc(18px * var(--bold-r, 1));
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room button {
+  background: var(--field);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room button.orch-primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room .orch-step,
+[data-ui='bold'] .bold-thread-recipe .orch-room [class*='orch-'] {
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-muted {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message {
+  width: 100%;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message > .agent-glyph {
+  --glyph-tile-size: 22px;
+  --glyph-radius: 8px;
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message-meta {
+  margin-bottom: calc(3px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-message .chat-text {
+  padding: calc(9px * var(--bold-d, 1)) calc(13px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-ring {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-track {
+  stroke: var(--line);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-fill {
+  stroke: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel {
+  top: calc(100% + 10px);
+  bottom: auto;
+  right: 0;
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+  border-radius: calc(22px * var(--bold-r, 1));
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel h3,
+[data-ui='bold'] .bold-thread .chat-ctx-panel h4,
+[data-ui='bold'] .bold-thread .chat-ctx-panel p,
+[data-ui='bold'] .bold-thread .chat-ctx-panel button {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel h4,
+[data-ui='bold'] .bold-thread .chat-ctx-meta,
+[data-ui='bold'] .bold-thread .chat-ctx-note,
+[data-ui='bold'] .bold-thread .chat-ctx-tokens {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel button {
+  background: var(--field);
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel .chat-ctx-primary {
+  background: var(--hi-bg);
+  border-color: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-confirm input {
+  background: var(--field);
+  border-color: var(--line);
+  color: var(--ink);
+}

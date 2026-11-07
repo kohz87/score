@@ -1,0 +1,103 @@
+/* 3.23.0: the run card in the stream (mock-up 18): a panel under the topic divider with the run's title, how far it is,
+   who is on what and Show graph. The needs-you line is a light object ("for you"). */
+[data-ui='bold'] .bold-run-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 78%;
+  margin: 4px 0 8px 40px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  border-radius: calc(22px * var(--bold-r, 1));
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-run-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-card-head > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-card-state {
+  flex: none;
+  font-size: 13px;
+  /* A name colour that keeps AA in both looks (the job map's swarm blue is set only inside the map: 2.0:1 on light). */
+  color: var(--agent-violet-name);
+}
+
+[data-ui='bold'] .bold-run-card-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-run-card-bar > span {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--jm-swarm, #7db8ff);
+}
+
+[data-ui='bold'] .bold-run-card-who {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-card-agent.on {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-run-needs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-run-needs a {
+  color: var(--hi-ink);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-run-card-graph {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-run-card-graph:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-run-card {
+    max-width: none;
+    margin-left: 0;
+  }
+}

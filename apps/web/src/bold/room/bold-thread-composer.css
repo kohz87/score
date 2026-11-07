@@ -1,0 +1,117 @@
+[data-ui='bold'] .bold-thread-foot {
+  flex: none;
+  padding: 0 calc(20px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-thread-composer {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+  min-height: 56px;
+  padding: calc(6px * var(--bold-d, 1)) calc(6px * var(--bold-d, 1)) calc(6px * var(--bold-d, 1))
+    calc(18px * var(--bold-d, 1));
+  border-radius: calc(26px * var(--bold-r, 1));
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-thread-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: calc(12px * var(--bold-d, 1)) 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-thread-composer input::placeholder {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-send {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+[data-ui='bold'] .bold-thread-composer-status,
+[data-ui='bold'] .bold-thread-composer-error {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-composer-status {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-thread-composer-error {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-thread-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--bold-d, 1));
+  margin: 0 16px 12px;
+  padding: calc(12px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-thread-tasks h3 {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-d);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-task {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-thread-task-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-thread-task-state {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-task-key {
+  margin-left: auto;
+  color: var(--faint);
+  font-family: var(--font-m);
+  font-size: 11px;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-thread-actions {
+    margin-left: 0;
+  }
+}
