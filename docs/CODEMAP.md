@@ -132,6 +132,13 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-settings-look.css` — Visually hidden utility and Look modes, themes, scale and currency controls.
 - `apps/web/src/bold/bold-settings-responsive.css` — Settings frame, grid and section-page responsive rules.
 - `apps/web/src/bold/bold-settings-workspaces.css` — Workspace cards, agent chips and shared folders.
+- `apps/web/src/bold/chats/chats.css` — bold chats style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/chats/chats-list.css` — chat list column, rail, search, rows, tiles, needs pill and chat meta.
+- `apps/web/src/bold/chats/chats-info.css` — Info section folds, members, topics and Chat info controls.
+- `apps/web/src/bold/chats/chats-layout.css` — desktop and phone chat layout, chat bar and side-column sizing.
+- `apps/web/src/bold/chats/chats-conversation.css` — topic divider, system line, composer palette, context bar, side tabs and top-bar links.
+- `apps/web/src/bold/chats/chats-topic.css` — This topic, context details, Graph tab, phone chat menu and phone topic targets.
+- `apps/web/src/bold/chats/chats-files.css` — Info files rows and the viewer sheet.
 - `apps/web/src/bold/room/BoldTeamRoom.tsx` — team room composition.
 - `apps/web/src/bold/room/RoomMessageStream.tsx` — room message stream rendering and follow behaviour.
 - `apps/web/src/bold/room/RoomMenus.tsx` — compatibility barrel for the room, job and chat menu exports.

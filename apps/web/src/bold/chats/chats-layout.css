@@ -1,0 +1,248 @@
+@media (min-width: 861px) {
+  /* One chat bar (board 18): the name in the display font with the owner line under it, the menus and Chat info at the
+     right, a hairline under it. */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .bold-chat-bar {
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-chat-bar-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-chat-bar-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .roomtitle {
+    font-size: 22px;
+    color: var(--ink);
+    min-height: 32px;
+  }
+
+  /* The chat gets the width: the Info panel is a 300px column and the chat's content fills the rest (3.27.1, owner:
+     no centred 860px column; each message bubble keeps its own reading width). */
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
+    width: 100%;
+    max-width: none;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-info-open > .bold-sidecol {
+    flex: 0 0 300px;
+  }
+
+  /* The wide Work, Library, Runs and Thread views widen the panel only while one of them is chosen. */
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .roomcol {
+    flex: 1 1 440px;
+    max-width: 600px;
+  }
+
+  /* Info is the mock-up's plain column with a hairline, not the work panel's rounded card. */
+  [data-ui='bold'] .roomgrid.bold-info-open .side {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    border-left: 1px solid var(--line);
+  }
+
+  /* The composer: a 26px box with a hairline and a 44px send circle. */
+  [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room {
+    border: 1px solid var(--line);
+    padding: 8px 8px 8px 18px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats .chat-composer-box--room .chat-send {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 860px) {
+  /* The list and the chat bar run edge to edge, past the shell's 20px page padding. */
+  [data-ui='bold'] .roomgrid.bold-chats {
+    margin-inline: -20px;
+  }
+
+  [data-ui='bold'] .bold-chat-row.direct .bold-chat-top b {
+    font-weight: 700;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol {
+    padding-inline: 14px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .bold-chat-phone-bar {
+    margin-inline: -14px;
+  }
+
+  /* The list is a screen of its own on a phone: 28px heading, the + button, 48px tiles, no group headings. */
+  [data-ui='bold'] .bold-chat-list {
+    flex: 1;
+    width: auto;
+    border-right: 0;
+    padding: 14px 14px 0;
+    gap: 6px;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-head {
+    justify-content: space-between;
+    padding: 0 4px 6px;
+  }
+
+  [data-ui='bold'] .bold-chat-round.solid {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-chat-kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    margin: 0;
+  }
+
+  /* 3.22.0: the Info sheet keeps its section headings (Members, Workspace, This topic, Topics); only the list hides them. */
+  [data-ui='bold'] .bold-chat-info .bold-chat-kicker {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    margin: 14px 0 6px;
+  }
+
+  [data-ui='bold'] .bold-chat-row,
+  [data-ui='bold'] .bold-chat-row.direct {
+    padding: 10px;
+  }
+
+  [data-ui='bold'] .bold-chat-tile,
+  [data-ui='bold'] .bold-chat-avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* The phone chat bar: Back circle, name with the owner line, Info circle. */
+  [data-ui='bold'] .bold-chat-phone-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id strong:focus {
+    outline: none;
+  }
+
+  [data-ui='bold'] .bold-chat-phone-id span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .bold-chat-phone-bar {
+    display: none;
+  }
+}
+
+/* 3.22.0 stage 2: the three columns run edge to edge under the top bar, as board 18 draws them. List 300-340px (rail
+   72px), the chat takes the rest with its content in a centred 860px column, Info is a flat 300px column. */
+@media (min-width: 861px) {
+  [data-ui='bold'] .main:has(> .roomgrid.bold-chats) {
+    padding: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats {
+    gap: 0;
+    align-items: stretch;
+  }
+
+  [data-ui='bold'] .bold-chat-list {
+    flex: 1 1 300px;
+    max-width: 340px;
+    width: auto;
+  }
+
+  [data-ui='bold'] .bold-chat-list.rail {
+    flex: 0 0 72px;
+    max-width: 72px;
+    width: 72px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol,
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .roomcol {
+    flex: 999 1 560px;
+    max-width: none;
+    min-width: 0;
+    gap: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol .bold-chat-bar {
+    padding: 14px 24px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .bold-sidecol {
+    flex: 0 0 300px;
+    width: 300px;
+  }
+
+  /* The Graph tab is a little wider than Info (the mock-up's 420px from 1280px, 340px below) so the run's nodes read; it is the flat Info panel. */
+  [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
+    flex: 0 0 340px;
+    width: 340px;
+  }
+
+  /* Up to 1279px the chat list folds to its rail while Graph is open (BoldRoom); from 1280px there is room for 420. */
+  @media (min-width: 1280px) {
+    [data-ui='bold'] .roomgrid.bold-chats.bold-graph-open > .bold-sidecol {
+      flex: 0 0 420px;
+      width: 420px;
+    }
+  }
+
+  /* Results and the Workbench widen the panel only while chosen. */
+  [data-ui='bold'] .roomgrid.bold-wide-panel:not(.bold-panel-shut) > .bold-sidecol {
+    flex: 0 0 480px;
+    width: 480px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats .side {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    border-left: 1px solid var(--line);
+    min-height: 0;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > :not(.bold-chat-bar) {
+    padding-inline: 24px;
+  }
+
+  [data-ui='bold'] .roomgrid.bold-chats > .roomcol > .stream {
+    padding-block: 22px;
+  }
+}
