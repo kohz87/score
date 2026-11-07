@@ -1,0 +1,109 @@
+[data-ui='bold'] .bold-library-main {
+  flex: 999 1 320px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library-main > .kn-banner,
+[data-ui='bold'] .bold-library-main > .bold-library-by {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-library-blank {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8px * var(--bold-d, 1));
+  text-align: center;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library-blank b {
+  color: var(--ink);
+  font-family: var(--font-d);
+  font-size: 22px;
+}
+
+[data-ui='bold'] .bold-library-blank span {
+  max-width: 320px;
+  font-size: 14px;
+}
+
+/* Reuse the classic editor and note panels without the classic page's outer cards. */
+[data-ui='bold'] .bold-library .kn-note {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library .kn-note-main {
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library .kn-note-head {
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library .kn-note h2 {
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library .kn-note-head .kn-path {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library .kn-edit-area {
+  min-height: 180px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-editor-host,
+[data-ui='bold'] .bold-library .kn-editor-host .cm-editor {
+  min-height: 180px;
+}
+
+[data-ui='bold'] .bold-library .kn-editor-host .cm-editor:not(.cm-source) .cm-content {
+  font-size: 1.05em;
+  line-height: 1.65;
+}
+
+[data-ui='bold'] .bold-library .kn-side {
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library .kn-panel {
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border: 1px solid var(--line);
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-library .kn-panel h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-d);
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-library .kn-panel p {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The note toolbar wraps onto more rows instead of scrolling off at any width. */
+[data-ui='bold'] .bold-library .kn-tb-strip {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}

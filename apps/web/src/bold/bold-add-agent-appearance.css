@@ -1,0 +1,106 @@
+[data-ui='bold'] .bold-add-appearance {
+  width: 170px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-preview {
+  height: 100px;
+  display: grid;
+  place-items: center;
+}
+
+[data-ui='bold'] .bold-add-preview .agent-glyph {
+  width: 100px;
+  height: 100px;
+  --glyph-svg-size: 62.5px;
+  --glyph-art-size: 100px;
+}
+
+[data-ui='bold'] .bold-add-shapes {
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  gap: calc(4px * var(--bold-d, 1));
+  justify-content: center;
+}
+
+[data-ui='bold'] .bold-add-shapes label {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-add-shapes label.on {
+  background: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-add-shapes .agent-glyph {
+  --glyph-svg-size: 18px;
+}
+
+[data-ui='bold'] .bold-add-colours {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-add-colours label {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-add-colours label.on {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--ink);
+}
+
+[data-ui='bold'] .bold-add-colours label:has(input:disabled) {
+  opacity: 0.3;
+}
+
+[data-ui='bold'] .bold-add-shapes label,
+[data-ui='bold'] .bold-add-colours label,
+[data-ui='bold'] .bold-add-tools label {
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes input,
+[data-ui='bold'] .bold-add-colours input,
+[data-ui='bold'] .bold-add-tools input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes label:focus-within,
+[data-ui='bold'] .bold-add-colours label:focus-within,
+[data-ui='bold'] .bold-add-tools label:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-add-hint {
+  max-width: 170px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}

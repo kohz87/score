@@ -1,0 +1,182 @@
+/* The right column (backlinks, links, properties, history) is 280-320px and every card spans it. The panel's `wide`
+   rule left `align-items: start` from its two-column grid, which shrank each card to its text. */
+[data-ui='bold'] .is-page[data-width='wide'] .kn-note {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+}
+
+[data-ui='bold'] .is-page[data-width='wide'] .kn-side {
+  align-items: stretch;
+}
+
+[data-ui='bold'] .is-page .kn-side > .kn-panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 3.19.1: a mid-width window keeps two columns: the folders sit above the note list, the note takes the rest. */
+@media (min-width: 861px) and (max-width: 1180px) {
+  [data-ui='bold'] .sidebody.bold-library.is-page {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  [data-ui='bold'] .is-page > .bold-knowledge-rail {
+    grid-column: 1;
+    grid-row: 1;
+    border-bottom: 1px solid var(--line);
+  }
+
+  [data-ui='bold'] .bold-knowledge-folders {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  [data-ui='bold'] .bold-knowledge-frow {
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none !important;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 10px;
+  }
+
+  /* Chips: the ⋯ belongs to the selected chip only. */
+  [data-ui='bold'] .bold-knowledge-frow:not(.is-on) .bold-knowledge-fmenu {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-dots {
+    opacity: 1;
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu {
+    right: auto;
+    left: 0;
+  }
+
+  [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-main {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Phone and narrow windows (the shell's tab-bar width): folders become a chip row above the list; a chosen note fills
+   the screen with Back. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .sidebody.bold-library.is-page {
+    flex-direction: column;
+    min-height: 0;
+    border-top: 0;
+  }
+
+  [data-ui='bold'] .is-page > .bold-knowledge-rail {
+    flex: none;
+    border-right: 0;
+    padding: calc(12px * var(--bold-d, 1)) 0 0;
+  }
+
+  /* Chips wrap rather than scroll sideways: a scrolling row would clip the ⋯ menu. */
+  [data-ui='bold'] .bold-knowledge-folders {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  [data-ui='bold'] .bold-knowledge-folder {
+    flex: none;
+    min-height: 44px;
+    padding: 0 16px !important;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 10px;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-knowledge-frow {
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-knowledge-frow .bold-knowledge-fmenu {
+    display: block;
+  }
+
+  [data-ui='bold'] .bold-knowledge-dots {
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+  }
+
+  /* Phone: the ⋯ opens a bottom sheet over a real scrim that takes the dismissing tap (3.27.1 review). */
+  [data-ui='bold'] .bold-knowledge-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 89;
+    background: rgb(var(--shadow-rgb) / 0.55);
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu-head {
+    display: flex;
+    flex-direction: column;
+    gap: calc(10px * var(--bold-d, 1));
+    padding: 0 calc(14px * var(--bold-d, 1)) calc(6px * var(--bold-d, 1));
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--ink2);
+  }
+
+  [data-ui='bold'] .bold-knowledge-menu-grip {
+    align-self: center;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
+  [data-ui='bold'] .menu.bold-knowledge-menu {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    min-width: 0;
+    border-radius: calc(28px * var(--bold-r, 1)) calc(28px * var(--bold-r, 1)) 0 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  [data-ui='bold'] .bold-knowledge-newfolder {
+    min-height: 44px;
+    border-radius: 999px;
+  }
+
+  [data-ui='bold'] .sidebody.bold-library.is-page > .bold-library-nav {
+    flex: none;
+    max-width: none;
+    border-right: 0;
+    padding: calc(12px * var(--bold-d, 1)) 0;
+  }
+
+  [data-ui='bold'] .bold-knowledge-row,
+  [data-ui='bold'] .bold-knowledge-plus {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .is-page > .bold-library-main {
+    padding: 0;
+  }
+}

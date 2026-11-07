@@ -105,21 +105,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/bold-add-agent.css",
-    "lines": 677,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/bold-knowledge.css",
-    "lines": 471,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/bold/bold-library.css",
-    "lines": 484,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/bold-screen.css",
     "lines": 753,
     "reason": "split in CS.2 wave 1"

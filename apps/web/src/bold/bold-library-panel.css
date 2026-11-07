@@ -1,0 +1,150 @@
+/* `.sidebody` (bold.css) says column; the extra class makes the prototype's row-wrap win. */
+[data-ui='bold'] .sidebody.bold-library {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(16px * var(--bold-d, 1));
+  /* The classic Knowledge components read these tokens; map them onto the bold palette without touching the classic page. */
+  --card: var(--panel);
+  --hairline: var(--line);
+  --subtle: var(--field);
+  --subtle-2: var(--field);
+  --ink-muted: var(--muted);
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --agent-violet-text: var(--agent-violet-name);
+  --agent-jade-text: var(--agent-jade-name);
+  --agent-saffron-text: var(--agent-saffron-name);
+  --agent-coral-text: var(--agent-coral-name);
+  --agent-violet-tint: color-mix(in srgb, var(--agent-violet-name) 18%, transparent);
+  --agent-jade-tint: color-mix(in srgb, var(--agent-jade-name) 18%, transparent);
+  --agent-saffron-tint: color-mix(in srgb, var(--agent-saffron-name) 18%, transparent);
+  --agent-coral-tint: color-mix(in srgb, var(--agent-coral-name) 18%, transparent);
+}
+
+[data-ui='bold'] .bold-library[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-library-nav {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-search {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+  min-height: 38px;
+  margin-bottom: calc(8px * var(--bold-d, 1));
+  padding: 0 calc(10px * var(--bold-d, 1));
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library-search:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-library-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-folder {
+  margin: 0;
+  padding: calc(8px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1));
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+[data-ui='bold'] .bold-library-group.is-drop {
+  outline: 2px dashed var(--ink);
+  outline-offset: -2px;
+  border-radius: calc(10px * var(--bold-r, 1));
+}
+
+[data-ui='bold'] .bold-library-groups section + section .bold-library-folder {
+  padding-top: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-library-item {
+  width: 100%;
+  min-height: 38px;
+  padding: calc(8px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(10px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-item:hover,
+[data-ui='bold'] .bold-library-item.is-selected {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library-item-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-by {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--bold-d, 1));
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+[data-ui='bold'] .bold-library-by.is-detail {
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-library-by .kn-author {
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-library-by .agent-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+[data-ui='bold'] .bold-library-empty-list {
+  margin: 8px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
