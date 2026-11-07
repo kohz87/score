@@ -1,15 +1,5 @@
 [
   {
-    "path": "apps/server/src/domain/exchanges/apply.ts",
-    "lines": 631,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/src/domain/exchanges/store.ts",
-    "lines": 483,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/domain/orchestration/commands.ts",
     "lines": 844,
     "reason": "split in CS.2 wave 1"
