@@ -90,16 +90,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/hermes/live/sqlite.test.ts",
-    "lines": 540,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/server/test/hermes/live/sse-client.test.ts",
-    "lines": 822,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/http/kanban-attempts-consumers.test.ts",
     "lines": 531,
     "reason": "split in CS.2 wave 1"
