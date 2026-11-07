@@ -634,6 +634,8 @@ likely to be the entry point for a change.
 ### Key files
 
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
+- `apps/server/test/launcher-service-helpers.ts` — shared launcher rig, fake systemd/loginctl, command and prompt harnesses for the feature-split launcher suites.
+- `apps/server/test/remote-helpers.ts` — shared remote config, app/pairing setup, cleanup and TLS fixtures for the feature-split remote suites.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
 ### Key files
