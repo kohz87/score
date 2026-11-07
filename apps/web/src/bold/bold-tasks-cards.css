@@ -1,0 +1,150 @@
+[data-ui='bold'] .bold-tb-card,
+[data-ui='bold'] .bold-tb-need--phone {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  border: 2px solid transparent;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 14px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-card {
+  background: var(--panel);
+  padding: 14px 16px;
+}
+
+[data-ui='bold'] .bold-tb-card[aria-pressed='true'] {
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-card:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Needs you is the shell's light "for you" object. */
+[data-ui='bold'] .bold-tb-need {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  --agent-violet-name: #4a2fd9;
+  --agent-jade-name: #00694f;
+  --agent-saffron-name: #8a5a00;
+  --agent-coral-name: #b01e43;
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-need {
+  --agent-violet-name: #b3a6ff;
+  --agent-jade-name: #5ee3bf;
+  --agent-saffron-name: #ffc94d;
+  --agent-coral-name: #ff97ae;
+}
+
+[data-ui='bold'] .bold-tb-need .bold-tb-card-top,
+[data-ui='bold'] .bold-tb-need .bold-tb-time {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-tb-need--phone {
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: 16px;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-card-title {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+[data-ui='bold'] .bold-tb-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2b3242;
+  color: #b3d4ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-tb-badge--triage,
+[data-ui='bold'] .bold-tb-badge--changes_requested {
+  background: #3a3322;
+  color: #f5c66b;
+}
+
+[data-ui='bold'] .bold-tb-badge--blocked,
+[data-ui='bold'] .bold-tb-badge--needs_you {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-badge--starts_after {
+  background: #dbe8fb;
+  color: #1d4e91;
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-badge--triage,
+[data-ui='bold'][data-look='light'] .bold-tb-badge--changes_requested {
+  background: #fbeccb;
+  color: #7a5200;
+}
+
+[data-ui='bold'] .bold-tb-progress {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-tb-progress > span {
+  display: block;
+  height: 6px;
+  background: #7db8ff;
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-tb-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-time {
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-tb-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-agent--none {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-empty {
+  margin: 8px 4px;
+  color: var(--muted);
+  font-size: 13px;
+}

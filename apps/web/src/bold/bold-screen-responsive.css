@@ -1,0 +1,75 @@
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-screen {
+    gap: calc(16px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-screen-head {
+    align-items: flex-start;
+  }
+
+  [data-ui='bold'] .bold-screen-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-screen-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  [data-ui='bold'] .bold-screen-frames {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-screen-window {
+    min-height: 320px;
+  }
+
+  [data-ui='bold'] .bold-screen-smalls {
+    flex-direction: row;
+  }
+
+  [data-ui='bold'] .bold-screen-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'ask'
+      'main'
+      'steps';
+    row-gap: calc(16px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-screen-ask:not(:empty) {
+    margin-bottom: 0;
+  }
+
+  [data-ui='bold'] .bold-screen-stage {
+    min-height: 480px;
+    padding: calc(12px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-screen-stage-head {
+    padding-right: 0;
+  }
+
+  [data-ui='bold'] .bold-screen-badge {
+    position: static;
+    align-self: flex-start;
+    order: -1;
+  }
+
+  [data-ui='bold'] .bold-screen .watch-replay {
+    padding: calc(12px * var(--bold-d, 1));
+  }
+
+  [data-ui='bold'] .bold-screen .watch-replay__legend {
+    gap: calc(10px * var(--bold-d, 1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-screen .livedot,
+  [data-ui='bold'] .bold-screen .watch-terminal__cursor {
+    animation: none !important;
+  }
+}

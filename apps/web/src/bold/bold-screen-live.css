@@ -1,0 +1,46 @@
+[data-ui='bold'] .bold-live-screen {
+  border-radius: calc(26px * var(--bold-r, 1));
+  background: var(--code-bg);
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-live-screen-head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+/* The card is always the dark code surface (like the replay below it), so its text takes the replay's light inks in
+   both looks. */
+[data-ui='bold'] .bold-live-screen-title {
+  margin: 0;
+  font-size: 15px;
+  color: #e8eaf0;
+}
+
+[data-ui='bold'] .bold-live-screen-toggle {
+  margin-left: auto;
+  background: #20232c;
+  color: #e8eaf0;
+}
+
+[data-ui='bold'] .bold-live-screen-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: #000;
+  user-select: none;
+  pointer-events: none;
+}
+
+[data-ui='bold'] .bold-live-screen-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--code-ink);
+}

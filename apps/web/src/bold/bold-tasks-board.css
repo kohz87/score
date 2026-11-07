@@ -1,0 +1,183 @@
+/* 3.16.0: the Tasks board. Colours, radii and spacing follow the approved mock-up
+   (docs/design/bold/mockups/13-tasks-board*.dc.html) and the shell's tokens; the light objects are the shell's
+   "for you" objects (--hi-bg / --hi-ink). */
+[data-ui='bold'] .bold-tb {
+  max-width: 1392px;
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-tb-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-tb-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 640px;
+}
+
+[data-ui='bold'] .bold-tb-title h1 {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-tb-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-tb-quiet {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-none {
+  padding: calc(24px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--panel);
+  text-align: center;
+}
+
+[data-ui='bold'] .bold-tb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: center;
+}
+
+/* 3.24.1: one row that scrolls sideways (no wrapping into two rows); a fade marks the cut edge, and the padding keeps
+   the last chip clear of it when everything fits. */
+[data-ui='bold'] .bold-tb-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding-right: 28px;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+[data-ui='bold'] .bold-tb-chips::-webkit-scrollbar {
+  display: none;
+}
+
+[data-ui='bold'] .bold-tb-chips button {
+  flex: none;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-tb-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-chips--room button {
+  min-height: 36px;
+}
+
+[data-ui='bold'] .bold-tb-chips button[aria-pressed='true'] {
+  background: var(--field);
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-layout {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-tb-scroll {
+  flex: 999 1 760px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 2px;
+  scrollbar-width: thin;
+}
+
+/* Below the wide layout the board is the whole row; the details open as a side sheet. */
+[data-ui='bold'] .bold-tb-layout.is-sheet .bold-tb-scroll {
+  flex: 1 1 100%;
+}
+
+[data-ui='bold'] .bold-tb-grid {
+  display: grid;
+  /* Columns are never narrower than 240px; when five do not fit, the board scrolls inside its own box (snap, and the
+     next column peeks in) instead of being cut off or squeezing the cards. */
+  grid-template-columns: repeat(5, minmax(240px, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-grid > .bold-tb-col {
+  scroll-snap-align: start;
+}
+
+[data-ui='bold'] .bold-tb-col {
+  background: var(--panel);
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 420px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-col {
+  min-height: 0;
+  background: transparent;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-tb-col h2 {
+  margin: 0 4px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-col h2 {
+  display: none;
+}
+
+[data-ui='bold'] .bold-tb-count {
+  min-width: 26px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
