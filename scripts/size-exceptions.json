@@ -5,11 +5,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/src/hermes/live/gateway.ts",
-    "lines": 569,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/src/hermes/live/updates.ts",
     "lines": 499,
     "reason": "split in CS.2 wave 1"

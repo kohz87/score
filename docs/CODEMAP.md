@@ -915,7 +915,11 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/agent-tabs-tools.ts` — tool listing and per-platform toggles for agent tabs.
 - `apps/server/src/hermes/live/agent-tabs-plugins.ts` — plugin listing and toggles for agent tabs.
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter.
-- `apps/server/src/hermes/live/gateway.ts` — Hermes gateway client.
+- `apps/server/src/hermes/live/gateway.ts` — Hermes gateway public facade and re-exports.
+- `apps/server/src/hermes/live/gateway-client.ts` — gateway transport, credentials, run, approval and clarify calls.
+- `apps/server/src/hermes/live/gateway-errors.ts` — gateway HTTP error type.
+- `apps/server/src/hermes/live/gateway-redaction.ts` — gateway payload and streamed-frame redaction.
+- `apps/server/src/hermes/live/gateway-schemas.ts` — gateway request and response schemas, run statuses and constants.
 - `apps/server/src/hermes/live/sqlite.ts` — read-only Hermes SQLite access.
 - `apps/server/src/hermes/live/bot-screen.ts` — public Bot Screen facade and its existing re-exports.
 - `apps/server/src/hermes/live/bot-screen-types.ts` — Bot Screen states, frame/status and takeover types, options and limits.
