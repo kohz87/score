@@ -84,7 +84,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/customizer/` — theme customizer and its live preview.
 - `apps/web/src/routes/chat/` — classic chat page, composer, message rendering, dialogs and ordered stylesheets.
 - `apps/web/src/routes/customizer/` — theme customizer, its area stylesheets and live preview.
-- `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images and tables.
+- `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images, tables and feature-split page tests.
 - `apps/web/src/routes/orchestrations/` — orchestration run panels, decisions and live diagram.
 - `apps/web/src/routes/pair/` — pairing and sign-in page.
 - `apps/web/src/routes/reports/` — reports pages and journey chart.
@@ -514,6 +514,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/knowledge/editor-table-commands.ts` — table detection, insertion, editing, alignment, deletion and tab navigation.
 - `apps/web/src/routes/knowledge/editor-toolbar-icons.tsx` — toolbar SVG icon set.
 - `apps/web/src/routes/knowledge/editor-toolbar-types.ts` — toolbar props and open panel type.
+- `apps/web/src/routes/knowledge/knowledge-test-helpers.tsx` — shared Knowledge page test state, fetch stub, mount and editor helpers.
 - `apps/web/src/routes/knowledge/note-workspace-types.ts` — note session, status and workspace prop types.
 - `apps/web/src/routes/team/CodingAgent.tsx` — coding-agent detail page composition and public re-exports.
 - `apps/web/src/routes/team/CodingAccessCard.tsx` — access card and its permission/quota-floor editor.
