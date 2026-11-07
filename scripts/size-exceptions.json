@@ -410,11 +410,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/server/test/runtimes/coding-runtime.test.ts",
-    "lines": 2781,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/server/test/runtimes/coding-socket.test.ts",
     "lines": 753,
     "reason": "split in CS.2 wave 1"
