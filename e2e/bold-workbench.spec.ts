@@ -2,6 +2,21 @@ import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
 /** The step list shows the five newest; older steps sit behind "Full history" (the shared server may hold more). */
+// The fake scenario loop asks builder its own approval for about a second each cycle (and approves it itself). The screen
+// shows builder's newest pending approval, so wait until only the seeded ask is pending before it opens.
+async function onlySeededApproval(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get('/api/approvals?status=pending&agent=builder')
+        const body = (await res.json()) as { items: { command?: string | null }[] }
+        return body.items.filter((item) => item.command !== 'npm install ws@8').length
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(0)
+}
+
 async function fullHistory(page: Page) {
   const steps = page.getByRole('region', { name: 'What builder did' })
   // Wait for the list itself, then open the history only when there is more than the newest few.
@@ -203,6 +218,7 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await pair(page)
+      await onlySeededApproval(page)
       await page.setViewportSize({ width: size.width, height: size.height })
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.goto('/b/screen/builder')
@@ -236,6 +252,7 @@ for (const size of sizes) {
       page,
     }) => {
       await pair(page)
+      await onlySeededApproval(page)
       await page.setViewportSize({ width: size.width, height: size.height })
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.goto('/b/screen/builder')
