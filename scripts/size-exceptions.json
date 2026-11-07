@@ -70,16 +70,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/routes/chat/ContextMeter.tsx",
-    "lines": 483,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
-    "path": "apps/web/src/routes/chat/MessageItem.tsx",
-    "lines": 695,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/routes/customizer/customizer.css",
     "lines": 826,
     "reason": "split in CS.2 wave 1"

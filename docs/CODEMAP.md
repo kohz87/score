@@ -80,7 +80,7 @@ likely to be the entry point for a change.
 - `apps/web/src/pwa/` — service worker and update banner.
 - `apps/web/src/routes/` — destination pages mounted by the app router.
 - `apps/web/src/routes/attempts/` — attempt detail and replay page.
-- `apps/web/src/routes/chat/` — classic chat page, composer, message rendering, dialogs and ordered stylesheets.
+- `apps/web/src/routes/chat/` — classic chat page, composer, message rendering (parts, tools, actions, stop), context meter, dialogs and ordered stylesheets.
 - `apps/web/src/routes/customizer/` — theme customizer and its live preview.
 - `apps/web/src/routes/knowledge/` — knowledge browser, note editor, files, images and tables.
 - `apps/web/src/routes/orchestrations/` — orchestration run panels, decisions and live diagram.
@@ -404,7 +404,18 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/use-composer-menu.ts` — command query, slash/mention suggestions and menu selection.
 - `apps/web/src/routes/chat/use-composer-voice.ts` — voice input lifecycle and draft updates.
 - `apps/web/src/routes/chat/use-composer-uploads.ts` — uploads, attachment state, Knowledge saving and live draft ref.
-- `apps/web/src/routes/chat/MessageItem.tsx` — chat message rendering.
+- `apps/web/src/routes/chat/ContextMeter.tsx` — context meter entry choosing the live or polled reading.
+- `apps/web/src/routes/chat/context-meter-types.ts` — context meter props.
+- `apps/web/src/routes/chat/ContextMeterSource.tsx` — live and polled session-context reads.
+- `apps/web/src/routes/chat/ContextMeterView.tsx` — ring/bar trigger, compaction status and context popover.
+- `apps/web/src/routes/chat/ContextMeterRing.tsx` — ring level, percentage helper and animated ring face.
+- `apps/web/src/routes/chat/ContextMeterCountdown.tsx` — animated compaction token countdown.
+- `apps/web/src/routes/chat/MessageItem.tsx` — chat message composition.
+- `apps/web/src/routes/chat/message-item-types.ts` — expansion and tool-part types shared by message rendering.
+- `apps/web/src/routes/chat/MessageToolCard.tsx` — tool and sub-agent call card.
+- `apps/web/src/routes/chat/MessageParts.tsx` — message part rendering and stable part keys.
+- `apps/web/src/routes/chat/MessageActions.tsx` — finished-message action row, retry and rewind controls.
+- `apps/web/src/routes/chat/MessageStopReply.tsx` — streaming stop control and stalled-reply line.
 - `apps/web/src/routes/chat/chat.css` — ordered entry for the classic chat stylesheets.
 - `apps/web/src/routes/chat/chat-shell.css` — New chat actions, direct-room link, thread frame and title.
 - `apps/web/src/routes/chat/chat-messages.css` — message rows and text, plan cards and approval cards.
