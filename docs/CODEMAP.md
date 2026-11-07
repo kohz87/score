@@ -423,9 +423,12 @@ likely to be the entry point for a change.
 ### Folders
 
 - `apps/server/test/runtimes/` — coding runtime, supervisor, socket, unit and systemd test suites and their fixtures.
+- `apps/server/test/orchestration/` — orchestrator, journal and coding-worker integration suites, split by feature with shared harness helpers.
 
 ### Key files
 
+- `apps/server/test/orchestration/coding-journal-helpers.ts` — shared coding-journal database, clock and launch fixtures for the split journal suites.
+- `apps/server/test/orchestration/coding-workers-helpers.ts` — shared worker harness lifecycle, scripted step and release-state probes for the split coding-worker suites.
 - `apps/server/test/runtimes/coding-units-runtime-helpers.ts` — shared runtime harness, boot helpers, row readers and seeded recovery fixtures.
 - `apps/server/test/http/` — Fastify `inject()` route tests; the rooms API suites are split by feature with their shared fixture.
 
