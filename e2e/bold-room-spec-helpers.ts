@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { openBoldJob } from './bold-room-fixtures.ts'
 
 export const roomTestOptions = {
-  reducedMotion: 'reduce',
+  reducedMotion: 'reduce' as const,
   permissions: ['clipboard-read', 'clipboard-write'] as string[],
 }
 

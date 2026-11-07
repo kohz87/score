@@ -24,7 +24,10 @@ for (const viewport of sizes) {
         assignee: 'builder',
         reviewer: null,
         roomId: 'team-room',
-        badge: { kind: 'blocked', label: 'Waiting for a decision on the timeout' },
+        badge: { kind: 'blocked', label: 'Waiting for a decision on the timeout' } as {
+          kind: string
+          label: string
+        } | null,
         progress: null,
         elapsedSec: null,
         note: null,

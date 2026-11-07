@@ -19,7 +19,10 @@ export function setupLibraryEditor() {
   })
 }
 
-export async function openLibrary(page: Page, size: (typeof sizes)[number] = sizes[0]) {
+export async function openLibrary(
+  page: Page,
+  size: { name: string; width: number; height: number } = sizes[0],
+) {
   await page.setViewportSize({ width: size.width, height: size.height })
   // The Library needs the width: a folded chat list (3.21.0) gives it back.
   await page.addInitScript(() => localStorage.setItem('score.chats.folded', '1'))

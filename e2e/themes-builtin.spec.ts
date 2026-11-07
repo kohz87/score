@@ -43,7 +43,11 @@ const attributes: Record<PackagedThemeId, Record<string, string>> = {
 }
 
 /** Picks the theme for this device (the real server serves it); the caller pairs, directly or by opening the room. */
-async function useTheme(page: Page, id: PackagedThemeId, mode: 'light' | 'dark' = 'light') {
+async function useTheme(
+  page: Page,
+  id: PackagedThemeId | 'paper' | 'night' | 'dense',
+  mode: 'light' | 'dark' = 'light',
+) {
   await page.addInitScript(
     ([theme, m]) => {
       localStorage.setItem('score.look.device', theme!)

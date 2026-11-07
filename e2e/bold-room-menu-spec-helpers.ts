@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { openInfoSection } from './bold-chat-helpers.ts'
 
 export const menuTestOptions = {
-  reducedMotion: 'reduce',
+  reducedMotion: 'reduce' as const,
   permissions: ['clipboard-read', 'clipboard-write'] as string[],
 }
 

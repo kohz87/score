@@ -134,7 +134,13 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
     }
     requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
 
-    const handled = await options.handle?.({ method, path, search: url.searchParams, body })
+    const handled = await options.handle?.({
+      method,
+      path,
+      search: url.searchParams,
+      body,
+      headers: request.headers(),
+    })
     if (handled) return response(route, handled.body, handled.status)
 
     if (path === '/api/stream') return route.fulfill({ status: 204 })

@@ -11,7 +11,7 @@ const sizes = [
   { name: '390×844', viewport: { width: 390, height: 844 } },
 ] as const
 
-function luminance([r, g, b]: number[]) {
+function luminance([r = 0, g = 0, b = 0]: number[]) {
   const c = [r, g, b].map((v) => {
     const s = v / 255
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4

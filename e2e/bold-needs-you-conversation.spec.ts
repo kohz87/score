@@ -77,7 +77,7 @@ for (const viewport of sizes) {
             return {
               body: {
                 asOfSeq: 12,
-                items: [...filler].reverse().concat([asking]),
+                items: [...[...filler].reverse(), asking],
                 nextCursor: null,
                 jobId: null,
               },

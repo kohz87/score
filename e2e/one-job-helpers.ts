@@ -25,6 +25,7 @@ export async function onlyTeams(page: Page, keep: readonly string[]) {
   await page.addInitScript(
     (ids: string[]) => {
       const add = EventSource.prototype.addEventListener
+      // The browser's overloads can't be restated here; the patched function keeps the same runtime signature.
       EventSource.prototype.addEventListener = function (
         this: EventSource,
         type: string,
@@ -44,7 +45,7 @@ export async function onlyTeams(page: Page, keep: readonly string[]) {
           listener.call(this, event)
         }
         return add.call(this, type, wrapped, options)
-      }
+      } as typeof EventSource.prototype.addEventListener
     },
     [...keep],
   )
