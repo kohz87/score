@@ -605,11 +605,6 @@
     "reason": "split in CS.2 wave 1"
   },
   {
-    "path": "apps/web/src/bold/BoldTriggers.tsx",
-    "lines": 1060,
-    "reason": "split in CS.2 wave 1"
-  },
-  {
     "path": "apps/web/src/bold/BoldUsage.tsx",
     "lines": 793,
     "reason": "split in CS.2 wave 1"
