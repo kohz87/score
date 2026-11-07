@@ -911,6 +911,12 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/bot-screen-png.ts` — RGBX framebuffer to PNG encoding.
 - `apps/server/src/hermes/live/bot-screen-lease.ts` — Hermes lease and sandbox marker reads.
 - `apps/server/src/hermes/live/bot-screen-screens.ts` — per-profile screen registry, frame serving and takeover input.
+- `apps/server/src/hermes/live/settings.ts` — public provider and connection settings facade.
+- `apps/server/src/hermes/live/settings-catalog.ts` — provider and connection constants, schemas and pure helpers.
+- `apps/server/src/hermes/live/settings-gateway.ts` — gateway runtime platform state and messaging rows.
+- `apps/server/src/hermes/live/settings-base.ts` — shared settings state, CLI reads and pooled credentials.
+- `apps/server/src/hermes/live/settings-providers.ts` — provider listing, sign-in, key and local-provider management.
+- `apps/server/src/hermes/live/settings-connections.ts` — tool server and messaging connections.
 - `apps/server/src/hermes/fake/fake-port.ts` — public fake Hermes adapter entry.
 - `apps/server/src/hermes/fake/fake-port-fixtures.ts` — deterministic fake scheduler, memory ids and skill hub.
 - `apps/server/src/hermes/fake/fake-port-demo.ts` — demo question and reply phrase hooks.
