@@ -762,7 +762,7 @@ Score's rooms: nothing to adopt.
 ## Subagents instead of named swarms (owner 2026-11-09; decision 173; design docs/briefs/SA-subagents.md; nothing built)
 A named agent spins up its own subagents; chat rooms, hand-offs, named recipe steps and votes stay as they are. Default on,
 up to 4 at once, with `/subagents`, a job and recipe setting, and an agent ceiling. First the note's checks and review, then
-**SA.1 safety** (`delegation.gateway_mode: inline` on every profile with the owner's OK, a warning, children blocked from
+**Done in 3.32.0–3.32.1, except rolling the plugin out to the owner's profiles, which needs their OK; left over: per-step limits in a saved recipe, "Held back by the limit" on the map, a live cost during a turn.** **SA.1 safety** (`delegation.gateway_mode: inline` on every profile with the owner's OK, a warning, children blocked from
 Score's room tools), **SA.2 limits**, **SA.3 UI** from an approved mock-up, **SA.4 retire the helpers picker**.
 
 ## Code structure (owner 2026-11-07; decision 168)
