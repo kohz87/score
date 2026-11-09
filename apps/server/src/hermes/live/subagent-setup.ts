@@ -1,4 +1,4 @@
-import type { SubagentSetup, SubagentSetupAgent } from '@score/contract'
+import { SUBAGENT_LIMITS, type SubagentSetup, type SubagentSetupAgent } from '@score/contract'
 import type { HermesSubagentConfig } from '../profile-management.ts'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -56,28 +56,53 @@ export async function applySubagentSetup(
       `${unready.agentId} needs the updated Score plugin first, so nothing was changed.`,
     )
   for (const { agentId, inline } of before.agents) {
-    for (const [key, value] of [
-      [
-        'delegation.max_concurrent_children',
-        String(db.read((sqlite) => ceilingOf(sqlite, agentId).maxConcurrent)),
-      ],
-      ['delegation.max_iterations', String(DEFAULT_MAX_ITERATIONS)],
-      ['delegation.gateway_mode', 'inline'],
-    ] as const) {
-      const result = await deps
-        .runner(['-p', agentId, 'config', 'set', key, value], {
-          timeoutMs: 30_000,
-          hermesHome: deps.hermesHome,
-          closeStdin: true,
-        })
-        .catch(() => ({ exitCode: -1 }))
-      if (result.exitCode !== 0)
-        throw new HttpError(502, 'hermes_error', `Hermes didn’t change ${key} for ${agentId}.`)
-    }
+    await setInline(
+      deps.runner,
+      deps.hermesHome,
+      agentId,
+      db.read((sqlite) => ceilingOf(sqlite, agentId).maxConcurrent),
+    )
     // Keeps the first moment while it stays inline: sessions since then are already inline.
     if (!inline || !sinceRecorded(db, agentId)) recordInline(db, agentId, now())
   }
   return readSubagentSetup(deps, agentIds)
+}
+
+async function setInline(
+  runner: HermesRunner,
+  hermesHome: string,
+  agentId: string,
+  maxConcurrent: number,
+): Promise<void> {
+  // Inline last: if a step fails the agent keeps refusing subagents, rather than running them with no limit set.
+  for (const [key, value] of [
+    ['delegation.max_concurrent_children', String(maxConcurrent)],
+    ['delegation.max_iterations', String(DEFAULT_MAX_ITERATIONS)],
+    ['delegation.gateway_mode', 'inline'],
+  ] as const) {
+    const result = await runner(['-p', agentId, 'config', 'set', key, value], {
+      timeoutMs: 30_000,
+      hermesHome,
+      closeStdin: true,
+    }).catch(() => ({ exitCode: -1 }))
+    if (result.exitCode !== 0)
+      throw new HttpError(502, 'hermes_error', `Hermes didn’t change ${key} for ${agentId}.`)
+  }
+}
+
+/** A profile Score creates has no sessions yet, so every session of it is inline. */
+export async function setUpNewProfileSubagents(
+  runner: HermesRunner,
+  hermesHome: string,
+  db: ScoreDb | undefined,
+  agentId: string,
+): Promise<void> {
+  try {
+    await setInline(runner, hermesHome, agentId, SUBAGENT_LIMITS.defaultConcurrent)
+    if (db) recordInline(db, agentId, new Date().toISOString())
+  } catch {
+    // The setup goes on: the Agents page shows this agent as needing the setting, and subagents stay refused.
+  }
 }
 
 const sinceRecorded = (db: ScoreDb, profile: string): boolean =>
