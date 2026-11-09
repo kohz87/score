@@ -416,7 +416,7 @@ test('the needs-you card and its buttons wear Score’s own colours under a cust
   expect(css).toContain(`${card} .btn {`)
   expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-request[data-protected]")
   expect(protectedClasses).toContain('bold-subagent-setup')
-  const setup = readFileSync(join(root, 'styles/protected-setup.css'), 'utf8')
+  const setup = readFileSync(join(root, 'styles/protected-setup.css'), 'utf8').replace(/\s+/g, ' ')
   expect(setup).toContain(
     "html[data-look='custom'] [data-ui='bold'] .bold-subagent-setup[data-protected]",
   )
