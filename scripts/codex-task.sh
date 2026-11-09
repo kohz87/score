@@ -35,7 +35,7 @@ worktree_for() { ls -d "$WT_ROOT/$1-"* 2>/dev/null | head -1; }
 
 # The owner's rule: if Codex runs out of quota, pause all work and wait for them (see CLAUDE.md).
 check_quota() {
-  if sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -qiE "usage limit|usage_limit|hit your limit|rate_limit_exceeded|insufficient_quota|quota exceeded|limit has been reached|out of credits|add credits"; then
+  if sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -qiE "usage limit|usage_limit|hit your limit|rate_limit_exceeded|insufficient_quota|insufficient balance|402 Payment Required|quota exceeded|limit has been reached|out of credits|add credits"; then
     echo "codex-task: CODEX QUOTA EXHAUSTED${PROFILE:+ (profile $PROFILE)} (see $1). Follow CLAUDE.md \"If Codex stops or runs out of quota\"." >&2
     exit 75
   fi

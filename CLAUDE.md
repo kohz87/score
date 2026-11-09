@@ -2,11 +2,13 @@
 
 # Claude-specific notes
 
-## Ground rules (owner, 2026-11-07; these override older role notes below where they differ)
+## Ground rules (owner, 2026-11-07, rule 1's fallback 2026-11-09; these override older role notes below where they differ)
 1. **Code is written by DeepSeek v4.1 Flash through NanoGPT**: new files, edits and file splits, via
    `CODEX_PROFILE=deepseek scripts/codex-task.sh start|fix …` (`~/.codex/deepseek.config.toml`,
-   `deepseek/deepseek-v4.1-flash-1017:thinking`). NanoGPT limit (exit 75) → the OpenRouter profile `ordeepseek`, then a
-   Sonnet coder. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
+   `deepseek/deepseek-v4.1-flash-1017:thinking`). **Never the OpenRouter profile `ordeepseek`** (owner, 2026-11-09). NanoGPT limit
+   (exit 75) → Haiku with a Sonnet advisor, same brief and worktree:
+   `claude -p --model claude-haiku-5-5 --advisor claude-sonnet-5-5 --allowedTools "Read" "Grep" "Glob" "Edit" "Write" "Bash" < brief.md`,
+   prompt on stdin; back to DeepSeek when NanoGPT recovers. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
    release gates, and fixes found in review that are a few lines.
 2. **Reviews are Sonnet with an Opus advisor**: a headless Claude Code run, read-only, findings only —
    `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git log:*)" < review-prompt.md`,
