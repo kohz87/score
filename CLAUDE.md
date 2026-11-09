@@ -10,11 +10,11 @@
    `claude -p --model claude-haiku-5-5 --advisor claude-sonnet-5-5 --allowedTools "Read" "Grep" "Glob" "Edit" "Write" "Bash" < brief.md`,
    prompt on stdin; back to DeepSeek when NanoGPT recovers. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
    release gates, and fixes found in review that are a few lines.
-2. **Reviews are Sonnet with an Opus advisor**: a headless Claude Code run, read-only, findings only —
-   `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git log:*)" < review-prompt.md`,
-   run in the task's worktree. The prompt goes on stdin: `--allowedTools` takes a list and would swallow a prompt
-   argument. The prompt carries the brief, the diff command and the checks. Every task and every fix round gets one before
-   the lead's merge checks; the lead verifies each finding.
+2. **Reviews are Codex on `gpt-6.1-terra` at `max`, once, after the fixes** (owner, 2026-11-09, decision 177; replaces Sonnet with an
+   Opus advisor). No review before fixes, and no review of each task or fix round: a batch gets one review when its fix work is done.
+   Read-only, findings only, in the task's worktree: `codex exec --disable apps -m gpt-6.1-terra -c model_reasoning_effort=max
+   -s read-only "$(cat review-prompt.md)" </dev/null` (without `</dev/null` it hangs on open stdin). Word the prompt as checking Score's
+   guarantees: attack wording gets flagged. The lead verifies each finding. If Codex has no quota, the lead reviews.
 3. **Machine load is measured for the whole system, and 80% is a safety ceiling** (the owner's other projects share
    this VM; the point is that it never crashes). Before starting or adding any task, run `node scripts/capacity.mjs`
    (CPU and memory of the whole machine, sampled). Under 50%: start more parallel tasks (independent worktrees), one at
@@ -28,9 +28,9 @@
    what is unnecessary in scope (unused files, exports, functions, removed-feature code and tests, stale fixtures and
    baselines), with proof per item; proven-unused code is removed first, then the rest is split. Briefs include the
    step; the lead checks each removal's proof (the line comparison must show only the listed removals beyond moves).
-6. **No pre-fix checks** (owner, 2026-11-07, repeating 2026-10-24): coders run lint and typecheck only, never tests; before
-   review the lead runs only static proofs (line comparison, compiled-CSS comparison, structure check); the full check
-   runs once, on main, after the reviewed and fixed batch is merged, and gates the push.
+6. **No pre-fix checks or reviews** (owner, 2026-11-07, repeating 2026-10-24; reviews 2026-11-09): coders run lint and typecheck only, never
+   tests; before the fix work the lead runs only static proofs (line comparison, compiled-CSS comparison, structure check). The order is: build, full
+   check, fixes, then the one Codex review; its findings are fixed and the tests they touch re-run. The full check gates the push.
 
 ## Roles (decided by the owner, 2026-10-06)
 - **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,
