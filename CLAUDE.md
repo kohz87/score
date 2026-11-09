@@ -12,7 +12,7 @@
    release gates, and fixes found in review that are a few lines.
 2. **Reviews are Codex on `gpt-6.1-terra` at `max`, once, after the fixes** (owner, 2026-11-09, decision 177; replaces Sonnet with an
    Opus advisor). No review before fixes, and no review of each task or fix round: a batch gets one review when its fix work is done.
-   Read-only, findings only, in the task's worktree: `codex exec --disable apps -m gpt-6.1-terra -c model_reasoning_effort=max
+   On Codex account A (`~/.codex`; `~/.codex-b` is a second account, not for this). Read-only, findings only, in the task's worktree: `CODEX_HOME=~/.codex codex exec --disable apps -m gpt-6.1-terra -c model_reasoning_effort=max
    -s read-only "$(cat review-prompt.md)" </dev/null` (without `</dev/null` it hangs on open stdin). Word the prompt as checking Score's
    guarantees: attack wording gets flagged. The lead verifies each finding. **Only if Codex is unavailable** (owner, 2026-11-09), fall back to Sonnet with an Opus advisor, same timing:
    `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git log:*)" < review-prompt.md`.
