@@ -180,3 +180,13 @@ export const subagentDriverOptions = (
   jobId: string | null,
 ): { subagentsOff?: true } =>
   effectiveLimits(sqlite, profile, jobId).enabled ? {} : { subagentsOff: true }
+
+/** The limit in plain words, so the agent can plan. The prompt is never the only control (docs/briefs/SA-subagents.md). */
+export function subagentRule(sqlite: DatabaseSync, agentId: string, jobId: string | null): string {
+  const limits = effectiveLimits(sqlite, agentId, jobId)
+  if (!limits.enabled) return 'Subagents are off in this job: do the work yourself.'
+  const left = Math.max(0, limits.maxTotal - limits.used)
+  if (left === 0)
+    return `This job has used all ${limits.maxTotal} of its subagents: do the work yourself.`
+  return `You may use subagents: up to ${limits.maxConcurrent} at once, ${left} more in this job. They report to you, not to the chat.`
+}
