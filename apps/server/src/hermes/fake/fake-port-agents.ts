@@ -32,11 +32,11 @@ export abstract class FakePortAgents extends FakePortSettings {
     }
   }
 
-  async applySubagentSetup(_agentIds: string[]): Promise<SubagentSetup> {
+  async applySubagentSetup(): Promise<SubagentSetup> {
     return this.subagentSetup()
   }
 
-  refreshSubagentPolicies(_jobId: string): void {}
+  refreshSubagentPolicies(): void {}
 
   private subagentConfigs = new Map<string, HermesSubagentConfig>()
 

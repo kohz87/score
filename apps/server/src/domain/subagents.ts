@@ -171,3 +171,11 @@ export function effectiveLimits(
     used: job?.subagents_used ?? 0,
   }
 }
+
+/** A coding agent's launch: only off needs saying, and a driver that can enforce it does. */
+export const subagentDriverOptions = (
+  sqlite: DatabaseSync,
+  profile: string,
+  jobId: string | null,
+): { subagentsOff?: true } =>
+  effectiveLimits(sqlite, profile, jobId).enabled ? {} : { subagentsOff: true }

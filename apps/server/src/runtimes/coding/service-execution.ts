@@ -1,4 +1,4 @@
-import { effectiveLimits } from '../../domain/subagents.ts'
+import { subagentDriverOptions } from '../../domain/subagents.ts'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { driverFor } from './drivers.ts'
@@ -253,9 +253,7 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
           settingsPath: frozenPolicy?.policy.settings?.path ?? settingsPath,
           denyPaths: this.denyPaths(),
           denyFiles: this.denyFiles(),
-          ...(effectiveLimits(db.sqlite, agent.id, translation.subagentJobId).enabled
-            ? {}
-            : { subagentsOff: true }),
+          ...subagentDriverOptions(db.sqlite, agent.id, translation.subagentJobId),
           ...(frozenPolicy ? { worker: true } : {}),
           ...(delivery.file ? { instructionsFile: delivery.file } : {}),
           ...(delivery.refresh ? { refreshSystemPrompt: true } : {}),

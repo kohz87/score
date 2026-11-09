@@ -82,7 +82,9 @@ export function registerSubagentSetupRoutes(
       if (before.control === 'none')
         throw new HttpError(409, 'conflict', 'Score can’t control this agent’s subagents yet.')
       if (before.control === 'limits') {
-        const { enabled: _enabled, ...config } = change
+        const config = Object.fromEntries(
+          Object.entries(change).filter(([field]) => field !== 'enabled'),
+        )
         if (Object.keys(config).length) await hermes.setSubagentConfig(agentId, config)
       }
       const ceiling = {
