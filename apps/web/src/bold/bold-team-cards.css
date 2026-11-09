@@ -119,3 +119,62 @@
 [data-ui='bold'] .bold-team-status h2 {
   font-size: 22px;
 }
+
+/* SA.1: the Agents page's setup offer. Values come from mockups/24-subagents-agent-settings.dc.html's light card. */
+[data-ui='bold'] .bold-subagent-setup {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(18px * var(--bold-d, 1)) calc(22px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-subagent-setup h2 {
+  font-family: var(--font-b);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-subagent-setup-copy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-subagent-setup-command,
+[data-ui='bold'] .bold-subagent-setup-waiting {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-subagent-setup-command {
+  font-family: var(--font-m);
+}
+
+[data-ui='bold'] .bold-subagent-setup-waiting {
+  margin: 0;
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-subagent-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-subagent-setup .btn.primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-subagent-setup .btn.ghost {
+  color: var(--hi-ink);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hi-ink) 45%, transparent);
+}
+
+[data-ui='bold'] .bold-subagent-setup .bold-team-error {
+  flex-basis: auto;
+}

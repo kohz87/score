@@ -78,6 +78,7 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  'bold-subagent-setup',
   // 2.3.0 (decision 128): an agent's question to the person, a decision like an approval
   'bold-question',
   // PLAN 11.11b: the shell-wide notice that starting work is blocked until the person reviews the fence

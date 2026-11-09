@@ -38,9 +38,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles; Team tests are split by feature under `bold-team-*.test.tsx`.
 - `apps/web/src/bold/bold-team-fixtures.ts` — shared Team test agents, runtimes, operations and response fixtures.
 - `apps/web/src/bold/bold-team-helpers.tsx` — shared Team test fetch stub, render setup, lifecycle state and removal helpers.
+- `apps/web/src/bold/BoldTeam.tsx` — the Agents page: agent cards, Add agent, subagent setup and Pause everyone.
+- `apps/web/src/bold/SubagentSetupCard.tsx` — the Agents page's subagent setup card: GET, Apply, Not now and errors.
+- `apps/web/src/bold/SubagentSetupCard.test.tsx` — subagent setup card responses, Apply filtering, dismissal and errors.
 - `apps/web/src/bold/bold-team.css` — Team and one-agent style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-team-page.css` — page frame, grids, cards, buttons, fields and compact controls.
-- `apps/web/src/bold/bold-team-cards.css` — Team agent-card grid, identity, actions and screen previews.
+- `apps/web/src/bold/bold-team-cards.css` — Team agent-card grid, identity, actions, screen previews and subagent setup.
 - `apps/web/src/bold/bold-team-agent.css` — one-agent header, facts, More cards and classic editor recolours.
 - `apps/web/src/bold/bold-team-responsive.css` — narrow and portrait-tablet layouts for Team pages and cards.
 - `apps/web/src/bold/bold-team-status.css` — where-it-works badges, removal panel and setup/removal status cards.
