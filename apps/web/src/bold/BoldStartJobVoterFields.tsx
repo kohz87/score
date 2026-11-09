@@ -74,6 +74,31 @@ export function VoterFields({ view }: { view: StartJobView }) {
       {view.voterIds.length === 0 && (
         <span className="small muted">No voters: no votes in this job.</span>
       )}
+      {view.voterIds.length > 0 && (
+        // 3.16 (the split-vote choice of the old helpers form): sent as `splitTo` with the voters.
+        <fieldset className="start-field">
+          <legend>When the voters split</legend>
+          {(
+            [
+              ['lead', 'The lead decides'],
+              ['person', 'Ask me'],
+            ] as const
+          ).map(([id, label]) => (
+            <label className="check small" key={id}>
+              <input
+                type="radio"
+                name="start-voter-split"
+                checked={view.helperSplit === id}
+                onChange={() => {
+                  view.setHelperSplit(id)
+                  view.touch()
+                }}
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <label className="check small">
         <input
           type="checkbox"

@@ -5,6 +5,7 @@ import {
   subagentControlLabel,
   subagentCostText,
   subagentCounts,
+  subagentDoneText,
   subagentJobLine,
   subagentRowState,
 } from './subagent-model.ts'
@@ -123,4 +124,49 @@ test('a card attaches to the agent’s latest message before its first row, and 
     attachSubagentRows(rows, [message('other', 'builder', 'job-1', '2026-11-09T01:00:00.000Z')])
       .size,
   ).toBe(0)
+})
+
+test('two turns give two cards, each with its own rows and its own count', () => {
+  const rows = [
+    row({ id: 'a', state: 'done', startedAt: '2026-11-09T01:05:00.000Z' }),
+    row({ id: 'b', state: 'running', startedAt: '2026-11-09T01:10:00.000Z' }),
+    row({ id: 'c', state: 'done', startedAt: '2026-11-09T02:05:00.000Z' }),
+    row({ id: 'd', state: 'done', startedAt: '2026-11-09T02:06:00.000Z' }),
+    row({ id: 'e', state: 'failed', startedAt: '2026-11-09T02:07:00.000Z' }),
+  ]
+  const messages = [
+    message('turn-1', 'lead', 'job-1', '2026-11-09T01:00:00.000Z'),
+    message('turn-2', 'lead', 'job-1', '2026-11-09T02:00:00.000Z'),
+  ]
+  const attached = attachSubagentRows(rows, messages)
+  expect(attached.get('turn-1')?.map((item) => item.id)).toEqual(['a', 'b'])
+  expect(attached.get('turn-2')?.map((item) => item.id)).toEqual(['c', 'd', 'e'])
+  expect(subagentDoneText(attached.get('turn-1') ?? [])).toBe('1 of 2 done')
+  expect(subagentDoneText(attached.get('turn-2') ?? [])).toBe('2 of 3 done')
+})
+
+test('a row that starts before the agent’s first message in its job lands on that first message', () => {
+  const rows = [row({ id: 'early', startedAt: '2026-11-09T00:30:00.000Z' })]
+  const messages = [message('first', 'lead', 'job-1', '2026-11-09T01:00:00.000Z')]
+  expect(
+    attachSubagentRows(rows, messages)
+      .get('first')
+      ?.map((item) => item.id),
+  ).toEqual(['early'])
+})
+
+test('cost: a finished row with no dollars makes the total at least; a running one does not', () => {
+  expect(
+    subagentCostText([row({ state: 'done', costUsd: 0.2 }), row({ state: 'done', costUsd: null })]),
+  ).toBe('at least $0.20')
+  expect(
+    subagentCostText([
+      row({ state: 'failed', costUsd: 0.1 }),
+      row({ state: 'failed', costUsd: null }),
+      row({ state: 'running', costUsd: 0.3 }),
+    ]),
+  ).toBe('at least $0.40')
+  expect(subagentCostText([row({ state: 'running', costUsd: 0.2 }), row({ costUsd: null })])).toBe(
+    'about $0.20',
+  )
 })

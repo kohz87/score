@@ -22,7 +22,8 @@ export function ComposerMenu({
   select: (position: number) => void
 }) {
   if (!menu || count === 0) return null
-  const note = menu === 'slash' ? slashItems.find((item) => item.note)?.note : null
+  // Only the selected command's note shows, so a note never sits under the other commands.
+  const note = menu === 'slash' ? slashItems[index]?.note : null
   return (
     <div
       className="chat-menu"

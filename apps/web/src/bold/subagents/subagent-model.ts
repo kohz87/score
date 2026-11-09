@@ -33,13 +33,20 @@ export function subagentJobLine(rows: readonly SubagentRow[]): string | null {
 
 const money = (usd: number) => `$${usd.toFixed(2)}`
 
-/** Their cost so far: dollars when any row has them, else tokens, else an unknown dash. Never $0 for unknown. */
+/**
+ * Their cost so far: dollars when any row has them ("at least" while a finished row has none), else tokens, else an
+ * unknown dash. Never $0 for unknown.
+ */
 export function subagentCostText(rows: readonly SubagentRow[]): string {
   const dollars = rows.filter(
     (row): row is SubagentRow & { costUsd: number } => row.costUsd !== null,
   )
-  if (dollars.length > 0)
-    return `about ${money(dollars.reduce((sum, row) => sum + row.costUsd, 0))}`
+  if (dollars.length > 0) {
+    // A finished row with no figure means the total is only a floor.
+    const floor = rows.some((row) => row.state !== 'running' && row.costUsd === null)
+    const total = money(dollars.reduce((sum, row) => sum + row.costUsd, 0))
+    return floor ? `at least ${total}` : `about ${total}`
+  }
   const tokens = rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)
   return tokens > 0 ? `${new Intl.NumberFormat().format(tokens)} tokens` : '—'
 }
@@ -94,38 +101,31 @@ export function subagentAtOnceText(
 type AgentMessage = Pick<Message, 'id' | 'jobId' | 'author' | 'createdAt'>
 
 /**
- * Attach each parent agent's rows to the message that started them: that agent's latest message in the job at or before
- * the first row's start. The contract has no message id on a row, so this is the closest honest place; when the parent
- * message predates the loaded page, the card falls back to the job's first message from that agent.
+ * Attach each subagent row to the message that started it: its parent agent's latest message in the row's job at or
+ * before the row's start, else that agent's first message in the job. A row whose agent has no message in its job yet
+ * stays out until one exists. The contract has no message id on a row, so this is the closest honest place.
  */
 export function attachSubagentRows(
   rows: readonly SubagentRow[],
   messages: readonly AgentMessage[],
 ): Map<string, SubagentRow[]> {
-  // One group per agent in one job: the same agent's rows from two jobs are two cards, each on its own job's message.
-  const groups = new Map<string, SubagentRow[]>()
-  for (const row of rows) {
-    const key = `${row.jobId}\n${row.agentId}`
-    groups.set(key, [...(groups.get(key) ?? []), row])
+  const byAgent = new Map<string, AgentMessage[]>()
+  for (const message of messages) {
+    if (message.author.kind !== 'agent') continue
+    const key = `${message.jobId}\n${message.author.agentId}`
+    byAgent.set(key, [...(byAgent.get(key) ?? []), message])
   }
+  for (const list of byAgent.values())
+    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
   const attached = new Map<string, SubagentRow[]>()
-  for (const group of groups.values()) {
-    const sorted = [...group].sort(
-      (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id),
-    )
-    const { jobId, agentId, startedAt } = sorted[0]!
-    const sameAgent = messages.filter(
-      (message) =>
-        message.jobId === jobId &&
-        message.author.kind === 'agent' &&
-        message.author.agentId === agentId,
-    )
-    const before = sameAgent
-      .filter((message) => message.createdAt <= startedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+  for (const row of [...rows].sort(
+    (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id),
+  )) {
+    const sameAgent = byAgent.get(`${row.jobId}\n${row.agentId}`) ?? []
+    const before = sameAgent.filter((message) => message.createdAt <= row.startedAt)
     const target = before.at(-1) ?? sameAgent[0]
     if (!target) continue
-    attached.set(target.id, sorted)
+    attached.set(target.id, [...(attached.get(target.id) ?? []), row])
   }
   return attached
 }

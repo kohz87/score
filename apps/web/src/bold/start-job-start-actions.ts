@@ -98,6 +98,7 @@ export function useStartJobStartActions(
               voterIds: data.voterIds,
               autoVote: data.autoVoteOn,
               autoVoteK: data.autoVoteOn ? data.autoVoteKNumber : 3,
+              splitTo: state.helperSplit,
             },
           }
         : {}),

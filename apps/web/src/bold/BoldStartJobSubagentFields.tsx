@@ -1,7 +1,12 @@
 import { SUBAGENT_LIMITS } from '@score/contract'
+import { useRef, type KeyboardEvent } from 'react'
 import { SUBAGENT_AT_ONCE_CHOICES } from './start-job-subagents.ts'
 import type { StartJobView } from './use-start-job-view.ts'
 import './bold-start-subagents.css'
+
+type Pill = { key: string; label: string; checked: boolean; disabled: boolean; choose: () => void }
+
+const STEP: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }
 
 /**
  * The Subagents choice (SA.3, mock-up 24): Off, or up to N at once (the lead's own limit caps it), and the job's total,
@@ -11,11 +16,57 @@ export function SubagentFields({ view }: { view: StartJobView }) {
   const lead = view.leadAgent?.name ?? 'The lead'
   const control = view.subagentsCeiling?.control
   const ceilingMax = view.subagentsCeiling?.maxConcurrent ?? SUBAGENT_LIMITS.maxConcurrent
+  const pillRefs = useRef<(HTMLButtonElement | null)[]>([])
   const choose = (on: boolean, at?: number) => {
     view.setSubagentsOn(on)
     if (at !== undefined) view.setSubagentsAt(at)
     view.touch()
   }
+  const pills: Pill[] = [
+    {
+      key: 'off',
+      label: 'Off',
+      checked: !view.subagentsOn,
+      disabled: false,
+      choose: () => choose(false),
+    },
+    ...(control === 'on_off'
+      ? [
+          {
+            key: 'on',
+            label: 'On',
+            checked: view.subagentsOn,
+            disabled: false,
+            choose: () => choose(true),
+          },
+        ]
+      : SUBAGENT_AT_ONCE_CHOICES.map((count) => ({
+          key: String(count),
+          label: String(count),
+          checked: view.subagentsOn && view.subagentsAtNow === count,
+          disabled: view.subagentsLoading || count > ceilingMax,
+          choose: () => choose(true, count),
+        }))),
+  ]
+  // Roving tabIndex: the checked pill is the one Tab reaches; with none checked, the first enabled one is.
+  const enabled = pills.flatMap((pill, index) => (pill.disabled ? [] : [index]))
+  const tabStop = pills.findIndex((pill) => pill.checked && !pill.disabled)
+  const stop = tabStop >= 0 ? tabStop : (enabled[0] ?? -1)
+
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step = STEP[event.key]
+    if (step === undefined) return
+    event.preventDefault()
+    let next = index
+    for (let turn = 0; turn < pills.length; turn++) {
+      next = (next + step + pills.length) % pills.length
+      if (!pills[next]!.disabled) break
+    }
+    if (next === index || pills[next]!.disabled) return
+    pillRefs.current[next]?.focus()
+    pills[next]!.choose()
+  }
+
   return (
     <>
       <span className="small muted" id="start-subagents-help">
@@ -30,40 +81,24 @@ export function SubagentFields({ view }: { view: StartJobView }) {
       {control === 'none' && <span className="small">Subagents aren’t supported here yet.</span>}
       {(control === 'limits' || control === 'on_off') && (
         <div className="bold-subagent-pills" role="radiogroup" aria-label="Subagents">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={!view.subagentsOn}
-            className="bold-subagent-pill"
-            onClick={() => choose(false)}
-          >
-            Off
-          </button>
-          {control === 'on_off' ? (
+          {pills.map((pill, index) => (
             <button
+              key={pill.key}
+              ref={(element) => {
+                pillRefs.current[index] = element
+              }}
               type="button"
               role="radio"
-              aria-checked={view.subagentsOn}
+              aria-checked={pill.checked}
+              tabIndex={index === stop ? 0 : -1}
+              disabled={pill.disabled}
               className="bold-subagent-pill"
-              onClick={() => choose(true)}
+              onClick={pill.choose}
+              onKeyDown={(event) => onKeyDown(event, index)}
             >
-              On
+              {pill.label}
             </button>
-          ) : (
-            SUBAGENT_AT_ONCE_CHOICES.map((count) => (
-              <button
-                key={count}
-                type="button"
-                role="radio"
-                aria-checked={view.subagentsOn && view.subagentsAtNow === count}
-                disabled={view.subagentsLoading || count > ceilingMax}
-                className="bold-subagent-pill"
-                onClick={() => choose(true, count)}
-              >
-                {count}
-              </button>
-            ))
-          )}
+          ))}
         </div>
       )}
       {control === 'limits' && (

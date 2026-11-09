@@ -131,3 +131,33 @@ test('a Claude Code agent takes on or off, not a count', async () => {
   expect(puts()).toEqual([])
   expect(said[0]).toContain('decides how many run at once')
 })
+
+test('the limit is the holder’s, not whoever is active, so it doesn’t flip as they change', async () => {
+  const active = makeJob({
+    ...feed,
+    holderAgentId: 'lead',
+    activeAgents: ['builder'],
+  })
+  await runTopicCommand('subagents', '', context({ current: active, jobs: [active] }))
+  const fetched = calls.map((call) => call.path)
+  expect(fetched.some((path) => path.includes('/agents/lead/subagents'))).toBe(true)
+  expect(fetched.some((path) => path.includes('/agents/builder/subagents'))).toBe(false)
+})
+
+test('an agent with no subagent control (none): the number says it isn’t supported, and nothing is sent', async () => {
+  ceiling = { control: 'none', maxConcurrent: 4 }
+  await runTopicCommand('subagents', '2', context())
+  expect(said[0]).toContain('Subagents aren’t supported on')
+  expect(said[0]).not.toContain('decides how many')
+  expect(puts()).toEqual([])
+})
+
+test.each(['', 'on', 'off', '2'])(
+  '/subagents %s sends nothing for an agent Score can’t control',
+  async (args) => {
+    ceiling = { control: 'none', maxConcurrent: 4 }
+    await runTopicCommand('subagents', args, context())
+    expect(said.at(-1)).toContain('aren’t supported')
+    expect(calls.filter((call) => call.method === 'PUT')).toEqual([])
+  },
+)

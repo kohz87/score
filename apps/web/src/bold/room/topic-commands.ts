@@ -204,10 +204,16 @@ export async function runTopicCommand(
         say('This job doesn’t have subagents.')
         return
       }
-      const agentId = topic.activeAgents[0] ?? topic.holderAgentId ?? room.leadAgentId ?? undefined
+      // The agent the limit belongs to is the one the next message goes to, so it doesn't flip as whoever is active changes.
+      const agentId = topic.holderAgentId ?? room.leadAgentId ?? topic.activeAgents[0] ?? undefined
       const agentSub = agentId
         ? await ctx.queryClient.fetchQuery(agentSubagentsQuery(agentId))
         : null
+      const name = agents.find((agent) => agent.id === agentId)?.name ?? agentId ?? 'This agent'
+      if (agentSub?.control === 'none') {
+        say(`Subagents aren’t supported on ${name} yet. Nothing was sent.`)
+        return
+      }
       const ceiling = agentSub?.control === 'limits' ? agentSub.maxConcurrent : null
       const used = `${limits.used} of ${limits.maxTotal} used in this job`
       const state = !limits.enabled
@@ -250,7 +256,6 @@ export async function runTopicCommand(
         return
       }
       if (agentSub && agentSub.control !== 'limits') {
-        const name = agents.find((agent) => agent.id === agentId)?.name ?? agentId ?? 'This agent'
         say(`${name} decides how many run at once. Use /subagents off or /subagents on.`)
         return
       }

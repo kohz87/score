@@ -61,6 +61,8 @@ export function useStartJobState(options: StartJobOptions | undefined, refs: Sta
   // 3.14: the automatic votes before each step (they need voters).
   const [autoVote, setAutoVote] = useState(false)
   const [autoVoteK, setAutoVoteK] = useState('3')
+  // 3.16: who decides a split vote among the voters: the lead (default) or you.
+  const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
   // SA.3: the lead's own subagents for this job. `subagentsAt` null = the lead's limit (capped at four).
   const [subagentsOn, setSubagentsOn] = useState(true)
   const [subagentsAt, setSubagentsAt] = useState<number | null>(null)
@@ -171,6 +173,8 @@ export function useStartJobState(options: StartJobOptions | undefined, refs: Sta
     setAutoVote,
     autoVoteK,
     setAutoVoteK,
+    helperSplit,
+    setHelperSplit,
     subagentsOn,
     setSubagentsOn,
     subagentsAt,

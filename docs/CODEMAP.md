@@ -85,6 +85,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
 - `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
 - `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.
+- `apps/web/src/bold/subagents/subagent-queries.test.ts` — the room and job subagent rows: the lowest read seq, one failed read, and approvals that open or close a row.
 - `apps/web/src/bold/subagents/SubagentsInfo.test.tsx` — the side panel's SUBAGENTS section and its cost states.
 - `apps/web/src/bold/room/topic-subagents-command.test.ts` — `/subagents` with its request bodies, the over-limit and no-job notes.
 - `apps/web/src/bold/agent-more/SubagentsCard.test.tsx` — the agent's subagent ceiling card for limits, on/off and not-supported agents.
@@ -272,6 +273,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
 - `apps/web/src/bold/BoldStartJobSubagentFields.tsx` — the Subagents choice: Off or up to N at once (the lead's limit caps it), and the job's total.
+- `apps/web/src/bold/BoldStartJobSubagentFields.test.tsx` — the Subagents pills: roving tab stop, arrow keys skip disabled ones.
 - `apps/web/src/bold/BoldStartJobVoterFields.tsx` — the voters picker (chips and Add, never the lead) and the automatic votes.
 - `apps/web/src/bold/BoldStartJobLaunchFields.tsx` — coding-agent launches field.
 - `apps/web/src/bold/bold-start-subagents.css` — Subagents pills, the total and the voters picker.
@@ -443,6 +445,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/composer-send.ts` — message posting, optimistic updates, rewind and send retries.
 - `apps/web/src/routes/chat/ComposerNotice.tsx` — composer notice banner and command result text.
 - `apps/web/src/routes/chat/ComposerMenu.tsx` — slash-command and agent mention menu.
+- `apps/web/src/routes/chat/ComposerMenu.test.tsx` — the slash palette shows only the selected command's note.
 - `apps/web/src/routes/chat/ComposerEditing.tsx` — edit notice and rewind confirmation.
 - `apps/web/src/routes/chat/ComposerAttachments.tsx` — attachment tray, upload progress and Knowledge save chips.
 - `apps/web/src/routes/chat/ComposerToPicker.tsx` — recipient chips, add-person menu and plan-first toggle.

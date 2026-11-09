@@ -1,5 +1,6 @@
 import {
   AgentSubagentsSchema,
+  type Approval,
   JobSchema,
   SubagentRowSchema,
   SubagentRowsResponseSchema,
@@ -26,7 +27,18 @@ const mergeRows = (items: readonly SubagentRow[], row: SubagentRow): SubagentRow
 
 const rowOf = (value: unknown): SubagentRow => SubagentRowSchema.parse(value)
 
-/** One job's subagent rows, kept live by `subagent.upserted` (its steps stay in Watch). */
+/**
+ * An approval from a subagent opens or closes its row's `waitingOnYou`: no `subagent.upserted` comes then. A row not in
+ * `items` (another job's, or one not loaded) is left alone, and so is an approval from the agent itself.
+ */
+function withApproval(items: SubagentRow[], approval: Approval): SubagentRow[] {
+  const id = approval.subagentId
+  if (!id || !items.some((row) => row.id === id)) return items
+  const waitingOnYou = approval.status === 'pending'
+  return items.map((row) => (row.id === id ? { ...row, waitingOnYou } : row))
+}
+
+/** One job's subagent rows, kept live by `subagent.upserted` and the approvals that open or close them. */
 export function jobSubagentRowsQuery(jobId: string | null) {
   return defineStreamQuery<SubagentRowsResponse>({
     key: ['bold', 'subagents', jobId],
@@ -37,11 +49,15 @@ export function jobSubagentRowsQuery(jobId: string | null) {
       )
       return { asOfSeq: response.asOfSeq, data: response }
     },
-    types: ['subagent.upserted', 'job.deleted'],
+    types: ['subagent.upserted', 'job.deleted', 'approval.requested', 'approval.updated'],
     reduce(data, event) {
       if (jobId === null) return data
       if (event.type === 'job.deleted')
         return event.data.id === jobId ? { ...data, items: [] } : data
+      if (event.type === 'approval.requested' || event.type === 'approval.updated') {
+        const items = withApproval(data.items, event.data)
+        return items === data.items ? data : { ...data, items }
+      }
       if (event.type !== 'subagent.upserted') return data
       const row = rowOf(event.data)
       return row.jobId === jobId ? { ...data, items: mergeRows(data.items, row) } : data
@@ -53,27 +69,41 @@ export function useJobSubagentRows(jobId: string | null) {
   return useStreamQuery(jobSubagentRowsQuery(jobId)).data?.items ?? []
 }
 
-/** Several jobs' rows in one registration: the conversation shows a card wherever its job is on screen. */
+/**
+ * Several jobs' rows in one registration: the conversation shows a card wherever its job is on screen. A job whose read
+ * fails counts as no rows; the query fails only when every read does. `asOfSeq` is the lowest that succeeded, so no
+ * event after any read is lost on a resync.
+ */
 export function roomSubagentRowsQuery(jobIds: readonly string[]) {
   const ids = [...new Set(jobIds)].sort()
   return defineStreamQuery<SubagentRow[]>({
     key: ['bold', 'subagents', 'room', ...ids],
     async fetch(signal) {
-      const reads = await Promise.all(
+      if (ids.length === 0) return { asOfSeq: 0, data: [] }
+      const reads = await Promise.allSettled(
         ids.map(async (jobId) =>
           SubagentRowsResponseSchema.parse(
             await apiFetch(`jobs/${encodeURIComponent(jobId)}/subagents`, { signal }),
           ),
         ),
       )
+      const succeeded = reads.flatMap((read) => (read.status === 'fulfilled' ? [read.value] : []))
+      if (succeeded.length === 0) {
+        const failure = reads.find(
+          (read): read is PromiseRejectedResult => read.status === 'rejected',
+        )
+        throw failure?.reason ?? new Error('Subagent rows could not be read.')
+      }
       return {
-        asOfSeq: reads.reduce((highest, read) => Math.max(highest, read.asOfSeq), 0),
-        data: reads.flatMap((read) => read.items),
+        asOfSeq: succeeded.reduce((lowest, read) => Math.min(lowest, read.asOfSeq), Infinity),
+        data: succeeded.flatMap((read) => read.items),
       }
     },
-    types: ['subagent.upserted', 'job.deleted'],
+    types: ['subagent.upserted', 'job.deleted', 'approval.requested', 'approval.updated'],
     reduce(data, event) {
       if (event.type === 'job.deleted') return data.filter((row) => row.jobId !== event.data.id)
+      if (event.type === 'approval.requested' || event.type === 'approval.updated')
+        return withApproval(data, event.data)
       if (event.type !== 'subagent.upserted') return data
       const row = rowOf(event.data)
       return ids.includes(row.jobId) ? mergeRows(data, row) : data

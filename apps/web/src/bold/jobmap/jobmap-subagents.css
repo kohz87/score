@@ -1,14 +1,11 @@
 /* SA.3 part 8 (docs/design/bold/mockups/24-subagents-jobmap.dc.html): the SUBAGENTS layer, one node for the lead's own
    helpers, and its detail panel. Blue is the swarm's colour, as in the mock-up; the states use the bold status tokens. */
-[data-ui='bold'] .jobmap {
-  --jm-subagents: #7db8ff;
-}
 [data-ui='bold'] .jobmap-node[data-tone='subagents'] {
-  border: 2px solid var(--jm-subagents);
+  border: 2px solid var(--jm-swarm);
   width: 320px;
 }
 [data-ui='bold'] .jobmap-node[data-tone='subagents'] .jobmap-kicker {
-  color: var(--jm-subagents);
+  color: var(--jm-swarm);
 }
 [data-ui='bold'] .jobmap-subagents-head {
   margin: 0 0 8px;

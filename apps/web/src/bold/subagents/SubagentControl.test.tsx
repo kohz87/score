@@ -102,3 +102,32 @@ test('off shows as off, with no count to choose from', async () => {
   renderInRoom(<SubagentControl job={job(limits({ enabled: false }))} agentId="lead" />)
   expect(await screen.findByRole('button', { name: 'Subagents: off' })).toBeTruthy()
 })
+
+test('the menu opens on its checked choice and arrow keys move through the choices, wrapping', async () => {
+  stub(ceiling())
+  renderInRoom(<SubagentControl job={job(limits())} agentId="lead" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Subagents: up to 4' }))
+  const off = screen.getByRole('menuitemradio', { name: /Off/ })
+  const back = screen.getByRole('menuitemradio', { name: /Back to the agent/ })
+  expect(document.activeElement).toBe(back)
+  fireEvent.keyDown(back, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(off)
+  fireEvent.keyDown(off, { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(back)
+  fireEvent.keyDown(back, { key: 'Home' })
+  expect(document.activeElement).toBe(off)
+  fireEvent.keyDown(off, { key: 'End' })
+  expect(document.activeElement).toBe(back)
+})
+
+test('Escape closes the menu and returns focus to its button', async () => {
+  stub(ceiling())
+  renderInRoom(<SubagentControl job={job(limits())} agentId="lead" />)
+  const button = await screen.findByRole('button', { name: 'Subagents: up to 4' })
+  fireEvent.click(button)
+  fireEvent.keyDown(screen.getByRole('menuitemradio', { name: /Back to the agent/ }), {
+    key: 'Escape',
+  })
+  expect(screen.queryByRole('menu')).toBeNull()
+  await waitFor(() => expect(document.activeElement).toBe(button))
+})

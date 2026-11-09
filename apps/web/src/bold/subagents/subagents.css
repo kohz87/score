@@ -126,6 +126,12 @@
   transition: transform 160ms ease;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-subagent-chevron {
+    transition: none;
+  }
+}
+
 /* The context bar's button and the same three choices (/subagents off, a number, the agent's limit). */
 [data-ui='bold'] .bold-subagents-control {
   position: relative;

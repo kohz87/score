@@ -36,6 +36,24 @@ test('automatic votes go with the voters, sent inside helpers (3.14, SA.3)', asy
     voterIds: ['builder'],
     autoVote: true,
     autoVoteK: 5,
+    splitTo: 'lead',
+  })
+})
+
+test('the split choice shows once a voter is named, and “Ask me” is sent as splitTo', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  expect(within(voters(dialog)).queryByRole('radio', { name: 'Ask me' })).toBeNull()
+  addVoter(dialog, 'builder')
+  fireEvent.click(within(voters(dialog)).getByRole('radio', { name: 'Ask me' }))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(state.orchestrationBodies.length).toBe(1))
+  expect(state.orchestrationBodies[0]!.helpers).toEqual({
+    agentIds: [],
+    voterIds: ['builder'],
+    autoVote: false,
+    autoVoteK: 3,
+    splitTo: 'person',
   })
 })
 
