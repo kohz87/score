@@ -1340,6 +1340,7 @@ likely to be the entry point for a change.
 
 - `playwright.config.ts` — main end-to-end configuration.
 - `e2e/customizer-helpers.ts` — shared customizer session, cleanup, preview and package helpers.
+- `e2e/subagents.spec.ts` — subagent limits end to end: `/subagents`, Start a job, voters alone, agent settings, phone.
 - `e2e/customizer-editing.spec.ts` — customizer build, save, export, keyboard, discard, contrast and accessibility flows.
 - `e2e/customizer-import-and-shell.spec.ts` — import preview and errors, roles/focus, settings shell and phone layout.
 - `e2e/customizer-saves.spec.ts` — save conflicts, in-use state, replaced pictures and unsaved edits.

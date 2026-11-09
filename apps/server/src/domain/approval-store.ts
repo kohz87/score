@@ -236,7 +236,9 @@ export function approvalView(
     actionable: actionable(sqlite, row, options),
     linkedTo: target?.visible ? target.id : null,
     agentId: row.profile,
-    fromSubagent: row.hook_session_id !== null && isSubagentSession(sqlite, row.hook_session_id),
+    ...(row.hook_session_id !== null && isSubagentSession(sqlite, row.hook_session_id)
+      ? { subagentId: row.hook_session_id }
+      : {}),
     title: (row.description.split('\n')[0] || row.pattern_keys[0] || '').slice(0, 120),
     command: row.command,
     cwd: null,

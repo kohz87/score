@@ -139,7 +139,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
     >
       <div className="chat-approval-body">
         <span className="chat-approval-title">
-          {approval.fromSubagent
+          {approval.subagentId
             ? `A subagent of ${approval.agentId} wants to run this`
             : approval.title}
         </span>

@@ -160,8 +160,8 @@ export const ApprovalSchema = z.object({
   actionable: z.boolean(),
   linkedTo: z.string().min(1).nullable(),
   agentId: AgentIdSchema,
-  /** Decision 174: it came from a subagent of `agentId`, not the agent itself. Absent means false. */
-  fromSubagent: z.boolean().optional(),
+  /** Decision 174: the subagent of `agentId` it came from, which the card names; absent: the agent itself. */
+  subagentId: z.string().optional(),
   title: z.string(),
   command: z.string(),
   cwd: z.string().nullable(),

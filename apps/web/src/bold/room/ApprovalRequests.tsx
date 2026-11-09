@@ -69,7 +69,7 @@ function ApprovalRequestCard({
       anchor={{ message, job: job?.id }}
     >
       <div className="bold-request-head">
-        {current.fromSubagent ? (
+        {current.subagentId ? (
           <>
             {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
             <b>

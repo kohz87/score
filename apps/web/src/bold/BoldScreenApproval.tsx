@@ -38,7 +38,7 @@ function ApprovalBar({
     >
       <span className="bold-screen-asked">Asked you at {clock(approval.createdAt)}</span>
       <span className="watch-approval__text">
-        {approval.fromSubagent ? (
+        {approval.subagentId ? (
           <>
             A subagent of {agentDisplayName(agent)} wants to run this
             {approval.command ? (
