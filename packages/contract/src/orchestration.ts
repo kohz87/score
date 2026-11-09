@@ -93,6 +93,7 @@ export const PauseReasonSchema = z.enum([
   'lead_failing',
   'agent_unavailable',
   'abandonment',
+  'subagent_total',
 ])
 export type PauseReason = z.infer<typeof PauseReasonSchema>
 
@@ -765,6 +766,8 @@ export const LimitsDecisionSchema = z
     deadlineAt: z.iso.datetime().nullable().optional(),
     /** Continue although spend is unknown (otherwise unknown spend keeps the run paused). */
     acceptUnknownSpend: z.boolean().optional(),
+    /** Decision 173: at the job's subagent total, allow this many more. */
+    moreSubagents: z.int().min(1).max(200).optional(),
     /** 7.7b: raise or lower how many coding launches the run may release. */
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
     /** 7.7b: accept (or stop accepting) unknown cost for single sources. */
@@ -786,6 +789,7 @@ export const LimitsDecisionSchema = z
       v.budgetUsd !== undefined ||
       v.deadlineAt !== undefined ||
       v.acceptUnknownSpend !== undefined ||
+      v.moreSubagents !== undefined ||
       v.codingSteps !== undefined ||
       v.acceptUnknownCost !== undefined,
   )

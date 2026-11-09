@@ -1,3 +1,5 @@
+import { allowMoreSubagents } from '../subagents.ts'
+import { runJobScope } from './subagent-scope.ts'
 import type { LimitsDecision } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../../errors.ts'
@@ -48,6 +50,10 @@ export function setLimits(
     sqlite
       .prepare('UPDATE orchestrations SET deadline_at = ? WHERE id = ?')
       .run(body.deadlineAt, orchId)
+  if (body.moreSubagents !== undefined) {
+    const jobId = runJobScope(sqlite, orchId).jobId
+    if (jobId) allowMoreSubagents(sqlite, jobId, body.moreSubagents)
+  }
   if (body.acceptUnknownSpend !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET accepted_unknown_spend = ? WHERE id = ?')
@@ -99,7 +105,7 @@ export function setLimits(
   // A pause caused by a limit ends with the decision about that limit; admission re-pauses if it still applies.
   if (
     o.status === 'paused' &&
-    ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
+    ['budget', 'unknown_spend', 'deadline', 'subagent_total'].includes(o.pause_reason ?? '')
   )
     // The condition is gone; a manual hold that is still there keeps the run paused, now for its own reason.
     sqlite

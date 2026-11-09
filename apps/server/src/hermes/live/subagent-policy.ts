@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
+import { effectiveLimits } from '../../domain/subagents.ts'
 
 // The limits a session runs under, for the plugin's guard to read at each delegate_task (hermes-plugin/score_bridge/
 // subagent_guard.py; docs/API-CONTRACT.md §19). A file, because a hook that called Score could stall a whole profile.
@@ -15,8 +16,8 @@ export interface SubagentPolicy {
   used: number
 }
 
-/** The owner's defaults (decision 173), and what Apply sets as the agent's ceiling. */
-export const SUBAGENT_DEFAULTS = { maxConcurrent: 4, maxTotal: 20, maxIterations: 50 } as const
+/** Steps for each subagent, as in the approved mock-up (Hermes' own default is 250). */
+export const DEFAULT_MAX_ITERATIONS = 50
 
 /** A session id is not a safe file name. The plugin computes the same one. */
 export const subagentPolicyPath = (scoreHome: string, sessionId: string): string =>
@@ -46,9 +47,9 @@ export function writeSubagentPolicy(
  */
 export function sessionIsInline(sqlite: DatabaseSync, profile: string, sessionId: string): boolean {
   const setup = sqlite
-    .prepare('SELECT inline_since FROM subagent_setup WHERE profile = ?')
-    .get(profile) as { inline_since: string } | undefined
-  if (!setup) return false
+    .prepare('SELECT inline_since FROM subagent_agents WHERE profile = ?')
+    .get(profile) as { inline_since: string | null } | undefined
+  if (!setup?.inline_since) return false
   return (
     sqlite
       .prepare('SELECT 1 FROM runs WHERE profile = ? AND session_id = ? AND started_at < ? LIMIT 1')
@@ -56,13 +57,15 @@ export function sessionIsInline(sqlite: DatabaseSync, profile: string, sessionId
   )
 }
 
-export function defaultSubagentPolicy(inline: boolean): SubagentPolicy {
+export function subagentPolicyFor(
+  sqlite: DatabaseSync,
+  profile: string,
+  sessionId: string,
+  jobId: string | null,
+): SubagentPolicy {
   return {
     v: 1,
-    inline,
-    enabled: true,
-    maxConcurrent: SUBAGENT_DEFAULTS.maxConcurrent,
-    maxTotal: SUBAGENT_DEFAULTS.maxTotal,
-    used: 0,
+    inline: sessionIsInline(sqlite, profile, sessionId),
+    ...effectiveLimits(sqlite, profile, jobId),
   }
 }

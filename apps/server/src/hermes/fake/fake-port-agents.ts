@@ -7,6 +7,7 @@ import {
   type SubagentSetup,
 } from '@score/contract'
 import { z } from 'zod'
+import type { HermesSubagentConfig } from '../profile-management.ts'
 import { excerpt } from '../agent-files.ts'
 import { MEMORY_DETAIL_ITEMS } from '../agent-tabs.ts'
 import { permissionsOf } from '../approvals.ts'
@@ -33,6 +34,25 @@ export abstract class FakePortAgents extends FakePortSettings {
 
   async applySubagentSetup(_agentIds: string[]): Promise<SubagentSetup> {
     return this.subagentSetup()
+  }
+
+  refreshSubagentPolicies(_jobId: string): void {}
+
+  private subagentConfigs = new Map<string, HermesSubagentConfig>()
+
+  async subagentConfig(agentId: string): Promise<HermesSubagentConfig> {
+    return (
+      this.subagentConfigs.get(agentId) ?? {
+        maxConcurrent: 4,
+        model: null,
+        maxIterations: 50,
+        timeoutSeconds: null,
+      }
+    )
+  }
+
+  async setSubagentConfig(agentId: string, change: Partial<HermesSubagentConfig>): Promise<void> {
+    this.subagentConfigs.set(agentId, { ...(await this.subagentConfig(agentId)), ...change })
   }
 
   async listAgents(): Promise<AgentSummary[]> {

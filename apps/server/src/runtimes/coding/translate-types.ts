@@ -7,6 +7,8 @@ export interface RunTranslation {
   agentId: string
   /** The job whose CLI session this run resumes or starts (null: not a room turn). */
   jobId: string | null
+  /** The job whose subagent count this run adds to; an orchestration's run has no `jobId` of its own. */
+  subagentJobId: string | null
   /** An orchestration- or workflow-owned run (7.7b §6): it never writes Chat's (room, agent) session cache. */
   owned: boolean
   seq: number
@@ -58,4 +60,13 @@ export const newTranslation = (
   agentId: string,
   jobId: string | null,
   owned = false,
-): RunTranslation => ({ runId, agentId, jobId, owned, seq: 0, calls: new Map(), usage: null })
+): RunTranslation => ({
+  runId,
+  agentId,
+  jobId,
+  subagentJobId: jobId,
+  owned,
+  seq: 0,
+  calls: new Map(),
+  usage: null,
+})

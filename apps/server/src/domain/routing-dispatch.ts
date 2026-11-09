@@ -235,6 +235,7 @@ export class RoutingDispatcher {
           input: frozen.admission_input!,
           turnId: job.turn_id,
           sessionId,
+          ...(job.job_id ? { jobId: job.job_id } : {}),
           ...(job.model ? { model: job.model } : {}),
           ...(frozen.provider ? { provider: frozen.provider } : {}),
           ...(images.length ? { images } : {}),

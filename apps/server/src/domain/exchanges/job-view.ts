@@ -34,6 +34,12 @@ export function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
     exchangeBudget: row.exchange_budget,
     jobTurnLimit: row.job_turn_limit,
     spendCapUsd: row.spend_cap_usd,
+    subagents: {
+      enabled: row.subagents_enabled === 1,
+      maxConcurrent: row.subagents_max_concurrent,
+      maxTotal: row.subagents_max_total,
+      used: row.subagents_used,
+    },
     recipe:
       row.recipe_kind && row.recipe_ref ? { kind: row.recipe_kind, ref: row.recipe_ref } : null,
     unread: counts.unread ?? 0,

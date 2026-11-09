@@ -89,6 +89,8 @@ export const systemHooks = new Set([
   'on_kanban_dispatch_tick',
 ])
 
+export const SubagentStartSchema = z.object({ parent_session_id: z.string().min(1).nullish() })
+
 // Hermes 0.22.5 session hooks (decision 129): a deleted session moves Score's room to a successor; a compaction is
 // logged.
 export const DeleteSchema = z.object({

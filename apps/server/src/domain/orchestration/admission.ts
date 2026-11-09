@@ -1,3 +1,4 @@
+import { runSubagentTotalReached } from './subagent-scope.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { teamPausedAt } from '../team-pause.ts'
@@ -110,6 +111,7 @@ export type AdmissionCause =
   | 'agent_changed'
   | 'budget'
   | 'unknown_cost'
+  | 'subagent_total'
 
 export interface AdmissionDenial {
   cause: AdmissionCause
@@ -170,5 +172,6 @@ export function admissionDenial(
   const view = budgetView(sqlite, o, { fresh: true })
   if (overBudget(view)) return { cause: 'budget' }
   if (unknownCostBlocks(sqlite, o, view, { fresh: true })) return { cause: 'unknown_cost' }
+  if (runSubagentTotalReached(sqlite, o.id)) return { cause: 'subagent_total' }
   return undefined
 }

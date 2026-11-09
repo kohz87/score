@@ -111,7 +111,7 @@ export function registerSystemAndSessionRoutes({
       ...(clock ? { clock } : {}),
     })
   registerSystemRoutes(app, getSystemStatus)
-  registerSubagentSetupRoutes(app, hermesPortOf(port))
+  registerSubagentSetupRoutes(app, { port, hermes: hermesPortOf(port), db, ingest })
   // 3.15.0 (owner): update Hermes from Settings › System (a simulated flow in fake mode).
   if (db)
     registerBotTakeoverRoutes(app, {

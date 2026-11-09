@@ -1,3 +1,4 @@
+import { effectiveLimits } from '../subagents.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { XTC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { redact, redactBounded } from '../../redact.ts'
@@ -111,6 +112,16 @@ function jobMessages(sqlite: DatabaseSync, turn: MessageRun, jobId: string): str
   return picked.map((message) => `${speaker(message)}: ${textOf(message)}`)
 }
 
+/** The limit in plain words, so the agent can plan. The prompt is never the only control (docs/briefs/SA-subagents.md). */
+function subagentRule(sqlite: DatabaseSync, agentId: string, jobId: string): string {
+  const limits = effectiveLimits(sqlite, agentId, jobId)
+  if (!limits.enabled) return 'Subagents are off in this job: do the work yourself.'
+  const left = Math.max(0, limits.maxTotal - limits.used)
+  if (left === 0)
+    return `This job has used all ${limits.maxTotal} of its subagents: do the work yourself.`
+  return `You may use subagents: up to ${limits.maxConcurrent} at once, ${left} more in this job. They report to you, not to the chat.`
+}
+
 /**
  * The admission input of a turn in an exchanges room. `capability`: the turn may act through the bridge tools (a
  * Hermes agent), so the input carries the placeholder the dispatcher fills in; coding agents act with a block.
@@ -131,6 +142,7 @@ export function jobRunInput(
     role(sqlite, turn),
     exchange ? `This exchange has used ${exchange.turns_used} of ${exchange.budget} turns.` : '',
     howToAct(coding, !coding),
+    subagentRule(sqlite, turn.agent_id, job.id),
   ]
     .filter(Boolean)
     .join('\n')

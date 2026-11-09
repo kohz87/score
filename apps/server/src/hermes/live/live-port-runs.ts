@@ -1,5 +1,6 @@
 import { settleRunCost } from './run-cost.ts'
-import { defaultSubagentPolicy, sessionIsInline, writeSubagentPolicy } from './subagent-policy.ts'
+import { rememberSubagentSession } from '../../domain/subagents.ts'
+import { subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 import { HttpError } from '../../errors.ts'
@@ -20,11 +21,19 @@ import { readRun, runLifecycle, runLostObservation } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
 
 /** Before the run, so the guard reads this session's limits. If this fails the guard finds none, and refuses. */
-function writeRunSubagentPolicy(port: LivePortRuntime, profile: string, sessionId: string): void {
+function writeRunSubagentPolicy(
+  port: LivePortRuntime,
+  profile: string,
+  sessionId: string,
+  jobId: string | null,
+): void {
   try {
     const { db } = port.requireStarted()
-    const inline = db.read((sqlite) => sessionIsInline(sqlite, profile, sessionId))
-    writeSubagentPolicy(port.options.scoreHome, sessionId, defaultSubagentPolicy(inline))
+    const policy = db.tx((sqlite) => {
+      if (jobId) rememberSubagentSession(sqlite, sessionId, profile, jobId)
+      return subagentPolicyFor(sqlite, profile, sessionId, jobId)
+    })
+    writeSubagentPolicy(port.options.scoreHome, sessionId, policy)
   } catch (error) {
     port.options.onError?.(error)
   }
@@ -82,6 +91,7 @@ export const runMethods = {
     this: LivePortRuntime,
     req: {
       agentId: string
+      jobId?: string
       input: string
       turnId: string
       sessionId?: string
@@ -104,7 +114,7 @@ export const runMethods = {
       // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
       throw notDispatched(error)
     }
-    if (req.sessionId) writeRunSubagentPolicy(this, req.agentId, req.sessionId)
+    if (req.sessionId) writeRunSubagentPolicy(this, req.agentId, req.sessionId, req.jobId ?? null)
     const result = await intents
       .startRunIntent(
         {

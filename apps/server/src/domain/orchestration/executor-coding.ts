@@ -91,6 +91,7 @@ export const codingMethods = {
       const fresh = requireOrch(sqlite, o.id)
       if (cause === 'budget') this.pauseFor(ctx, fresh, 'budget')
       if (cause === 'unknown_cost') this.pauseFor(ctx, fresh, 'unknown_spend')
+      if (cause === 'subagent_total') this.pauseFor(ctx, fresh, 'subagent_total')
     } else if (klass === 'terminal') bumpAdmission(sqlite)
     addHistory(sqlite, o.id, 'send_closed', { attemptId: attempt.id, generation, cause }, now)
     touch(ctx, o.id)

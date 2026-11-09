@@ -1,3 +1,5 @@
+import { JobSubagentsRequestSchema } from '@score/contract'
+import { changeJobSubagents } from '../domain/subagents.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import {
@@ -126,6 +128,11 @@ export function registerJobRoutes(
     return JobSchema.parse(
       await jobChange(jobId, (sqlite, now) => renameJob(sqlite, jobId, title, now)),
     )
+  })
+  app.put('/api/jobs/:jobId/subagents', mutation, async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    const change = JobSubagentsRequestSchema.parse(request.body)
+    return jobChange(jobId, (sqlite) => changeJobSubagents(sqlite, jobId, change))
   })
   app.post('/api/jobs/:jobId/close', mutation, async (request) => {
     const { jobId } = JobParams.parse(request.params)

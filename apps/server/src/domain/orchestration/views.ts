@@ -99,7 +99,7 @@ export function needsYouOf(
     const reason = o.pause_reason as Extract<NeedsYou, { kind: 'paused' }>['reason']
     if (reason !== 'person')
       result.push(
-        ['budget', 'unknown_spend', 'deadline'].includes(reason)
+        ['budget', 'unknown_spend', 'deadline', 'subagent_total'].includes(reason)
           ? { kind: 'budget', reason }
           : { kind: 'paused', reason },
       )

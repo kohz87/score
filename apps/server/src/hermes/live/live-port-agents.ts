@@ -1,4 +1,12 @@
-import { applySubagentSetup, readSubagentSetup } from './subagent-setup.ts'
+import { subagentSessionsOf } from '../../domain/subagents.ts'
+import type { HermesSubagentConfig } from '../profile-management.ts'
+import { subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
+import {
+  applySubagentSetup,
+  readSubagentConfig,
+  readSubagentSetup,
+  writeSubagentConfig,
+} from './subagent-setup.ts'
 import type { AgentDetail, AgentSummary, RunsOnUpdate } from '@score/contract'
 import { homedir } from 'node:os'
 import { HttpError } from '../../errors.ts'
@@ -27,6 +35,27 @@ const subagentSetupDeps = (port: LivePortRuntime) => ({
 export const agentMethods = {
   async subagentSetup(this: LivePortRuntime) {
     return readSubagentSetup(subagentSetupDeps(this), hermesAgentIds(await this.listAgents()))
+  },
+  refreshSubagentPolicies(this: LivePortRuntime, jobId: string): void {
+    const { db } = this.requireStarted()
+    db.read((sqlite) => {
+      for (const { sessionId, profile } of subagentSessionsOf(sqlite, jobId))
+        writeSubagentPolicy(
+          this.options.scoreHome,
+          sessionId,
+          subagentPolicyFor(sqlite, profile, sessionId, jobId),
+        )
+    })
+  },
+  async subagentConfig(this: LivePortRuntime, agentId: string) {
+    return readSubagentConfig(subagentSetupDeps(this), agentId)
+  },
+  async setSubagentConfig(
+    this: LivePortRuntime,
+    agentId: string,
+    change: Partial<HermesSubagentConfig>,
+  ) {
+    await writeSubagentConfig(subagentSetupDeps(this), agentId, change)
   },
   async applySubagentSetup(this: LivePortRuntime, agentIds: string[]) {
     const { db } = this.requireStarted()

@@ -1,3 +1,4 @@
+import { effectiveLimits } from '../../domain/subagents.ts'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { driverFor } from './drivers.ts'
@@ -52,6 +53,7 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
       }))
     const driver = driverFor(agent.runtime)
     const translation = newTranslation(entry.runId, agent.id, job, Boolean(entry.owner))
+    translation.subagentJobId = job ?? entry.jobId ?? null
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
     const owner = entry.owner
     // An owned worker runs what its policy says (7.7b §3), never what the agent row says now: permission, model and
@@ -251,6 +253,9 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
           settingsPath: frozenPolicy?.policy.settings?.path ?? settingsPath,
           denyPaths: this.denyPaths(),
           denyFiles: this.denyFiles(),
+          ...(effectiveLimits(db.sqlite, agent.id, translation.subagentJobId).enabled
+            ? {}
+            : { subagentsOff: true }),
           ...(frozenPolicy ? { worker: true } : {}),
           ...(delivery.file ? { instructionsFile: delivery.file } : {}),
           ...(delivery.refresh ? { refreshSystemPrompt: true } : {}),

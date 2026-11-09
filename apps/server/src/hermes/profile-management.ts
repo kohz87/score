@@ -24,11 +24,24 @@ export interface ProfileStepContext {
   /** Import only: the stored archive handed to `hermes profile import`. */
   importArchive?: string | null
 }
+/** `delegation.*` in a profile's Hermes config; null: not set, or (timeout) no limit. */
+export interface HermesSubagentConfig {
+  maxConcurrent: number | null
+  model: string | null
+  maxIterations: number | null
+  timeoutSeconds: number | null
+}
+
 export interface SubagentSetupPort {
   /** Whether each Hermes agent is set up for subagents (docs/API-CONTRACT.md §19). */
   subagentSetup(): Promise<SubagentSetup>
   /** Only when the person presses Apply. */
   applySubagentSetup(agentIds: string[]): Promise<SubagentSetup>
+  /** A job's limits or count changed: every session of the job gets them, for its next `delegate_task`. */
+  refreshSubagentPolicies(jobId: string): void
+  /** The Hermes part of an agent's ceiling. */
+  subagentConfig(agentId: string): Promise<HermesSubagentConfig>
+  setSubagentConfig(agentId: string, change: Partial<HermesSubagentConfig>): Promise<void>
 }
 
 export interface ProfileManagementPort {

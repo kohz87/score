@@ -1,11 +1,13 @@
 import type { SubagentSetup, SubagentSetupAgent } from '@score/contract'
+import type { HermesSubagentConfig } from '../profile-management.ts'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { HttpError } from '../../errors.ts'
 import type { ScoreDb } from '../../db/index.ts'
+import { ceilingOf } from '../../domain/subagents.ts'
 import { configJson } from './agent-config.ts'
 import type { HermesRunner } from './cli.ts'
-import { SUBAGENT_DEFAULTS } from './subagent-policy.ts'
+import { DEFAULT_MAX_ITERATIONS } from './subagent-policy.ts'
 
 // Whether each Hermes profile is set up for subagents, and the one change that sets it up (docs/API-CONTRACT.md §19).
 
@@ -55,8 +57,11 @@ export async function applySubagentSetup(
     )
   for (const { agentId, inline } of before.agents) {
     for (const [key, value] of [
-      ['delegation.max_concurrent_children', String(SUBAGENT_DEFAULTS.maxConcurrent)],
-      ['delegation.max_iterations', String(SUBAGENT_DEFAULTS.maxIterations)],
+      [
+        'delegation.max_concurrent_children',
+        String(db.read((sqlite) => ceilingOf(sqlite, agentId).maxConcurrent)),
+      ],
+      ['delegation.max_iterations', String(DEFAULT_MAX_ITERATIONS)],
       ['delegation.gateway_mode', 'inline'],
     ] as const) {
       const result = await deps
@@ -78,16 +83,70 @@ export async function applySubagentSetup(
 const sinceRecorded = (db: ScoreDb, profile: string): boolean =>
   db.read(
     (sqlite) =>
-      sqlite.prepare('SELECT 1 FROM subagent_setup WHERE profile = ?').get(profile) !== undefined,
+      sqlite
+        .prepare('SELECT 1 FROM subagent_agents WHERE profile = ? AND inline_since IS NOT NULL')
+        .get(profile) !== undefined,
   )
 
 function recordInline(db: ScoreDb, profile: string, at: string): void {
   db.tx((sqlite) => {
     sqlite
       .prepare(
-        `INSERT INTO subagent_setup (profile, inline_since) VALUES (?, ?)
+        `INSERT INTO subagent_agents (profile, inline_since) VALUES (?, ?)
          ON CONFLICT (profile) DO UPDATE SET inline_since = excluded.inline_since`,
       )
       .run(profile, at)
   })
+}
+
+const ConfigKeys = {
+  maxConcurrent: 'delegation.max_concurrent_children',
+  model: 'delegation.model',
+  maxIterations: 'delegation.max_iterations',
+  timeoutSeconds: 'delegation.child_timeout_seconds',
+} as const
+
+const positive = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
+
+export async function readSubagentConfig(
+  deps: SetupDeps,
+  agentId: string,
+): Promise<HermesSubagentConfig> {
+  const read = (key: string) => configJson(deps.runner, deps.hermesHome, agentId, key)
+  const [maxConcurrent, model, maxIterations, timeoutSeconds] = await Promise.all([
+    read(ConfigKeys.maxConcurrent),
+    read(ConfigKeys.model),
+    read(ConfigKeys.maxIterations),
+    read(ConfigKeys.timeoutSeconds),
+  ])
+  const value = (reading: typeof model) => (reading.state === 'ok' ? reading.value : null)
+  const name = value(model)
+  return {
+    maxConcurrent: positive(value(maxConcurrent)),
+    model: typeof name === 'string' && name ? name : null,
+    maxIterations: positive(value(maxIterations)),
+    timeoutSeconds: positive(value(timeoutSeconds)),
+  }
+}
+
+export async function writeSubagentConfig(
+  deps: SetupDeps,
+  agentId: string,
+  change: Partial<HermesSubagentConfig>,
+): Promise<void> {
+  for (const [field, value] of Object.entries(change)) {
+    const key = ConfigKeys[field as keyof typeof ConfigKeys]
+    // Hermes reads '' as "the parent's model" and 0 as "no time limit".
+    const text = value === null ? (field === 'model' ? '' : '0') : String(value)
+    const result = await deps
+      .runner(['-p', agentId, 'config', 'set', key, text], {
+        timeoutMs: 30_000,
+        hermesHome: deps.hermesHome,
+        closeStdin: true,
+      })
+      .catch(() => ({ exitCode: -1 }))
+    if (result.exitCode !== 0)
+      throw new HttpError(502, 'hermes_error', `Hermes didn’t change ${key} for ${agentId}.`)
+  }
 }

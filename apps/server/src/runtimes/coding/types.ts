@@ -113,6 +113,8 @@ export interface DriverRunOptions {
   model: string | null
   /** Reasoning effort for the CLI (`--effort` / `model_reasoning_effort`); null/absent = send nothing. Not part of the worker policy. */
   effort?: string | null
+  /** Decision 173: the job or the agent has turned subagents off; a driver that can enforce it does. */
+  subagentsOff?: boolean
   /** The CLI's own session id from an earlier turn, to resume. */
   sessionId: string | null
   /** Extra settings file the driver wants (Claude Code deny rules), written by the caller before the spawn. */

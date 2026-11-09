@@ -6,7 +6,6 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../../src/db/index.ts'
 import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
 import {
-  defaultSubagentPolicy,
   sessionIsInline,
   subagentPolicyPath,
   writeSubagentPolicy,
@@ -40,7 +39,7 @@ const guardFor = (agent: string) => {
 const since = (profile: string) =>
   db.read(
     (sqlite) =>
-      sqlite.prepare('SELECT inline_since FROM subagent_setup WHERE profile = ?').get(profile) as
+      sqlite.prepare('SELECT inline_since FROM subagent_agents WHERE profile = ?').get(profile) as
         { inline_since: string } | undefined,
   )?.inline_since
 const addRun = (profile: string, session: string, at: string) =>
@@ -156,7 +155,14 @@ test('a session is inline only if it is new since the profile went inline', asyn
 })
 
 test('the policy file is owner-only, whole, and named as the plugin expects', () => {
-  writeSubagentPolicy(dir, 'score-room-lead', defaultSubagentPolicy(true))
+  writeSubagentPolicy(dir, 'score-room-lead', {
+    v: 1,
+    inline: true,
+    enabled: true,
+    maxConcurrent: 4,
+    maxTotal: 20,
+    used: 0,
+  })
   const path = subagentPolicyPath(dir, 'score-room-lead')
   // hashlib.sha256(b"score-room-lead").hexdigest(), the plugin's name for it.
   expect(

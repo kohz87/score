@@ -1,3 +1,4 @@
+import { runJobScope } from './subagent-scope.ts'
 import { withCapability } from './capability.ts'
 import { type Ctx } from './ctx.ts'
 import { readWorkerPolicy } from './coding-policy.ts'
@@ -44,6 +45,7 @@ export const dispatchMethods = {
         input: attempt.input,
         turnId: coding?.turnId ?? attempt.turn_id,
         sessionId: attempt.session_id,
+        ...runJobScope(this.options.db.sqlite, attempt.orchestration_id),
         owner: coding ? this.ownerOf(attempt, coding) : 'orchestration',
         ...(capability ? { render: (stored: string) => withCapability(stored, capability) } : {}),
       })

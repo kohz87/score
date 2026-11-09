@@ -3086,5 +3086,18 @@ subagents stay off in them.
 
 Before each run Score writes the session's policy to `$SCORE_HOME/subagents/<sha256 of the session id>.json` (owner-only, written
 atomically; internal, between the server and the plugin):
-`{ "v": 1, "inline": boolean, "enabled": boolean, "maxConcurrent": int, "maxTotal": int, "used": int }`. The plugin's guard reads it
+`{ "v": 1, "inline": boolean, "enabled": boolean, "maxConcurrent": int, "maxTotal": int, "used": int }`, rewritten whenever the job's limits or count move. The plugin's guard reads it
 at each `delegate_task`: no file for a session Score named, or one it can't trust, means refused.
+
+**Limits (SA.2).** An agent has a ceiling; a job can narrow it, and has a total. The narrowest applies.
+
+| Endpoint | Needs | Body | Answer |
+| --- | --- | --- | --- |
+| `GET /api/agents/:agentId/subagents` | | | `AgentSubagents`: `control` is `limits` (Hermes), `on_off` (Claude Code) or `none` (others: Score can't turn them off or follow them yet) |
+| `PUT /api/agents/:agentId/subagents` | paired browser | `AgentSubagentsRequest` | `AgentSubagents`. `409 conflict` for `control: none` |
+| `PUT /api/jobs/:jobId/subagents` | paired browser | `JobSubagentsRequest` (`maxConcurrent: null` = the agent's own) | `Job` |
+
+- `POST /api/rooms/:roomId/jobs` takes `subagents`; `Job.subagents` carries `{ enabled, maxConcurrent, maxTotal, used }`.
+- The web composer handles `/subagents` itself, like `/usage`: `/subagents` shows the state, `/subagents off`, `/subagents on` (back to the agent's limit), `/subagents N`.
+- Event `subagents.changed` `{ jobId, roomId, subagents }`: limits or count moved, for every kind of room.
+- At the total: the job's next agent-started turn pauses with `pause_reason: subagent_total` (options `more_subagents { count }`, `step_in`, `stop`). An orchestration pauses with `pauseReason: subagent_total` and `LimitsDecision.moreSubagents` lifts it. Claude Code has no count limit of its own, so its count is after the fact.

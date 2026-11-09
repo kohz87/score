@@ -86,7 +86,13 @@ export const claudeDriver: CodingDriver = {
     if (options.settingsPath) args.push('--settings', options.settingsPath)
     // A worker uses no MCP server the person configured for their own sessions (7.7b §3).
     if (options.worker) args.push('--strict-mcp-config')
-    args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
+    args.push(
+      '--disallowed-tools',
+      [
+        ...claudeDenyRules(options.denyPaths, options.denyFiles),
+        ...(options.subagentsOff ? ['Agent', 'Task'] : []),
+      ].join(','),
+    )
     if (options.model) args.push('--model', options.model)
     const effort = checkedEffort(options.effort, CLAUDE_EFFORTS)
     if (effort) args.push('--effort', effort)
