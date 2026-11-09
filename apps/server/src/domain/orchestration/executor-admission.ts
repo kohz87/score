@@ -123,7 +123,10 @@ export const admissionMethods = {
           budget: view,
           now,
           check: this.leadCheck(sqlite, o.id),
-          helperLines: [...helperLines(sqlite, o), runSubagentRule(sqlite, o.id, o.lead_agent_id)],
+          helperLines: [
+            ...helperLines(sqlite, o),
+            ...(o.lead_agent_id ? [runSubagentRule(sqlite, o.id, o.lead_agent_id)] : []),
+          ],
         })
         if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
           throw new Error('Lead input lost its capability placeholder')
