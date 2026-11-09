@@ -62,9 +62,6 @@ export function CanUseCard({ agent, coding }: { agent: AgentDetail; coding: bool
           Manage
         </Link>
       </span>
-      {agent.helpersMax !== null && (
-        <span className="small muted">Helpers it can start: up to {agent.helpersMax}</span>
-      )}
     </MoreCard>
   )
 }

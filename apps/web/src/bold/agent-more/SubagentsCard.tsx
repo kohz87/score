@@ -109,7 +109,7 @@ function SubagentsForm({
         submit()
       }}
     >
-      <label className="row">
+      <label className="check">
         <input
           type="checkbox"
           checked={enabled}
