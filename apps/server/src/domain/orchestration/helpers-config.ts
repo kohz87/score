@@ -8,7 +8,7 @@ import { addStored, utf8Bytes } from './ops.ts'
 import { addHistory, stepsOf, type OrchRow, type StepRow } from './store.ts'
 
 const HelpersConfigSchema = z.object({
-  agentIds: z.array(z.string()).min(1),
+  agentIds: z.array(z.string()),
   maxConcurrent: z.int().positive(),
   /** null = no separate limit (until the job ends). */
   maxSteps: z.int().positive().nullable(),

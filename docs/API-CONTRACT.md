@@ -3097,7 +3097,7 @@ at each `delegate_task`: no file for a session Score named, or one it can't trus
 | `PUT /api/agents/:agentId/subagents` | paired browser | `AgentSubagentsRequest` | `AgentSubagents`. `409 conflict` for `control: none` |
 | `PUT /api/jobs/:jobId/subagents` | paired browser | `JobSubagentsRequest` (`maxConcurrent: null` = the agent's own) | `Job` |
 
-- `POST /api/rooms/:roomId/jobs` takes `subagents`; `Job.subagents` carries `{ enabled, maxConcurrent, maxTotal, used }`.
+- `POST /api/rooms/:roomId/jobs` and a run's `topic` take `subagents`; a run's `helpers` may now name `voterIds` with no `agentIds` (old runs keep their helpers; a scan or audit still needs one); `Job.subagents` carries `{ enabled, maxConcurrent, maxTotal, used }`.
 - The web composer handles `/subagents` itself, like `/usage`: `/subagents` shows the state, `/subagents off`, `/subagents on` (back to the agent's limit), `/subagents N`.
 - Event `subagents.changed` `{ jobId, roomId, subagents }`: limits or count moved, for every kind of room.
 - `GET /api/jobs/:jobId/subagents` → `{ asOfSeq, items: SubagentRow[] }`, with event `subagent.upserted`: one row per subagent for the chat's status card and the job map. Its steps stay in Watch. `costUsd` fills when the parent's turn ends; `tokens` is what a route with no dollars shows.

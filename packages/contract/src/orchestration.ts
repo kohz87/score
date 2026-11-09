@@ -224,7 +224,8 @@ export type CheckRunView = z.infer<typeof CheckRunViewSchema>
 export const HelperRoleSchema = z.enum(['search', 'grep', 'audit'])
 export const OrchestrationHelpersSchema = z
   .object({
-    agentIds: z.array(AgentIdSchema).min(1).max(4),
+    /** Decision 173: a new run names voters only, and its lead uses subagents. Old runs keep their helpers. */
+    agentIds: z.array(AgentIdSchema).max(4).default([]),
     maxConcurrent: z.int().min(1).max(6).default(3),
     /** null = no separate limit: helper work runs until the job ends (bounded by its budget, launches and lead turns). */
     maxSteps: z.int().min(1).max(500).nullable().default(20),
@@ -241,6 +242,12 @@ export const OrchestrationHelpersSchema = z
     autoAudit: z.boolean().default(false),
   })
   .strict()
+  .refine((helpers) => helpers.agentIds.length > 0 || (helpers.voterIds?.length ?? 0) > 0, {
+    message: 'Name at least one helper or voter.',
+  })
+  .refine((helpers) => helpers.agentIds.length > 0 || (!helpers.scan && !helpers.autoAudit), {
+    message: 'A scan or an audit needs a helper.',
+  })
 export const VoteViewSchema = z.object({
   id: z.string().min(1),
   question: z.string(),

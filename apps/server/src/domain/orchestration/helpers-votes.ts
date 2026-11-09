@@ -239,7 +239,9 @@ export function helperLines(sqlite: DatabaseSync, o: OrchRow): string[] {
   const helpers = helpersOf(o)
   if (!helpers) return []
   const lines = [
-    `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)}${helpers.maxSteps === null ? '' : ` of ${helpers.maxSteps}`} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask ${helpers.voterIds.length > 0 ? `the voters (${helpers.voterIds.join(', ')})` : 'them'} a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
+    helpers.agentIds.length === 0
+      ? `Voters: ${votersOf(helpers).join(', ')}. Ask them when a decision is close; Score counts the answers.`
+      : `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)}${helpers.maxSteps === null ? '' : ` of ${helpers.maxSteps}`} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask ${helpers.voterIds.length > 0 ? `the voters (${helpers.voterIds.join(', ')})` : 'them'} a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
   ]
   const unvoted = (
     sqlite

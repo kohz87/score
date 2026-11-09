@@ -6,6 +6,10 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { jobLimitFor } from '../../src/domain/exchanges/budget.ts'
 import {
+  runJobScope,
+  runSubagentTotalReached,
+} from '../../src/domain/orchestration/subagent-scope.ts'
+import {
   allowMoreSubagents,
   ceilingOf,
   changeJobSubagents,
@@ -167,4 +171,17 @@ test('allowing more starts from where the job stands when it passed its total', 
     allowMoreSubagents(sqlite, 'job-1', 3)
   })
   expect(job().subagents_max_total).toBe(9)
+})
+
+test('a run’s limits are the job it was started as', () => {
+  db.tx((sqlite) =>
+    sqlite
+      .prepare(
+        "UPDATE jobs SET recipe_kind = 'orchestration', recipe_ref = 'orc-1', subagents_used = 20 WHERE id = 'job-1'",
+      )
+      .run(),
+  )
+  expect(runJobScope(db.sqlite, 'orc-1')).toEqual({ jobId: 'job-1' })
+  expect(runSubagentTotalReached(db.sqlite, 'orc-1')).toBe(true)
+  expect(runJobScope(db.sqlite, 'orc-other')).toEqual({})
 })

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { JobSubagentsRequestSchema } from './subagents.ts'
 
 /**
  * 3.23.0 (chats stage 3): a run started from a chat becomes a topic of that chat in the same server call. The run and
@@ -13,6 +14,7 @@ export const RunTopicRequestSchema = z
     exchangeBudget: z.int().min(1).max(100).optional(),
     jobTurnLimit: z.int().min(1).max(1000).optional(),
     spendCapUsd: z.number().positive().max(10_000).optional(),
+    subagents: JobSubagentsRequestSchema.optional(),
   })
   .strict()
 export type RunTopicRequest = z.infer<typeof RunTopicRequestSchema>
