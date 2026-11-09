@@ -2,7 +2,7 @@
 
 Owner, 2026-11-09: "we are just calling other agents in score which means we need to create plenty of agents to do the
 swarm", "we need a command to limit or specifically telling it to spin or not", "on up to 4", "in a chatroom, agent can
-still talk and hand over job to each other". Decision 173. Status: design, nothing built. A mock-up comes before any UI.
+still talk and hand over job to each other". Decision 173. Status: design, nothing built; the checks are in below. A mock-up comes before any UI.
 
 ## The idea
 
@@ -88,14 +88,30 @@ the team. It inherits the parent's tools, which may include Score's (`score_repl
 
 ## Coding agents
 
-Claude Code spawns its own subagents, and Score's parser already reads them (`subagent` events, `parent_tool_use_id`).
-Codex's parser has no subagent handling.
+Tested 2026-11-09 on Claude Code 2.1.319 (Haiku, about 2 cents in all) and Codex 0.164 (`gpt-6-luna`).
 
-- **Off for a job:** Score's Claude driver already passes `--disallowed-tools` at launch, so add the subagent tool.
-- **Limits:** no count setting is known: the note's total-per-job rule may have to stop the job after the limit, not block.
-- **Approvals:** these run under the tool's own permissions and Score's coding policy, not Hermes's cards.
+**Claude Code**
 
-All of this is check 5. The controls show only what a given agent's program can enforce, and say so.
+| Point | Result |
+| --- | --- |
+| Shown in Score | Yes, already: the `Agent` call with a summary, child calls linked to it (`parent_call_id`) |
+| Dollars | Yes: the run's `cost_usd` is filled, unlike Hermes runs |
+| Off for a job | Works: `--disallowed-tools Agent,Task`, which Score's driver can add at launch |
+| Stop | Works: cancelled in about a second mid-subagent, no process left |
+| Permissions | A subagent stays under the agent's rules: its `python3` command was denied by the permission system |
+| **Background subagents** | **A bug in Score today.** Claude Code may run a subagent in the background and then report a second result, and Score marks the run failed ("reported more than one result", `claude-parser.ts`). A foreground subagent completes normally. No real work has been hit yet |
+| Count limit | None known. Total per job has to be counted by Score, which then stops the job: firm, but after the fact |
+
+**Fix for the background bug (SA.1):** make Claude Code run subagents in the foreground, or accept a later result. To be
+decided at build time, from what the CLI offers; the check that rejects a second result exists for a reason (7.7a), so it
+is not simply removed.
+
+**Codex** (no live Codex agent in Score, so tested outside Score, read-only): it has `spawn_agent` and `wait_agent`
+(`multi_agent` is stable and on). **`--disable multi_agent` did not remove them**, so "off" isn't solved. Its events show only
+a `wait` with no receiver, so a real spawn couldn't be confirmed. Score's parser doesn't know `collab_tool_call`. Until these
+are answered, the Codex controls say "can't be enforced" and Score doesn't offer subagents as a feature there.
+
+The controls show only what a given agent's program can enforce, and say so.
 
 ## What you see
 
@@ -117,8 +133,11 @@ All of this is check 5. The controls show only what a given agent's program can 
 
 ## Checks before building
 
-1. **Block (open):** the plugin's `delegate_task` block really stops the subagents, for a whole batch, and the lead
-   recovers. From the code, a `pre_tool_call` hook may return `{"action": "block", …}`; not yet run.
+1. **Block (answered 2026-11-09, a temporary plugin on gem38, since removed):** a `pre_tool_call` hook returning
+   `{"action": "block", "message": …}` works. A batch over the limit was stopped before anything started (no child sessions),
+   and the lead read the message and reported it. In a child session `score_reply`, `rooms_post` and `score_handoff` were all
+   blocked and no exchange was created. Child calls carry the child's own `session_id`, which is how the hook tells them apart.
+   Hermes reloaded the plugin live and restarted only that profile's slot.
 2. **Spending (answered 2026-11-09; one run on `openai/gpt-6-luna` through OpenRouter, under a cent).** Hermes recorded
    dollars on each session row ($0.0034 parent, $0.0022 and $0.0002 children). The parent's row doesn't include its
    children: the rollup is in memory only, each row holds its own calls, so the sum is the true total. **`runs.cost_usd`
@@ -133,8 +152,9 @@ All of this is check 5. The controls show only what a given agent's program can 
    it unsafely. This depends on check 1.
 4. **Score's tools in a child (answered 2026-11-09): a subagent has them:** `score_handoff`, `score_reply`, `rooms_post`,
    `orch_*`, `score_approve` and others, listed by a subagent itself. The block in "Subagents stay out of the room" is
-   required. Whether it holds is part of check 1. Still to explain: why `score_reply` showed an error in three of the runs.
-5. **Coding agents (open):** a test on Claude Code (off, Stop, spending, permissions), and what Codex does.
+   required. Whether it holds is part of check 1. Still to explain: why `score_reply` showed an error in the parent's runs; it takes a capability, which a plain chat has no
+   reason to have, so it is probably only the model trying it. The tool's error is harmless, but costs a call.
+5. **Coding agents (answered for Claude Code; Codex open):** see "Coding agents".
 6. **After the Hermes update (H.1, open):** repeat the table above on the new version; the checks ran on the installed one.
 
 ## Build order
@@ -143,6 +163,7 @@ All of this is check 5. The controls show only what a given agent's program can 
 2. **Safety first:** inline on every profile (with the owner's OK), the Agents page warning, the child tool block, the block
    in sessions still pinned to background. This fixes today's gap on its own and can ship by itself.
    **Real dollars in the job budget** for Hermes runs (check 2) goes with it: it's a gap with or without subagents.
+   So does the Claude Code background bug.
 3. Limits: the agent ceiling, the policy, the count and block, `/subagents`.
 4. The UI, from an approved mock-up: context bar, job map node, Start a job, recipe step, approval card's source.
 5. Retire the helpers picker for new jobs; the owner removes the swarm profiles.
