@@ -40,6 +40,9 @@ const WORKSPACE_ALLOWED = [
 ]
 
 export const claudeDriver: CodingDriver = {
+  // A background sub-agent makes Claude Code report a second result, and one run has one result (claude-parser). With this
+  // set the same request runs in the foreground: tested on 2.1.319 (docs/briefs/SA-subagents.md).
+  runEnv: { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' },
   runtime: 'claude-code',
   resumeRefusal: /^No conversation found with session ID\b/i,
   label: 'Claude Code',

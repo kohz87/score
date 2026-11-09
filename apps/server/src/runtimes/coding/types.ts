@@ -191,6 +191,8 @@ export interface CodingDriver {
   readonly requiresReadAck: (permission: CodingPermission) => boolean
   /** Whether the CLI can print its own quota, and how (never a model turn). */
   readonly usage?: { args: readonly string[]; parse(output: string): UsageReading }
+  /** Environment every run of this CLI gets, on top of Score's clean child environment. */
+  readonly runEnv?: Readonly<Record<string, string>>
   /** `--version` output to a bare version string, or null when it doesn't look like this CLI. */
   parseVersion(output: string): string | null
   /**
