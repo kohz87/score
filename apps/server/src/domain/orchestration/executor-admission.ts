@@ -1,3 +1,4 @@
+import { runSubagentRule } from './subagent-scope.ts'
 import { ORCH_CAPACITY, ORC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { z } from 'zod'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
@@ -122,7 +123,7 @@ export const admissionMethods = {
           budget: view,
           now,
           check: this.leadCheck(sqlite, o.id),
-          helperLines: helperLines(sqlite, o),
+          helperLines: [...helperLines(sqlite, o), runSubagentRule(sqlite, o.id, o.lead_agent_id)],
         })
         if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
           throw new Error('Lead input lost its capability placeholder')

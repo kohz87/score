@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { defaultJobId } from '../job-sessions.ts'
-import { subagentTotalReached } from '../subagents.ts'
+import { subagentRule, subagentTotalReached } from '../subagents.ts'
 
 // A run's subagent limits live on the job the person sees: the one it was started as, in the team room (Start a job,
 // `recipe`), else its own room's one job.
@@ -28,3 +28,9 @@ export function runSubagentTotalReached(sqlite: DatabaseSync, orchestrationId: s
   const jobId = jobOfRun(sqlite, orchestrationId)
   return jobId !== null && subagentTotalReached(sqlite, jobId)
 }
+
+export const runSubagentRule = (
+  sqlite: DatabaseSync,
+  orchestrationId: string,
+  agentId: string,
+): string => subagentRule(sqlite, agentId, jobOfRun(sqlite, orchestrationId))
