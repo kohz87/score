@@ -59,6 +59,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/recipe-model-helpers.ts` — shared recipe fixtures and graph-versus-validator comparison helpers.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal, with feature-split tests.
+- `apps/web/src/bold/agent-more/SubagentsCard.tsx` — the agent's subagent ceiling: Allow, At once, Model, Steps, Time (Hermes), on/off (Claude Code) or not supported (Codex).
 - `apps/web/src/bold/agent-more/agent-more-helpers.tsx` — shared agent-detail test agent, fetch stub, mount and lifecycle state for the split card suites.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
@@ -71,6 +72,24 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/room/` — team room shell, loaded-room parts, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom, RoomMessageStream and RoomRequests test suites.
+- `apps/web/src/bold/subagents/` — subagents on screen (SA.3): the room's rows and limits, the chat status card, the `/subagents` control and styles.
+- `apps/web/src/bold/subagents/subagent-queries.ts` — job and room subagent rows kept live by stream events; the agent's ceiling and the PUT calls.
+- `apps/web/src/bold/subagents/subagent-model.ts` — pure helpers: counts, cost and state text, the limit label, and which message each row group belongs to.
+- `apps/web/src/bold/subagents/use-subagent-cards.ts` — the room's subagent rows grouped under the messages that started them.
+- `apps/web/src/bold/subagents/MessageSubagentCard.tsx` — the status card under one message, or nothing when it started no subagents.
+- `apps/web/src/bold/subagents/SubagentStatusCard.tsx` — the chat's "Subagents · N of M done" card: rows, Details link, phone collapse.
+- `apps/web/src/bold/subagents/SubagentControl.tsx` — the `/subagents` choices and the context bar's subagent button.
+- `apps/web/src/bold/subagents/SubagentsInfo.tsx` — the side panel's SUBAGENTS section.
+- `apps/web/src/bold/subagents/job-subagent-cache.ts` — applies `subagents.changed` to the cached jobs.
+- `apps/web/src/bold/subagents/subagents.css` — subagent card, control and side-panel styles.
+- `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
+- `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
+- `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.
+- `apps/web/src/bold/subagents/SubagentsInfo.test.tsx` — the side panel's SUBAGENTS section and its cost states.
+- `apps/web/src/bold/room/topic-subagents-command.test.ts` — `/subagents` with its request bodies, the over-limit and no-job notes.
+- `apps/web/src/bold/agent-more/SubagentsCard.test.tsx` — the agent's subagent ceiling card for limits, on/off and not-supported agents.
+- `apps/web/src/routes/orchestrations/limit-subagents.test.tsx` — "Allow 10 more" at a subagent total, sent as the limits decision.
+- `apps/web/src/bold/room/use-edit-room-params.ts` — changes the room's URL query in place (job, message, command offers).
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.

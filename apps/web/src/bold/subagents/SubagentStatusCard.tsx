@@ -4,7 +4,12 @@ import { Link } from 'react-router'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { boldAgentScreenLink } from '../bold-links.ts'
 import { agentDisplayName } from '../bold-agents.ts'
-import { subagentCounts, subagentDoneText, subagentRowMeta, subagentRowState } from './subagent-model.ts'
+import {
+  subagentCounts,
+  subagentDoneText,
+  subagentRowMeta,
+  subagentRowState,
+} from './subagent-model.ts'
 import './subagents.css'
 
 function Rows({ rows }: { rows: readonly SubagentRow[] }) {

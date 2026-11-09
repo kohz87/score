@@ -114,6 +114,18 @@ export function LimitsCard({
             Continue although spend is unknown
           </button>
         )}
+        {/* SA.3 part 11 (decision 173): at the job's subagent total, allow ten more. */}
+        {reason === 'subagent_total' && (
+          <button
+            type="button"
+            disabled={actions.limits.isPending}
+            onClick={() =>
+              actions.limits.mutate({ orchestrationRevision: run.revision, moreSubagents: 10 })
+            }
+          >
+            Allow 10 more
+          </button>
+        )}
         {reason === 'unknown_spend' &&
           coding &&
           coding.unknownSpend !== 'continue' &&

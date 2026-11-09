@@ -38,12 +38,13 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
 
   if (!limits || ceiling.data?.control === 'none') return null
   const max = ceiling.data?.maxConcurrent ?? limits.maxConcurrent ?? 1
+  // Claude Code decides how many run at once, so a count can't be set for it: only off and its own choice.
+  const counted = ceiling.data?.control !== 'on_off'
   const options: JobSubagentsRequest[] = [
     { enabled: false },
-    ...Array.from({ length: max }, (_, index) => ({
-      enabled: true,
-      maxConcurrent: index + 1,
-    })),
+    ...(counted
+      ? Array.from({ length: max }, (_, index) => ({ enabled: true, maxConcurrent: index + 1 }))
+      : []),
     { enabled: true, maxConcurrent: null },
   ]
 
@@ -56,7 +57,6 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
   return (
     <span
       className="bold-subagents-control"
-      data-protected="block"
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !open) return
         event.preventDefault()
@@ -95,11 +95,7 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
                 aria-checked={checked}
                 onClick={() => choose(option)}
               >
-                {off
-                  ? 'Off'
-                  : back
-                    ? `Back to the agent’s limit (${max})`
-                    : `At most ${n} at once`}
+                {off ? 'Off' : back ? `Back to the agent’s limit (${max})` : `At most ${n} at once`}
                 <small>
                   {off
                     ? 'None in this job'

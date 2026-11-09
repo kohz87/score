@@ -32,13 +32,7 @@ export function directChatsQuery(agentId: string) {
         data: { room: response.room, chats: [...response.chats].sort(byActivity) },
       }
     },
-    types: [
-      'room.upserted',
-      'room.deleted',
-      'job.upserted',
-      'job.deleted',
-      'subagents.changed',
-    ],
+    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted', 'subagents.changed'],
     reduce(data, event) {
       if (event.type === 'room.deleted')
         return data.room?.id === event.data.id ? { room: null, chats: [] } : data

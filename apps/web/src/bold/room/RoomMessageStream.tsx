@@ -30,9 +30,8 @@ import {
 } from './room-message-pages.tsx'
 import { RoomTyping } from './RoomTyping.tsx'
 import { useRoomLiveCards } from './use-room-live-cards.ts'
-import { useRoomSubagentRows } from '../subagents/subagent-queries.ts'
-import { attachSubagentRows } from '../subagents/subagent-model.ts'
-import { SubagentStatusCard } from '../subagents/SubagentStatusCard.tsx'
+import { useSubagentCards } from '../subagents/use-subagent-cards.ts'
+import { MessageSubagentCard } from '../subagents/MessageSubagentCard.tsx'
 
 /** The chat as one conversation: every topic's messages in time order, a divider where each topic starts. */
 export function RoomMessageStream({
@@ -165,21 +164,12 @@ export function RoomMessageStream({
   const hidden = usePendingDeletes().hidden
   const [branch, setView] = useState<VersionView>(null)
 
-  const subagentJobIds = useMemo(
-    () => jobs.filter((job) => job.subagents).map((job) => job.id),
-    [jobs],
-  )
-  const subagentRows = useRoomSubagentRows(subagentJobIds)
-
   // The merged conversation shows every topic, closed ones too: their divider says how they ended.
   const items = useMemo(
     () => allItems.filter((message) => !hidden.has(message.id)),
     [allItems, hidden],
   )
-  const subagentCards = useMemo(
-    () => attachSubagentRows(subagentRows, allItems),
-    [allItems, subagentRows],
-  )
+  const subagentCards = useSubagentCards(jobs, allItems)
 
   useEffect(() => {
     if (status !== 'success') return
@@ -314,16 +304,7 @@ export function RoomMessageStream({
               {extras?.below}
               {/* 3.24.0: a needs-you card for this message (or the end of its topic) is drawn right after it. */}
               <NeedsSlot id={slotIds.message(message.id)} />
-              {subagentCards.get(message.id)?.map((rows) => {
-                const agentId = rows[0]!.agentId
-                return (
-                  <SubagentStatusCard
-                    key={`subagents-${agentId}-${message.id}`}
-                    rows={rows}
-                    agent={agents.find((agent) => agent.id === agentId)}
-                  />
-                )
-              })}
+              <MessageSubagentCard rows={subagentCards.get(message.id)} agents={agents} />
               {message.jobId && lastOfTopic.get(message.jobId) === message.id && (
                 <NeedsSlot id={slotIds.topic(message.jobId)} />
               )}

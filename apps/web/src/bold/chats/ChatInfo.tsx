@@ -152,8 +152,7 @@ export function ChatInfo({
           agentName={
             agents.find(
               (agent) =>
-                agent.id ===
-                (current.activeAgents[0] ?? current.holderAgentId ?? room.leadAgentId),
+                agent.id === (current.activeAgents[0] ?? current.holderAgentId ?? room.leadAgentId),
             )?.name
           }
         />

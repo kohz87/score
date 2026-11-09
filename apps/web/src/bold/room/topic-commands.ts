@@ -204,8 +204,7 @@ export async function runTopicCommand(
         say('This job doesn’t have subagents.')
         return
       }
-      const agentId =
-        topic.activeAgents[0] ?? topic.holderAgentId ?? room.leadAgentId ?? undefined
+      const agentId = topic.activeAgents[0] ?? topic.holderAgentId ?? room.leadAgentId ?? undefined
       const agentSub = agentId
         ? await ctx.queryClient.fetchQuery(agentSubagentsQuery(agentId))
         : null
@@ -252,9 +251,7 @@ export async function runTopicCommand(
       }
       if (agentSub && agentSub.control !== 'limits') {
         const name = agents.find((agent) => agent.id === agentId)?.name ?? agentId ?? 'This agent'
-        say(
-          `${name} decides how many run at once. Use /subagents off or /subagents on.`,
-        )
+        say(`${name} decides how many run at once. Use /subagents off or /subagents on.`)
         return
       }
       if (ceiling !== null && count > ceiling) {

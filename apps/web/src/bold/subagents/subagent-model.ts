@@ -69,10 +69,12 @@ export function subagentRowState(row: SubagentRow): 'Done' | 'Waiting' | 'Failed
 /** The context bar's label, from the job's narrowing limit and, when it is null, the agent's own ceiling. */
 export function subagentControlLabel(
   job: Pick<Job, 'subagents'>,
-  agent: Pick<AgentSubagents, 'maxConcurrent'> | undefined,
+  agent: Pick<AgentSubagents, 'maxConcurrent' | 'control'> | undefined,
 ): string {
   const limits = job.subagents
   if (!limits || !limits.enabled) return 'Subagents: off'
+  // Claude Code decides how many run at once: there is no number to show.
+  if (agent?.control === 'on_off') return 'Subagents: on'
   const limit = limits.maxConcurrent ?? agent?.maxConcurrent ?? null
   if (limit === null) return 'Subagents: on'
   return `Subagents: ${limits.maxConcurrent === null ? 'up to ' : ''}${limit}`
@@ -100,19 +102,18 @@ export function attachSubagentRows(
   rows: readonly SubagentRow[],
   messages: readonly AgentMessage[],
 ): Map<string, SubagentRow[]> {
+  // One group per agent in one job: the same agent's rows from two jobs are two cards, each on its own job's message.
   const groups = new Map<string, SubagentRow[]>()
   for (const row of rows) {
-    const list = groups.get(row.agentId) ?? []
-    list.push(row)
-    groups.set(row.agentId, list)
+    const key = `${row.jobId}\n${row.agentId}`
+    groups.set(key, [...(groups.get(key) ?? []), row])
   }
   const attached = new Map<string, SubagentRow[]>()
-  for (const [agentId, group] of groups) {
-    const jobId = group[0]!.jobId
+  for (const group of groups.values()) {
     const sorted = [...group].sort(
       (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id),
     )
-    const first = sorted[0]!
+    const { jobId, agentId, startedAt } = sorted[0]!
     const sameAgent = messages.filter(
       (message) =>
         message.jobId === jobId &&
@@ -120,11 +121,11 @@ export function attachSubagentRows(
         message.author.agentId === agentId,
     )
     const before = sameAgent
-      .filter((message) => message.createdAt <= first.startedAt)
+      .filter((message) => message.createdAt <= startedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
     const target = before.at(-1) ?? sameAgent[0]
     if (!target) continue
-    attached.set(target.id, [...(attached.get(target.id) ?? []), ...sorted])
+    attached.set(target.id, sorted)
   }
   return attached
 }

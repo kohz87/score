@@ -2,6 +2,7 @@ import type { AgentSummary, Job, Room } from '@score/contract'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
+import { useEditRoomParams } from './use-edit-room-params.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
@@ -233,29 +234,26 @@ export function LoadedTeamRoom({
     setParams(next, { replace: true, state: location.state })
   }, [location.state, params, setParams])
 
+  const editParams = useEditRoomParams()
+
   const topicCommands = useTopicCommands({
     room,
     agents,
     jobs: allJobs,
     current: currentJob,
-    pick: (jobId) => {
-      const next = new URLSearchParams(params)
-      if (jobId) next.set('job', jobId)
-      else next.delete('job')
-      next.delete('message')
-      next.delete('jobs')
-      setParams(next, { replace: true, state: location.state })
-    },
+    pick: (jobId) =>
+      editParams((next) => {
+        if (jobId) next.set('job', jobId)
+        else next.delete('job')
+        next.delete('message')
+        next.delete('jobs')
+      }),
     say: (text, action) =>
       setSystemLines((lines) => [
         ...lines,
         { id: newId(), at: new Date().toISOString(), text, ...(action ? { action } : {}) },
       ]),
-    offer: (command) => {
-      const next = new URLSearchParams(params)
-      next.set('command', command)
-      setParams(next, { replace: true, state: location.state })
-    },
+    offer: (command) => editParams((next) => next.set('command', command)),
     onBusy: (busy, options) => setBusyStart({ busy, options }),
   })
 

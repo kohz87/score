@@ -73,8 +73,7 @@ export function roomSubagentRowsQuery(jobIds: readonly string[]) {
     },
     types: ['subagent.upserted', 'job.deleted'],
     reduce(data, event) {
-      if (event.type === 'job.deleted')
-        return data.filter((row) => row.jobId !== event.data.id)
+      if (event.type === 'job.deleted') return data.filter((row) => row.jobId !== event.data.id)
       if (event.type !== 'subagent.upserted') return data
       const row = rowOf(event.data)
       return ids.includes(row.jobId) ? mergeRows(data, row) : data
@@ -104,10 +103,7 @@ export function useAgentSubagents(agentId: AgentId | null, enabled = true) {
   return useQuery(agentSubagentsQuery(agentId, enabled))
 }
 
-export async function putJobSubagents(
-  jobId: string,
-  body: JobSubagentsRequest,
-): Promise<Job> {
+export async function putJobSubagents(jobId: string, body: JobSubagentsRequest): Promise<Job> {
   return JobSchema.parse(
     await apiFetch(`jobs/${encodeURIComponent(jobId)}/subagents`, {
       method: 'PUT',
@@ -139,3 +135,11 @@ export async function putAgentSubagents(
   )
 }
 
+/** Saves an agent's ceiling and puts the answer back in the cache the card and the Team page read. */
+export function useSaveAgentSubagents(agentId: AgentId) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: AgentSubagentsRequest) => putAgentSubagents(agentId, body),
+    onSuccess: (value) => queryClient.setQueryData(agentSubagentsQuery(agentId).queryKey, value),
+  })
+}

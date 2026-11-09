@@ -70,9 +70,12 @@ function ApprovalRequestCard({
     >
       <div className="bold-request-head">
         {current.fromSubagent ? (
-          <b>
-            A subagent of {agent ? agentDisplayName(agent) : current.agentId} wants to run this
-          </b>
+          <>
+            {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
+            <b>
+              A subagent of {agent ? agentDisplayName(agent) : current.agentId} wants to run this
+            </b>
+          </>
         ) : (
           <>
             {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}

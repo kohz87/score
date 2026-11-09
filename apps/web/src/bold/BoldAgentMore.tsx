@@ -14,6 +14,7 @@ import { RoutinesCard } from './agent-more/RoutinesCard.tsx'
 import { RunsCard } from './agent-more/RunsCard.tsx'
 import { ScoreAccessCard } from './agent-more/ScoreAccessCard.tsx'
 import { SkillsCard } from './agent-more/SkillsCard.tsx'
+import { SubagentsCard } from './agent-more/SubagentsCard.tsx'
 import { TodoCard } from './agent-more/TodoCard.tsx'
 import { WorkspaceCard } from './agent-more/WorkspaceCard.tsx'
 import './agent-more/agent-more.css'
@@ -60,6 +61,7 @@ export function BoldAgentMore({
             <CanUseCard agent={agent} coding />
             {workspace}
             <RunsCard agent={agent} />
+            <SubagentsCard agent={agent} />
             <LooksCard agent={agent} />
             {editable && <NameCard agent={agent} />}
             {deletion}
@@ -71,6 +73,7 @@ export function BoldAgentMore({
             <CanUseCard agent={agent} coding={false} />
             {workspace}
             <RoutinesCard agent={agent} />
+            <SubagentsCard agent={agent} />
             {deletion}
             <PluginsCard agent={agent} />
             <ChannelsCard agent={agent} />
