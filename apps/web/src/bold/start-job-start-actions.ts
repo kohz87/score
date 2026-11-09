@@ -1,5 +1,6 @@
 import {
   JobSchema,
+  type JobSubagentsRequest,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_DEFAULTS,
   OrchestrationCreatedSchema,
@@ -53,10 +54,15 @@ export function useStartJobStartActions(
     }
   }
 
+  /** SA.3: the job's subagents, in every path that starts a job now (none when the lead's settings aren't read). */
+  function subagentsPart(): { subagents?: JobSubagentsRequest } {
+    return model.subagentsRequest ? { subagents: model.subagentsRequest } : {}
+  }
+
   /** The topic a run makes in the chat, in the run's own request: its title and the limits a plain job takes. */
   function runTopic(title: string): RunTopicRequest {
     if (!data.startRoom) throw new Error(data.roomProblem)
-    return { roomId: data.startRoom.id, title, ...jobLimits() }
+    return { roomId: data.startRoom.id, title, ...jobLimits(), ...subagentsPart() }
   }
 
   async function createJob(title: string, limits: JobLimits) {
@@ -84,19 +90,14 @@ export function useStartJobStartActions(
       leadAgentId: data.leadId,
       allowedAgents: data.allowedFor,
       ...(data.advisorId !== '' ? { advisorAgentId: data.advisorId } : {}),
-      ...(model.helpersOn
+      // SA.3: a new run names voters only; its lead's subagents come from `topic.subagents`.
+      ...(model.votersOn
         ? {
             helpers: {
-              agentIds: data.helperIds,
-              maxConcurrent: data.helperConcurrentNumber,
-              maxSteps: state.helperNoLimit ? null : data.helperStepsNumber,
+              agentIds: [],
+              voterIds: data.voterIds,
               autoVote: data.autoVoteOn,
               autoVoteK: data.autoVoteOn ? data.autoVoteKNumber : 3,
-              autoAudit: state.autoAudit,
-              scan: state.helperScan,
-              ...(state.helperScan ? { scanFolder: data.helperFolderNow.trim() } : {}),
-              splitTo: state.helperSplit,
-              ...(data.voterIds.length > 0 ? { voterIds: data.voterIds } : {}),
             },
           }
         : {}),
@@ -305,7 +306,7 @@ export function useStartJobStartActions(
           orchestrationId: made.orchestration.id,
         })
       } else {
-        const job = await createJob(title, jobLimits())
+        const job = await createJob(title, { ...jobLimits(), ...subagentsPart() })
         state.setResult({ kind: 'job', title, jobId: job.id })
       }
       await saveRecipeAfterStart()

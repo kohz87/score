@@ -271,7 +271,10 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
-- `apps/web/src/bold/BoldStartJobHelperFields.tsx` — helpers, automatic votes/audits and coding launches.
+- `apps/web/src/bold/BoldStartJobSubagentFields.tsx` — the Subagents choice: Off or up to N at once (the lead's limit caps it), and the job's total.
+- `apps/web/src/bold/BoldStartJobVoterFields.tsx` — the voters picker (chips and Add, never the lead) and the automatic votes.
+- `apps/web/src/bold/BoldStartJobLaunchFields.tsx` — coding-agent launches field.
+- `apps/web/src/bold/bold-start-subagents.css` — Subagents pills, the total and the voters picker.
 - `apps/web/src/bold/BoldStartJobCheckFields.tsx` — pre-finish command check fields.
 - `apps/web/src/bold/BoldStartJobLimitFields.tsx` — limits, deadline, workflow options, unknown cost and inputs.
 - `apps/web/src/bold/BoldStartJobParts.tsx` — checklist rows, auth fields, result cards and dialog actions.
@@ -288,6 +291,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/start-job-context.ts` — start-job opener context and hook.
 - `apps/web/src/bold/start-job-checks.ts` — room and preflight check conversion.
 - `apps/web/src/bold/start-job-copy.ts` — size text and start/auth error messages.
+- `apps/web/src/bold/start-job-subagents.ts` — what Start a job sends for subagents (off, the lead's limit, on/off or unknown) and the subagent checks.
+- `apps/web/src/bold/BoldStartJob-subagents.test.tsx` — the Subagents choice and what each path sends (lead, plain job, saved recipe), and that the helpers picker is gone.
 - `apps/web/src/bold/bold-start-job.ts` — start-job model and request shaping.
 - `apps/web/src/bold/bold-recipes.css` — Recipes style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-recipes-list.css` — Recipes view switch, badges, page actions, columns, step rows and route controls.
@@ -359,7 +364,13 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/jobmap/Node.tsx` — selectable job-map layer node shell with pressed and pulse states.
 - `apps/web/src/bold/jobmap/Line.tsx` — connector line and moving dot between job-map layers.
 - `apps/web/src/bold/jobmap/Pill.tsx` — toned step and status pill.
+- `apps/web/src/bold/jobmap/SubagentLayer.tsx` — the SUBAGENTS node and its selected panel (the lead's own helpers).
+- `apps/web/src/bold/jobmap/subagent-layer-model.ts` — pure layer model: the node's title and detail, the header line, each row's time and cost.
+- `apps/web/src/bold/jobmap/use-run-job.ts` — the job a lead-decides run belongs to, from its room's job list.
 - `apps/web/src/bold/jobmap/jobmap.css` — job-map style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/jobmap/jobmap-subagents.css` — the SUBAGENTS node, its panel and rows.
+- `apps/web/src/bold/jobmap/JobMap-subagents.test.tsx` — the SUBAGENTS node, its header line, its panel, and a voters-only run with no swarm layer.
+- `apps/web/src/bold/jobmap/subagent-layer-model.test.ts` — the layer model's counts, cost text and row facts.
 - `apps/web/src/bold/jobmap/jobmap-base.css` — job-map shell, layer nodes, text blocks, advisor marks and pills.
 - `apps/web/src/bold/jobmap/jobmap-layers.css` — vote rows, swarm and worker layout, stop rows and check lines.
 - `apps/web/src/bold/jobmap/jobmap-lines-log.css` — connector lines and dots, session log, phone layout and motion.

@@ -69,13 +69,16 @@ test('a job without a check posts none and starts without the password prompt (3
   expect(within(dialog).queryByRole('form', { name: 'Confirm it’s you' })).toBeNull()
 })
 
-test('a check, an advisor and helpers together: one body, and nothing posted before the password (3.13-3.15)', async () => {
+test('a check, an advisor and voters together: one body, and nothing posted before the password (3.13-3.15)', async () => {
   open('/b?start=job')
   const dialog = await startDialog()
-  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  const section = dialog.querySelector('fieldset.start-voters') as HTMLFieldSetElement
   fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: 'reviewer' } })
-  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
-  fireEvent.click(within(section).getByRole('checkbox', { name: 'designer' }))
+  // SA.3: voters are picked from Add (the helpers picker is gone for new jobs).
+  fireEvent.click(within(section).getByRole('button', { name: 'Add' }))
+  fireEvent.click(within(section).getByRole('button', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('button', { name: 'Add' }))
+  fireEvent.click(within(section).getByRole('button', { name: 'designer' }))
   fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
   fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
   const start = await fillLeadJob(dialog)
@@ -95,7 +98,7 @@ test('a check, an advisor and helpers together: one body, and nothing posted bef
   expect(state.calls).toEqual(['security-check', 'orchestrations'])
   expect(state.orchestrationBodies[0]).toMatchObject({
     advisorAgentId: 'reviewer',
-    helpers: { agentIds: ['builder', 'designer'], splitTo: 'lead' },
+    helpers: { agentIds: [], voterIds: ['builder', 'designer'] },
     check: { command: 'pnpm test', workspace: '/work/site' },
   })
 })

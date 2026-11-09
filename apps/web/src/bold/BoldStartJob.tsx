@@ -1,7 +1,9 @@
 import { useId, type ReactNode, type RefObject } from 'react'
 import { CloseIcon } from './BoldIcons.tsx'
 import { StartJobChatPick, StartJobRecipe, StartJobWhat } from './BoldStartJobFields.tsx'
-import { HelperFields, StartJobLaunches } from './BoldStartJobHelperFields.tsx'
+import { StartJobLaunches } from './BoldStartJobLaunchFields.tsx'
+import { SubagentFields } from './BoldStartJobSubagentFields.tsx'
+import { VoterFields } from './BoldStartJobVoterFields.tsx'
 import { CheckFields } from './BoldStartJobCheckFields.tsx'
 import {
   LimitsFields,
@@ -133,7 +135,9 @@ export function BoldStartJob({
 
               {view.isLead && <StartJobAdvisor view={view} />}
 
-              {view.isLead && <HelpersSection view={view} />}
+              {view.nowOnce && <SubagentsSection view={view} />}
+
+              {view.isLead && <VotersSection view={view} />}
 
               {view.isLead && view.launchesInUse && <StartJobLaunches view={view} />}
 
@@ -179,25 +183,31 @@ function AskSection({ view }: { view: StartJobView }) {
   )
 }
 
-function HelpersSection({ view }: { view: StartJobView }) {
+/** SA.3: the lead's own subagents for this job (Off, or up to N at once, and the total). Asks the person to decide. */
+function SubagentsSection({ view }: { view: StartJobView }) {
   return (
-    <details
-      className="inner start-helpers"
+    <fieldset
+      className="inner start-subagents"
       data-protected="block"
-      open={view.helperProblem ? true : undefined}
+      style={{ border: 0, margin: 0 }}
     >
-      <summary>
-        Helpers
-        {view.helpersOn && (
-          <span className="small muted">
-            {' '}
-            · {view.helperIds.length} {view.helperIds.length === 1 ? 'helper' : 'helpers'}
-            {view.helperScan && <> · scans {view.helperFolderNow.trim() || 'no folder yet'}</>}
-          </span>
-        )}
-      </summary>
-      <HelperFields view={view} />
-    </details>
+      <legend className="lab start-legend">Subagents</legend>
+      <SubagentFields view={view} />
+    </fieldset>
+  )
+}
+
+/** SA.3: named agents the lead can ask for votes (never the lead). Votes are the person's to trust, so protected. */
+function VotersSection({ view }: { view: StartJobView }) {
+  return (
+    <fieldset
+      className="inner start-voters bold-start-voters"
+      data-protected="block"
+      style={{ border: 0, margin: 0 }}
+    >
+      <legend className="bold-start-voters-title">Voters</legend>
+      <VoterFields view={view} />
+    </fieldset>
   )
 }
 

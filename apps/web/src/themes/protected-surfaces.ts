@@ -50,7 +50,9 @@ export const protectedClasses = [
   'start-more',
   // 3.13: the oracle's command and folder in Start a job, and the person's "finish without a passing check" choice
   'start-check',
-  'start-helpers',
+  // SA.3: Start a job's subagents (the lead's own helpers, their total) and its voters
+  'start-subagents',
+  'start-voters',
   'orch-check-waive',
   'orch-check-waived',
   // 3.14: a step quiet for over 5 minutes, with its Stop

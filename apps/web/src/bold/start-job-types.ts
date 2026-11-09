@@ -1,3 +1,5 @@
+import type { JobSubagentsRequest } from '@score/contract'
+
 /** 3.23.0: where Start a job starts, when the opener knows (a chat's own button, `/run`). */
 export type StartJobOptions = {
   /** The chat the run starts in; without it, the team room the address names. */
@@ -23,4 +25,6 @@ export type JobLimits = {
   exchangeBudget?: number
   jobTurnLimit?: number
   spendCapUsd?: number
+  /** SA.3: the job's subagents (Start a job's Subagents choice). */
+  subagents?: JobSubagentsRequest
 }

@@ -1,4 +1,11 @@
-import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
+import type {
+  AgentSubagents,
+  AgentSummary,
+  Job,
+  OrchEvent,
+  OrchestrationDetail,
+  SubagentRow,
+} from '@score/contract'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
@@ -15,6 +22,7 @@ import {
   type StopStepAction,
 } from '../../routes/orchestrations/StepStop.tsx'
 import { useFramed } from '../../shell/framed-paths.tsx'
+import { useAgentSubagents, useJobSubagentRows } from '../subagents/subagent-queries.ts'
 import {
   buildJobMap,
   LAYER_LABEL,
@@ -23,6 +31,9 @@ import {
   type JobMapModel,
 } from './job-map-model.ts'
 import { Line } from './Line.tsx'
+import { buildSubagentLayer } from './subagent-layer-model.ts'
+import { SubagentNode, SubagentPanel } from './SubagentLayer.tsx'
+import { useRunJob } from './use-run-job.ts'
 import { Node } from './Node.tsx'
 import { Pill } from './Pill.tsx'
 import { WorkerBox } from './WorkerBox.tsx'
@@ -44,10 +55,12 @@ export interface JobMapViewProps {
   agents: readonly AgentSummary[]
   stop: StopStepAction
   now: number
+  /** SA.3 part 8: the run's job with its subagent rows; null or no rows = no SUBAGENTS layer. */
+  subagents?: { job: Job; rows: readonly SubagentRow[]; ceiling: AgentSubagents | undefined } | null
 }
 
 /** The graph for one job, from data already loaded (the live wrapper below fetches it). */
-export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) {
+export function JobMapView({ run, events, agents, stop, now, subagents }: JobMapViewProps) {
   const phoneScreen = useMediaQuery(PHONE_QUERY)
   // 3.27.1 (owner's Troubleshooting note): the map stacks by its own width, not the screen's. In the chat's 420px Graph
   // panel or a narrow sheet the side-by-side top row (you · lead · advisor, about 1020px) wrapped into a muddle.
@@ -72,9 +85,13 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
   const has = (layer: LayerId) => model.layers.includes(layer)
   const pick = (layer: LayerId) => setSelected((current) => (current === layer ? null : layer))
   const agentOf = (id: string) => agents.find((agent) => agent.id === id)
-  const lines = logFor(model, selected, { phone })
   const { lead, advisor } = model
   const leadAgent = agentOf(lead.agentId)
+  const subLayer = subagents
+    ? buildSubagentLayer(subagents.job, subagents.rows, subagents.ceiling, lead.name)
+    : null
+  // The SUBAGENTS layer's detail replaces the session log's list while it is selected: its steps are in Watch.
+  const lines = selected === 'subagents' ? [] : logFor(model, selected, { phone })
 
   const stuck = run.stepsList.filter(
     (step) =>
@@ -112,6 +129,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
       className={`jobmap${phone ? ' jobmap--phone' : ''}${still ? ' jobmap--still' : ''}`}
       aria-label="Job map"
     >
+      {subLayer && <p className="jobmap-subagents-head">{subLayer.headerLine}</p>}
       <div className="jobmap-row jobmap-top">
         <Node
           layer="you"
@@ -170,6 +188,22 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
           </>
         )}
       </div>
+
+      {subLayer && (
+        <>
+          <Line active={subLayer.working} still={still} />
+          <SubagentNode
+            layer="subagents"
+            model={subLayer}
+            selected={selected}
+            onPick={pick}
+            pulse={subLayer.working && !still}
+          />
+          {selected === 'subagents' && (
+            <SubagentPanel model={subLayer} lead={leadAgent} leadName={lead.name} />
+          )}
+        </>
+      )}
 
       {has('votes') && model.votes && (
         <>
@@ -313,7 +347,9 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
           )}
         </header>
         {lines.length === 0 ? (
-          <p className="jobmap-empty">Nothing here yet.</p>
+          <p className="jobmap-empty">
+            {selected === 'subagents' ? 'Each subagent’s steps are in Watch.' : 'Nothing here yet.'}
+          </p>
         ) : (
           <ol>
             {lines.map((line) => (
@@ -337,6 +373,9 @@ export function JobMap({ orchestrationId }: { orchestrationId: string }) {
   const actions = useRunActions(orchestrationId)
   const detail = run.data?.snapshot.orchestration
   const now = useNow(detail !== undefined)
+  const job = useRunJob(detail?.roomId ?? null, orchestrationId)
+  const subagentRows = useJobSubagentRows(job?.subagents ? job.id : null)
+  const ceiling = useAgentSubagents(detail?.leadAgentId ?? null, subagentRows.length > 0)
   if (run.isError)
     return (
       <p role="alert">
@@ -354,6 +393,9 @@ export function JobMap({ orchestrationId }: { orchestrationId: string }) {
       agents={agents}
       stop={actions.stopStep}
       now={now}
+      subagents={
+        job && subagentRows.length > 0 ? { job, rows: subagentRows, ceiling: ceiling.data } : null
+      }
     />
   )
 }

@@ -1,0 +1,125 @@
+/* SA.3 part 8 (docs/design/bold/mockups/24-subagents-jobmap.dc.html): the SUBAGENTS layer, one node for the lead's own
+   helpers, and its detail panel. Blue is the swarm's colour, as in the mock-up; the states use the bold status tokens. */
+[data-ui='bold'] .jobmap {
+  --jm-subagents: #7db8ff;
+}
+[data-ui='bold'] .jobmap-node[data-tone='subagents'] {
+  border: 2px solid var(--jm-subagents);
+  width: 320px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='subagents'] .jobmap-kicker {
+  color: var(--jm-subagents);
+}
+[data-ui='bold'] .jobmap-subagents-head {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+[data-ui='bold'] .jobmap-subagents-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(460px, 100%);
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+}
+[data-ui='bold'] .jobmap-subagents-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+[data-ui='bold'] .jobmap-subagents-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+[data-ui='bold'] .jobmap-subagents-facts > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--field);
+}
+[data-ui='bold'] .jobmap-subagents-facts dt {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+[data-ui='bold'] .jobmap-subagents-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  font-weight: 700;
+}
+[data-ui='bold'] .jobmap-subagents-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-ui='bold'] .jobmap-subagents-rows li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 4px 10px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border-radius: 14px;
+}
+[data-ui='bold'] .jobmap-subagents-rows li:nth-child(odd) {
+  background: var(--field);
+}
+[data-ui='bold'] .jobmap-subagents-state {
+  font-weight: 600;
+}
+[data-ui='bold'] .jobmap-subagents-rows li[data-state='Done'] .jobmap-subagents-state {
+  color: var(--ok);
+}
+[data-ui='bold'] .jobmap-subagents-rows li[data-state='Waiting'] .jobmap-subagents-state {
+  color: var(--warn);
+}
+[data-ui='bold'] .jobmap-subagents-rows li[data-state='Failed'] .jobmap-subagents-state {
+  color: var(--bad);
+}
+[data-ui='bold'] .jobmap-subagents-goal {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-ui='bold'] .jobmap-subagents-meta {
+  grid-column: 2;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+[data-ui='bold'] .jobmap-subagents-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+[data-ui='bold'] .jobmap-subagents-watch {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+@media (max-width: 480px) {
+  [data-ui='bold'] .jobmap-subagents-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -333,7 +333,8 @@ const consentForms: Record<string, { decisions: number; markers: string[]; parts
       'start-ask',
       'start-more',
       'start-check',
-      'start-helpers',
+      'start-subagents',
+      'start-voters',
     ],
   },
   'routes/orchestrations/StepStop.tsx': {
