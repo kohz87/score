@@ -108,8 +108,8 @@ is not simply removed.
 
 **Codex** (no live Codex agent in Score, so tested outside Score, read-only): it has `spawn_agent` and `wait_agent`
 (`multi_agent` is stable and on). **`--disable multi_agent` did not remove them**, so "off" isn't solved. Its events show only
-a `wait` with no receiver, so a real spawn couldn't be confirmed. Score's parser doesn't know `collab_tool_call`. Until these
-are answered, the Codex controls say "can't be enforced" and Score doesn't offer subagents as a feature there.
+a `wait` with no receiver, so a real spawn couldn't be confirmed. Score's parser doesn't know `collab_tool_call` and treats an unknown item as invalid, so a Codex run
+that uses subagents would be marked failed (from the code, not run through Score). Until these are answered, the Codex controls say "can't be enforced" and Score doesn't offer subagents as a feature there.
 
 The controls show only what a given agent's program can enforce, and say so.
 
