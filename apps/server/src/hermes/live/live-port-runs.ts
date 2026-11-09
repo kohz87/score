@@ -1,4 +1,7 @@
-import { settleRunCost } from './run-cost.ts'
+import { configJson } from './agent-config.ts'
+import { runHermes } from './cli.ts'
+import { resolveHermesHome } from './paths.ts'
+import { hermesSessionStartedAt, settleRunCost } from './run-cost.ts'
 import { rememberSubagentSession } from '../../domain/subagents.ts'
 import { subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
@@ -20,22 +23,36 @@ import { followRun, waitForRun } from './runs.ts'
 import { readRun, runLifecycle, runLostObservation } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
 
-/** Before the run, so the guard reads this session's limits. If this fails the guard finds none, and refuses. */
-function writeRunSubagentPolicy(
+/**
+ * Before the run, so the guard reads this session's limits. If this fails the guard refuses a session Score named, but
+ * it can't tell a room continuing an outside session from the owner's own: that run doesn't start without its limits.
+ */
+async function writeRunSubagentPolicy(
   port: LivePortRuntime,
   profile: string,
   sessionId: string,
   jobId: string | null,
-): void {
+): Promise<void> {
   try {
     const { db } = port.requireStarted()
+    const mode = await configJson(
+      port.options.runner ?? runHermes,
+      resolveHermesHome(port.options.hermesHome),
+      profile,
+      'delegation.gateway_mode',
+    )
+    const started = hermesSessionStartedAt(profile, sessionId, port.options.hermesHome)
     const policy = db.tx((sqlite) => {
       if (jobId) rememberSubagentSession(sqlite, sessionId, profile, jobId)
-      return subagentPolicyFor(sqlite, profile, sessionId, jobId)
+      return subagentPolicyFor(sqlite, profile, sessionId, jobId, started)
     })
-    writeSubagentPolicy(port.options.scoreHome, sessionId, policy)
+    // Turned back outside Score: the profile's setting is the truth for a session this run may start.
+    const inline = policy.inline && mode.state === 'ok' && mode.value === 'inline'
+    writeSubagentPolicy(port.options.scoreHome, sessionId, { ...policy, inline })
   } catch (error) {
     port.options.onError?.(error)
+    if (!/^(score-|orc-)/.test(sessionId))
+      throw new HttpError(500, 'internal', 'Couldn’t set this session’s subagent limits.')
   }
 }
 
@@ -114,7 +131,8 @@ export const runMethods = {
       // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
       throw notDispatched(error)
     }
-    if (req.sessionId) writeRunSubagentPolicy(this, req.agentId, req.sessionId, req.jobId ?? null)
+    if (req.sessionId)
+      await writeRunSubagentPolicy(this, req.agentId, req.sessionId, req.jobId ?? null)
     const result = await intents
       .startRunIntent(
         {

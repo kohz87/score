@@ -42,14 +42,21 @@ export function writeSubagentPolicy(
 }
 
 /**
- * A session runs inline only when its profile has gone inline and the session is new since then: Hermes freezes the mode
- * when a session starts, so one Score already ran before that moment is still in background mode.
+ * A session runs inline only when its profile went inline before the session began: Hermes freezes the mode when a
+ * session starts. `hermesStartedAtMs`: when Hermes says it began (a room can continue a session Score never ran); null
+ * for one Hermes doesn't have yet, which this run will start.
  */
-export function sessionIsInline(sqlite: DatabaseSync, profile: string, sessionId: string): boolean {
+export function sessionIsInline(
+  sqlite: DatabaseSync,
+  profile: string,
+  sessionId: string,
+  hermesStartedAtMs: number | null,
+): boolean {
   const setup = sqlite
     .prepare('SELECT inline_since FROM subagent_agents WHERE profile = ?')
     .get(profile) as { inline_since: string | null } | undefined
   if (!setup?.inline_since) return false
+  if (hermesStartedAtMs !== null && hermesStartedAtMs < Date.parse(setup.inline_since)) return false
   return (
     sqlite
       .prepare('SELECT 1 FROM runs WHERE profile = ? AND session_id = ? AND started_at < ? LIMIT 1')
@@ -62,10 +69,11 @@ export function subagentPolicyFor(
   profile: string,
   sessionId: string,
   jobId: string | null,
+  hermesStartedAtMs: number | null,
 ): SubagentPolicy {
   return {
     v: 1,
-    inline: sessionIsInline(sqlite, profile, sessionId),
+    inline: sessionIsInline(sqlite, profile, sessionId, hermesStartedAtMs),
     ...effectiveLimits(sqlite, profile, jobId),
   }
 }

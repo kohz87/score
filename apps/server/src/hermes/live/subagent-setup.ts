@@ -19,7 +19,9 @@ interface SetupDeps {
 }
 
 const hasGuard = (home: string): boolean =>
-  existsSync(join(home, 'plugins', 'score-bridge', 'subagent_guard.py'))
+  ['score-bridge', 'score_bridge'].some((dir) =>
+    existsSync(join(home, 'plugins', dir, 'subagent_guard.py')),
+  )
 
 async function readAgent(deps: SetupDeps, agentId: string): Promise<SubagentSetupAgent> {
   const mode = await configJson(deps.runner, deps.hermesHome, agentId, 'delegation.gateway_mode')

@@ -149,6 +149,26 @@ function settleRun(
   return [runDraft(sqlite, row.id)]
 }
 
+/** When Hermes says a session began; null when it has no such session, or can't be read. */
+export function hermesSessionStartedAt(
+  profile: string,
+  sessionId: string,
+  hermesHome: string | undefined,
+): number | null {
+  try {
+    const db = openReadOnly(hermesPaths(resolveHermesHome(hermesHome)).stateDb(profile))
+    try {
+      const row = db.prepare('SELECT started_at FROM sessions WHERE id = ?').get(sessionId) as
+        { started_at: number } | undefined
+      return row ? row.started_at * 1000 : null
+    } finally {
+      closeReadOnly(db)
+    }
+  } catch {
+    return null
+  }
+}
+
 function readTreeCost(
   profile: string,
   sessionId: string,

@@ -1231,6 +1231,7 @@ likely to be the entry point for a change.
 - `hermes-plugin/score_bridge/spool_format.py` — spool envelope encoding, gap events, caps and record validation.
 - `hermes-plugin/score_bridge/spool_process.py` — producer process identity for recycled-pid detection.
 - `hermes-plugin/score_bridge/spool_directory.py` — directory-quota eviction across producer outboxes and quarantine.
+- `hermes-plugin/score_bridge/session_lineage.py` — where a session came from, read-only from the profile's state.db.
 - `hermes-plugin/score_bridge/subagent_guard.py` — keeps subagents inside their limits and out of the room (local, fail closed).
 - `hermes-plugin/score_bridge/hermes_private.py` — the only calls into private Hermes functions.
 - `hermes-plugin/tests/` — pytest suite for the plugin; `conftest.py` holds fixtures shared by the split review-regression tests.

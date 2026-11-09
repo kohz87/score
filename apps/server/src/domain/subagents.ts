@@ -80,9 +80,22 @@ export function subagentTotalReached(sqlite: DatabaseSync, jobId: string): boole
   return row !== null && row.subagents_used >= row.subagents_max_total
 }
 
-function addUse(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
+export function addSubagentUse(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
   sqlite.prepare('UPDATE jobs SET subagents_used = subagents_used + 1 WHERE id = ?').run(jobId)
   return subagentsEvent(sqlite, jobId)
+}
+
+/**
+ * A room's own thread never ends, so its total can't be a lifetime's: each request from the person starts it again. A
+ * job you start has one piece of work, and keeps its count.
+ */
+export function startRoomThreadCount(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
+  const changed = sqlite
+    .prepare(
+      'UPDATE jobs SET subagents_used = 0 WHERE id = ? AND is_default = 1 AND subagents_used > 0',
+    )
+    .run(jobId).changes
+  return changed ? subagentsEvent(sqlite, jobId) : []
 }
 
 export const jobOfSession = (sqlite: DatabaseSync, sessionId: string): string | null =>
@@ -90,18 +103,6 @@ export const jobOfSession = (sqlite: DatabaseSync, sessionId: string): string | 
     sqlite.prepare('SELECT job_id FROM subagent_sessions WHERE session_id = ?').get(sessionId) as
       { job_id: string } | undefined
   )?.job_id ?? null
-
-/** Hermes: `subagent_start` names its parent's session. A session Score has no job for isn't counted. */
-export function countSubagentOfSession(
-  sqlite: DatabaseSync,
-  sessionId: string,
-): DomainEventDraft[] {
-  const jobId = jobOfSession(sqlite, sessionId)
-  return jobId ? addUse(sqlite, jobId) : []
-}
-
-/** Claude Code: its `Agent` call. Its program has no limit Score can set, so this count is the only control. */
-export const countSubagentOfJob = addUse
 
 export function rememberSubagentSession(
   sqlite: DatabaseSync,

@@ -1,5 +1,4 @@
-import { endSubagentRow, startSubagentRow } from '../../domain/subagent-rows.ts'
-import { countSubagentOfJob } from '../../domain/subagents.ts'
+import { endSubagentRow, startSubagent } from '../../domain/subagent-rows.ts'
 import { SubagentSummarySchema, type SubagentSummary } from '@score/contract'
 import { z } from 'zod'
 import { appendRunMessage, liveActivityDraft, noteRunProgress } from '../../domain/message-runs.ts'
@@ -110,8 +109,7 @@ export function eventObservation(
           }
           if (translation.subagentJobId && SUBAGENT_TOOLS.has(toolName))
             drafts.push(
-              ...countSubagentOfJob(sqlite, translation.subagentJobId),
-              ...startSubagentRow(sqlite, {
+              ...startSubagent(sqlite, {
                 id: `${runId}:${event.callId}`,
                 jobId: translation.subagentJobId,
                 profile: agentId,
