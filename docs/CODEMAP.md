@@ -641,6 +641,7 @@ likely to be the entry point for a change.
 - `apps/web/src/themes/guard-violation.ts` — protected-surface scans, glyph-shape comparison and theme-off baseline measurement.
 - `apps/web/src/themes/guard-decision.ts` — click-time checks of the protected surfaces a decision answers to.
 - `apps/web/src/themes/guard-watch.ts` — watchers for protected-surface damage and click/submit refusal while a theme is worn.
+- `apps/web/src/styles/protected-setup.css` — the subagent setup card's protected colours.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
 

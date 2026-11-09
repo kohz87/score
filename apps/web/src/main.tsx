@@ -13,6 +13,7 @@ import './styles/packs/night.css'
 import './styles/packs/dense.css'
 import './styles/select.css'
 import './styles/protected.css'
+import './styles/protected-setup.css'
 import './themes/variants.css'
 import './shell/shell.css'
 
