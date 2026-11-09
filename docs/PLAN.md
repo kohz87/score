@@ -733,6 +733,32 @@ warning for others); listing and deleting triggers that were never called (orpha
 screenshot test (`themes-bold-visual` phone Team) depends on the fake's agent order after other specs ran: make the
 order fixed in that test. Removing messaging channels clears only Score's field table keys (no Hermes verb exists).
 
+## Hermes v0.23.0 list (checked 2026-11-09 against upstream main 109fd816; installed 557254fa; nothing started)
+A code comparison only, not run against the new Hermes. Owner: "keep them in a list first".
+
+**H.1 Update Hermes** from Settings › System, with the check on gem38 (owner's call: it changes `~/.hermes`). Static check:
+the private APIs compared are unchanged, the others still exist; all 16 hooks, the kanban verbs and the update flags are
+there; schema 32 → 33 is data-only.
+
+**H.2 Browser capture in Watch** (a real gap today). Hermes deleted the built-in `browser_*` tools on 2026-10-23
+(68500d9f); `browser_exec` reports `screenshot_path`. Score's plugin (`sender_capture.py`) and bridge (`translate.ts`)
+capture only `browser_vision`, and the captions in `watch-tool-frames.ts` rely on the old names. Live has no browser frames
+yet. Deploying means updating the plugin on the owner's profiles: ask first.
+
+**H.3 Stop a running routine** through `hermes cron cancel` (installed; Score can only start one).
+
+**H.4 Refresh ongoing chats after a `SOUL.md` edit** through `hermes sessions refresh-prompts` (installed).
+
+**H.5 Lock a skill** through `hermes curator lock`, and **update plugins from Settings** through `hermes plugins update`
+(both installed).
+
+**H.6 Paid MCP tool prices on approval cards:** check whether Score shows the cost and running total Hermes now has.
+
+**H.7 After the update:** use the public `redact_sensitive_text` plugin API instead of the private call; consider the
+official stored-session reads and the compaction-stable `conversation_id`. Check that the new settings in Score's config
+list (prepared compaction, plugin auto-update) can be changed from Settings. Hermes's Bot Mode Group Chats overlap with
+Score's rooms: nothing to adopt.
+
 ## Code structure (owner 2026-11-07; decision 168)
 Owner: "tidying the entire code structure, making each file dedicated function with code map (not more than 450 lines
 of codes) so it will help with troubleshooting, optimizing and less token wastage". Rules in AGENTS.md "File size and
