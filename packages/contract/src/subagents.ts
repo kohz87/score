@@ -71,6 +71,7 @@ export const SubagentRowsResponseSchema = z.object({
   asOfSeq: z.int().nonnegative(),
   items: z.array(SubagentRowSchema),
 })
+export type SubagentRowsResponse = z.infer<typeof SubagentRowsResponseSchema>
 
 /** `subagents.changed`: a job's limits or count moved. Sent for every room. */
 export const SubagentsChangedSchema = z.object({
@@ -78,6 +79,7 @@ export const SubagentsChangedSchema = z.object({
   roomId: z.string().min(1),
   subagents: JobSubagentsSchema,
 })
+export type SubagentsChanged = z.infer<typeof SubagentsChangedSchema>
 
 /** `PUT /api/jobs/:jobId/subagents` (the `/subagents` command, the context bar), and Start a job's choice. */
 export const JobSubagentsRequestSchema = z
