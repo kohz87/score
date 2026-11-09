@@ -3,6 +3,33 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.32.0] — 2026-11-09
+
+### Added
+- **Named agents can use their own subagents, and they report back.** A lead splits work among throwaway helpers of its own
+  instead of needing a swarm of named agents. They never join a chat: the chat shows a status card under the agent's message
+  ("Subagents · 3 of 4 done"), the job map shows one node, and each one's steps stay in Watch. Chat hand-offs between named agents
+  and named voters work as before.
+- **Limits you control, at three levels.** An agent's settings set its ceiling (on or off, how many at once, model, steps and time for
+  each); Start a job picks Off or 1–4 and a total for the job (default 20); `/subagents off`, `/subagents on`, `/subagents 2` and a button
+  beside the model change it for the current job. A job can lower an agent's limit, not raise it. Reaching the total pauses the job and
+  asks you. Claude Code decides how many run at once, so Score turns them off and counts them; Codex says they aren't supported yet.
+- **A setup card on the Agents page.** Hermes needs one setting (`delegation.gateway_mode: inline`) for subagents to report back, be
+  stopped and ask for your approval. Until you press Apply, Score refuses them for that agent, so nothing runs unsafely. Chats already open
+  keep their old setting; a new job picks up the change. Agents Score creates from now on start with it set.
+- **Approvals say who asked:** "A subagent of builder wants to run this".
+
+### Changed
+- **Start a job:** the helpers picker is replaced by Subagents; voters stay, and can now be named on their own. Old runs with helpers keep
+  showing as they did.
+
+### Fixed
+- **Hermes runs now have real dollars in a job's budget.** Every Hermes run read as "unknown spend" because the figure was never picked up. A run
+  is now charged its own share of its session and its subagents. A model Hermes has no price for stays unknown, never $0.
+- **A subagent could use Score's tools and speak in the chat.** The plugin now refuses every Score tool to a subagent, including after Hermes
+  compresses its session. Run the plugin update on your profiles for this to apply.
+- **Claude Code's background subagents failed the run.** Score now starts Claude Code with them off, so its subagents finish inside the turn.
+
 ## [3.31.0] — 2026-11-08
 
 ### Changed
