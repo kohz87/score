@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { CostSourceSchema, ORCH_LIMITS, QuotaFloorSchema } from './orchestration.ts'
+import { QuotaFloorSchema } from './coding.ts'
+import { CostSourceSchema, ORCH_LIMITS } from './orchestration.ts'
+
+const revision = z.int().positive()
 
 export const LimitsDecisionSchema = z
   .object({
