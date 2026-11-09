@@ -11,24 +11,46 @@ import { DEFAULT_MAX_ITERATIONS } from './subagent-policy.ts'
 
 // Whether each Hermes profile is set up for subagents, and the one change that sets it up (docs/API-CONTRACT.md §19).
 
+/** The one plugin version that has no guard. */
+const UNGUARDED_PLUGIN_VERSION = '0.1.0'
+
 interface SetupDeps {
   runner: HermesRunner
   hermesHome: string
+  db: ScoreDb
   /** The profile's own home. */
   home(agentId: string): string
 }
 
-const hasGuard = (home: string): boolean =>
+const hasGuardFile = (home: string): boolean =>
   ['score-bridge', 'score_bridge'].some((dir) =>
     existsSync(join(home, 'plugins', dir, 'subagent_guard.py')),
   )
+
+/**
+ * The file isn't enough: Hermes keeps a plugin's code in memory until it's reloaded, so a profile can hold the new files
+ * and still run with no guard (found live on 3.32.0). The plugin's newest hello says what's running; a profile that
+ * hasn't said hello yet runs nothing, and loads what's on disk.
+ */
+function hasGuard(db: ScoreDb, agentId: string, home: string): boolean {
+  if (!hasGuardFile(home)) return false
+  const running = db.read(
+    (sqlite) =>
+      sqlite
+        .prepare(
+          'SELECT plugin_version FROM producers WHERE profile = ? ORDER BY created_at DESC LIMIT 1',
+        )
+        .get(agentId) as { plugin_version: string } | undefined,
+  )
+  return !running || running.plugin_version !== UNGUARDED_PLUGIN_VERSION
+}
 
 async function readAgent(deps: SetupDeps, agentId: string): Promise<SubagentSetupAgent> {
   const mode = await configJson(deps.runner, deps.hermesHome, agentId, 'delegation.gateway_mode')
   return {
     agentId,
     inline: mode.state === 'ok' && mode.value === 'inline',
-    guard: hasGuard(deps.home(agentId)),
+    guard: hasGuard(deps.db, agentId, deps.home(agentId)),
   }
 }
 
@@ -101,7 +123,7 @@ export async function setUpNewProfileSubagents(
   home: string,
 ): Promise<void> {
   // A pinned plugin older than the guard: inline would leave subagents unlimited, so they stay refused for now.
-  if (!hasGuard(home)) return
+  if (!hasGuardFile(home)) return
   try {
     await setInline(runner, hermesHome, agentId, SUBAGENT_LIMITS.defaultConcurrent)
     if (db) recordInline(db, agentId, new Date().toISOString())

@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.32.1] — 2026-11-09
+
+### Fixed
+- **The setup card checks the plugin Hermes is running, not just the file on disk.** Hermes keeps a plugin's code in memory until it's
+  reloaded, so an updated profile could be set up with no guard actually running: found in the live test of 3.32.0. Apply now waits until the running plugin has
+  the guard. After updating the plugin's files, reload it: `hermes -p <agent> plugins disable score-bridge`, then `plugins enable score-bridge`.
+
 ## [3.32.0] — 2026-11-09
 
 ### Added

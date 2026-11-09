@@ -112,6 +112,7 @@ suppressed for 60 s. So a hook that calls Score could stall a whole profile. **T
 - **Compression gives a session a new generated id** (found in review). The policy file is under the id Score started, so the
   guard walks `parent_session_id` up the profile's `state.db` (read-only, local) to find it. A row's `source: subagent` carries through a
   compression, so a compressed subagent stays one, also after a restart. `subagent_start` tells Score which session the job is known by.
+- **A slot restart doesn't reload a plugin's code** (found live on 3.32.0: `hermes -p X gateway restart` left the old code in memory while the new files sat on disk, and no limit held). `plugins disable` then `plugins enable` does reload it, verified. So Apply trusts the plugin's own hello, not the file: version 0.1.0 has no guard.
 - **All of this needs the updated plugin on the profile.** Rolling it out is a release step, with the owner's OK; Apply refuses (409) for a profile without the guard, and only changes settings.
 
 ## Coding agents

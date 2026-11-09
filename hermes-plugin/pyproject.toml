@@ -1,6 +1,6 @@
 [project]
 name = "score-bridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hermes plugin that streams redacted agent activity to Score with bounded offline recovery."
 requires-python = ">=3.12"
 license = "PolyForm-Noncommercial-1.0.0"
