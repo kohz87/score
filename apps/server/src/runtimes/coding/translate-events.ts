@@ -1,3 +1,4 @@
+import { endSubagentRow, startSubagentRow } from '../../domain/subagent-rows.ts'
 import { countSubagentOfJob } from '../../domain/subagents.ts'
 import { SubagentSummarySchema, type SubagentSummary } from '@score/contract'
 import { z } from 'zod'
@@ -108,7 +109,16 @@ export function eventObservation(
             })
           }
           if (translation.subagentJobId && SUBAGENT_TOOLS.has(toolName))
-            drafts.push(...countSubagentOfJob(sqlite, translation.subagentJobId))
+            drafts.push(
+              ...countSubagentOfJob(sqlite, translation.subagentJobId),
+              ...startSubagentRow(sqlite, {
+                id: `${runId}:${event.callId}`,
+                jobId: translation.subagentJobId,
+                profile: agentId,
+                goal: event.preview,
+                now,
+              }),
+            )
           drafts.push({
             type: 'log.line',
             data: {
@@ -140,6 +150,14 @@ export function eventObservation(
           const call = translation.calls.get(event.callId)
           if (!call) break
           translation.calls.delete(event.callId)
+          drafts.push(
+            ...endSubagentRow(
+              sqlite,
+              `${runId}:${event.callId}`,
+              event.ok ? 'done' : 'failed',
+              now,
+            ),
+          )
           sqlite
             .prepare(
               `UPDATE tool_calls SET status = ?, ended_at = ?, duration_ms = ?, result_preview = ? WHERE run_id = ? AND seq = ?`,

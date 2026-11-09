@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
-import type { Observation } from '../../hub/ingest.ts'
+import { endSubagentRow, setSubagentCost } from '../../domain/subagent-rows.ts'
+import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import type { ObservationSink } from '../port.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
 import { closeReadOnly, HermesDbMissing, HermesSchemaDrift, openReadOnly } from './sqlite.ts'
@@ -12,6 +13,8 @@ import { readRun, runDraft } from './translate-runs.ts'
 // row of its own linked by parent_session_id, so the sum over the tree is the session's total so far.
 
 const SessionRowSchema = z.object({
+  id: z.string(),
+  parent_session_id: z.string().nullable(),
   started_at: z.number(),
   cost_status: z.string().nullable(),
   estimated_cost_usd: z.number().nullable(),
@@ -25,6 +28,8 @@ export interface SessionTreeCost {
   usd: number | null
   estimated: boolean
   startedAtMs: number
+  /** Each row below the session: a subagent's (a continuation has no subagent row, and is skipped when applied). */
+  children: { id: string; usd: number | null; tokens: number }[]
 }
 
 const MAX_TREE_ROWS = 2000
@@ -49,12 +54,12 @@ export function readSessionTreeCost(db: DatabaseSync, sessionId: string): Sessio
            SELECT id FROM sessions WHERE id = ?
            UNION SELECT s.id FROM sessions s JOIN tree t ON s.parent_session_id = t.id
          )
-         SELECT s.started_at, s.cost_status, s.estimated_cost_usd, s.actual_cost_usd, s.input_tokens, s.output_tokens
+         SELECT s.id, s.parent_session_id, s.started_at, s.cost_status, s.estimated_cost_usd, s.actual_cost_usd, s.input_tokens, s.output_tokens
          FROM sessions s JOIN tree t ON s.id = t.id ORDER BY s.started_at LIMIT ?`,
       )
       .all(sessionId, MAX_TREE_ROWS + 1),
   )
-  const first = rows[0]
+  const first = rows.find((row) => row.id === sessionId)
   if (!first) return null
   const costs = rows.map(rowCost)
   const known = rows.length <= MAX_TREE_ROWS && costs.every((cost) => cost !== null)
@@ -62,6 +67,17 @@ export function readSessionTreeCost(db: DatabaseSync, sessionId: string): Sessio
     usd: known ? costs.reduce((total, cost) => total + cost!.usd, 0) : null,
     estimated: costs.some((cost) => cost?.estimated),
     startedAtMs: first.started_at * 1000,
+    children: rows.flatMap((row, index) =>
+      row.id === sessionId
+        ? []
+        : [
+            {
+              id: row.id,
+              usd: costs[index]?.usd ?? null,
+              tokens: (row.input_tokens ?? 0) + (row.output_tokens ?? 0),
+            },
+          ],
+    ),
   }
 }
 
@@ -83,36 +99,54 @@ export function runCostObservation(
     identity: `run_cost:${runId}:${round}`,
     apply({ sqlite, now }) {
       const row = readRun(sqlite, runId)
-      if (row.session_id === null) return []
-      const others = (order: string) =>
-        z.array(EarlierRunSchema).parse(
-          sqlite
-            .prepare(
-              `SELECT cost_usd FROM runs
-               WHERE profile = ? AND session_id = ? AND id != ? AND (started_at ${order} ?)`,
-            )
-            .all(row.profile, row.session_id, row.id, row.started_at),
-        )
-      // A later turn has begun: the session's total now includes it, so this run keeps the figure it has.
-      if (others('>').length > 0) return []
-      const earlier = others('<=')
-      const outside =
-        earlier.length === 0 && cost.startedAtMs < Date.parse(row.started_at) - startTolerance
-      const usd =
-        cost.usd === null || outside || earlier.some((run) => run.cost_usd === null)
-          ? null
-          : Math.max(0, cost.usd - earlier.reduce((total, run) => total + run.cost_usd!, 0))
-      const kind = usd === null ? 'unknown' : cost.estimated ? 'estimated' : null
-      if (usd === row.cost_usd && kind === row.cost_kind) return []
-      // Not updateRun: a run's terminal row is closed to status changes, and this is the one fact that comes after it.
-      sqlite
-        .prepare(
-          'UPDATE runs SET cost_usd = ?, cost_kind = ?, version = version + 1, updated_at = ? WHERE id = ?',
-        )
-        .run(usd, kind, now, row.id)
-      return [runDraft(sqlite, row.id)]
+      const children = cost.children.flatMap((child) =>
+        setSubagentCost(sqlite, child.id, child.usd, child.tokens),
+      )
+      // Stop kills a subagent with no word from it. By the second read, one still marked running has ended.
+      const stopped =
+        round > 0
+          ? cost.children.flatMap((child) => endSubagentRow(sqlite, child.id, 'failed', now))
+          : []
+      return [...children, ...stopped, ...settleRun(sqlite, row, cost, now, startTolerance)]
     },
   }
+}
+
+function settleRun(
+  sqlite: DatabaseSync,
+  row: ReturnType<typeof readRun>,
+  cost: SessionTreeCost,
+  now: string,
+  startTolerance: number,
+): DomainEventDraft[] {
+  if (row.session_id === null) return []
+  const others = (order: string) =>
+    z.array(EarlierRunSchema).parse(
+      sqlite
+        .prepare(
+          `SELECT cost_usd FROM runs
+               WHERE profile = ? AND session_id = ? AND id != ? AND (started_at ${order} ?)`,
+        )
+        .all(row.profile, row.session_id, row.id, row.started_at),
+    )
+  // A later turn has begun: the session's total now includes it, so this run keeps the figure it has.
+  if (others('>').length > 0) return []
+  const earlier = others('<=')
+  const outside =
+    earlier.length === 0 && cost.startedAtMs < Date.parse(row.started_at) - startTolerance
+  const usd =
+    cost.usd === null || outside || earlier.some((run) => run.cost_usd === null)
+      ? null
+      : Math.max(0, cost.usd - earlier.reduce((total, run) => total + run.cost_usd!, 0))
+  const kind = usd === null ? 'unknown' : cost.estimated ? 'estimated' : null
+  if (usd === row.cost_usd && kind === row.cost_kind) return []
+  // Not updateRun: a run's terminal row is closed to status changes, and this is the one fact that comes after it.
+  sqlite
+    .prepare(
+      'UPDATE runs SET cost_usd = ?, cost_kind = ?, version = version + 1, updated_at = ? WHERE id = ?',
+    )
+    .run(usd, kind, now, row.id)
+  return [runDraft(sqlite, row.id)]
 }
 
 function readTreeCost(

@@ -19,3 +19,16 @@ CREATE TABLE subagent_sessions (
   job_id TEXT NOT NULL
 );
 CREATE INDEX subagent_sessions_job ON subagent_sessions (job_id);
+-- One row per subagent, for the chat's status card and the job map. id: the child's Hermes session, or Claude Code's call.
+CREATE TABLE subagents (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  profile TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('running', 'done', 'failed')),
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  cost_usd REAL,
+  tokens INTEGER
+);
+CREATE INDEX subagents_job ON subagents (job_id, started_at);

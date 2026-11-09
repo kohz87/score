@@ -48,6 +48,30 @@ export const JobSubagentsSchema = z.object({
 })
 export type JobSubagents = z.infer<typeof JobSubagentsSchema>
 
+/** One subagent, for the chat's status card and the job map. Its steps stay in Watch. */
+export const SubagentRowSchema = z.object({
+  id: z.string().min(1),
+  jobId: z.string().min(1),
+  /** Its parent, the agent on the team. */
+  agentId: AgentIdSchema,
+  goal: z.string(),
+  state: z.enum(['running', 'done', 'failed']),
+  /** An approval from it is open. */
+  waitingOnYou: z.boolean(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  /** Dollars once its parent's turn ends; null when unknown, and where a route has no dollars (see `tokens`). */
+  costUsd: z.number().nonnegative().nullable(),
+  tokens: z.int().nonnegative().nullable(),
+})
+export type SubagentRow = z.infer<typeof SubagentRowSchema>
+
+/** `GET /api/jobs/:jobId/subagents`. */
+export const SubagentRowsResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  items: z.array(SubagentRowSchema),
+})
+
 /** `subagents.changed`: a job's limits or count moved. Sent for every room. */
 export const SubagentsChangedSchema = z.object({
   jobId: z.string().min(1),

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../../src/db/index.ts'
+import { startSubagentRow } from '../../../src/domain/subagent-rows.ts'
 import {
   readSessionTreeCost,
   runCostObservation,
@@ -76,6 +77,7 @@ const known = (usd: number, estimated = true): SessionTreeCost => ({
   usd,
   estimated,
   startedAtMs: at('2026-11-09T10:00:00.000Z'),
+  children: [],
 })
 
 beforeEach(() => {
@@ -188,4 +190,27 @@ test('a billed figure has no estimated kind', () => {
   addRun('r1', '2026-11-09T10:00:00.000Z')
   settle('r1', known(0.2, false))
   expect(stored('r1')).toMatchObject({ cost_usd: 0.2, cost_kind: null })
+})
+
+test('a run’s end gives its subagents their own figures, including where Hermes has no price', () => {
+  addRun('r1', '2026-11-09T10:00:00.000Z')
+  db.tx((sqlite) =>
+    startSubagentRow(sqlite, {
+      id: 'child',
+      jobId: 'job',
+      profile: 'lead',
+      goal: 'look',
+      now: 'now',
+    }),
+  )
+  row('score-1', { estimated: 0.1 })
+  row('child', { parent: 'score-1', status: 'unknown', estimated: 0, tokens: 500 })
+  const cost = readSessionTreeCost(state, 'score-1')!
+  expect(cost.children).toEqual([{ id: 'child', usd: null, tokens: 500 }])
+  settle('r1', cost)
+  expect(
+    db.read((sqlite) =>
+      sqlite.prepare("SELECT cost_usd, tokens FROM subagents WHERE id = 'child'").get(),
+    ),
+  ).toMatchObject({ cost_usd: null, tokens: 500 })
 })

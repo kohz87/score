@@ -85,15 +85,19 @@ function addUse(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
   return subagentsEvent(sqlite, jobId)
 }
 
+export const jobOfSession = (sqlite: DatabaseSync, sessionId: string): string | null =>
+  (
+    sqlite.prepare('SELECT job_id FROM subagent_sessions WHERE session_id = ?').get(sessionId) as
+      { job_id: string } | undefined
+  )?.job_id ?? null
+
 /** Hermes: `subagent_start` names its parent's session. A session Score has no job for isn't counted. */
 export function countSubagentOfSession(
   sqlite: DatabaseSync,
   sessionId: string,
 ): DomainEventDraft[] {
-  const row = sqlite
-    .prepare('SELECT job_id FROM subagent_sessions WHERE session_id = ?')
-    .get(sessionId) as { job_id: string } | undefined
-  return row ? addUse(sqlite, row.job_id) : []
+  const jobId = jobOfSession(sqlite, sessionId)
+  return jobId ? addUse(sqlite, jobId) : []
 }
 
 /** Claude Code: its `Agent` call. Its program has no limit Score can set, so this count is the only control. */

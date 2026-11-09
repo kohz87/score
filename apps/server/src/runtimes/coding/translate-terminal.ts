@@ -1,3 +1,4 @@
+import { endRunningSubagentsOf } from '../../domain/subagent-rows.ts'
 import { completeRunMessage } from '../../domain/message-runs.ts'
 import { CODING_OUTPUT_BYTES, CODING_RESULT_BYTES } from '../../domain/orchestration/ops.ts'
 import { applyCliTtft } from '../../domain/run-speed.ts'
@@ -46,6 +47,10 @@ export function terminalObservation(
       }
       // The CLI's own time to first token beats Score's measurement.
       if (usage?.ttftMs !== undefined) applyCliTtft(sqlite, runId, usage.ttftMs, now)
+      // Stop ends a subagent with no word from it. Nothing of this run is still working.
+      const stoppedSubagents = translation.subagentJobId
+        ? endRunningSubagentsOf(sqlite, translation.subagentJobId, agentId, now)
+        : []
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
         ended_at: now,
@@ -62,6 +67,7 @@ export function terminalObservation(
           : {}),
       })
       return [
+        ...stoppedSubagents,
         ...(changed ? [runDraft(sqlite, runId)] : []),
         ...completeRunMessage(sqlite, runId, now, {
           output: info.output ?? null,

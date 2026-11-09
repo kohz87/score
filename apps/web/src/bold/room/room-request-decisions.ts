@@ -11,6 +11,8 @@ export function decisionBody(
       return { option, turns: Number(form.turns) }
     case 'more_spend':
       return { option, usd: Number(form.usd) }
+    case 'more_subagents':
+      return { option, count: 10 }
     case 'step_in':
       return { option, text: form.text.trim() }
     case 'reassign':

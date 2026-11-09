@@ -3100,4 +3100,6 @@ at each `delegate_task`: no file for a session Score named, or one it can't trus
 - `POST /api/rooms/:roomId/jobs` takes `subagents`; `Job.subagents` carries `{ enabled, maxConcurrent, maxTotal, used }`.
 - The web composer handles `/subagents` itself, like `/usage`: `/subagents` shows the state, `/subagents off`, `/subagents on` (back to the agent's limit), `/subagents N`.
 - Event `subagents.changed` `{ jobId, roomId, subagents }`: limits or count moved, for every kind of room.
+- `GET /api/jobs/:jobId/subagents` → `{ asOfSeq, items: SubagentRow[] }`, with event `subagent.upserted`: one row per subagent for the chat's status card and the job map. Its steps stay in Watch. `costUsd` fills when the parent's turn ends; `tokens` is what a route with no dollars shows.
+- `Approval.fromSubagent`: the request came from a subagent of `agentId`, so the card says "A subagent of lead wants to run this".
 - At the total: the job's next agent-started turn pauses with `pause_reason: subagent_total` (options `more_subagents { count }`, `step_in`, `stop`). An orchestration pauses with `pauseReason: subagent_total` and `LimitsDecision.moreSubagents` lifts it. Claude Code has no count limit of its own, so its count is after the fact.

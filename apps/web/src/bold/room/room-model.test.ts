@@ -57,6 +57,7 @@ test('every exchange option has the prototype’s button label', () => {
   const labels: Record<ExchangeOption, string> = {
     more_turns: 'Give 4 more turns',
     more_spend: 'Allow more spend',
+    more_subagents: 'Allow 10 more',
     continue: 'Continue',
     lead_decides: 'Let lead decide',
     step_in: 'Step in',

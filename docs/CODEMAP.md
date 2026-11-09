@@ -733,6 +733,7 @@ likely to be the entry point for a change.
 - `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
+- `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
 - `apps/server/src/http/rooms/route-schemas.ts` — zod schemas for room, message and query inputs.
@@ -909,6 +910,11 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port-agents.ts` — agents, profiles, routines and model settings.
 - `apps/server/src/hermes/live/run-cost.ts` — a Hermes run's dollars from its session rows and their children, after the run ends.
 - `apps/server/src/hermes/live/subagent-policy.ts` — the per-session limits file the plugin's guard reads; whether a session is inline.
+- `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
+- `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
+- `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
+- `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
+- `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
 - `apps/server/src/hermes/live/subagent-setup.ts` — whether each profile is set up for subagents, and Apply.
 - `apps/server/src/hermes/live/live-port-runs.ts` — runs: follow, start, stop, rewind, compact, session context.
 - `apps/server/src/hermes/live/live-port-tasks.ts` — tasks, questions, outside sessions, report-back facts and costs.
