@@ -19,6 +19,18 @@ function jobOfRun(sqlite: DatabaseSync, orchestrationId: string): string | null 
   return row ? defaultJobId(sqlite, row.room_id) : null
 }
 
+/** For the run's view: which job its map reads subagents from. */
+export function runSubagentJob(
+  sqlite: DatabaseSync,
+  orchestrationId: string,
+): { id: string; roomId: string } | null {
+  const id = jobOfRun(sqlite, orchestrationId)
+  if (!id) return null
+  const row = sqlite.prepare('SELECT room_id FROM jobs WHERE id = ?').get(id) as
+    { room_id: string } | undefined
+  return row ? { id, roomId: row.room_id } : null
+}
+
 export function runJobScope(sqlite: DatabaseSync, orchestrationId: string): { jobId?: string } {
   const jobId = jobOfRun(sqlite, orchestrationId)
   return jobId ? { jobId } : {}

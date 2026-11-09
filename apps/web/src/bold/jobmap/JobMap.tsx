@@ -373,7 +373,7 @@ export function JobMap({ orchestrationId }: { orchestrationId: string }) {
   const actions = useRunActions(orchestrationId)
   const detail = run.data?.snapshot.orchestration
   const now = useNow(detail !== undefined)
-  const job = useRunJob(detail?.roomId ?? null, orchestrationId)
+  const job = useRunJob(detail?.subagentJob)
   const subagentRows = useJobSubagentRows(job?.subagents ? job.id : null)
   const ceiling = useAgentSubagents(detail?.leadAgentId ?? null, subagentRows.length > 0)
   if (run.isError)

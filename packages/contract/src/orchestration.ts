@@ -639,6 +639,8 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** Decision 173: the job whose subagent limits and rows the run works under, wherever it sits. */
+  subagentJob: z.object({ id: z.string(), roomId: z.string() }).nullable().optional(),
   /** 3.15: the helpers, their limits and use; 3.16: the votes (oldest first). Null = no helpers. */
   helpers: z
     .object({
