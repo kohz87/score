@@ -1,5 +1,5 @@
 name: score-bridge
-version: 0.1.0
+version: 0.2.0
 description: 'Streams redacted Hermes hook events to Score with bounded offline recovery.'
 author: score
 hooks:

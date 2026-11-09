@@ -27,6 +27,7 @@ import type { LivePortRuntime } from './live-port-runtime.ts'
 const hermesAgentIds = (agents: readonly { id: string }[]): string[] =>
   agents.map((agent) => agent.id)
 const subagentSetupDeps = (port: LivePortRuntime) => ({
+  db: port.requireStarted().db,
   runner: port.options.runner ?? runHermes,
   hermesHome: resolveHermesHome(port.options.hermesHome),
   home: (agentId: string) => port.agentHome(agentId),

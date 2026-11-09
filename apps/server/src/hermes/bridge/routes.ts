@@ -40,7 +40,9 @@ export interface BridgeDeps {
   knowledge?: KnowledgeAgentApi
 }
 
-export const SHIPPED_PLUGIN_VERSION = '0.1.0'
+export const SHIPPED_PLUGIN_VERSION = '0.2.0'
+/** 0.1.0 has no subagent guard (Apply refuses it), and works as before until it's updated. */
+const SUPPORTED_PLUGIN_VERSIONS = [SHIPPED_PLUGIN_VERSION, '0.1.0']
 
 const BearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/i)
 const BatchSchema = BridgeEventsRequestSchema.refine(
@@ -103,7 +105,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       const expires = now + 60 * 60 * 1000
       const compatibility = getCompatibility()
       const gatewayApprovals =
-        hello.pluginVersion === SHIPPED_PLUGIN_VERSION &&
+        SUPPORTED_PLUGIN_VERSIONS.includes(hello.pluginVersion) &&
         // Hermes reports `<version>+<build>`; the code SHA is the exact identity.
         hello.hermes.version.split('+', 1)[0] === compatibility.matchedHermes?.version &&
         hello.hermes.codeSha === compatibility.matchedHermes?.codeSha &&

@@ -250,6 +250,8 @@ an SSH tunnel (`ssh -N -L 5173:127.0.0.1:5173 <user>@<host>`); Score itself only
 
 ## 8. Creating agents from Score (Team › Add agent)
 
+**Updating the plugin on a profile:** replace the files, then reload it with `hermes -p <profile> plugins disable score-bridge` and `hermes -p <profile> plugins enable score-bridge`. A `gateway restart` of one profile doesn't reload its code. Score refuses subagents until the plugin it hears from has the guard.
+
 Score creates agents with `hermes profile create` and installs its bridge plugin into each one through
 `hermes plugins install`, pinned to a URL and ref you choose. Set both before using **Add agent**:
 

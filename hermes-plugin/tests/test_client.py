@@ -30,7 +30,7 @@ def test_hello_contract(token, monkeypatch):
     assert req["profile"] == "builder" and req["pid"] > 0
     assert req["incarnation"] == client.incarnation
     assert int(req["incarnation"], 16) > 0
-    assert req["kanbanTaskId"] == "t_test" and req["pluginVersion"] == "0.1.0"
+    assert req["kanbanTaskId"] == "t_test" and req["pluginVersion"] == "0.2.0"
     assert req["hermes"] == {"version": "test", "codeSha": "fixture-sha"}
     assert req["privateApis"] == hermes_private.available()
     assert client.producer_token == "producer"

@@ -34,7 +34,7 @@ const runner: HermesRunner = async (args) => {
   ;(config[profile!] ??= {})[rest[0]!] = rest[1]!
   return { exitCode: 0 }
 }
-const deps = () => ({ runner, hermesHome: dir, home: (agent: string) => join(dir, agent) })
+const deps = () => ({ db, runner, hermesHome: dir, home: (agent: string) => join(dir, agent) })
 const writes = () => calls.filter((call) => call[3] === 'set')
 const guardFor = (agent: string) => {
   mkdirSync(join(dir, agent, 'plugins', 'score-bridge'), { recursive: true })
@@ -186,6 +186,30 @@ test('a new profile whose pinned plugin has no guard stays refused', async () =>
   await setUpNewProfileSubagents(runner, dir, db, 'lead', join(dir, 'lead'))
   expect(config['lead']?.['delegation.gateway_mode']).toBe('inline')
   expect(since('lead')).toBeDefined()
+})
+
+test('new files aren’t enough: the plugin Hermes is actually running has to have the guard', async () => {
+  guardFor('lead')
+  const hello = (id: string, version: string, at: string) =>
+    db.tx((sqlite) =>
+      sqlite
+        .prepare(
+          `INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, hermes_version, hermes_code_sha,
+             private_apis, token_hash, token_expires_at, created_at, last_seen_at)
+           VALUES (?, 'lead', ?, 1, 'in_process', ?, '1', 'x', '{}', ?, 1, ?, ?)`,
+        )
+        .run(id, id, version, id, at, at),
+    )
+  const guarded = async () => (await readSubagentSetup(deps(), ['lead'])).agents[0]?.guard
+  expect(await guarded()).toBe(true)
+  hello('old', '0.1.0', '2026-11-09T10:00:00.000Z')
+  expect(await guarded()).toBe(false)
+  await expect(
+    applySubagentSetup(deps(), db, ['lead'], ['lead'], () => '2026-11-09T11:00:00.000Z'),
+  ).rejects.toMatchObject({ status: 409 })
+  expect(writes()).toEqual([])
+  hello('new', '0.2.0', '2026-11-09T12:00:00.000Z')
+  expect(await guarded()).toBe(true)
 })
 
 test('the plugin folder may be either spelling', async () => {
