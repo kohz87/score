@@ -1156,6 +1156,9 @@ likely to be the entry point for a change.
 
 ### Key files
 
+- `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
+- `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
+- `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.
 - `packages/contract/src/index.ts` — public contract exports and version.
 - `packages/contract/src/http.ts` — HTTP envelopes and shared request/response pieces.
 - `packages/contract/src/stream.ts` — stream event types and envelopes.

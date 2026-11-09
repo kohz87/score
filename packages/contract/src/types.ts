@@ -1,3 +1,4 @@
+import { CostKindSchema, RuntimeSchema } from './run-kinds.ts'
 import { z } from 'zod'
 import { AutoSummarySchema, RoomImportSchema } from './conversations.ts'
 
@@ -55,11 +56,7 @@ export const AgentStatusSchema = z.enum([
 export type AgentStatus = z.infer<typeof AgentStatusSchema>
 
 /** Which engine runs an agent's turns: a Hermes profile or a coding-agent CLI (PLAN 7.2). Absent = `hermes`. */
-export const RuntimeSchema = z.enum(['hermes', 'claude-code', 'codex', 'antigravity'])
-export type Runtime = z.infer<typeof RuntimeSchema>
-/** Where a run's cost came from: the CLI/provider reported it, it is an API-price equivalent, or nothing says. */
-export const CostKindSchema = z.enum(['reported', 'estimated', 'unknown'])
-export type CostKind = z.infer<typeof CostKindSchema>
+export * from './run-kinds.ts'
 
 export const AgentSummarySchema = z.object({
   id: AgentIdSchema,

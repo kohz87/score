@@ -200,7 +200,7 @@ test('a run’s end gives its subagents their own figures, including where Herme
       jobId: 'job',
       profile: 'lead',
       goal: 'look',
-      now: 'now',
+      now: '2026-11-09T10:00:00.000Z',
     }),
   )
   row('score-1', { estimated: 0.1 })
