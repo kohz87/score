@@ -32,6 +32,7 @@ export const teamState = {
   runsOnPuts: [] as unknown[],
   detailReply: (() => Response.json({})) as Reply,
   watchReply: (() => Response.json({})) as Reply,
+  subagentSetupReply: (() => Response.json({})) as Reply,
   pauseReply: null as (() => Response) | null,
   previewReply: (() => Response.json({})) as Reply,
   createReply: (() => Response.json({})) as Reply,
@@ -63,6 +64,7 @@ beforeEach(() => {
   teamState.runsOn = localRunsOn
   teamState.runsOnPuts = []
   teamState.detailReply = () => agentResponse(builder)
+  teamState.subagentSetupReply = () => Response.json({ agents: [] })
   teamState.pauseReply = null
   teamState.createReply = completedOperation
   teamState.runsOnReply = null
@@ -129,6 +131,8 @@ beforeEach(() => {
         return Promise.resolve(teamState.pauseReply())
       if (url.pathname === '/api/watch/overview') return Promise.resolve(teamState.watchReply())
       if (url.pathname === '/api/now') return Promise.resolve(Response.json(now()))
+      if (url.pathname === '/api/subagent-setup')
+        return Promise.resolve(teamState.subagentSetupReply())
       if (url.pathname === '/api/agents/builder') return Promise.resolve(teamState.detailReply())
       if (url.pathname === '/api/settings/rules')
         return Promise.resolve(
