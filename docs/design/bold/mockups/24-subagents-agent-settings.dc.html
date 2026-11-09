@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent settings: subagents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600">
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Chats</a>
+      <a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Agents</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Tasks</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a>
+    </nav>
+  </header>
+  <div style="flex:1;min-height:0;padding:24px 40px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px">
+    <section aria-label="Subagents for lead" style="padding:22px 24px;border-radius:28px;background:#1A1C23;display:flex;flex-direction:column;gap:16px">
+      <div>
+        <div style="font-size:14px;color:#A6A8B4">lead · Hermes agent</div>
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:700">Subagents</div>
+      </div>
+      <div style="font-size:15px;line-height:1.45;color:#C4C6D0">Helpers lead can spin up for one task. They report back to lead and never join a chat. A job or chat can lower these limits, not raise them.</div>
+      <label style="display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600">
+        <input type="checkbox" checked style="width:22px;height:22px;accent-color:#ECECF1">Allow subagents
+      </label>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:12px 16px;align-items:center;font-size:15px">
+        <label for="s1">At once</label><input id="s1" value="4" style="height:44px;box-sizing:border-box;padding:0 12px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit">
+        <label for="s2">Model</label><select id="s2" style="height:44px;padding:0 12px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit"><option>Same as lead</option></select>
+        <label for="s3">Steps for each</label><input id="s3" value="50" style="height:44px;box-sizing:border-box;padding:0 12px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit">
+        <label for="s4">Time for each</label><input id="s4" value="No limit" style="height:44px;box-sizing:border-box;padding:0 12px;border-radius:14px;border:0;background:#262833;color:#ECECF1;font:inherit">
+      </div>
+      <div style="font-size:14px;line-height:1.45;color:#A6A8B4">Subagents can't spawn their own, ask you questions directly, write lead's memory or send messages. Their risky commands come to you as approvals.</div>
+      <div style="display:flex;gap:8px;margin-top:auto">
+        <button type="button" style="height:48px;padding:0 24px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:15px;font-weight:700">Save</button>
+      </div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;gap:18px;min-height:0">
+      <section aria-label="A coding agent" style="padding:18px 22px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:14px;color:#A6A8B4">sonnet55 · Claude Code</div>
+        <label style="display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600"><input type="checkbox" checked style="width:22px;height:22px;accent-color:#ECECF1">Allow subagents</label>
+        <div style="font-size:14px;line-height:1.45;color:#C4C6D0">Claude Code decides how many run at once. Score can turn them off, stop them, and pause the job at its total.</div>
+      </section>
+      <section aria-label="A Codex agent" style="padding:18px 22px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:14px;color:#A6A8B4">example · Codex</div>
+        <div style="font-size:15px;font-weight:600">Subagents aren't supported here yet</div>
+        <div style="font-size:14px;line-height:1.45;color:#C4C6D0">Score can't turn them off or follow them on Codex yet, so it asks this agent not to use them. That's a request, not a limit.</div>
+      </section>
+      <section data-protected="block" aria-label="Setup needed" style="padding:18px 22px;border-radius:24px;background:#ECECF1;color:#12131A;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:15px;font-weight:700">3 agents need one setting changed</div>
+        <div style="font-size:14px;line-height:1.45">Until then, their subagents can't report back, be stopped or ask for your approval. Score has refused them, so nothing runs unsafely.</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px">delegation.gateway_mode: inline · astra, sol61, terra</div>
+        <div style="display:flex;gap:8px">
+          <button type="button" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:#12131A;color:#FFFFFF;font:inherit;font-size:14px;font-weight:700">Apply to all 3</button>
+          <button type="button" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(18,19,26,0.45);color:#12131A;font:inherit;font-size:14px;font-weight:600">Not now</button>
+        </div>
+      </section>
+      <section aria-label="An open chat" style="padding:16px 22px;border-radius:24px;background:#1A1C23;font-size:14px;line-height:1.45;color:#C4C6D0">
+        <b style="color:#ECECF1">Chats already open</b> keep their old setting, so subagents stay off there. A new job picks up the change.
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

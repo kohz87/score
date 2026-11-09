@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat with subagents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600">
+      <a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Chats</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Agents</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Tasks</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a>
+    </nav>
+  </header>
+  <div style="flex:1;display:flex;min-height:0">
+    <aside aria-label="Chats" style="width:260px;flex:none;box-sizing:border-box;padding:16px 14px;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:4px 6px">GROUPS</div>
+      <a href="#" style="display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:18px;background:#22242C;text-decoration:none">
+        <span style="font-weight:700;font-size:15px">Team room</span>
+        <span style="font-size:13px;color:#A6A8B4">4 members</span>
+      </a>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:14px 6px 4px">DIRECT</div>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">lead</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">builder</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">reviewer</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">voter</a>
+      <div style="margin:10px 6px 0;font-size:13px;line-height:1.45;color:#A6A8B4">Subagents never appear here. Only your team does.</div>
+    </aside>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+      <div style="padding:14px 24px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700">Team room</div>
+          <div style="font-size:13px;color:#A6A8B4">Owner lead · 4 members</div>
+        </div>
+      </div>
+
+      <section aria-label="Current job" style="margin:12px 24px 0;padding:12px 16px;border-radius:20px;background:#1A1C23;display:flex;align-items:center;gap:14px">
+        <span aria-hidden="true" style="width:10px;height:10px;border-radius:50%;background:#4FD1A5;flex:none"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:16px">Add pagination to the feed</div>
+          <div style="font-size:13px;color:#A6A8B4">lead is working · 3 of 4 subagents done · $0.42 of $5.00</div>
+        </div>
+        <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Graph</button>
+        <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Stop job</button>
+      </section>
+
+      <div style="flex:1;min-height:0;padding:14px 24px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span aria-hidden="true" style="width:28px;height:28px;border-radius:8px;background:#ECECF1;color:#12131A;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">Y</span>
+          <div style="padding:9px 14px;border-radius:18px;background:#22242C;font-size:15px">@lead add pagination to the activity feed, then get it reviewed</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">
+            <span style="font-size:13px;color:#B7AAFF;font-weight:600">lead</span>
+            <div style="padding:9px 14px;border-radius:18px;background:#22242C;font-size:15px;align-self:flex-start">I'll split this up, then hand it to @reviewer when it's done.</div>
+            <section aria-label="lead's subagents" style="padding:12px 14px;border-radius:18px;background:#1A1C23;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);max-width:560px;display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-weight:700;font-size:14px;flex:1">Subagents · 3 of 4 done</span>
+                <a href="#" style="font-size:13px;font-weight:600;padding:4px 2px">Details</a>
+              </div>
+              <div style="display:flex;gap:10px;font-size:14px;color:#D9DAE2"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Read how the feed API works</span><span style="color:#A6A8B4">12 s</span></div>
+              <div style="display:flex;gap:10px;font-size:14px;color:#D9DAE2"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Find every place that lists events</span><span style="color:#A6A8B4">9 s</span></div>
+              <div style="display:flex;gap:10px;font-size:14px;color:#D9DAE2"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Draft the cursor query</span><span style="color:#A6A8B4">31 s</span></div>
+              <div style="display:flex;gap:10px;font-size:14px;color:#ECECF1"><span style="color:#F2B33D;width:56px;flex:none;font-weight:600">Waiting</span><span style="flex:1">Add the virtual list</span><span style="color:#A6A8B4">needs you</span></div>
+            </section>
+          </div>
+        </div>
+        <section data-protected="block" aria-label="Approval needed" style="margin-left:38px;max-width:560px;padding:14px 16px;border-radius:20px;background:#ECECF1;color:#12131A;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;font-weight:700">A subagent of lead wants to run this</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:14px;padding:8px 10px;border-radius:10px;background:#FFFFFF">pnpm add @tanstack/react-virtual</div>
+          <div style="display:flex;gap:8px">
+            <button type="button" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:#12131A;color:#FFFFFF;font:inherit;font-size:14px;font-weight:700">Approve once</button>
+            <button type="button" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(18,19,26,0.45);color:#12131A;font:inherit;font-size:14px;font-weight:600">Deny</button>
+          </div>
+        </section>
+      </div>
+
+      <div role="listbox" aria-label="Commands" style="position:absolute;left:24px;bottom:104px;width:480px;padding:8px;border-radius:20px;background:#262833;box-shadow:0 12px 32px rgba(0,0,0,0.45);display:flex;flex-direction:column;gap:2px">
+        <div role="option" aria-selected="true" style="padding:9px 12px;border-radius:14px;background:#343743;font-size:14px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500">/subagents 2</b> <span style="color:#C4C6D0">At most 2 at once, for this job</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500">/subagents off</b> <span style="color:#C4C6D0">None in this job</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500">/subagents on</b> <span style="color:#C4C6D0">Back to the agent's limit (4)</span></div>
+        <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">The agent's limit is the most you can set here. Change it in its settings.</div>
+      </div>
+      <div style="margin:0 24px 6px;padding:13px 18px;border-radius:24px;background:#1A1C23;display:flex;align-items:center;gap:12px;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.28)">
+        <span aria-hidden="true" style="font-size:20px;color:#A6A8B4">+</span>
+        <span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px">/subagents 2</span>
+      </div>
+      <div style="margin:0 32px 12px;font-size:13px;color:#A6A8B4;display:flex;gap:14px;align-items:center">
+        <span>To <b style="color:#ECECF1">lead</b></span><span>Context 42%</span><span>Model example-model</span>
+        <button type="button" style="height:32px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Subagents: up to 4</button>
+      </div>
+    </main>
+
+    <aside aria-label="Chat info" style="width:300px;flex:none;box-sizing:border-box;padding:18px;border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:14px;font-size:14px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">MEMBERS · 4</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">WORKSPACE · none</div>
+      <section aria-label="Subagents in this job" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ECECF1">SUBAGENTS</div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#A6A8B4">At once</span><span>up to 4</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#A6A8B4">Used in this job</span><span>4 of 20</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#A6A8B4">Their cost so far</span><span>$0.11</span></div>
+        <a href="#" style="font-weight:600;padding:4px 0">See what they did</a>
+      </section>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">PAST JOBS · 3</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

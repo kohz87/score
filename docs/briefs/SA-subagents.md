@@ -2,7 +2,9 @@
 
 Owner, 2026-11-09: "we are just calling other agents in score which means we need to create plenty of agents to do the
 swarm", "we need a command to limit or specifically telling it to spin or not", "on up to 4", "in a chatroom, agent can
-still talk and hand over job to each other". Decision 173. Status: design, nothing built; the checks are in below. A mock-up comes before any UI.
+still talk and hand over job to each other". Decision 173. Status: design, nothing built; the checks are in below. Mock-up approved 2026-11-09 (copies
+`docs/design/bold/mockups/24-subagents-*.dc.html`): it is binding for the UI; where this note and the mock-up differ, the
+mock-up wins and the difference is reported.
 
 ## The idea
 
@@ -113,7 +115,12 @@ that uses subagents would be marked failed (from the code, not run through Score
 
 The controls show only what a given agent's program can enforce, and say so.
 
-## What you see
+## What you see (from the approved mock-up)
+
+At the job's total the job **pauses and asks** rather than stopping. Where a route records no dollars (a ChatGPT
+subscription), the subagent rows show tokens instead of cost. The Agents page's setup card applies `inline` to the listed
+profiles only when the person presses Apply.
+
 
 - **Context bar:** "Subagents up to 4" next to the model; `/subagents` changes it.
 - **Job map:** one node, "4 subagents, 3 done", replacing the swarm layer; details and nested calls stay in Watch.

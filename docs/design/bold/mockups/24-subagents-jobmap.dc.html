@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job map with subagents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="padding:18px 28px;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <div style="flex:1;min-width:0">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:700">Add pagination to the feed</div>
+      <div style="font-size:14px;color:#A6A8B4">Team room · $0.42 of $5.00 · 6 of 20 subagents used</div>
+    </div>
+    <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Pause</button>
+    <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Stop job</button>
+  </div>
+  <div style="flex:1;min-height:0;display:flex">
+    <div style="flex:1;min-width:0;padding:28px;display:flex;flex-direction:column;align-items:center;gap:0">
+      <div style="width:420px;padding:14px 18px;border-radius:20px;background:#1A1C23;box-shadow:inset 0 0 0 2px #F2A65A">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#F2A65A">LEAD</div>
+        <div style="font-size:16px;font-weight:700">lead</div>
+        <div style="font-size:14px;color:#A6A8B4">Plans the work and uses what comes back</div>
+      </div>
+      <div aria-hidden="true" style="width:2px;height:26px;background:rgba(255,255,255,0.3)"></div>
+      <button type="button" aria-expanded="true" style="width:420px;box-sizing:border-box;padding:14px 18px;border-radius:20px;border:0;background:#262833;box-shadow:inset 0 0 0 2px #7DB8FF;color:#ECECF1;font:inherit;text-align:left;display:flex;align-items:center;gap:14px">
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-size:12px;font-weight:700;letter-spacing:1.2px;color:#7DB8FF">SUBAGENTS</span>
+          <span style="display:block;font-size:16px;font-weight:700">4 subagents, 3 done</span>
+          <span style="display:block;font-size:14px;color:#C4C6D0">lead's own helpers · up to 4 at once</span>
+        </span>
+        <span style="font-size:14px;font-weight:600">Selected</span>
+      </button>
+      <div aria-hidden="true" style="width:2px;height:26px;background:rgba(255,255,255,0.3)"></div>
+      <div style="width:420px;padding:14px 18px;border-radius:20px;background:#1A1C23;box-shadow:inset 0 0 0 2px #4FD1A5">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#4FD1A5">VOTE</div>
+        <div style="font-size:16px;font-weight:700">Which list library?</div>
+        <div style="font-size:14px;color:#A6A8B4">Asked of voter and voter-2 · Score counts the answers</div>
+      </div>
+      <div aria-hidden="true" style="width:2px;height:26px;background:rgba(255,255,255,0.3)"></div>
+      <div style="width:420px;padding:14px 18px;border-radius:20px;background:#1A1C23;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.2)">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">HAND-OFF</div>
+        <div style="font-size:16px;font-weight:700">reviewer</div>
+        <div style="font-size:14px;color:#A6A8B4">Next: lead hands the finished work over in the chat</div>
+      </div>
+      <div aria-hidden="true" style="width:2px;height:26px;background:rgba(255,255,255,0.3)"></div>
+      <div style="width:420px;padding:14px 18px;border-radius:20px;background:#1A1C23;box-shadow:inset 0 0 0 2px #F5D06B">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#F5D06B">CHECK</div>
+        <div style="font-size:16px;font-weight:700">pnpm test</div>
+        <div style="font-size:14px;color:#A6A8B4">Not started</div>
+      </div>
+    </div>
+    <aside aria-label="Subagents detail" style="width:460px;flex:none;box-sizing:border-box;padding:22px;border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:14px">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700">lead's subagents</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <div style="padding:10px 12px;border-radius:16px;background:#1A1C23"><div style="font-size:13px;color:#A6A8B4">At once</div><div style="font-size:16px;font-weight:700">up to 4</div></div>
+        <div style="padding:10px 12px;border-radius:16px;background:#1A1C23"><div style="font-size:13px;color:#A6A8B4">This job</div><div style="font-size:16px;font-weight:700">6 of 20</div></div>
+        <div style="padding:10px 12px;border-radius:16px;background:#1A1C23"><div style="font-size:13px;color:#A6A8B4">Their cost</div><div style="font-size:16px;font-weight:700">$0.11</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-size:14px">
+        <a href="#" style="padding:11px 12px;border-radius:14px;text-decoration:none;display:flex;gap:10px;background:#1A1C23"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Read how the feed API works</span><span style="color:#A6A8B4">12 s · $0.02</span></a>
+        <a href="#" style="padding:11px 12px;border-radius:14px;text-decoration:none;display:flex;gap:10px"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Find every place that lists events</span><span style="color:#A6A8B4">9 s · $0.01</span></a>
+        <a href="#" style="padding:11px 12px;border-radius:14px;text-decoration:none;display:flex;gap:10px"><span style="color:#4FD1A5;width:56px;flex:none;font-weight:600">Done</span><span style="flex:1">Draft the cursor query</span><span style="color:#A6A8B4">31 s · $0.05</span></a>
+        <a href="#" style="padding:11px 12px;border-radius:14px;text-decoration:none;display:flex;gap:10px"><span style="color:#F2B33D;width:56px;flex:none;font-weight:600">Waiting</span><span style="flex:1">Add the virtual list</span><span style="color:#A6A8B4">needs you · $0.03</span></a>
+      </div>
+      <div style="padding:12px 14px;border-radius:16px;background:#1A1C23;font-size:14px;line-height:1.45">
+        <div style="font-weight:700;margin-bottom:3px">Held back by the limit</div>
+        <div style="color:#C4C6D0">lead asked for 6 at once and was told the limit is 4. It went on with 4.</div>
+      </div>
+      <div style="font-size:14px;line-height:1.45;color:#A6A8B4">Each subagent's steps open in Watch. They can't post in the chat or hand off: only lead reports back.</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
