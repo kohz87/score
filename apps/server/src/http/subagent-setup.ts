@@ -100,7 +100,7 @@ export function registerSubagentSetupRoutes(
   )
 
   // A change or a count reaches every session of the job: the guard reads only its own file.
-  const stop = ingest?.onCommitted((events) => {
+  const stop = (db ? ingest : undefined)?.onCommitted((events) => {
     for (const event of events)
       if (event.type === 'subagents.changed') {
         try {
