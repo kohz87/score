@@ -109,6 +109,9 @@ suppressed for 60 s. So a hook that calls Score could stall a whole profile. **T
 - **Telling a child apart:** an in-process set filled by `subagent_start`, which Hermes runs on the parent's thread before the
   child starts (no race, and no need to ask Score). Not by the shape of a session id.
 - **Sessions still pinned to background** (check 3): `delegate_task` is blocked, with a message to start a new job.
+- **Compression gives a session a new generated id** (found in review). The policy file is under the id Score started, so the
+  guard walks `parent_session_id` up the profile's `state.db` (read-only, local) to find it. A row's `source: subagent` carries through a
+  compression, so a compressed subagent stays one, also after a restart. `subagent_start` tells Score which session the job is known by.
 - **All of this needs the updated plugin on the profile.** Rolling it out is a release step, with the owner's OK; Apply refuses (409) for a profile without the guard, and only changes settings.
 
 ## Coding agents
@@ -242,6 +245,15 @@ Sonnet with an Opus advisor, 2026-11-09, asked to break the design. Each finding
 | P2: summing by `parent_session_id` misses continuations; the sweep is too slow | "Spending": live events, and the count as the timely control |
 | P2: `votersOf`, scan and audit, reserve sizing | "Migration" |
 | P2: accepting a later result reopens a real check | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`, tested; the check stays |
+
+**Build review of the server half (Sonnet with Opus advisor, 2026-11-09; 10 findings, verified).** Fixed: compression escaping the limits
+and a compressed child regaining Score's tools; `tasks` sent as a JSON string counting as one; `inline` trusted for a session Score never ran, or a profile turned back to
+`auto`; a missing policy on an outside continuation (the run doesn't start now); one failed file stopping a job's other sessions; the guard registered inside the sender's
+`try`; the second plugin folder spelling; a room's own thread keeping a lifetime count (its count starts again at each request from the person, and the guard's own count follows a lower figure); a replayed
+start counting twice; `action` in capitals; a child's wrong refusal message; a model name read as an option. Found by the lead while checking: the read allow-list in `cli.ts` lacked the new keys, so
+every read would have come back unavailable and Apply would have looked as if it did nothing. Rejected: `used == total` pausing at the next agent turn (decision 174 says reaching the total pauses); a failed
+spawn burning the guard's own count (Score's figure takes over, and it errs safe; the person can allow more); closing a concurrent run's subagents (a coding agent has one turn at a time); a late stop after the 5 s sweep (Hermes
+fires it before the parent ends); the cost landing after a hop in a capped job (no worse than today); `knowledge_` matching a third-party tool in a child (fails safe, and the design chose prefixes); checking the plugin is loaded, not just present (a plugin change restarts the slot at release).
 
 ## Not doing
 

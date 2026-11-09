@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../../src/db/index.ts'
-import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
+import { captureReadShape, type HermesRunner } from '../../../src/hermes/live/cli.ts'
 import {
   sessionIsInline,
   subagentPolicyPath,
@@ -142,7 +142,7 @@ test('applying after someone turned it off moves the moment forward', async () =
 
 test('a session is inline only if it is new since the profile went inline', async () => {
   const read = (profile: string, session: string) =>
-    db.read((sqlite) => sessionIsInline(sqlite, profile, session))
+    db.read((sqlite) => sessionIsInline(sqlite, profile, session, null))
   expect(read('lead', 'score-new')).toBe(false) // not set up yet
   guardFor('lead')
   addRun('lead', 'score-old', '2026-11-09T09:00:00.000Z')
@@ -152,6 +152,33 @@ test('a session is inline only if it is new since the profile went inline', asyn
   expect(read('lead', 'score-later')).toBe(true)
   expect(read('lead', 'score-new')).toBe(true)
   expect(read('builder', 'score-new')).toBe(false)
+})
+
+test('a session Hermes began before the profile went inline is not, even with no Score run in it', async () => {
+  guardFor('lead')
+  await applySubagentSetup(deps(), db, ['lead'], ['lead'], () => '2026-11-09T10:00:00.000Z')
+  const read = (startedAt: number | null) =>
+    db.read((sqlite) => sessionIsInline(sqlite, 'lead', 'outside', startedAt))
+  expect(read(Date.parse('2026-11-09T09:00:00.000Z'))).toBe(false)
+  expect(read(Date.parse('2026-11-09T11:00:00.000Z'))).toBe(true)
+  expect(read(null)).toBe(true)
+})
+
+test('the settings it reads are allowed through the Hermes runner', () => {
+  for (const key of [
+    'delegation.gateway_mode',
+    'delegation.model',
+    'delegation.max_iterations',
+    'delegation.max_concurrent_children',
+    'delegation.child_timeout_seconds',
+  ])
+    expect(captureReadShape(['-p', 'lead', 'config', 'get', '--json', key])).toBe(true)
+})
+
+test('the plugin folder may be either spelling', async () => {
+  mkdirSync(join(dir, 'lead', 'plugins', 'score_bridge'), { recursive: true })
+  writeFileSync(join(dir, 'lead', 'plugins', 'score_bridge', 'subagent_guard.py'), '')
+  expect((await readSubagentSetup(deps(), ['lead'])).agents[0]?.guard).toBe(true)
 })
 
 test('the policy file is owner-only, whole, and named as the plugin expects', () => {

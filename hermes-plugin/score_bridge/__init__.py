@@ -23,12 +23,15 @@ def _current_sender():
     return _sender
 
 
-def _make_hook(hook):
+def _make_hook(hook, guard=None):
     def wrapper(*args, **kwargs):
         current = None
         try:
             current = _current_sender()
             if current is not None:
+                # Score knows a job by the session it started; after a compression the parent's id is a new one.
+                if guard is not None:
+                    kwargs = {**kwargs, "policy_session_id": guard.policy_session(kwargs.get("parent_session_id"))}
                 current.enqueue(hook, args, kwargs)
         except Exception:
             if current is not None:
@@ -85,10 +88,24 @@ def _register_exchanges(ctx):
         pass
 
 
+def _register_guard(ctx):
+    """Not an observer: it may refuse a tool, so it isn't wrapped in the fail-open _make_hook, and it stands whether or
+    not the sender below can start."""
+    try:
+        from .subagent_guard import SubagentGuard
+        guard = SubagentGuard()
+        ctx.register_hook("subagent_start", guard.on_subagent_start)
+        ctx.register_hook("pre_tool_call", guard.pre_tool_call)
+        return guard
+    except Exception:
+        return None
+
+
 def register(ctx):
     global _sender, _pid, _exit_callback
     _register_knowledge(ctx)
     _register_exchanges(ctx)
+    guard = _register_guard(ctx)
     try:
         from .client import ScoreClient
         from .gates import reset
@@ -120,17 +137,9 @@ def register(ctx):
             on_unload(unload)
         for hook in HOOKS:
             try:
-                ctx.register_hook(hook, _make_hook(hook))
+                ctx.register_hook(hook, _make_hook(hook, guard if hook == "subagent_start" else None))
             except Exception:
                 sender.record_error("register:" + hook)
-        # Not an observer: it may refuse a tool, so it isn't wrapped in the fail-open _make_hook.
-        try:
-            from .subagent_guard import SubagentGuard
-            guard = SubagentGuard()
-            ctx.register_hook("subagent_start", guard.on_subagent_start)
-            ctx.register_hook("pre_tool_call", guard.pre_tool_call)
-        except Exception:
-            sender.record_error("register:subagent_guard")
     except Exception:
         return None
 

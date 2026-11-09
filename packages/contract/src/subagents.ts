@@ -113,7 +113,8 @@ export const AgentSubagentsRequestSchema = z
   .object({
     enabled: z.boolean().optional(),
     maxConcurrent: Concurrent.optional(),
-    model: z.string().trim().min(1).max(200).nullable().optional(),
+    // Goes to `hermes config set` as a value: a leading dash would read as an option.
+    model: z.string().trim().min(1).max(200).regex(/^[^-]/).nullable().optional(),
     maxIterations: z.int().min(1).max(1000).optional(),
     timeoutSeconds: z.int().min(1).max(86_400).nullable().optional(),
   })

@@ -9,9 +9,11 @@ import {
   allowMoreSubagents,
   ceilingOf,
   changeJobSubagents,
-  countSubagentOfSession,
   effectiveLimits,
+  addSubagentUse,
+  jobOfSession,
   rememberSubagentSession,
+  startRoomThreadCount,
   setCeiling,
   subagentSessionsOf,
   subagentTotalReached,
@@ -103,9 +105,11 @@ test('an unknown job is refused', () => {
   )
 })
 
-test('a started subagent counts against its session’s job, and tells the room', () => {
+test('a use counts against the job, and tells the room', () => {
   db.tx((sqlite) => rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1'))
-  const drafts = db.tx((sqlite) => countSubagentOfSession(sqlite, 'score-1'))
+  expect(jobOfSession(db.sqlite, 'score-1')).toBe('job-1')
+  expect(jobOfSession(db.sqlite, 'outside')).toBeNull()
+  const drafts = db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
   expect(job().subagents_used).toBe(1)
   expect(drafts).toEqual([
     {
@@ -119,9 +123,19 @@ test('a started subagent counts against its session’s job, and tells the room'
   ])
 })
 
-test('a session Score has no job for isn’t counted', () => {
-  expect(db.tx((sqlite) => countSubagentOfSession(sqlite, 'outside'))).toEqual([])
-  expect(job().subagents_used).toBe(0)
+test('only a room’s own thread starts its count again at a new request', () => {
+  db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1'))).toEqual([])
+  expect(job().subagents_used).toBe(1)
+  const thread = (
+    db.sqlite.prepare("SELECT id FROM jobs WHERE room_id = 'room-1' AND is_default = 1").get() as {
+      id: string
+    }
+  ).id
+  db.tx((sqlite) => addSubagentUse(sqlite, thread))
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toHaveLength(1)
+  expect(effectiveLimits(db.sqlite, 'lead', thread).used).toBe(0)
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toEqual([])
 })
 
 test('sessions of a job are listed for the refresh, and a session moves with its job', () => {
@@ -135,13 +149,10 @@ test('sessions of a job are listed for the refresh, and a session moves with its
 
 test('reaching the total holds the next agent turn, and allowing more lifts it', () => {
   db.tx((sqlite) => changeJobSubagents(sqlite, 'job-1', { maxTotal: 2 }))
-  db.tx((sqlite) => {
-    rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1')
-    countSubagentOfSession(sqlite, 'score-1')
-  })
+  db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
   expect(subagentTotalReached(db.sqlite, 'job-1')).toBe(false)
   expect(jobLimitFor(db.sqlite, 'job-1')).toBeNull()
-  db.tx((sqlite) => countSubagentOfSession(sqlite, 'score-1'))
+  db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
   expect(subagentTotalReached(db.sqlite, 'job-1')).toBe(true)
   expect(jobLimitFor(db.sqlite, 'job-1')).toBe('subagent_total')
   db.tx((sqlite) => allowMoreSubagents(sqlite, 'job-1', 5))

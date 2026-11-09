@@ -89,6 +89,31 @@ test('anything but success is a failure, and a late stop changes nothing', () =>
   expect(subagentRowsOf(db.sqlite, 'job-1')[0]?.state).toBe('failed')
 })
 
+test('after a compression the plugin names the session Score knows', () => {
+  db.tx((sqlite) =>
+    applySubagentHook(
+      sqlite,
+      'subagent_start',
+      {
+        parent_session_id: 'new-generated-id',
+        policy_session_id: 'score-1',
+        child_session_id: 'child-9',
+        child_goal: 'Look',
+      },
+      producer,
+      NOW,
+    ),
+  )
+  expect(used()).toBe(1)
+  expect(subagentRowsOf(db.sqlite, 'job-1')).toHaveLength(1)
+})
+
+test('a replayed start doesn’t count twice', () => {
+  start('child-1')
+  expect(start('child-1')).toEqual([])
+  expect(used()).toBe(1)
+})
+
 test('a session Score has no job for is left out', () => {
   expect(start('child-1', 'outside')).toEqual([])
   expect(used()).toBe(0)

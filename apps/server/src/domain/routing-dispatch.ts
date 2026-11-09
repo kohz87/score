@@ -1,3 +1,4 @@
+import { startRoomThreadCount } from './subagents.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
@@ -205,6 +206,15 @@ export class RoutingDispatcher {
           this.busySince.delete(job.turn_id)
         }
         const images = job.hop === 0 ? this.imageIds(job.parent_message_id) : []
+        // Before the run's limits are written: a person's new request in a room's own thread has its total to itself.
+        if (job.hop === 0 && job.job_id) {
+          const jobId = job.job_id
+          await this.ingest.submit({
+            source: 'routing',
+            identity: `subagents-new-request:${job.turn_id}`,
+            apply: ({ sqlite }) => startRoomThreadCount(sqlite, jobId),
+          })
+        }
         // A Hermes agent's turn in an exchanges room acts through the bridge tools with a capability of its own: a
         // fresh one per start, only its hash stored, filled into the payload in memory (brief §4.2).
         const capability = this.db.read(

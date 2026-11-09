@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../../src/db/index.ts'
-import { startSubagentRow } from '../../../src/domain/subagent-rows.ts'
+import { startSubagent } from '../../../src/domain/subagent-rows.ts'
 import {
   readSessionTreeCost,
   runCostObservation,
@@ -195,7 +195,7 @@ test('a billed figure has no estimated kind', () => {
 test('a run’s end gives its subagents their own figures, including where Hermes has no price', () => {
   addRun('r1', '2026-11-09T10:00:00.000Z')
   db.tx((sqlite) =>
-    startSubagentRow(sqlite, {
+    startSubagent(sqlite, {
       id: 'child',
       jobId: 'job',
       profile: 'lead',

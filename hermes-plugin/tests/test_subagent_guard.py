@@ -10,9 +10,21 @@ CHILD = "20261109_182613_a02461"
 ALLOWED = {"v": 1, "inline": True, "enabled": True, "maxConcurrent": 4, "maxTotal": 20, "used": 0}
 
 
+ROWS = {}
+
+
+def lineage(session_id):
+    return ROWS.get(session_id)
+
+
+@pytest.fixture(autouse=True)
+def no_rows():
+    ROWS.clear()
+
+
 @pytest.fixture
 def guard(tmp_path):
-    return SubagentGuard(home=tmp_path)
+    return SubagentGuard(home=tmp_path, lineage=lineage)
 
 
 def write(tmp_path, session=SESSION, **policy):
@@ -112,7 +124,7 @@ def test_the_total_takes_the_larger_of_scores_count_and_its_own(guard, tmp_path)
     assert delegate(guard) is None
     assert message(delegate(guard))
     # A fresh process has no count of its own: Score's holds the line after a restart.
-    assert message(delegate(SubagentGuard(home=tmp_path), 2))
+    assert message(delegate(SubagentGuard(home=tmp_path, lineage=lineage), 2))
 
 
 def test_a_change_applies_to_the_next_call(guard, tmp_path):
@@ -189,3 +201,114 @@ def test_odd_input_never_raises(guard):
     guard.on_subagent_start()
     guard.on_subagent_start(child_session_id=7)
     assert message(guard.pre_tool_call(tool_name="delegate_task", args=[], session_id="score-x"))
+
+
+def test_a_task_list_sent_as_a_json_string_counts_each_task(guard, tmp_path):
+    write(tmp_path, maxConcurrent=2)
+    tasks = json.dumps([{"goal": str(n)} for n in range(3)])
+    result = guard.pre_tool_call(tool_name="delegate_task", args={"tasks": tasks}, session_id=SESSION)
+    assert "asked for 3" in message(result)
+    assert guard.pre_tool_call(tool_name="delegate_task", args={"tasks": "not json"}, session_id=SESSION) is None
+
+
+def test_a_stop_in_capitals_is_still_a_stop(guard, tmp_path):
+    write(tmp_path, enabled=False)
+    assert guard.pre_tool_call(tool_name="delegate_task", args={"action": " STOP "}, session_id=SESSION) is None
+
+
+def test_a_child_is_told_why_it_cannot_delegate(guard, tmp_path):
+    guard.on_subagent_start(child_session_id=CHILD)
+    assert "start subagents of its own" in message(delegate(guard, session=CHILD))
+
+
+def test_a_compressed_session_keeps_its_limits(guard, tmp_path):
+    ROWS["tip"] = ("middle", "api_server")
+    ROWS["middle"] = (SESSION, "api_server")
+    ROWS[SESSION] = (None, "api_server")
+    write(tmp_path, enabled=False)
+    assert "off for this job" in message(delegate(guard, session="tip"))
+    write(tmp_path, maxTotal=2)
+    guard = SubagentGuard(home=tmp_path, lineage=lineage)
+    assert delegate(guard, 2, session="tip") is None
+    # The count follows the job across the new id.
+    assert "used 2 of its 2" in message(delegate(guard, session="middle"))
+    assert guard.policy_session("tip") == SESSION
+
+
+def test_a_compressed_score_session_with_no_policy_is_refused(guard):
+    ROWS["tip"] = (SESSION, "api_server")
+    ROWS[SESSION] = (None, "api_server")
+    assert "no subagent limit" in message(delegate(guard, session="tip"))
+
+
+def test_a_compressed_subagent_stays_a_subagent_even_after_a_restart(guard):
+    ROWS["child-tip"] = (CHILD, "subagent")
+    ROWS[CHILD] = (SESSION, "subagent")
+    ROWS[SESSION] = (None, "api_server")
+    for tool in ("score_reply", "mcp__score__rooms_post"):
+        assert "can't use Score" in message(guard.pre_tool_call(tool_name=tool, args={}, session_id="child-tip"))
+    assert message(delegate(guard, session="child-tip"))
+
+
+def test_an_outside_session_and_its_compression_stay_ungoverned(guard):
+    ROWS["outside-tip"] = ("outside", "telegram")
+    ROWS["outside"] = (None, "telegram")
+    assert delegate(guard, 9, session="outside-tip") is None
+    assert guard.pre_tool_call(tool_name="score_reply", args={}, session_id="outside-tip") is None
+
+
+def test_a_row_that_appears_later_is_seen_later(guard, tmp_path):
+    write(tmp_path, enabled=False)
+    assert delegate(guard, session="tip") is None
+    ROWS["tip"] = (SESSION, "api_server")
+    ROWS[SESSION] = (None, "api_server")
+    assert "off for this job" in message(delegate(guard, session="tip"))
+
+
+def test_a_lineage_loop_ends(guard):
+    ROWS["a"] = ("b", "api_server")
+    ROWS["b"] = ("a", "api_server")
+    assert delegate(guard, session="a") is None
+
+
+def test_an_unreadable_lineage_refuses_score_tools_and_delegation_only(tmp_path):
+    def broken(_session_id):
+        raise OSError("locked")
+
+    guard = SubagentGuard(home=tmp_path, lineage=broken)
+    assert "refused" in message(delegate(guard, session="tip"))
+    assert "refused" in message(guard.pre_tool_call(tool_name="score_reply", args={}, session_id="tip"))
+    assert guard.pre_tool_call(tool_name="terminal", args={}, session_id="tip") is None
+
+
+def test_scores_own_ids_need_no_lookup(tmp_path):
+    def forbidden(_session_id):
+        raise AssertionError("looked up")
+
+    guard = SubagentGuard(home=tmp_path, lineage=forbidden)
+    write(tmp_path)
+    assert delegate(guard) is None
+
+
+def test_the_own_count_gives_way_to_scores_as_it_catches_up(guard, tmp_path):
+    write(tmp_path, maxTotal=5)
+    assert delegate(guard, 3) is None
+    write(tmp_path, maxTotal=5, used=3)
+    assert delegate(guard, 2) is None
+    assert message(delegate(guard))
+
+
+def test_a_lower_count_from_score_starts_the_own_count_again(guard, tmp_path):
+    write(tmp_path, maxTotal=3, used=2)
+    assert delegate(guard) is None
+    assert message(delegate(guard))
+    write(tmp_path, maxTotal=3, used=0)
+    assert delegate(guard, 3) is None
+
+
+def test_a_raised_total_lets_more_through(guard, tmp_path):
+    write(tmp_path, maxTotal=1)
+    assert delegate(guard) is None
+    assert message(delegate(guard))
+    write(tmp_path, maxTotal=2)
+    assert delegate(guard) is None

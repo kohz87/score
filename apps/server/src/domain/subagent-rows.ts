@@ -3,6 +3,7 @@ import { SubagentRowSchema, type SubagentRow } from '@score/contract'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { redactBounded } from '../redact.ts'
+import { addSubagentUse } from './subagents.ts'
 
 // One row per subagent, for the chat's status card and the job map (decision 174). Their steps stay in Watch.
 
@@ -44,17 +45,18 @@ const rowEvent = (sqlite: DatabaseSync, id: string): DomainEventDraft[] => {
     : [{ type: 'subagent.upserted', data: asView(sqlite, RowSchema.parse(row)) }]
 }
 
-export function startSubagentRow(
+/** Once per subagent: a replayed start changes nothing, so it can't count twice. */
+export function startSubagent(
   sqlite: DatabaseSync,
   row: { id: string; jobId: string; profile: string; goal: string; now: string },
 ): DomainEventDraft[] {
-  sqlite
+  const added = sqlite
     .prepare(
       `INSERT INTO subagents (id, job_id, profile, goal, state, started_at) VALUES (?, ?, ?, ?, 'running', ?)
        ON CONFLICT (id) DO NOTHING`,
     )
-    .run(row.id, row.jobId, row.profile, redactBounded(row.goal, 500), row.now)
-  return rowEvent(sqlite, row.id)
+    .run(row.id, row.jobId, row.profile, redactBounded(row.goal, 500), row.now).changes
+  return added ? [...addSubagentUse(sqlite, row.jobId), ...rowEvent(sqlite, row.id)] : []
 }
 
 export function endSubagentRow(

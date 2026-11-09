@@ -1,5 +1,6 @@
 import { subagentSessionsOf } from '../../domain/subagents.ts'
 import type { HermesSubagentConfig } from '../profile-management.ts'
+import { hermesSessionStartedAt } from './run-cost.ts'
 import { subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
 import {
   applySubagentSetup,
@@ -39,12 +40,24 @@ export const agentMethods = {
   refreshSubagentPolicies(this: LivePortRuntime, jobId: string): void {
     const { db } = this.requireStarted()
     db.read((sqlite) => {
-      for (const { sessionId, profile } of subagentSessionsOf(sqlite, jobId))
-        writeSubagentPolicy(
-          this.options.scoreHome,
-          sessionId,
-          subagentPolicyFor(sqlite, profile, sessionId, jobId),
-        )
+      for (const { sessionId, profile } of subagentSessionsOf(sqlite, jobId)) {
+        // One unwritable file doesn't stop the job's other sessions getting the change.
+        try {
+          writeSubagentPolicy(
+            this.options.scoreHome,
+            sessionId,
+            subagentPolicyFor(
+              sqlite,
+              profile,
+              sessionId,
+              jobId,
+              hermesSessionStartedAt(profile, sessionId, this.options.hermesHome),
+            ),
+          )
+        } catch (error) {
+          this.options.onError?.(error)
+        }
+      }
     })
   },
   async subagentConfig(this: LivePortRuntime, agentId: string) {

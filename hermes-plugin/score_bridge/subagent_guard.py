@@ -17,6 +17,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from .client import score_home
+from .session_lineage import session_row
 
 SCORE_TOOL_PREFIXES = ("score_", "knowledge_", "mcp_score_", "mcp__score__")
 # The sessions Score names itself (domain/job-sessions.ts, the orchestration executor). A room continuing an outside
@@ -24,9 +25,11 @@ SCORE_TOOL_PREFIXES = ("score_", "knowledge_", "mcp_score_", "mcp__score__")
 SCORE_SESSION_PREFIXES = ("score-", "orc-")
 LIVE_CONTROL_ACTIONS = frozenset({"list", "steer", "stop"})
 MAX_TRACKED_SESSIONS = 4096
+MAX_LINEAGE_HOPS = 32
 MAX_POLICY_BYTES = 4096
 
 ROOM_TOOL_REFUSED = "Score: a subagent can't use Score's tools. Report to your parent instead."
+CHILD_DELEGATING = "Score: a subagent can't start subagents of its own. Do the work yourself."
 NO_POLICY = "Score: this session has no subagent limit Score can read, so subagents are off. Do the work yourself."
 UNDECIDED = "Score couldn't check this call, so it was refused."
 BACKGROUND = (
@@ -51,16 +54,30 @@ def _whole(value) -> int | None:
 
 def _task_count(args) -> int:
     tasks = args.get("tasks") if isinstance(args, dict) else None
+    # Hermes also accepts the list as a JSON string, and spawns every entry (tools/delegate_tool_tasks.py).
+    if isinstance(tasks, str):
+        try:
+            tasks = json.loads(tasks)
+        except ValueError:
+            return 1
     # The handler also accepts the legacy single-goal shape, which is one task.
     return len(tasks) if isinstance(tasks, list) and tasks else 1
 
 
+def _action(args) -> str:
+    action = args.get("action") if isinstance(args, dict) else None
+    return action.strip().lower() if isinstance(action, str) else ""
+
+
 class SubagentGuard:
-    def __init__(self, home: Path | None = None):
+    def __init__(self, home: Path | None = None, lineage=session_row):
         self._home = home
+        self._lineage = lineage
         self._lock = threading.Lock()
         self._children: OrderedDict[str, None] = OrderedDict()
-        self._started: OrderedDict[str, int] = OrderedDict()
+        self._chains: OrderedDict[str, tuple[tuple[str, ...], bool]] = OrderedDict()
+        # Per policy: the `used` last seen in its file, and how many this process has let start since.
+        self._started: OrderedDict[str, tuple[int, int]] = OrderedDict()
 
     def on_subagent_start(self, child_session_id=None, **_kwargs) -> None:
         """Hermes runs this on the parent's thread before the child starts, so a child's first call is already known."""
@@ -74,23 +91,59 @@ class SubagentGuard:
         if not delegating and not name.startswith(SCORE_TOOL_PREFIXES):
             return None
         try:
-            return self._decide(name, delegating, args, session_id if isinstance(session_id, str) else "")
+            return self._decide(delegating, args, session_id if isinstance(session_id, str) else "")
         except Exception:
             return _block(UNDECIDED)
 
-    def _decide(self, name: str, delegating: bool, args, session_id: str):
+    def policy_session(self, session_id) -> str | None:
+        """The session whose policy governs this one: after a compression the id is new and the file is under the old."""
+        if not isinstance(session_id, str) or not session_id:
+            return None
+        chain, _child = self._lineage_of(session_id)
+        home = self._home or score_home()
+        return next((one for one in chain if policy_path(home, one).exists()), session_id)
+
+    def _lineage_of(self, session_id: str) -> tuple[tuple[str, ...], bool]:
+        """The session and its ancestors, and whether it is a subagent. Score's own ids need no lookup."""
+        if not session_id or session_id.startswith(SCORE_SESSION_PREFIXES):
+            return ((session_id,), False)
+        with self._lock:
+            known = self._chains.get(session_id)
+        if known:
+            return known
+        chain = [session_id]
+        child = False
+        complete = False
+        for _ in range(MAX_LINEAGE_HOPS):
+            row = self._lineage(chain[-1])
+            if row is None:
+                break
+            parent, source = row
+            child = child or source == "subagent"
+            if not parent or parent in chain:
+                complete = True
+                break
+            chain.append(parent)
+        result = (tuple(chain), child)
+        # A row can appear later, and a lineage this long is not trusted to be whole; neither is kept.
+        if complete:
+            with self._lock:
+                self._remember(self._chains, session_id, result)
+        return result
+
+    def _decide(self, delegating: bool, args, session_id: str):
         with self._lock:
             child = session_id in self._children
-        if child:
-            return _block(ROOM_TOOL_REFUSED)
-        if not delegating:
+        chain, descended = self._lineage_of(session_id)
+        if child or descended:
+            return _block(CHILD_DELEGATING if delegating else ROOM_TOOL_REFUSED)
+        if not delegating or _action(args) in LIVE_CONTROL_ACTIONS:
             return None
-        if isinstance(args, dict) and args.get("action") in LIVE_CONTROL_ACTIONS:
-            return None
-        policy = self._read_policy(session_id)
-        if policy is None:
-            return _block(NO_POLICY) if session_id.startswith(SCORE_SESSION_PREFIXES) else None
-        return self._within_limits(session_id, policy, _task_count(args))
+        for one in chain:
+            policy = self._read_policy(one)
+            if policy is not None:
+                return self._within_limits(one, policy, _task_count(args))
+        return _block(NO_POLICY) if any(one.startswith(SCORE_SESSION_PREFIXES) for one in chain) else None
 
     def _read_policy(self, session_id: str) -> dict | None:
         """None: no file. A file that can't be read or parsed raises, and the caller refuses."""
@@ -125,14 +178,17 @@ class SubagentGuard:
                 f"you asked for {asked}. Ask for fewer."
             )
         with self._lock:
-            # Score's count lags and this one starts again after a restart, so the larger is the truth.
-            so_far = max(used, self._started.get(session_id, 0))
+            seen, mine = self._started.get(session_id, (used, 0))
+            # Score's count catches up with this one, and starts again when a new request opens a room's own thread.
+            mine = 0 if used < seen else max(0, mine - (used - seen))
+            so_far = used + mine
             if so_far + asked > total:
+                self._remember(self._started, session_id, (used, mine))
                 return _block(
                     f"Score: this job has used {so_far} of its {total} subagents, so {asked} more won't fit. "
                     "Finish the work yourself."
                 )
-            self._remember(self._started, session_id, so_far + asked)
+            self._remember(self._started, session_id, (used, mine + asked))
         return None
 
     @staticmethod
