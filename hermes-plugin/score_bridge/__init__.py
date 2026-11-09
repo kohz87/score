@@ -123,6 +123,14 @@ def register(ctx):
                 ctx.register_hook(hook, _make_hook(hook))
             except Exception:
                 sender.record_error("register:" + hook)
+        # Not an observer: it may refuse a tool, so it isn't wrapped in the fail-open _make_hook.
+        try:
+            from .subagent_guard import SubagentGuard
+            guard = SubagentGuard()
+            ctx.register_hook("subagent_start", guard.on_subagent_start)
+            ctx.register_hook("pre_tool_call", guard.pre_tool_call)
+        except Exception:
+            sender.record_error("register:subagent_guard")
     except Exception:
         return None
 
