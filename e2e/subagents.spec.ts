@@ -10,7 +10,10 @@ test.beforeEach(async ({ page }) => {
 
 async function startJob(page: Parameters<typeof makeTeam>[0], roomId: string, title: string) {
   const response = await page.request.post(`/api/rooms/${roomId}/jobs`, {
-    headers: { 'x-score-client': 'web', 'Idempotency-Key': `job-${title}-${roomId}` },
+    headers: {
+      'x-score-client': 'web',
+      'Idempotency-Key': `job-${title.replace(/\W/g, '-')}-${roomId}`,
+    },
     data: { title },
   })
   expect(response.status()).toBe(201)
@@ -31,7 +34,7 @@ test('/subagents changes the job, shows in the bar, and is never posted to the a
   const team = await makeTeam(page, 'Subagents')
   const job = await startJob(page, team.id, 'Add pagination')
   await page.goto(`/b?room=${team.id}`)
-  const composer = page.getByRole('textbox', { name: /message/i }).last()
+  const composer = page.getByRole('combobox', { name: /^Message / })
   await expect(page.getByRole('button', { name: 'Subagents: up to 4' })).toBeVisible()
 
   await composer.fill('/subagents 2')
@@ -70,7 +73,7 @@ test('Start a job sends the choice, and the side panel shows it', async ({ page 
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
   await dialog.getByLabel('What should the team do?').fill('Add a changelog page')
   await dialog.getByRole('radio', { name: '2', exact: true }).click()
-  await dialog.getByLabel('Total in this job').fill('7')
+  await dialog.getByLabel('Total subagents in this job').fill('7')
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const created = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().endsWith('/api/orchestrations'),
@@ -91,7 +94,7 @@ test('voters without helpers are accepted by the server', async ({ page }) => {
   await dialog.getByLabel('What should the team do?').fill('Choose a list library')
   const voters = dialog.locator('.start-voters')
   await voters.getByRole('button', { name: 'Add' }).click()
-  await voters.getByRole('option', { name: /reviewer/ }).click()
+  await voters.getByRole('button', { name: 'reviewer' }).click()
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const created = page.waitForResponse(
     (response) =>
@@ -111,8 +114,9 @@ test('an agent has its subagent settings, and they save', async ({ page }) => {
   if (await more.count()) await more.first().click()
   const allow = page.getByRole('checkbox', { name: 'Allow subagents' })
   await expect(allow).toBeChecked()
-  await page.getByLabel('At once').fill('3')
-  await page.getByRole('button', { name: 'Save' }).last().click()
+  const card = page.locator('#agent-subagents')
+  await card.getByLabel('At once').fill('3')
+  await card.getByRole('button', { name: 'Save' }).click()
   await expect
     .poll(
       async () =>
