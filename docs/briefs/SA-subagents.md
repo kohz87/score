@@ -73,7 +73,7 @@ can't spawn their own), the parent's model, and a total of 20 per job.
 | Each one's steps and time | `delegation.max_iterations`, `child_timeout_seconds` |
 | Model | `delegation.model` |
 | Total per job, and job or chat limits below the ceiling | Score: the plugin's `pre_tool_call` hook sees `delegate_task` and its `tasks` before anything starts, and can return `{"action": "block", "message": …}` |
-| Spending | The existing job budget (check 2) |
+| Spending | The job budget, once it can see Hermes dollars at all (check 2) |
 
 Why the two kinds: Hermes settings are per profile, and Score's run request passes a model, not settings, so a per-job limit
 can't be handed to Hermes. The block message tells the model what happened ("the limit for this job is 2"), and its limit
@@ -117,21 +117,32 @@ All of this is check 5. The controls show only what a given agent's program can 
 
 ## Checks before building
 
-1. **Block:** the plugin's `delegate_task` block really stops the subagents, for a whole batch, and the lead recovers.
-2. **Spending (a small paid run; the owner's OK needed):** the code folds children's cost into the parent's session. Does
-   it reach `runs.cost_usd`, and does the job budget stop in time? Fallback: sum child sessions by `parent_session_id`.
-3. **Open chats:** what a session pinned to background does after the profile goes inline, and whether Score should start a
-   fresh session for it.
-4. **Score's tools in a child:** does a subagent get them, and does the block hold. Also why `score_reply` showed an error
-   in two of the tests.
-5. **Coding agents:** a test on Claude Code (off, Stop, spending, permissions), and what Codex does.
-6. **After the Hermes update (H.1):** repeat the table above on the new version; the checks ran on the installed one.
+1. **Block (open):** the plugin's `delegate_task` block really stops the subagents, for a whole batch, and the lead
+   recovers. From the code, a `pre_tool_call` hook may return `{"action": "block", …}`; not yet run.
+2. **Spending (answered 2026-11-09; one run on `openai/gpt-6-luna` through OpenRouter, under a cent).** Hermes recorded
+   dollars on each session row ($0.0034 parent, $0.0022 and $0.0002 children). The parent's row doesn't include its
+   children: the rollup is in memory only, each row holds its own calls, so the sum is the true total. **`runs.cost_usd`
+   stayed null, and past Hermes runs show the same: Score's job budget sees "unknown spend" for every Hermes run, with or
+   without subagents** (coding agents do report dollars). So this needs its own fix, before limits rely on it: sum the
+   session row and its children by `parent_session_id` (`session_cost_snapshots` already holds child rows, on a ~15 minute
+   sweep), or read `cost_usd` from the run stream's `subagent` events for a live figure. A ChatGPT-subscription route
+   records no dollars at all ("included"), so a dollar limit can't apply there; tokens could.
+3. **Open chats (answered 2026-11-09):** a session started under `auto` stays background after the profile goes inline
+   (tested: "Subagent dispatched; awaiting completion"). New jobs get new sessions, so they are fine. In a session still
+   pinned to background the plugin should block `delegate_task` with a message saying to start a new job, rather than run
+   it unsafely. This depends on check 1.
+4. **Score's tools in a child (answered 2026-11-09): a subagent has them:** `score_handoff`, `score_reply`, `rooms_post`,
+   `orch_*`, `score_approve` and others, listed by a subagent itself. The block in "Subagents stay out of the room" is
+   required. Whether it holds is part of check 1. Still to explain: why `score_reply` showed an error in three of the runs.
+5. **Coding agents (open):** a test on Claude Code (off, Stop, spending, permissions), and what Codex does.
+6. **After the Hermes update (H.1, open):** repeat the table above on the new version; the checks ran on the installed one.
 
 ## Build order
 
 1. The checks above, then this note's review (Sonnet with an Opus advisor), findings answered here.
-2. **Safety first:** inline on every profile (with the owner's OK), the Agents page warning, the child tool block. This fixes
-   today's gap on its own and can ship by itself.
+2. **Safety first:** inline on every profile (with the owner's OK), the Agents page warning, the child tool block, the block
+   in sessions still pinned to background. This fixes today's gap on its own and can ship by itself.
+   **Real dollars in the job budget** for Hermes runs (check 2) goes with it: it's a gap with or without subagents.
 3. Limits: the agent ceiling, the policy, the count and block, `/subagents`.
 4. The UI, from an approved mock-up: context bar, job map node, Start a job, recipe step, approval card's source.
 5. Retire the helpers picker for new jobs; the owner removes the swarm profiles.
