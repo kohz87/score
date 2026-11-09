@@ -98,13 +98,18 @@ export function startRoomThreadCount(
   chainId: string,
 ): DomainEventDraft[] {
   // Once per request: one message to two agents is one request, whichever starts second.
-  const changed = sqlite
+  const row = sqlite
     .prepare(
-      `UPDATE jobs SET subagents_used = 0, subagents_chain = ?
+      `SELECT subagents_used AS used FROM jobs
        WHERE id = ? AND is_default = 1 AND subagents_chain IS NOT ?`,
     )
-    .run(chainId, jobId, chainId).changes
-  return changed ? subagentsEvent(sqlite, jobId) : []
+    .get(jobId, chainId) as { used: number } | undefined
+  if (!row) return []
+  sqlite
+    .prepare('UPDATE jobs SET subagents_used = 0, subagents_chain = ? WHERE id = ?')
+    .run(chainId, jobId)
+  // A count already at nothing has nothing to tell.
+  return row.used > 0 ? subagentsEvent(sqlite, jobId) : []
 }
 
 export const jobOfSession = (sqlite: DatabaseSync, sessionId: string): string | null =>
