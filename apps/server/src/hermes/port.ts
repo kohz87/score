@@ -64,7 +64,7 @@ import type { IngestResult, Observation } from '../hub/ingest.ts'
 import type { SessionCost } from '../domain/spend.ts'
 import type { JourneyFacts } from '../domain/journey.ts'
 import type { ReportApproval, ReportFacts, ReportRun } from '../domain/reports.ts'
-import type { ProfileManagementPort } from './profile-management.ts'
+import type { ProfileManagementPort, SubagentSetupPort } from './profile-management.ts'
 import type { OutsideSessionFact, OutsideSessionHistory } from './outside-sessions.ts'
 
 export interface ObservationSink {
@@ -176,7 +176,7 @@ export type CompatibilityEvaluation = SystemStatus['compatibility'] & {
 
 export type ProviderBase = Omit<ProviderItem, 'usedBy'>
 
-export interface HermesPort extends ProfileManagementPort {
+export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
   stop(): Promise<void>

@@ -109,7 +109,7 @@ suppressed for 60 s. So a hook that calls Score could stall a whole profile. **T
 - **Telling a child apart:** an in-process set filled by `subagent_start`, which Hermes runs on the parent's thread before the
   child starts (no race, and no need to ask Score). Not by the shape of a session id.
 - **Sessions still pinned to background** (check 3): `delegate_task` is blocked, with a message to start a new job.
-- **All of this needs the updated plugin on the profile**, so the setup card's Apply does both: `inline` and the plugin.
+- **All of this needs the updated plugin on the profile.** Rolling it out is a release step, with the owner's OK; Apply refuses (409) for a profile without the guard, and only changes settings.
 
 ## Coding agents
 

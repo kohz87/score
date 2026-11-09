@@ -1,3 +1,4 @@
+import { applySubagentSetup, readSubagentSetup } from './subagent-setup.ts'
 import type { AgentDetail, AgentSummary, RunsOnUpdate } from '@score/contract'
 import { homedir } from 'node:os'
 import { HttpError } from '../../errors.ts'
@@ -15,7 +16,28 @@ import { readAgentTodos } from './todos.ts'
 import { RunRowSchema } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
 
+const hermesAgentIds = (agents: readonly { id: string }[]): string[] =>
+  agents.map((agent) => agent.id)
+const subagentSetupDeps = (port: LivePortRuntime) => ({
+  runner: port.options.runner ?? runHermes,
+  hermesHome: resolveHermesHome(port.options.hermesHome),
+  home: (agentId: string) => port.agentHome(agentId),
+})
+
 export const agentMethods = {
+  async subagentSetup(this: LivePortRuntime) {
+    return readSubagentSetup(subagentSetupDeps(this), hermesAgentIds(await this.listAgents()))
+  },
+  async applySubagentSetup(this: LivePortRuntime, agentIds: string[]) {
+    const { db } = this.requireStarted()
+    return applySubagentSetup(
+      subagentSetupDeps(this),
+      db,
+      hermesAgentIds(await this.listAgents()),
+      agentIds,
+      () => new Date().toISOString(),
+    )
+  },
   async listAgents(this: LivePortRuntime): Promise<AgentSummary[]> {
     return (await this.listAgentDetails()).map(agentSummary)
   },

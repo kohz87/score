@@ -3070,3 +3070,21 @@ type SharedWorkspace = { id: string; name: string; path: string; agentIds: Agent
   The folder is checked with the root policy at admission and again at launch; a folder that fails refuses the turn
   (`422 workspace_unavailable` at admission, a failed run at launch), it never falls back silently. Orchestration worker
   steps keep the folder their frozen policy names.
+
+## 19. Subagents (decision 173; schemas in `packages/contract/src/subagents.ts`; design docs/briefs/SA-subagents.md)
+
+An agent's own throwaway helpers. Hermes agents need one setting before Score allows them.
+
+| Endpoint | Needs | Body | Answer |
+| --- | --- | --- | --- |
+| `GET /api/subagent-setup` | | | `SubagentSetup`: each Hermes agent, whether `inline` is on and whether its plugin has the guard |
+| `POST /api/subagent-setup/apply` | paired browser | `{ agentIds }` | `SubagentSetup` after applying. `409 conflict` when a listed agent's plugin has no guard: nothing is changed. |
+
+Apply sets `delegation.gateway_mode: inline`, `delegation.max_concurrent_children: 4` and `delegation.max_iterations: 50` through
+the Hermes CLI, only for the agents named, only when the person presses Apply. Chats already open keep their old mode, and
+subagents stay off in them.
+
+Before each run Score writes the session's policy to `$SCORE_HOME/subagents/<sha256 of the session id>.json` (owner-only, written
+atomically; internal, between the server and the plugin):
+`{ "v": 1, "inline": boolean, "enabled": boolean, "maxConcurrent": int, "maxTotal": int, "used": int }`. The plugin's guard reads it
+at each `delegate_task`: no file for a session Score named, or one it can't trust, means refused.

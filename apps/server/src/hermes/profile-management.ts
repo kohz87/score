@@ -1,3 +1,4 @@
+import type { SubagentSetup } from '@score/contract'
 import { z } from 'zod'
 import { AgentPreviewSchema, type AgentCreateInput, type ProfileStepName } from '@score/contract'
 import type { Baseline } from './approvals.ts'
@@ -23,6 +24,13 @@ export interface ProfileStepContext {
   /** Import only: the stored archive handed to `hermes profile import`. */
   importArchive?: string | null
 }
+export interface SubagentSetupPort {
+  /** Whether each Hermes agent is set up for subagents (docs/API-CONTRACT.md §19). */
+  subagentSetup(): Promise<SubagentSetup>
+  /** Only when the person presses Apply. */
+  applySubagentSetup(agentIds: string[]): Promise<SubagentSetup>
+}
+
 export interface ProfileManagementPort {
   profileInventory(name: string, cloneFrom?: string): Promise<ProfileInventory>
   profileExportPath(name: string, revision: string): string

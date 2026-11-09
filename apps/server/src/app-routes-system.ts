@@ -22,6 +22,8 @@ import { registerAboutRoutes } from './http/about.ts'
 import { registerBotTakeoverRoutes } from './http/bot-takeover.ts'
 import { registerCodingAgentRoutes } from './http/coding-agents.ts'
 import { registerHermesUpdateRoutes } from './http/hermes-update.ts'
+import { registerSubagentSetupRoutes } from './http/subagent-setup.ts'
+import { hermesPortOf } from './runtimes/coding/port.ts'
 import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerLogRoutes } from './http/logs.ts'
 import { registerSessionRoutes } from './http/session.ts'
@@ -109,6 +111,7 @@ export function registerSystemAndSessionRoutes({
       ...(clock ? { clock } : {}),
     })
   registerSystemRoutes(app, getSystemStatus)
+  registerSubagentSetupRoutes(app, hermesPortOf(port))
   // 3.15.0 (owner): update Hermes from Settings › System (a simulated flow in fake mode).
   if (db)
     registerBotTakeoverRoutes(app, {

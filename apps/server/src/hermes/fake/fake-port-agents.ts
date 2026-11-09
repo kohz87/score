@@ -4,6 +4,7 @@ import {
   type AgentDetail,
   type AgentSummary,
   type ProfileStepName,
+  type SubagentSetup,
 } from '@score/contract'
 import { z } from 'zod'
 import { excerpt } from '../agent-files.ts'
@@ -20,6 +21,20 @@ import { fakeReportHistory } from './report-history.ts'
 import { exampleAgents } from './scenario.ts'
 
 export abstract class FakePortAgents extends FakePortSettings {
+  async subagentSetup(): Promise<SubagentSetup> {
+    return {
+      agents: (await this.listAgents()).map((agent) => ({
+        agentId: agent.id,
+        inline: true,
+        guard: true,
+      })),
+    }
+  }
+
+  async applySubagentSetup(_agentIds: string[]): Promise<SubagentSetup> {
+    return this.subagentSetup()
+  }
+
   async listAgents(): Promise<AgentSummary[]> {
     return structuredClone([...this.agents.values()])
   }

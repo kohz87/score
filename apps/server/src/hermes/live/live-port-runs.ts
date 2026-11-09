@@ -1,3 +1,4 @@
+import { defaultSubagentPolicy, sessionIsInline, writeSubagentPolicy } from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 import { HttpError } from '../../errors.ts'
@@ -16,6 +17,17 @@ import { rewindSession } from './rewind.ts'
 import { followRun, waitForRun } from './runs.ts'
 import { readRun, runLifecycle, runLostObservation } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
+
+/** Before the run, so the guard reads this session's limits. If this fails the guard finds none, and refuses. */
+function writeRunSubagentPolicy(port: LivePortRuntime, profile: string, sessionId: string): void {
+  try {
+    const { db } = port.requireStarted()
+    const inline = db.read((sqlite) => sessionIsInline(sqlite, profile, sessionId))
+    writeSubagentPolicy(port.options.scoreHome, sessionId, defaultSubagentPolicy(inline))
+  } catch (error) {
+    port.options.onError?.(error)
+  }
+}
 
 export const runMethods = {
   follow(this: LivePortRuntime, runId: string): void {
@@ -82,6 +94,7 @@ export const runMethods = {
       // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
       throw notDispatched(error)
     }
+    if (req.sessionId) writeRunSubagentPolicy(this, req.agentId, req.sessionId)
     const result = await intents
       .startRunIntent(
         {
