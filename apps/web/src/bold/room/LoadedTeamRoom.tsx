@@ -246,8 +246,16 @@ export function LoadedTeamRoom({
       next.delete('jobs')
       setParams(next, { replace: true, state: location.state })
     },
-    say: (text) =>
-      setSystemLines((lines) => [...lines, { id: newId(), at: new Date().toISOString(), text }]),
+    say: (text, action) =>
+      setSystemLines((lines) => [
+        ...lines,
+        { id: newId(), at: new Date().toISOString(), text, ...(action ? { action } : {}) },
+      ]),
+    offer: (command) => {
+      const next = new URLSearchParams(params)
+      next.set('command', command)
+      setParams(next, { replace: true, state: location.state })
+    },
     onBusy: (busy, options) => setBusyStart({ busy, options }),
   })
 

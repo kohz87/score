@@ -38,16 +38,31 @@ function ApprovalBar({
     >
       <span className="bold-screen-asked">Asked you at {clock(approval.createdAt)}</span>
       <span className="watch-approval__text">
-        {agentDisplayName(agent)} stopped
-        {approval.command ? (
+        {approval.fromSubagent ? (
           <>
-            {' '}
-            before <code>{approval.command}</code>
+            A subagent of {agentDisplayName(agent)} wants to run this
+            {approval.command ? (
+              <>
+                : <code>{approval.command}</code>
+              </>
+            ) : (
+              <>: {approval.title}</>
+            )}
           </>
         ) : (
-          <>: {approval.title}</>
-        )}{' '}
-        and is waiting for you
+          <>
+            {agentDisplayName(agent)} stopped
+            {approval.command ? (
+              <>
+                {' '}
+                before <code>{approval.command}</code>
+              </>
+            ) : (
+              <>: {approval.title}</>
+            )}{' '}
+            and is waiting for you
+          </>
+        )}
         {sending && <span className="bold-screen-answer"> Sending…</span>}
         {retrying && (
           <span className="bold-screen-answer"> Couldn’t deliver your answer. Try again.</span>

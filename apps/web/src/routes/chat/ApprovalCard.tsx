@@ -138,7 +138,11 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
       aria-label={`Approval: ${approval.title}`}
     >
       <div className="chat-approval-body">
-        <span className="chat-approval-title">{approval.title}</span>
+        <span className="chat-approval-title">
+          {approval.fromSubagent
+            ? `A subagent of ${approval.agentId} wants to run this`
+            : approval.title}
+        </span>
         {approval.command && <code className="chat-approval-command">{approval.command}</code>}
         {approval.description && approval.description !== approval.title && (
           <span className="chat-approval-description">{approval.description}</span>

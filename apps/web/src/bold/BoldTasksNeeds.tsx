@@ -15,6 +15,9 @@ function TaskApproval({ detail }: { detail: TaskDetail }) {
   const open = current.actionable && outcome === null && !busy
   return (
     <div className="bold-tb-approval">
+      {current.fromSubagent && (
+        <span>A subagent of {current.agentId} wants to run this</span>
+      )}
       <b>{current.title}</b>
       {current.command && <code className="bold-tb-command">{current.command}</code>}
       {!current.actionable && outcome === null && (

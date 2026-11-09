@@ -4,6 +4,7 @@ import { apiFetch } from '../../data/api.ts'
 import { agentDisplayName } from '../bold-agents.ts'
 import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { fetchSessionContext, roomSessionId } from '../../routes/chat/room-actions.ts'
+import { SubagentControl } from '../subagents/SubagentControl.tsx'
 
 /** The session the next message goes to: the room's own for the general conversation, else the topic's own. */
 export function topicSessionId(
@@ -116,6 +117,12 @@ export function ContextBar({
         <span className="bold-context-model">
           Model <code>{model}</code>
         </span>
+      )}
+      {topic && !topic.isDefault && topic.subagents && (
+        <SubagentControl
+          job={topic}
+          agentId={topic.activeAgents[0] ?? topic.holderAgentId ?? subjectId ?? ''}
+        />
       )}
       <span className="bold-context-spacer" />
       <span className="bold-context-hint">

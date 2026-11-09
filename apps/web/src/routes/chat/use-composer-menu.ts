@@ -101,7 +101,7 @@ export function useComposerMenu({
     if (menu === 'slash') {
       const command = slashItems[position]
       if (!command) return
-      const next = `/${command.name} `
+      const next = `${command.insert ?? `/${command.name}`} `
       edit(next, next.length)
       restoreCaret(area, next, next.length)
     } else if (menu === 'mention' && mention) {

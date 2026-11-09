@@ -207,6 +207,10 @@
   background: var(--field);
 }
 
+[data-ui='bold'] .chat-composer-box--room .chat-menu-note {
+  color: var(--ink2);
+}
+
 [data-ui='bold'] .chat-composer-box--room + * {
   color: var(--muted);
 }

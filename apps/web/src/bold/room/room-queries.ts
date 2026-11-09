@@ -18,6 +18,7 @@ import { defineStreamQuery, type StreamSnapshot } from '../../data/resync.ts'
 import { reduceMessages, type MessagePageData } from '../../routes/chat/queries.ts'
 import { fetchCompleteJobs, fetchCompleteTeamRoom } from '../bold-job-reads.ts'
 import { dropCachedJobFromSearch } from '../bold-search-queries.ts'
+import { withChangedSubagents } from '../subagents/job-subagent-cache.ts'
 import { isEveryoneRoom } from './room-model.ts'
 
 /** The job read model as it now ships: `job.upserted` carries every field the tabs need. */
@@ -111,9 +112,13 @@ export function teamRoomQuery(roomIdOverride: string | null) {
       const snapshot = await fetchCompleteTeamRoom(signal)
       return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: snapshot.jobs } }
     },
-    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted'],
+    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted', 'subagents.changed'],
     reduce(data, event) {
       if (event.type === 'room.deleted') return data?.room.id === event.data.id ? null : data
+      if (event.type === 'subagents.changed') {
+        if (roomIdOverride !== null || !data || event.data.roomId !== data.room.id) return data
+        return { ...data, jobs: withChangedSubagents(data.jobs, event.data) }
+      }
       if (event.type === 'job.deleted') {
         if (!data || event.data.roomId !== data.room.id) return data
         return { ...data, jobs: withoutJob(data.jobs, event.data.id) }
@@ -331,11 +336,15 @@ export function roomJobsQuery(roomId: string | null) {
       const response = await fetchCompleteJobs(roomId, signal)
       return { asOfSeq: response.asOfSeq, data: response.items }
     },
-    types: ['job.upserted', 'job.deleted'],
+    types: ['job.upserted', 'job.deleted', 'subagents.changed'],
     reduce(data, event) {
       if (event.type === 'job.deleted') {
         if (roomId === null || event.data.roomId !== roomId) return data
         return withoutJob(data, event.data.id)
+      }
+      if (event.type === 'subagents.changed') {
+        if (roomId === null || event.data.roomId !== roomId) return data
+        return withChangedSubagents(data, event.data)
       }
       if (event.type !== 'job.upserted' || roomId === null || event.data.roomId !== roomId)
         return data

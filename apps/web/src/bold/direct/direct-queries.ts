@@ -9,6 +9,7 @@ import {
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
+import { withChangedSubagents } from '../subagents/job-subagent-cache.ts'
 
 export type DirectChatsState = { room: Room | null; chats: Job[] }
 
@@ -31,7 +32,13 @@ export function directChatsQuery(agentId: string) {
         data: { room: response.room, chats: [...response.chats].sort(byActivity) },
       }
     },
-    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted'],
+    types: [
+      'room.upserted',
+      'room.deleted',
+      'job.upserted',
+      'job.deleted',
+      'subagents.changed',
+    ],
     reduce(data, event) {
       if (event.type === 'room.deleted')
         return data.room?.id === event.data.id ? { room: null, chats: [] } : data
@@ -42,6 +49,10 @@ export function directChatsQuery(agentId: string) {
       if (event.type === 'job.deleted') {
         if (data.room && event.data.roomId !== data.room.id) return data
         return { ...data, chats: data.chats.filter((chat) => chat.id !== event.data.id) }
+      }
+      if (event.type === 'subagents.changed') {
+        if (data.room && event.data.roomId !== data.room.id) return data
+        return { ...data, chats: withChangedSubagents(data.chats, event.data) }
       }
       if (event.type !== 'job.upserted') return data
       if (data.room && event.data.roomId !== data.room.id) return data

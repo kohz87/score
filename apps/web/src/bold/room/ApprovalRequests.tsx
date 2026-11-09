@@ -69,11 +69,19 @@ function ApprovalRequestCard({
       anchor={{ message, job: job?.id }}
     >
       <div className="bold-request-head">
-        {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
-        <b style={agent ? { color: agentNameColor(agent) } : undefined}>
-          {agent ? agentDisplayName(agent) : current.agentId}
-        </b>
-        <span>· {current.title}</span>
+        {current.fromSubagent ? (
+          <b>
+            A subagent of {agent ? agentDisplayName(agent) : current.agentId} wants to run this
+          </b>
+        ) : (
+          <>
+            {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
+            <b style={agent ? { color: agentNameColor(agent) } : undefined}>
+              {agent ? agentDisplayName(agent) : current.agentId}
+            </b>
+            <span>· {current.title}</span>
+          </>
+        )}
         {job && <span className="bold-request-job">{job.title}</span>}
       </div>
       {current.command && <code className="bold-request-command">{current.command}</code>}
