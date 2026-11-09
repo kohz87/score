@@ -82,15 +82,18 @@ test('the control label: off, the agent’s own limit, a lower number, and Claud
   )
 })
 
+const TEXT: Message['parts'] = [{ kind: 'text', text: 'On it.' }]
 const message = (
   id: string,
   agentId: string,
   jobId: string,
   createdAt: string,
-): Pick<Message, 'id' | 'jobId' | 'author' | 'createdAt'> => ({
+  parts: Message['parts'] = TEXT,
+): Pick<Message, 'id' | 'jobId' | 'author' | 'createdAt' | 'parts'> => ({
   id,
   jobId,
   createdAt,
+  parts,
   author: { kind: 'agent', agentId } as Message['author'],
 })
 
@@ -143,6 +146,29 @@ test('two turns give two cards, each with its own rows and its own count', () =>
   expect(attached.get('turn-2')?.map((item) => item.id)).toEqual(['c', 'd', 'e'])
   expect(subagentDoneText(attached.get('turn-1') ?? [])).toBe('1 of 2 done')
   expect(subagentDoneText(attached.get('turn-2') ?? [])).toBe('2 of 3 done')
+})
+
+test('an approval card is not a message a subagent can land under: only text the agent wrote takes a card', () => {
+  const rows = [row({ id: 'a', startedAt: '2026-11-09T01:30:00.000Z' })]
+  const messages = [
+    message('text', 'lead', 'job-1', '2026-11-09T01:00:00.000Z'),
+    message('approval', 'lead', 'job-1', '2026-11-09T01:20:00.000Z', [
+      { kind: 'approval', approvalId: 'appr-1' },
+    ]),
+  ]
+  const attached = attachSubagentRows(rows, messages)
+  expect(attached.get('text')?.map((item) => item.id)).toEqual(['a'])
+  expect(attached.has('approval')).toBe(false)
+})
+
+test('a message with no text part is skipped even when it is the agent’s only one', () => {
+  const rows = [row({ id: 'a', startedAt: '2026-11-09T01:30:00.000Z' })]
+  const attached = attachSubagentRows(rows, [
+    message('approval', 'lead', 'job-1', '2026-11-09T01:00:00.000Z', [
+      { kind: 'approval', approvalId: 'appr-1' },
+    ]),
+  ])
+  expect(attached.size).toBe(0)
 })
 
 test('a row that starts before the agent’s first message in its job lands on that first message', () => {

@@ -98,12 +98,13 @@ export function subagentAtOnceText(
   return limits.maxConcurrent === null ? `up to ${limit}` : String(limit)
 }
 
-type AgentMessage = Pick<Message, 'id' | 'jobId' | 'author' | 'createdAt'>
+type AgentMessage = Pick<Message, 'id' | 'jobId' | 'author' | 'createdAt' | 'parts'>
 
 /**
  * Attach each subagent row to the message that started it: its parent agent's latest message in the row's job at or
  * before the row's start, else that agent's first message in the job. A row whose agent has no message in its job yet
- * stays out until one exists. The contract has no message id on a row, so this is the closest honest place.
+ * stays out until one exists. The contract has no message id on a row, so this is the closest honest place. Only a
+ * message with text the agent wrote takes a card: an approval card is an agent message with no text part.
  */
 export function attachSubagentRows(
   rows: readonly SubagentRow[],
@@ -112,6 +113,7 @@ export function attachSubagentRows(
   const byAgent = new Map<string, AgentMessage[]>()
   for (const message of messages) {
     if (message.author.kind !== 'agent') continue
+    if (!message.parts.some((part) => part.kind === 'text')) continue
     const key = `${message.jobId}\n${message.author.agentId}`
     byAgent.set(key, [...(byAgent.get(key) ?? []), message])
   }

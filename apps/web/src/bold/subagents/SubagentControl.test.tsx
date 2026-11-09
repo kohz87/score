@@ -131,3 +131,67 @@ test('Escape closes the menu and returns focus to its button', async () => {
   expect(screen.queryByRole('menu')).toBeNull()
   await waitFor(() => expect(document.activeElement).toBe(button))
 })
+
+test('choosing an item returns focus to the button, which is not disabled while the change saves', async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.includes('/agents/lead/subagents')) return jsonResponse(ceiling())
+      if (init?.method === 'PUT') {
+        await gate
+        return jsonResponse(makeJob({ id: 'job-feed', subagents: limits({ maxConcurrent: 2 }) }))
+      }
+      return jsonResponse(makeJob({ id: 'job-feed', subagents: limits() }))
+    }),
+  )
+  renderInRoom(<SubagentControl job={job(limits())} agentId="lead" />)
+  const button = await screen.findByRole('button', { name: 'Subagents: up to 4' })
+  fireEvent.click(button)
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /At most 2 at once/ }))
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(document.activeElement).toBe(button)
+  expect(button.getAttribute('aria-disabled')).toBe('true')
+  expect(button.hasAttribute('disabled')).toBe(false)
+  release()
+  await waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull())
+  expect(document.activeElement).toBe(button)
+})
+
+test('a failed change shows its error beside the button, and the next attempt clears it', async () => {
+  let fail = true
+  const puts: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.includes('/agents/lead/subagents')) return jsonResponse(ceiling())
+      if (init?.method === 'PUT') {
+        puts.push(JSON.parse(String(init.body)))
+        if (fail) return jsonResponse({}, 500)
+        return jsonResponse(makeJob({ id: 'job-feed', subagents: limits({ maxConcurrent: 2 }) }))
+      }
+      return jsonResponse(makeJob({ id: 'job-feed', subagents: limits() }))
+    }),
+  )
+  renderInRoom(<SubagentControl job={job(limits())} agentId="lead" />)
+  const button = await screen.findByRole('button', { name: 'Subagents: up to 4' })
+  fireEvent.click(button)
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /At most 2 at once/ }))
+  const alert = await screen.findByRole('alert')
+  expect(alert.textContent).toBe('Couldn’t change subagents. Try again.')
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(alert.parentElement).toBe(button.parentElement)
+  expect(document.activeElement).toBe(button)
+
+  fail = false
+  fireEvent.click(button)
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /At most 2 at once/ }))
+  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  expect(puts).toEqual([
+    { enabled: true, maxConcurrent: 2 },
+    { enabled: true, maxConcurrent: 2 },
+  ])
+})

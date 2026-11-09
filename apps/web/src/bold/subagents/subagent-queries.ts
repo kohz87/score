@@ -13,7 +13,7 @@ import {
   type SubagentRowsResponse,
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../../data/api.ts'
+import { ApiError, apiFetch } from '../../data/api.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { changeCachedJob } from '../room/room-queries.ts'
@@ -70,9 +70,10 @@ export function useJobSubagentRows(jobId: string | null) {
 }
 
 /**
- * Several jobs' rows in one registration: the conversation shows a card wherever its job is on screen. A job whose read
- * fails counts as no rows; the query fails only when every read does. `asOfSeq` is the lowest that succeeded, so no
- * event after any read is lost on a resync.
+ * Several jobs' rows in one registration: the conversation shows a card wherever its job is on screen. A job that is
+ * gone (its read is a 404) counts as no rows; any other failed read fails the whole query, so the stream layer retries
+ * instead of hiding finished rows for good. `asOfSeq` is the lowest live read, so no event after any read is lost on a
+ * resync; a gone job has no state to protect and is left out of it.
  */
 export function roomSubagentRowsQuery(jobIds: readonly string[]) {
   const ids = [...new Set(jobIds)].sort()
@@ -80,23 +81,22 @@ export function roomSubagentRowsQuery(jobIds: readonly string[]) {
     key: ['bold', 'subagents', 'room', ...ids],
     async fetch(signal) {
       if (ids.length === 0) return { asOfSeq: 0, data: [] }
-      const reads = await Promise.allSettled(
-        ids.map(async (jobId) =>
-          SubagentRowsResponseSchema.parse(
-            await apiFetch(`jobs/${encodeURIComponent(jobId)}/subagents`, { signal }),
-          ),
-        ),
+      const reads = await Promise.all(
+        ids.map(async (jobId) => {
+          try {
+            return SubagentRowsResponseSchema.parse(
+              await apiFetch(`jobs/${encodeURIComponent(jobId)}/subagents`, { signal }),
+            )
+          } catch (error) {
+            if (error instanceof ApiError && error.status === 404) return null
+            throw error
+          }
+        }),
       )
-      const succeeded = reads.flatMap((read) => (read.status === 'fulfilled' ? [read.value] : []))
-      if (succeeded.length === 0) {
-        const failure = reads.find(
-          (read): read is PromiseRejectedResult => read.status === 'rejected',
-        )
-        throw failure?.reason ?? new Error('Subagent rows could not be read.')
-      }
+      const live = reads.flatMap((read) => (read === null ? [] : [read]))
       return {
-        asOfSeq: succeeded.reduce((lowest, read) => Math.min(lowest, read.asOfSeq), Infinity),
-        data: succeeded.flatMap((read) => read.items),
+        asOfSeq: live.length === 0 ? 0 : Math.min(...live.map((read) => read.asOfSeq)),
+        data: live.flatMap((read) => read.items),
       }
     },
     types: ['subagent.upserted', 'job.deleted', 'approval.requested', 'approval.updated'],

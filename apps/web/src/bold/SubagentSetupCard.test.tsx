@@ -56,8 +56,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('shows nothing when every agent is already inline', async () => {
-  setup = setupWith(agentSetup('builder', true, true), agentSetup('coder', true, false))
+test('shows nothing when every agent is already inline with its guard', async () => {
+  setup = setupWith(agentSetup('builder', true, true), agentSetup('coder', true, true))
   const queryClient = open()
   await waitFor(() => expect(queryClient.getQueryState(subagentSetupKey)?.status).toBe('success'))
   expect(screen.queryByText(/agents? needs? one setting changed/)).toBeNull()
@@ -131,6 +131,37 @@ test('shows the server message inside the card when Apply fails and keeps both b
   await waitFor(() => expect(apply.hasAttribute('disabled')).toBe(false))
   expect(screen.getByRole('button', { name: 'Apply to all 1' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Not now' })).toBeDefined()
+})
+
+test('an inline agent without its guard has no limits, so it is listed as waiting for the plugin', async () => {
+  setup = setupWith(agentSetup('builder', true, true), agentSetup('coder', true, false))
+  open()
+
+  expect(
+    await screen.findByRole('heading', { name: '1 agent needs one setting changed' }),
+  ).toBeDefined()
+  expect(screen.getByText('Waiting for the updated Score plugin: coder')).toBeDefined()
+  expect(screen.queryByRole('button', { name: /^Apply to all/ })).toBeNull()
+})
+
+test('a failed Apply refreshes the card, so an agent that did change leaves the list', async () => {
+  setup = setupWith(agentSetup('builder', false, true), agentSetup('coder', false, true))
+  applyReply = () => {
+    setup = setupWith(agentSetup('builder', true, true), agentSetup('coder', false, true))
+    return Response.json(
+      { error: { code: 'conflict', message: 'coder could not be changed.' } },
+      { status: 409 },
+    )
+  }
+  open()
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply to all 2' }))
+  expect(await screen.findByRole('alert')).toBeDefined()
+  expect(
+    await screen.findByRole('heading', { name: '1 agent needs one setting changed' }),
+  ).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Apply to all 1' })).toBeDefined()
+  expect(screen.getByText('delegation.gateway_mode: inline · coder')).toBeDefined()
 })
 
 test('Not now hides the card for this visit', async () => {

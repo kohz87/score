@@ -77,7 +77,7 @@ export function deriveSubagentChoice({
   const problem = loading
     ? 'Still reading the lead’s subagent settings.'
     : counted && !totalValid
-      ? 'The total must be a whole number from 1 to 500'
+      ? `The total must be a whole number from 1 to ${SUBAGENT_LIMITS.maxTotal}`
       : null
   const request = startsNow
     ? subagentsRequestFor({ on, at: atNow, total: totalNumber, ceiling })

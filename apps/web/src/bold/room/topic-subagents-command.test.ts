@@ -57,7 +57,6 @@ const feed = makeJob({
   holderAgentId: 'lead',
   subagents: limits(),
 })
-const general = makeJob({ id: 'job-general', title: 'General', isDefault: true, state: 'open' })
 
 function context(over: Partial<TopicCommandContext> = {}): TopicCommandContext {
   return {
@@ -113,10 +112,30 @@ test('a number above the agent’s limit sends nothing and says the limit is low
   ])
 })
 
-test('no current job: the note says to start one, and nothing is sent', async () => {
-  await runTopicCommand('subagents', '2', context({ current: general }))
+test('no current job and no room job: the note says to start one, and nothing is sent', async () => {
+  await runTopicCommand('subagents', '2', context({ current: undefined, jobs: [] }))
   expect(puts()).toEqual([])
   expect(said).toEqual(['There’s no job to set subagents for. Start one first.'])
+})
+
+test('the room’s own thread can run subagents: with none current, /subagents off sets the general job', async () => {
+  const own = makeJob({
+    id: 'job-general',
+    title: 'General',
+    isDefault: true,
+    state: 'open',
+    holderAgentId: 'lead',
+    subagents: limits(),
+  })
+  await runTopicCommand('subagents', 'off', context({ current: undefined, jobs: [feed, own] }))
+  expect(puts()).toEqual([
+    {
+      path: expect.stringContaining('/jobs/job-general/subagents'),
+      method: 'PUT',
+      body: { enabled: false },
+    },
+  ])
+  expect(said).toEqual(['Subagents are off for this job.'])
 })
 
 test('an invalid argument gives the usage, and nothing is sent', async () => {

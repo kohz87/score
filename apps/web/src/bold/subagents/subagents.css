@@ -190,7 +190,7 @@
   font-size: 12px;
 }
 
-[data-ui='bold'] .bold-subagents-menu-error {
+[data-ui='bold'] .bold-subagents-error {
   margin: 4px 8px 2px;
   color: var(--bad);
   font-size: 12px;

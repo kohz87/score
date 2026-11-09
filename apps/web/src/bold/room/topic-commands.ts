@@ -195,17 +195,20 @@ export async function runTopicCommand(
       say(line)
     } else if (name === 'subagents') {
       const change = { label: 'Change', run: () => ctx.offer?.('subagents') }
-      if (!topic) {
+      // The room's own thread (the general conversation) can run subagents too, so it is the job when none is current.
+      const subagentJob = current ?? jobs.find((job) => job.isDefault)
+      if (!subagentJob) {
         say('There’s no job to set subagents for. Start one first.')
         return
       }
-      const limits = topic.subagents
+      const limits = subagentJob.subagents
       if (!limits) {
         say('This job doesn’t have subagents.')
         return
       }
       // The agent the limit belongs to is the one the next message goes to, so it doesn't flip as whoever is active changes.
-      const agentId = topic.holderAgentId ?? room.leadAgentId ?? topic.activeAgents[0] ?? undefined
+      const agentId =
+        subagentJob.holderAgentId ?? room.leadAgentId ?? subagentJob.activeAgents[0] ?? undefined
       const agentSub = agentId
         ? await ctx.queryClient.fetchQuery(agentSubagentsQuery(agentId))
         : null
@@ -227,13 +230,13 @@ export async function runTopicCommand(
         return
       }
       if (argument === 'off') {
-        const updated = await putJobSubagents(topic.id, { enabled: false })
+        const updated = await putJobSubagents(subagentJob.id, { enabled: false })
         changeCachedJob(ctx.queryClient, updated, 'upsert')
         say('Subagents are off for this job.', change)
         return
       }
       if (argument === 'on') {
-        const updated = await putJobSubagents(topic.id, {
+        const updated = await putJobSubagents(subagentJob.id, {
           enabled: true,
           maxConcurrent: null,
         })
@@ -265,7 +268,7 @@ export async function runTopicCommand(
         )
         return
       }
-      const updated = await putJobSubagents(topic.id, {
+      const updated = await putJobSubagents(subagentJob.id, {
         enabled: true,
         maxConcurrent: count,
       })

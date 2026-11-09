@@ -17,19 +17,19 @@ export function SubagentSetupCard() {
     retry: false,
   })
   const apply = useMutation({
-    mutationFn: async (agentIds: string[]) => {
-      const result = SubagentSetupSchema.parse(
+    mutationFn: async (agentIds: string[]) =>
+      SubagentSetupSchema.parse(
         await apiFetch('subagent-setup/apply', {
           method: 'POST',
           body: JSON.stringify({ agentIds }),
         }),
-      )
-      await queryClient.invalidateQueries({ queryKey: subagentSetupKey })
-      return result
-    },
+      ),
+    // Refreshed on failure too: an Apply that fails part-way may already have changed some agents.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: subagentSetupKey }),
   })
 
-  const waiting = setup.data?.agents.filter((agent) => !agent.inline) ?? []
+  // An agent needs a change when it is not inline, or inline without the guard that limits its subagents.
+  const waiting = setup.data?.agents.filter((agent) => !agent.inline || !agent.guard) ?? []
   if (dismissed || waiting.length === 0) return null
 
   const applicable = waiting.filter((agent) => agent.guard)

@@ -1,3 +1,4 @@
+import { SUBAGENT_LIMITS } from '@score/contract'
 import { fireEvent, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import {
@@ -70,7 +71,11 @@ test('an invalid total blocks Start with the reason', async () => {
   fireEvent.change(subagents(dialog).getByLabelText('Total subagents in this job'), {
     target: { value: '0' },
   })
-  expect(within(dialog).getByText('The total must be a whole number from 1 to 500')).toBeDefined()
+  expect(
+    within(dialog).getByText(
+      `The total must be a whole number from 1 to ${SUBAGENT_LIMITS.maxTotal}`,
+    ),
+  ).toBeDefined()
   expect((start as HTMLButtonElement).disabled).toBe(true)
 })
 

@@ -1,6 +1,6 @@
 import type { SubagentRow } from '@score/contract'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { apiFetch } from '../../data/api.ts'
+import { ApiError, apiFetch } from '../../data/api.ts'
 import { jobSubagentRowsQuery, roomSubagentRowsQuery } from './subagent-queries.ts'
 
 vi.mock('../../data/api.ts', async (importOriginal) => ({
@@ -56,9 +56,9 @@ test('the room’s asOfSeq is the lowest read, so no event after either read is 
   expect(snapshot.data.map((item) => item.id)).toEqual(['a', 'b'])
 })
 
-test('one failed read counts its job as no rows; the others still load', async () => {
+test('a job that is gone (404) counts as no rows; the others still load', async () => {
   readsByJob({
-    'job-a': new Error('down'),
+    'job-a': new ApiError(404, 'not_found', 'Job not found'),
     'job-b': { asOfSeq: 6, items: [row({ id: 'b', jobId: 'job-b' })] },
   })
   const snapshot = await roomSubagentRowsQuery(['job-a', 'job-b']).fetch()
@@ -66,8 +66,25 @@ test('one failed read counts its job as no rows; the others still load', async (
   expect(snapshot.data.map((item) => item.id)).toEqual(['b'])
 })
 
-test('the room query fails only when every read fails', async () => {
-  readsByJob({ 'job-a': new Error('down'), 'job-b': new Error('down') })
+test('every job gone (404) gives no rows at sequence 0', async () => {
+  readsByJob({
+    'job-a': new ApiError(404, 'not_found', 'Job not found'),
+    'job-b': new ApiError(404, 'not_found', 'Job not found'),
+  })
+  const snapshot = await roomSubagentRowsQuery(['job-a', 'job-b']).fetch()
+  expect(snapshot).toEqual({ asOfSeq: 0, data: [] })
+})
+
+test('a failed read that is not a 404 fails the whole query, even when the other read succeeds', async () => {
+  readsByJob({
+    'job-a': new ApiError(500, 'internal', 'Down'),
+    'job-b': { asOfSeq: 6, items: [row({ id: 'b', jobId: 'job-b' })] },
+  })
+  await expect(roomSubagentRowsQuery(['job-a', 'job-b']).fetch()).rejects.toThrow('Down')
+})
+
+test('a network failure fails the whole room query, not only when every read fails', async () => {
+  readsByJob({ 'job-a': new Error('down'), 'job-b': { asOfSeq: 6, items: [] } })
   await expect(roomSubagentRowsQuery(['job-a', 'job-b']).fetch()).rejects.toThrow('down')
 })
 

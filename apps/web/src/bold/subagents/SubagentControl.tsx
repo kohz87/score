@@ -74,7 +74,9 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
     { enabled: true, maxConcurrent: null },
   ]
 
+  // The chosen item unmounts with the menu, so focus goes back to the button first. A new attempt clears the last error.
   function choose(body: JobSubagentsRequest) {
+    button.current?.focus()
     setOpen(false)
     save.mutate(body)
   }
@@ -97,8 +99,11 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        disabled={save.isPending}
-        onClick={() => setOpen((value) => !value)}
+        // aria-disabled, not disabled: a disabled button drops focus, and focus must stay on it while a change is saved.
+        aria-disabled={save.isPending || undefined}
+        onClick={() => {
+          if (!save.isPending) setOpen((value) => !value)
+        }}
       >
         {label}
       </button>
@@ -141,12 +146,12 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
               </button>
             )
           })}
-          {save.error && (
-            <span className="bold-subagents-menu-error" role="alert">
-              Couldn’t change subagents. Try again.
-            </span>
-          )}
         </div>
+      )}
+      {save.error && (
+        <span className="bold-subagents-error" role="alert">
+          Couldn’t change subagents. Try again.
+        </span>
       )}
     </span>
   )

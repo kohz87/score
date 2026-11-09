@@ -383,6 +383,7 @@ export function LoadedTeamRoom({
               agents={agents}
               ownerId={room.leadAgentId}
               topic={sendJob}
+              subagentJob={currentJob ?? allJobs.find((job) => job.isDefault)}
               showTopic={severalJobs}
             />
           )}
