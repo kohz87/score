@@ -178,6 +178,43 @@ test('leaves out what the read does not give instead of inventing it', async () 
   expect(bar().textContent).not.toContain('Model')
 })
 
+test('the general conversation has the room’s own subagent control when no other job is current', async () => {
+  stubContext({ model: null, tokens: null, costUsd: null, contextLength: null })
+  const general = makeJob({
+    id: 'job-general',
+    isDefault: true,
+    title: 'General',
+    subagents: { enabled: true, maxConcurrent: null, maxTotal: 20, used: 0 },
+  })
+  renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="lead"
+      agents={agents}
+      ownerId="lead"
+      topic={general}
+      subagentJob={general}
+    />,
+  )
+  expect(await screen.findByRole('button', { name: 'Subagents: on' })).toBeTruthy()
+})
+
+test('no subagent control for the general conversation without the room’s own job', () => {
+  stubContext({ model: null, tokens: null, costUsd: null, contextLength: null })
+  renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="lead"
+      agents={agents}
+      ownerId="lead"
+      topic={makeJob({ isDefault: true, title: 'General' })}
+    />,
+  )
+  expect(screen.queryByRole('button', { name: /^Subagents:/ })).toBeNull()
+})
+
 test('with nobody to address it says so', () => {
   stubContext({})
   renderInRoom(

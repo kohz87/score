@@ -93,6 +93,7 @@ export const PauseReasonSchema = z.enum([
   'lead_failing',
   'agent_unavailable',
   'abandonment',
+  'subagent_total',
 ])
 export type PauseReason = z.infer<typeof PauseReasonSchema>
 
@@ -223,7 +224,8 @@ export type CheckRunView = z.infer<typeof CheckRunViewSchema>
 export const HelperRoleSchema = z.enum(['search', 'grep', 'audit'])
 export const OrchestrationHelpersSchema = z
   .object({
-    agentIds: z.array(AgentIdSchema).min(1).max(4),
+    /** Decision 173: a new run names voters only, and its lead uses subagents. Old runs keep their helpers. */
+    agentIds: z.array(AgentIdSchema).max(4).default([]),
     maxConcurrent: z.int().min(1).max(6).default(3),
     /** null = no separate limit: helper work runs until the job ends (bounded by its budget, launches and lead turns). */
     maxSteps: z.int().min(1).max(500).nullable().default(20),
@@ -240,6 +242,12 @@ export const OrchestrationHelpersSchema = z
     autoAudit: z.boolean().default(false),
   })
   .strict()
+  .refine((helpers) => helpers.agentIds.length > 0 || (helpers.voterIds?.length ?? 0) > 0, {
+    message: 'Name at least one helper or voter.',
+  })
+  .refine((helpers) => helpers.agentIds.length > 0 || (!helpers.scan && !helpers.autoAudit), {
+    message: 'A scan or an audit needs a helper.',
+  })
 export const VoteViewSchema = z.object({
   id: z.string().min(1),
   question: z.string(),
@@ -631,6 +639,8 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** Decision 173: the job whose subagent limits and rows the run works under, wherever it sits. */
+  subagentJob: z.object({ id: z.string(), roomId: z.string() }).nullable().optional(),
   /** 3.15: the helpers, their limits and use; 3.16: the votes (oldest first). Null = no helpers. */
   helpers: z
     .object({
@@ -758,38 +768,6 @@ export const InquiryAnswerSchema = z
   })
   .strict()
 export type InquiryAnswer = z.infer<typeof InquiryAnswerSchema>
-
-export const LimitsDecisionSchema = z
-  .object({
-    budgetUsd: z.number().positive().max(10_000).nullable().optional(),
-    deadlineAt: z.iso.datetime().nullable().optional(),
-    /** Continue although spend is unknown (otherwise unknown spend keeps the run paused). */
-    acceptUnknownSpend: z.boolean().optional(),
-    /** 7.7b: raise or lower how many coding launches the run may release. */
-    codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
-    /** 7.7b: accept (or stop accepting) unknown cost for single sources. */
-    acceptUnknownCost: z
-      .object({
-        add: z.array(CostSourceSchema).max(3).optional(),
-        remove: z.array(CostSourceSchema).max(3).optional(),
-      })
-      .strict()
-      .optional(),
-    /** 8.6: change the run's quota floor; `null` goes back to each coding agent's own. */
-    quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
-    orchestrationRevision: revision,
-  })
-  .strict()
-  .refine(
-    (v) =>
-      v.quotaFloorPercent !== undefined ||
-      v.budgetUsd !== undefined ||
-      v.deadlineAt !== undefined ||
-      v.acceptUnknownSpend !== undefined ||
-      v.codingSteps !== undefined ||
-      v.acceptUnknownCost !== undefined,
-  )
-export type LimitsDecision = z.infer<typeof LimitsDecisionSchema>
 
 export const RunControlSchema = z.object({ orchestrationRevision: revision }).strict()
 export type RunControl = z.infer<typeof RunControlSchema>

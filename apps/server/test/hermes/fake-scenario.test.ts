@@ -78,7 +78,10 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         type !== 'job.deleted' &&
         // Agent questions (decision 128) follow a person's "ask me" message, never the scripted scenario.
         type !== 'question.requested' &&
-        type !== 'question.updated',
+        type !== 'question.updated' &&
+        // The fake adapter starts no subagents of its own (e2e/subagents.spec.ts covers the limits).
+        type !== 'subagent.upserted' &&
+        type !== 'subagents.changed',
     )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
   expect(stored).toHaveLength(createScenario(schedulerStart).length + 4 + SCENARIO_JOB_EVENTS)

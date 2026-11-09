@@ -1,0 +1,77 @@
+/* SA.3 part 9 (docs/design/bold/mockups/24-subagents-start-job.dc.html): the Subagents pills, the total and the voters
+   picker. The selected choice is a light object, as the mock-up has it. */
+[data-ui='bold'] .bold-subagent-pills,
+[data-ui='bold'] .bold-start-voter-row,
+[data-ui='bold'] .bold-start-voter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+[data-ui='bold'] .bold-subagent-pill,
+[data-ui='bold'] .bold-start-voter,
+[data-ui='bold'] .bold-start-voter-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+[data-ui='bold'] .bold-subagent-pill:disabled,
+[data-ui='bold'] .bold-start-voter-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+[data-ui='bold'] .bold-subagent-pill[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+[data-ui='bold'] .bold-start-voter-add {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+[data-ui='bold'] .bold-subagent-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-ui='bold'] .bold-subagent-total .field {
+  width: 88px;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+/* The mock-up: each a full-width block, its heading on its own line. */
+[data-ui='bold'] .start-subagents,
+[data-ui='bold'] .start-voters {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+[data-ui='bold'] .start-subagents > legend,
+[data-ui='bold'] .start-voters > legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+[data-ui='bold'] .start-subagents > legend + *,
+[data-ui='bold'] .start-voters > legend + * {
+  clear: both;
+}

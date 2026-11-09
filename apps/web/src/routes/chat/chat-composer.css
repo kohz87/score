@@ -236,6 +236,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.chat-menu-note {
+  padding: 6px var(--space-3) 4px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
 .chat-composer-notice {
   margin-bottom: 10px;
   padding: 10px var(--space-4);

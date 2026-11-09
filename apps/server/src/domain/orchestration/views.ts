@@ -11,6 +11,7 @@ import type {
 import { checkView } from './checks.ts'
 import { consultViews, workerAdvisorAsks } from './advisor.ts'
 import { helpersView } from './helpers.ts'
+import { runSubagentJob } from './subagent-scope.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { workerPoliciesOf } from './coding-policy.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
@@ -99,7 +100,7 @@ export function needsYouOf(
     const reason = o.pause_reason as Extract<NeedsYou, { kind: 'paused' }>['reason']
     if (reason !== 'person')
       result.push(
-        ['budget', 'unknown_spend', 'deadline'].includes(reason)
+        ['budget', 'unknown_spend', 'deadline', 'subagent_total'].includes(reason)
           ? { kind: 'budget', reason }
           : { kind: 'paused', reason },
       )
@@ -326,6 +327,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     advisor: consultViews(sqlite, o),
     workerAdvisorAsks: workerAdvisorAsks(sqlite, o.id),
     helpers: helpersView(sqlite, o),
+    subagentJob: runSubagentJob(sqlite, o.id),
     coding: {
       stepLimit: o.coding_steps,
       acceptedUnknownCost: o.accepted_unknown_cost.filter(

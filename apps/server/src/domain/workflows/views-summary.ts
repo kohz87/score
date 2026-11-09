@@ -63,7 +63,7 @@ function needsYouOf(
   if (o.status === 'paused' && o.pause_reason !== null && o.pause_reason !== 'person') {
     const reason = o.pause_reason as Extract<WorkflowNeedsYou, { kind: 'paused' }>['reason']
     result.push(
-      ['budget', 'unknown_spend', 'deadline'].includes(reason)
+      ['budget', 'unknown_spend', 'deadline', 'subagent_total'].includes(reason)
         ? { kind: 'budget', reason }
         : { kind: 'paused', reason },
     )

@@ -17,6 +17,7 @@ import {
 } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { BoldAddAgent } from './BoldAddAgent.tsx'
+import { SubagentSetupCard } from './SubagentSetupCard.tsx'
 import './bold-team.css'
 
 const PHONE = '(max-width: 860px)'
@@ -165,6 +166,7 @@ export function BoldTeam() {
         </h1>
         <BoldAddAgent agents={visible} phone={phone} />
       </div>
+      <SubagentSetupCard />
       {body}
       <div className="card row wrap bold-pause">
         <span className="grow">

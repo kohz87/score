@@ -1,3 +1,4 @@
+import { subagentDriverOptions } from '../../domain/subagents.ts'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { driverFor } from './drivers.ts'
@@ -52,6 +53,7 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
       }))
     const driver = driverFor(agent.runtime)
     const translation = newTranslation(entry.runId, agent.id, job, Boolean(entry.owner))
+    translation.subagentJobId = job ?? entry.jobId ?? null
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
     const owner = entry.owner
     // An owned worker runs what its policy says (7.7b §3), never what the agent row says now: permission, model and
@@ -251,6 +253,7 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
           settingsPath: frozenPolicy?.policy.settings?.path ?? settingsPath,
           denyPaths: this.denyPaths(),
           denyFiles: this.denyFiles(),
+          ...subagentDriverOptions(db.sqlite, agent.id, translation.subagentJobId),
           ...(frozenPolicy ? { worker: true } : {}),
           ...(delivery.file ? { instructionsFile: delivery.file } : {}),
           ...(delivery.refresh ? { refreshSystemPrompt: true } : {}),
@@ -284,7 +287,13 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
         entry,
         agent,
         attempt,
-        command: { file, args: cliArgs, env: locator.childEnv(), cwd: checked.real, stdin },
+        command: {
+          file,
+          args: cliArgs,
+          env: { ...locator.childEnv(), ...driver.runEnv },
+          cwd: checked.real,
+          stdin,
+        },
         parser,
         retainedBytes: () => translationBytes(translation) + text.size,
         deadline,

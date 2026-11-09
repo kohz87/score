@@ -1,3 +1,4 @@
+import { endSubagentRow, startSubagent } from '../../domain/subagent-rows.ts'
 import { SubagentSummarySchema, type SubagentSummary } from '@score/contract'
 import { z } from 'zod'
 import { appendRunMessage, liveActivityDraft, noteRunProgress } from '../../domain/message-runs.ts'
@@ -20,6 +21,9 @@ const boundCallId = (id: string) => id.slice(0, 200)
  * One parsed CLI event as an observation. Everything stored is redacted here: tool previews, thinking, frames and
  * the reply text (which `appendRunMessage` redacts once it settles).
  */
+// Claude Code's way of starting a subagent; the older name is still accepted (`--disallowed-tools` names both).
+const SUBAGENT_TOOLS = new Set(['Agent', 'Task'])
+
 export function eventObservation(
   translation: RunTranslation,
   rawEvent: CodingEvent,
@@ -103,6 +107,16 @@ export function eventObservation(
               tools_used: JSON.stringify(tools.map(({ tool }) => tool)),
             })
           }
+          if (translation.subagentJobId && SUBAGENT_TOOLS.has(toolName))
+            drafts.push(
+              ...startSubagent(sqlite, {
+                id: `${runId}:${event.callId}`,
+                jobId: translation.subagentJobId,
+                profile: agentId,
+                goal: event.preview,
+                now,
+              }),
+            )
           drafts.push({
             type: 'log.line',
             data: {
@@ -134,6 +148,14 @@ export function eventObservation(
           const call = translation.calls.get(event.callId)
           if (!call) break
           translation.calls.delete(event.callId)
+          drafts.push(
+            ...endSubagentRow(
+              sqlite,
+              `${runId}:${event.callId}`,
+              event.ok ? 'done' : 'failed',
+              now,
+            ),
+          )
           sqlite
             .prepare(
               `UPDATE tool_calls SET status = ?, ended_at = ?, duration_ms = ?, result_preview = ? WHERE run_id = ? AND seq = ?`,

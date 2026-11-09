@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { EXCHANGE_LIMITS, type Job, type JobCreateRequest } from '@score/contract'
+import { EXCHANGE_LIMITS, SUBAGENT_LIMITS, type Job, type JobCreateRequest } from '@score/contract'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { HttpError } from '../../errors.ts'
 import { jobEvent } from './job-view.ts'
@@ -61,8 +61,9 @@ export function createJob(
   sqlite
     .prepare(
       `INSERT INTO jobs (id, room_id, title, session_scheme, exchange_budget, job_turn_limit, spend_cap_usd,
-                         recipe_kind, recipe_ref, created_at, updated_at)
-       VALUES (?, ?, ?, 'job', ?, ?, ?, ?, ?, ?, ?)`,
+                         recipe_kind, recipe_ref, subagents_enabled, subagents_max_concurrent, subagents_max_total,
+                         created_at, updated_at)
+       VALUES (?, ?, ?, 'job', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -73,6 +74,9 @@ export function createJob(
       options.spendCapUsd ?? null,
       options.recipe?.kind ?? null,
       options.recipe?.ref ?? null,
+      options.subagents?.enabled === false ? 0 : 1,
+      options.subagents?.maxConcurrent ?? null,
+      options.subagents?.maxTotal ?? SUBAGENT_LIMITS.defaultTotal,
       now,
       now,
     )

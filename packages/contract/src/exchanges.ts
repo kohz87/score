@@ -1,3 +1,4 @@
+import { JobSubagentsRequestSchema, JobSubagentsSchema, SUBAGENT_LIMITS } from './subagents.ts'
 import { z } from 'zod'
 import { CommandIdSchema } from './orchestration.ts'
 import { AgentIdSchema, RoomSchema } from './types.ts'
@@ -176,6 +177,8 @@ export const JobSchema = z.object({
   jobTurnLimit: z.int().positive(),
   /** 11.10c: the job's spend cap in USD; null = none. */
   spendCapUsd: z.number().positive().nullable(),
+  /** Decision 173: its subagent limits. Optional for readers of older servers; the server always sends it. */
+  subagents: JobSubagentsSchema.optional(),
   /** 11.10c: the orchestration or workflow run this job came from; null for a free-form job. */
   recipe: JobRecipeSchema.nullable(),
   /** PLAN 11.2: agent messages in the job the person hasn't read. */
@@ -213,11 +216,13 @@ export const ExchangePauseReasonSchema = z.enum([
   'no_decision',
   'author_stalled',
   'question_stopped',
+  'subagent_total',
 ])
 export type ExchangePauseReason = z.infer<typeof ExchangePauseReasonSchema>
 export const ExchangeOptionSchema = z.enum([
   'more_turns',
   'more_spend',
+  'more_subagents',
   'continue',
   'lead_decides',
   'step_in',
@@ -279,6 +284,12 @@ export type Exchange = z.infer<typeof ExchangeSchema>
 export const ExchangeDecisionRequestSchema = z.discriminatedUnion('option', [
   z
     .object({
+      option: z.literal('more_subagents'),
+      count: z.int().min(1).max(SUBAGENT_LIMITS.moreMax),
+    })
+    .strict(),
+  z
+    .object({
       option: z.literal('more_turns'),
       turns: z.int().min(1).max(EXCHANGE_LIMITS.moreTurnsMax),
     })
@@ -319,6 +330,8 @@ export const JobCreateRequestSchema = z
     jobTurnLimit: z.int().min(1).max(1000).optional(),
     spendCapUsd: z.number().positive().max(10_000).optional(),
     recipe: JobRecipeSchema.optional(),
+    /** Decision 173; omitted = on, the agent's own limit at once, a total of 20. */
+    subagents: JobSubagentsRequestSchema.optional(),
   })
   .strict()
 export const ExchangesResponseSchema = z.object({

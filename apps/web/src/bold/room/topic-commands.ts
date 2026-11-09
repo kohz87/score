@@ -10,6 +10,7 @@ import { activeJobs } from './room-model.ts'
 import type { BusyStart } from './BusyDialog.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { setRoomWorkspace, useSharedWorkspaces } from '../workspaces-queries.ts'
+import { agentSubagentsQuery, putJobSubagents } from '../subagents/subagent-queries.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
 export const TOPIC_COMMANDS: SlashCommand[] = [
@@ -21,6 +22,28 @@ export const TOPIC_COMMANDS: SlashCommand[] = [
     description: 'Reopen the current (or latest finished) job',
   },
   { name: 'lead', usage: '/lead @agent', description: 'Make someone the owner of this chat' },
+  {
+    name: 'subagents',
+    usage: '/subagents 2',
+    insert: '/subagents 2',
+    key: 'subagents-2',
+    description: 'At most 2 at once, for this job',
+  },
+  {
+    name: 'subagents',
+    usage: '/subagents off',
+    insert: '/subagents off',
+    key: 'subagents-off',
+    description: 'None in this job',
+  },
+  {
+    name: 'subagents',
+    usage: '/subagents on',
+    insert: '/subagents on',
+    key: 'subagents-on',
+    description: "Back to the agent's limit (4)",
+    note: "The agent's limit is the most you can set here. Change it in its settings.",
+  },
   { name: 'add', usage: '/add @agent', description: 'Add someone to this chat' },
   { name: 'remove', usage: '/remove @agent', description: 'Take someone out of this chat' },
   {
@@ -81,7 +104,9 @@ export type TopicCommandContext = {
   /** Makes a topic the current one (the address names it). */
   pick: (jobId: string | null) => void
   /** A small line in the stream for what changed. */
-  say: (text: string) => void
+  say: (text: string, action?: { label: string; run: () => void }) => void
+  /** Loads a slash command into the composer (the note's "Change"). */
+  offer?: (command: string) => void
   /** Opens Start a job for this chat (`/run`). Missing where the dialog isn't mounted. */
   startRun?: (options: StartJobOptions) => void
   /** The chat already has a job running: the busy dialog asks what to do (3.28.0). Without it `/run` just starts. */
@@ -168,6 +193,87 @@ export async function runTopicCommand(
         }),
       )
       say(line)
+    } else if (name === 'subagents') {
+      const change = { label: 'Change', run: () => ctx.offer?.('subagents') }
+      // The room's own thread (the general conversation) can run subagents too, so it is the job when none is current.
+      const subagentJob = current ?? jobs.find((job) => job.isDefault)
+      if (!subagentJob) {
+        say('There’s no job to set subagents for. Start one first.')
+        return
+      }
+      const limits = subagentJob.subagents
+      if (!limits) {
+        say('This job doesn’t have subagents.')
+        return
+      }
+      // The agent the limit belongs to is the one the next message goes to, so it doesn't flip as whoever is active changes.
+      const agentId =
+        subagentJob.holderAgentId ?? room.leadAgentId ?? subagentJob.activeAgents[0] ?? undefined
+      const agentSub = agentId
+        ? await ctx.queryClient.fetchQuery(agentSubagentsQuery(agentId))
+        : null
+      const name = agents.find((agent) => agent.id === agentId)?.name ?? agentId ?? 'This agent'
+      if (agentSub?.control === 'none') {
+        say(`Subagents aren’t supported on ${name} yet. Nothing was sent.`)
+        return
+      }
+      const ceiling = agentSub?.control === 'limits' ? agentSub.maxConcurrent : null
+      const used = `${limits.used} of ${limits.maxTotal} used in this job`
+      const state = !limits.enabled
+        ? 'Subagents are off for this job.'
+        : limits.maxConcurrent === null
+          ? `Subagents are on, up to ${ceiling ?? 'the agent’s limit'} at once (${used}).`
+          : `Subagents are set to at most ${limits.maxConcurrent} for this job (${used}).`
+      const argument = args.trim().toLowerCase()
+      if (!argument) {
+        say(state, change)
+        return
+      }
+      if (argument === 'off') {
+        const updated = await putJobSubagents(subagentJob.id, { enabled: false })
+        changeCachedJob(ctx.queryClient, updated, 'upsert')
+        say('Subagents are off for this job.', change)
+        return
+      }
+      if (argument === 'on') {
+        const updated = await putJobSubagents(subagentJob.id, {
+          enabled: true,
+          maxConcurrent: null,
+        })
+        changeCachedJob(ctx.queryClient, updated, 'upsert')
+        say(
+          ceiling === null
+            ? 'Subagents are on, at the agent’s limit.'
+            : `Subagents are on, up to the agent’s limit (${ceiling}).`,
+          change,
+        )
+        return
+      }
+      if (!/^\d+$/.test(argument)) {
+        say('Use /subagents off, /subagents on, or /subagents 2.')
+        return
+      }
+      const count = Number(argument)
+      if (!Number.isInteger(count) || count < 1) {
+        say('Use a whole number from 1 to the agent’s limit.')
+        return
+      }
+      if (agentSub && agentSub.control !== 'limits') {
+        say(`${name} decides how many run at once. Use /subagents off or /subagents on.`)
+        return
+      }
+      if (ceiling !== null && count > ceiling) {
+        say(
+          `The agent’s limit is ${ceiling}, so that’s the most you can set here. Nothing was sent.`,
+        )
+        return
+      }
+      const updated = await putJobSubagents(subagentJob.id, {
+        enabled: true,
+        maxConcurrent: count,
+      })
+      changeCachedJob(ctx.queryClient, updated, 'upsert')
+      say(`Subagents set to at most ${count} for this job.`, change)
     } else if (name === 'run') {
       // A direct chat holds no run: runs belong to a group chat (a team or a chat of several agents).
       if (room.kind === 'direct') throw new Error('Runs start in a group chat.')

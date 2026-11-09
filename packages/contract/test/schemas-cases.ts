@@ -10,9 +10,11 @@ import { maintenanceCases } from './schemas-cases-maintenance.ts'
 import { codingCases } from './schemas-cases-coding.ts'
 import { themeCases } from './schemas-cases-themes.ts'
 import { exchangeCases } from './schemas-cases-exchanges.ts'
+import { subagentCases } from './schemas-cases-subagents.ts'
 
 export const cases = [
   ...agentCases,
+  ...subagentCases,
   ...nowTaskCases,
   ...watchStreamCases,
   ...securitySettingsCases,

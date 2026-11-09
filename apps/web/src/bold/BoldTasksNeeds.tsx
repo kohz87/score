@@ -1,6 +1,9 @@
 import type { TaskDetail, TaskSummary } from '@score/contract'
 import { Link } from 'react-router'
 import { useApprovalDecision, approvalOutcome } from '../routes/chat/ApprovalCard.tsx'
+import { useStreamQuery } from '../data/query-client.ts'
+import { agentsQuery } from '../routes/chat/queries.ts'
+import { agentDisplayName } from './bold-agents.ts'
 import { blockedTask, taskBlockedReason } from './room/task-queries.ts'
 import { CardBody } from './BoldTasksCards.tsx'
 import type { Lookup } from './bold-tasks-page-model.ts'
@@ -8,13 +11,20 @@ import { useTaskPost } from './use-task-post.ts'
 
 function TaskApproval({ detail }: { detail: TaskDetail }) {
   const approval = detail.pendingApproval
+  const agents = useStreamQuery(agentsQuery).data ?? []
   const { posted, busy, error, decide } = useApprovalDecision(approval?.id ?? '')
   if (!approval) return null
   const current = posted && approval.delivery === 'none' ? posted : approval
+  const owner = agents.find((agent) => agent.id === current.agentId)
   const outcome = approvalOutcome(current)
   const open = current.actionable && outcome === null && !busy
   return (
     <div className="bold-tb-approval">
+      {current.subagentId && (
+        <span>
+          A subagent of {owner ? agentDisplayName(owner) : current.agentId} wants to run this
+        </span>
+      )}
       <b>{current.title}</b>
       {current.command && <code className="bold-tb-command">{current.command}</code>}
       {!current.actionable && outcome === null && (

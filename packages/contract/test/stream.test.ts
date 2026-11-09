@@ -15,6 +15,23 @@ const eventData = {
   'agent.updated': f.agent,
   'room.upserted': f.room,
   'room.pins.changed': { roomId: 'room-1' },
+  'subagents.changed': {
+    jobId: 'job_1',
+    roomId: 'room_1',
+    subagents: { enabled: true, maxConcurrent: 2, maxTotal: 20, used: 1 },
+  },
+  'subagent.upserted': {
+    id: 'child_1',
+    jobId: 'job_1',
+    agentId: 'lead',
+    goal: 'Read the feed API',
+    state: 'running',
+    waitingOnYou: false,
+    startedAt: '2026-11-09T10:00:00.000Z',
+    endedAt: null,
+    costUsd: null,
+    tokens: null,
+  },
   'job.deleted': { id: 'job_1', roomId: 'room-team' },
   'job.upserted': {
     id: 'job_1',

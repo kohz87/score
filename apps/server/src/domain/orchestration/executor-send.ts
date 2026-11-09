@@ -134,11 +134,19 @@ export const sendMethods = {
     }
     // Pauses, fences, holds, the deadline and a stop owed: the attempt stays `created`. The deadline flow, the budget
     // pause and the unknown-cost pause are the orchestration's own.
-    if (denial?.cause === 'budget' || denial?.cause === 'unknown_cost') {
+    if (
+      denial?.cause === 'budget' ||
+      denial?.cause === 'unknown_cost' ||
+      denial?.cause === 'subagent_total'
+    ) {
       this.pauseFor(
         ctx,
         requireOrch(sqlite, o.id),
-        denial.cause === 'budget' ? 'budget' : 'unknown_spend',
+        denial.cause === 'budget'
+          ? 'budget'
+          : denial.cause === 'unknown_cost'
+            ? 'unknown_spend'
+            : 'subagent_total',
       )
       return undefined
     }

@@ -82,6 +82,8 @@ export interface ActiveRun {
   turnId: string
   /** Set when an orchestration attempt generation owns the run (7.7b §5). */
   owner?: OrchestrationOwner
+  /** The job its subagents count against, when the run has none of its own (an orchestration's). */
+  jobId?: string
   /** Set once the process (or unit) exists. */
   process?: { stop(reason?: StopReason): void }
   /** Stop asked while the turn was still waiting for the agent's previous turn. */

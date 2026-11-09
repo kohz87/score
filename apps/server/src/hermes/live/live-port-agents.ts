@@ -1,3 +1,12 @@
+import { subagentSessionsOf } from '../../domain/subagents.ts'
+import type { HermesSubagentConfig } from '../profile-management.ts'
+import { dropSubagentPolicy, subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
+import {
+  applySubagentSetup,
+  readSubagentConfig,
+  readSubagentSetup,
+  writeSubagentConfig,
+} from './subagent-setup.ts'
 import type { AgentDetail, AgentSummary, RunsOnUpdate } from '@score/contract'
 import { homedir } from 'node:os'
 import { HttpError } from '../../errors.ts'
@@ -15,7 +24,60 @@ import { readAgentTodos } from './todos.ts'
 import { RunRowSchema } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
 
+const hermesAgentIds = (agents: readonly { id: string }[]): string[] =>
+  agents.map((agent) => agent.id)
+const subagentSetupDeps = (port: LivePortRuntime) => ({
+  runner: port.options.runner ?? runHermes,
+  hermesHome: resolveHermesHome(port.options.hermesHome),
+  home: (agentId: string) => port.agentHome(agentId),
+})
+
 export const agentMethods = {
+  async subagentSetup(this: LivePortRuntime) {
+    return readSubagentSetup(subagentSetupDeps(this), hermesAgentIds(await this.listAgents()))
+  },
+  refreshSubagentPolicies(this: LivePortRuntime, jobId: string): void {
+    const { db } = this.requireStarted()
+    db.read((sqlite) => {
+      for (const { sessionId, profile, inline } of subagentSessionsOf(sqlite, jobId)) {
+        // One unwritable file doesn't stop the job's other sessions getting the change.
+        try {
+          writeSubagentPolicy(
+            this.options.scoreHome,
+            sessionId,
+            subagentPolicyFor(sqlite, profile, jobId, inline),
+          )
+        } catch (error) {
+          this.options.onError?.(error)
+          try {
+            dropSubagentPolicy(this.options.scoreHome, sessionId)
+          } catch (dropped) {
+            this.options.onError?.(dropped)
+          }
+        }
+      }
+    })
+  },
+  async subagentConfig(this: LivePortRuntime, agentId: string) {
+    return readSubagentConfig(subagentSetupDeps(this), agentId)
+  },
+  async setSubagentConfig(
+    this: LivePortRuntime,
+    agentId: string,
+    change: Partial<HermesSubagentConfig>,
+  ) {
+    await writeSubagentConfig(subagentSetupDeps(this), agentId, change)
+  },
+  async applySubagentSetup(this: LivePortRuntime, agentIds: string[]) {
+    const { db } = this.requireStarted()
+    return applySubagentSetup(
+      subagentSetupDeps(this),
+      db,
+      hermesAgentIds(await this.listAgents()),
+      agentIds,
+      () => new Date().toISOString(),
+    )
+  },
   async listAgents(this: LivePortRuntime): Promise<AgentSummary[]> {
     return (await this.listAgentDetails()).map(agentSummary)
   },

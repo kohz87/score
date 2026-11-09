@@ -9,6 +9,7 @@ export function pinLabel(item: NeedsYou | WorkflowNeedsYou): string {
     case 'inquiry':
       return 'The lead asks'
     case 'budget':
+      if (item.reason === 'subagent_total') return 'Subagent total reached'
       return item.reason === 'unknown_spend' ? 'Spend not settled' : 'Budget or deadline'
     case 'paused':
       return 'Paused'

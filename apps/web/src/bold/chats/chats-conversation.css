@@ -36,6 +36,25 @@
   color: var(--muted);
 }
 
+[data-ui='bold'] .bold-system-line-action {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  [data-ui='bold'] .bold-system-line-action {
+    min-height: 44px;
+    padding: 0 4px;
+  }
+}
+
 /* The / palette opens above the composer in the layout flow, not over the messages. */
 [data-ui='bold'] .bold-room-composer .chat-menu {
   position: static;

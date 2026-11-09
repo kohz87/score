@@ -1,3 +1,4 @@
+import { subagentRule } from '../subagents.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { XTC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { redact, redactBounded } from '../../redact.ts'
@@ -131,6 +132,7 @@ export function jobRunInput(
     role(sqlite, turn),
     exchange ? `This exchange has used ${exchange.turns_used} of ${exchange.budget} turns.` : '',
     howToAct(coding, !coding),
+    subagentRule(sqlite, turn.agent_id, job.id),
   ]
     .filter(Boolean)
     .join('\n')

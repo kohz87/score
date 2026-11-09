@@ -54,22 +54,19 @@ export function useStartJobState(options: StartJobOptions | undefined, refs: Sta
   const [advisorPick, setAdvisorPick] = useState('')
   // 3.15: who the advisor helps. On call (default) also lets a Claude Code worker ask it while it works.
   const [checkFolder, setCheckFolder] = useState<string | null>(null)
-  // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
-  const [helperPick, setHelperPick] = useState<string[]>([])
-  // 3.13.1: who answers votes; empty = the helpers.
+  // 3.13.1: who answers votes (named agents, never the lead; Score counts the answers).
   const [voterPick, setVoterPick] = useState<string[]>([])
   // 3.13.1: raw text; null = follows the suggestion until the person types.
   const [launchesText, setLaunchesText] = useState<string | null>(null)
-  const [helperConcurrent, setHelperConcurrent] = useState('3')
-  const [helperSteps, setHelperSteps] = useState('20')
-  // 3.14: no helper limit (until the job ends), and the automatic votes and audits.
-  const [helperNoLimit, setHelperNoLimit] = useState(false)
+  // 3.14: the automatic votes before each step (they need voters).
   const [autoVote, setAutoVote] = useState(false)
   const [autoVoteK, setAutoVoteK] = useState('3')
-  const [autoAudit, setAutoAudit] = useState(false)
-  const [helperScan, setHelperScan] = useState(false)
-  const [helperFolder, setHelperFolder] = useState<string | null>(null)
+  // 3.16: who decides a split vote among the voters: the lead (default) or you.
   const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
+  // SA.3: the lead's own subagents for this job. `subagentsAt` null = the lead's limit (capped at four).
+  const [subagentsOn, setSubagentsOn] = useState(true)
+  const [subagentsAt, setSubagentsAt] = useState<number | null>(null)
+  const [subagentsTotal, setSubagentsTotal] = useState('20')
   const [checkEachStep, setCheckEachStep] = useState(false)
   const [checkMinutes, setCheckMinutes] = useState('10')
   const [authNeeded, setAuthNeeded] = useState(false)
@@ -168,30 +165,22 @@ export function useStartJobState(options: StartJobOptions | undefined, refs: Sta
     setAdvisorPick,
     checkFolder,
     setCheckFolder,
-    helperPick,
-    setHelperPick,
     voterPick,
     setVoterPick,
     launchesText,
     setLaunchesText,
-    helperConcurrent,
-    setHelperConcurrent,
-    helperSteps,
-    setHelperSteps,
-    helperNoLimit,
-    setHelperNoLimit,
     autoVote,
     setAutoVote,
     autoVoteK,
     setAutoVoteK,
-    autoAudit,
-    setAutoAudit,
-    helperScan,
-    setHelperScan,
-    helperFolder,
-    setHelperFolder,
     helperSplit,
     setHelperSplit,
+    subagentsOn,
+    setSubagentsOn,
+    subagentsAt,
+    setSubagentsAt,
+    subagentsTotal,
+    setSubagentsTotal,
     checkEachStep,
     setCheckEachStep,
     checkMinutes,

@@ -98,7 +98,9 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
   if (o.status !== 'paused') throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   // Resume ends the manual hold. A budget / unknown-spend / deadline pause is that condition's own and stays until the
   // limits decision (or, without a manual hold, is simply re-evaluated by admission as before).
-  const limitPause = ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
+  const limitPause = ['budget', 'unknown_spend', 'deadline', 'subagent_total'].includes(
+    o.pause_reason ?? '',
+  )
   if (limitPause && o.manual_paused_at !== null)
     ctx.sqlite.prepare('UPDATE orchestrations SET manual_paused_at = NULL WHERE id = ?').run(orchId)
   else

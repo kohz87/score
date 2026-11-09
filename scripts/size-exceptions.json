@@ -1,7 +1,7 @@
 [
   {
     "path": "apps/server/src/hermes/port.ts",
-    "lines": 513,
+    "lines": 493,
     "reason": "the Hermes adapter interface (D2.1): a declarative list of the port's method signatures (decision 172)"
   },
   {

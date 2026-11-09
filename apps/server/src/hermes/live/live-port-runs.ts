@@ -1,3 +1,14 @@
+import { configJson } from './agent-config.ts'
+import { runHermes } from './cli.ts'
+import { resolveHermesHome } from './paths.ts'
+import { hermesSessionStartedAt, settleRunCost } from './run-cost.ts'
+import { rememberSubagentSession } from '../../domain/subagents.ts'
+import {
+  dropSubagentPolicy,
+  sessionIsInline,
+  subagentPolicyFor,
+  writeSubagentPolicy,
+} from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 import { HttpError } from '../../errors.ts'
@@ -16,6 +27,45 @@ import { rewindSession } from './rewind.ts'
 import { followRun, waitForRun } from './runs.ts'
 import { readRun, runLifecycle, runLostObservation } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
+
+/**
+ * Before the run, so the guard reads this session's limits. A run doesn't start without them: an older file may say
+ * more than the job now allows, and the guard can't tell a room continuing an outside session from the owner's own.
+ */
+async function writeRunSubagentPolicy(
+  port: LivePortRuntime,
+  profile: string,
+  sessionId: string,
+  jobId: string | null,
+): Promise<void> {
+  try {
+    const { db } = port.requireStarted()
+    const mode = await configJson(
+      port.options.runner ?? runHermes,
+      resolveHermesHome(port.options.hermesHome),
+      profile,
+      'delegation.gateway_mode',
+    )
+    const started = hermesSessionStartedAt(profile, sessionId, port.options.hermesHome)
+    const policy = db.tx((sqlite) => {
+      const seen =
+        mode.state === 'ok' &&
+        mode.value === 'inline' &&
+        sessionIsInline(sqlite, profile, sessionId, started)
+      const inline = jobId ? rememberSubagentSession(sqlite, sessionId, profile, jobId, seen) : seen
+      return subagentPolicyFor(sqlite, profile, jobId, inline)
+    })
+    writeSubagentPolicy(port.options.scoreHome, sessionId, policy)
+  } catch (error) {
+    port.options.onError?.(error)
+    try {
+      dropSubagentPolicy(port.options.scoreHome, sessionId)
+    } catch (dropped) {
+      port.options.onError?.(dropped)
+    }
+    throw new HttpError(500, 'internal', 'Couldn’t set this session’s subagent limits.')
+  }
+}
 
 export const runMethods = {
   follow(this: LivePortRuntime, runId: string): void {
@@ -53,6 +103,15 @@ export const runMethods = {
           signal,
         )
       }
+      if (!signal.aborted)
+        await settleRunCost({
+          db,
+          sink,
+          signal,
+          hermesHome: this.options.hermesHome,
+          runId,
+          wait: this.options.following?.wait ?? waitForRun,
+        }).catch((error: unknown) => this.options.onError?.(error))
     })().finally(() => this.followers.delete(runId))
     this.followers.set(runId, pending)
   },
@@ -60,6 +119,7 @@ export const runMethods = {
     this: LivePortRuntime,
     req: {
       agentId: string
+      jobId?: string
       input: string
       turnId: string
       sessionId?: string
@@ -82,6 +142,8 @@ export const runMethods = {
       // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
       throw notDispatched(error)
     }
+    if (req.sessionId)
+      await writeRunSubagentPolicy(this, req.agentId, req.sessionId, req.jobId ?? null)
     const result = await intents
       .startRunIntent(
         {

@@ -1,0 +1,414 @@
+/* SA.3 (decision 173): a job's subagents on screen. Values from the approved mock-ups 24-subagents-*; colours are the
+   shell's own tokens, never copied hexes. Status displays are open; the controls that change a limit stay protected. */
+[data-ui='bold'] .bold-subagent-card {
+  max-width: calc(560px * var(--bold-s, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(7px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-subagent-card-head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-subagent-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-subagent-details {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 calc(2px * var(--bold-d, 1));
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-subagent-details:hover {
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-subagent-row {
+  display: flex;
+  gap: calc(10px * var(--bold-d, 1));
+  align-items: baseline;
+  min-width: 0;
+  color: var(--ink2);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-subagent-row-state {
+  flex: none;
+  width: calc(56px * var(--bold-s, 1));
+  color: var(--muted);
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-subagent-row-state.is-done {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-subagent-row-state.is-waiting {
+  color: var(--warn);
+}
+
+[data-ui='bold'] .bold-subagent-row-state.is-failed {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-subagent-row.is-waiting {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-subagent-row-goal {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-subagent-row-meta {
+  flex: none;
+  color: var(--muted);
+  text-align: right;
+}
+
+[data-ui='bold'] .bold-subagent-collapse {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  min-height: 56px;
+  width: 100%;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(18px * var(--bold-r, 1));
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-subagent-collapse-text {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-subagent-collapse-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-subagent-collapse-sub {
+  display: block;
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-subagent-collapse[aria-expanded='true'] .bold-subagent-chevron {
+  transform: rotate(180deg);
+}
+
+[data-ui='bold'] .bold-subagent-chevron {
+  flex: none;
+  transition: transform 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-subagent-chevron {
+    transition: none;
+  }
+}
+
+/* The context bar's button and the same three choices (/subagents off, a number, the agent's limit). */
+[data-ui='bold'] .bold-subagents-control {
+  position: relative;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-subagents-button {
+  min-height: 32px;
+  padding: 0 calc(12px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-subagents-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  min-width: 248px;
+  padding: 8px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--field);
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-subagents-menu button {
+  min-height: 40px;
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-subagents-menu button:hover,
+[data-ui='bold'] .bold-subagents-menu button[aria-checked='true'] {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-subagents-menu small {
+  display: block;
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-subagents-error {
+  margin: 4px 8px 2px;
+  color: var(--bad);
+  font-size: 12px;
+}
+
+/* The side panel's SUBAGENTS section. */
+[data-ui='bold'] .bold-subagents-info {
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-subagents-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-subagents-info-row > span:first-child {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-subagents-info-link {
+  align-self: flex-start;
+  padding: calc(4px * var(--bold-d, 1)) 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-subagents-info-link:hover {
+  text-decoration: underline;
+}
+
+/* Start a job's Subagents field: Off / 1 / 2 / … / the agent's limit, then a total. */
+[data-ui='bold'] .bold-start-subagents {
+  margin: 0;
+  padding: calc(16px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  border: 0;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-start-subagents legend {
+  float: left;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-start-subagents-copy {
+  clear: both;
+  color: var(--ink2);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-start-subagents-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-start-subagents-pills button {
+  min-height: 44px;
+  min-width: 52px;
+  padding: 0 calc(18px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-start-subagents-pills button[aria-checked='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-start-subagents-limit,
+[data-ui='bold'] .bold-start-subagents-total {
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-start-subagents-total label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-start-subagents-total input {
+  height: 40px;
+  width: 72px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-start-voters {
+  padding: calc(14px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-start-voters-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-start-voters-copy {
+  color: var(--ink2);
+  font-size: 14px;
+}
+
+/* Agent settings' Subagents card. */
+[data-ui='bold'] .bold-agent-subagents-copy {
+  color: var(--ink2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-agent-subagents-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px 16px;
+  align-items: center;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-agent-subagents-grid label {
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-agent-subagents-grid input,
+[data-ui='bold'] .bold-agent-subagents-grid select {
+  height: 44px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-agent-subagents-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-agent-subagents-check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-agent-subagents-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* A phone: the status card is one button until opened, and every control is at least 44px. */
+@media (max-width: 640px) {
+  [data-ui='bold'] .bold-subagent-card {
+    padding: 10px 12px;
+  }
+
+  [data-ui='bold'] .bold-subagent-row {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  [data-ui='bold'] .bold-subagent-row-state {
+    width: 52px;
+  }
+
+  [data-ui='bold'] .bold-subagent-details {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-subagents-button {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-subagents-menu button {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-agent-subagents-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-agent-subagents-grid input,
+  [data-ui='bold'] .bold-agent-subagents-grid select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

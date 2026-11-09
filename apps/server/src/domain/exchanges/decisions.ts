@@ -5,6 +5,7 @@ import { HttpError } from '../../errors.ts'
 import { assertJobOpen, closeJobNow } from './job-life.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
+import { allowMoreSubagents } from '../subagents.ts'
 import { failMessageRun, reserveMessageRun } from '../message-runs.ts'
 import { storeMessage } from '../rooms.ts'
 import { roomMembers } from './actions.ts'
@@ -93,6 +94,11 @@ export function decideExchange(
         .prepare('UPDATE jobs SET spend_cap_usd = spend_cap_usd + ? WHERE id = ?')
         .run(decision.usd, job.id)
       return done(release(sqlite, exchange.id, now, { check: true }))
+    case 'more_subagents':
+      return done([
+        ...allowMoreSubagents(sqlite, job.id, decision.count),
+        ...release(sqlite, exchange.id, now, { check: true }),
+      ])
     case 'continue':
       // Go on without a stopped question's answer, or accept the unknown costs seen so far.
       if (exchange.pause_reason === 'cost_unknown')

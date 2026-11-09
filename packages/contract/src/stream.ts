@@ -1,3 +1,4 @@
+import { SubagentRowSchema, SubagentsChangedSchema } from './subagents.ts'
 import { z } from 'zod'
 import { AgentQuestionSchema } from './questions.ts'
 import { RoomProjectSchema } from './conversations.ts'
@@ -127,6 +128,11 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('agent.updated'), data: AgentSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('room.upserted'), data: RoomSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('job.upserted'), data: JobSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('subagent.upserted'), data: SubagentRowSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('subagents.changed'),
+    data: SubagentsChangedSchema,
+  }),
   StreamEnvelopeSchema.extend({ type: z.literal('job.deleted'), data: JobDeletedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('exchange.upserted'), data: ExchangeSchema }),
   StreamEnvelopeSchema.extend({

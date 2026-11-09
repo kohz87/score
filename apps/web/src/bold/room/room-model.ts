@@ -24,6 +24,7 @@ const PAUSE_TITLE: Record<string, string> = {
   job_limit: 'This job used its turn limit',
   spend_cap: 'This job reached its spend cap',
   cost_unknown: 'A run’s cost is unknown',
+  subagent_total: 'This job used its subagents',
   turn_failed: 'A turn failed',
   unreachable: 'An agent could not be reached',
   asker_gone: 'The agent that asked has gone',
@@ -37,6 +38,7 @@ const PAUSE_ASK: Record<string, string> = {
   job_limit: 'This job is holding more work than its turn limit allows.',
   spend_cap: 'Allow more spend, step in, or stop the work.',
   cost_unknown: 'Continue when the cost can be settled, step in, or stop.',
+  subagent_total: 'Allow more subagents, step in, or stop the work.',
   turn_failed: 'Try the turn again, reassign it, or stop.',
   unreachable: 'Try to reach the agent again, reassign the turn, or stop.',
   asker_gone: 'Try again, send the answer to the lead, or stop.',
@@ -61,6 +63,8 @@ export function optionLabel(option: ExchangeOption): string {
       return 'Give 4 more turns'
     case 'more_spend':
       return 'Allow more spend'
+    case 'more_subagents':
+      return 'Allow 10 more'
     case 'continue':
       return 'Continue'
     case 'lead_decides':

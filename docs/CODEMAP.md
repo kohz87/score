@@ -38,9 +38,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles and other bold-only styles; Team tests are split by feature under `bold-team-*.test.tsx`.
 - `apps/web/src/bold/bold-team-fixtures.ts` — shared Team test agents, runtimes, operations and response fixtures.
 - `apps/web/src/bold/bold-team-helpers.tsx` — shared Team test fetch stub, render setup, lifecycle state and removal helpers.
+- `apps/web/src/bold/BoldTeam.tsx` — the Agents page: agent cards, Add agent, subagent setup and Pause everyone.
+- `apps/web/src/bold/SubagentSetupCard.tsx` — the Agents page's subagent setup card: GET, Apply, Not now and errors.
+- `apps/web/src/bold/SubagentSetupCard.test.tsx` — subagent setup card responses, Apply filtering, dismissal and errors.
 - `apps/web/src/bold/bold-team.css` — Team and one-agent style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-team-page.css` — page frame, grids, cards, buttons, fields and compact controls.
-- `apps/web/src/bold/bold-team-cards.css` — Team agent-card grid, identity, actions and screen previews.
+- `apps/web/src/bold/bold-team-cards.css` — Team agent-card grid, identity, actions, screen previews and subagent setup.
 - `apps/web/src/bold/bold-team-agent.css` — one-agent header, facts, More cards and classic editor recolours.
 - `apps/web/src/bold/bold-team-responsive.css` — narrow and portrait-tablet layouts for Team pages and cards.
 - `apps/web/src/bold/bold-team-status.css` — where-it-works badges, removal panel and setup/removal status cards.
@@ -56,6 +59,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/recipe-model-helpers.ts` — shared recipe fixtures and graph-versus-validator comparison helpers.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal, with feature-split tests.
+- `apps/web/src/bold/agent-more/SubagentsCard.tsx` — the agent's subagent ceiling: Allow, At once, Model, Steps, Time (Hermes), on/off (Claude Code) or not supported (Codex).
 - `apps/web/src/bold/agent-more/agent-more-helpers.tsx` — shared agent-detail test agent, fetch stub, mount and lifecycle state for the split card suites.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
@@ -68,6 +72,25 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/room/` — team room shell, loaded-room parts, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom integration tests.
 - `apps/web/src/bold/room/` — team room, message stream, needs-you cards, menus, room state, split room styles and the split BoldTeamRoom, RoomMessageStream and RoomRequests test suites.
+- `apps/web/src/bold/subagents/` — subagents on screen (SA.3): the room's rows and limits, the chat status card, the `/subagents` control and styles.
+- `apps/web/src/bold/subagents/subagent-queries.ts` — job and room subagent rows kept live by stream events; the agent's ceiling and the PUT calls.
+- `apps/web/src/bold/subagents/subagent-model.ts` — pure helpers: counts, cost and state text, the limit label, and which message each row group belongs to.
+- `apps/web/src/bold/subagents/use-subagent-cards.ts` — the room's subagent rows grouped under the messages that started them.
+- `apps/web/src/bold/subagents/MessageSubagentCard.tsx` — the status card under one message, or nothing when it started no subagents.
+- `apps/web/src/bold/subagents/SubagentStatusCard.tsx` — the chat's "Subagents · N of M done" card: rows, Details link, phone collapse.
+- `apps/web/src/bold/subagents/SubagentControl.tsx` — the `/subagents` choices and the context bar's subagent button.
+- `apps/web/src/bold/subagents/SubagentsInfo.tsx` — the side panel's SUBAGENTS section.
+- `apps/web/src/bold/subagents/job-subagent-cache.ts` — applies `subagents.changed` to the cached jobs.
+- `apps/web/src/bold/subagents/subagents.css` — subagent card, control and side-panel styles.
+- `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
+- `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
+- `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.
+- `apps/web/src/bold/subagents/subagent-queries.test.ts` — the room and job subagent rows: the lowest read seq, one failed read, and approvals that open or close a row.
+- `apps/web/src/bold/subagents/SubagentsInfo.test.tsx` — the side panel's SUBAGENTS section and its cost states.
+- `apps/web/src/bold/room/topic-subagents-command.test.ts` — `/subagents` with its request bodies, the over-limit and no-job notes.
+- `apps/web/src/bold/agent-more/SubagentsCard.test.tsx` — the agent's subagent ceiling card for limits, on/off and not-supported agents.
+- `apps/web/src/routes/orchestrations/limit-subagents.test.tsx` — "Allow 10 more" at a subagent total, sent as the limits decision.
+- `apps/web/src/bold/room/use-edit-room-params.ts` — changes the room's URL query in place (job, message, command offers).
 - `apps/web/src/bold/take-over/` — leased Hermes bot desktop screen and input handling.
 - `apps/web/src/bold/triggers/` — trigger cards, secret display and the four-step trigger wizard.
 - `apps/web/src/components/` — shared UI: agent identity, glyphs, model pickers, editor and uploads.
@@ -249,7 +272,11 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldStartJob.tsx` — start-job public entry, protected surfaces and dialog composition.
 - `apps/web/src/bold/BoldStartJobFields.tsx` — chat, work description and recipe fields.
 - `apps/web/src/bold/BoldStartJobPlanFields.tsx` — lead, agents allowed, when, approvals and advisor fields.
-- `apps/web/src/bold/BoldStartJobHelperFields.tsx` — helpers, automatic votes/audits and coding launches.
+- `apps/web/src/bold/BoldStartJobSubagentFields.tsx` — the Subagents choice: Off or up to N at once (the lead's limit caps it), and the job's total.
+- `apps/web/src/bold/BoldStartJobSubagentFields.test.tsx` — the Subagents pills: roving tab stop, arrow keys skip disabled ones.
+- `apps/web/src/bold/BoldStartJobVoterFields.tsx` — the voters picker (chips and Add, never the lead) and the automatic votes.
+- `apps/web/src/bold/BoldStartJobLaunchFields.tsx` — coding-agent launches field.
+- `apps/web/src/bold/bold-start-subagents.css` — Subagents pills, the total and the voters picker.
 - `apps/web/src/bold/BoldStartJobCheckFields.tsx` — pre-finish command check fields.
 - `apps/web/src/bold/BoldStartJobLimitFields.tsx` — limits, deadline, workflow options, unknown cost and inputs.
 - `apps/web/src/bold/BoldStartJobParts.tsx` — checklist rows, auth fields, result cards and dialog actions.
@@ -266,6 +293,8 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/start-job-context.ts` — start-job opener context and hook.
 - `apps/web/src/bold/start-job-checks.ts` — room and preflight check conversion.
 - `apps/web/src/bold/start-job-copy.ts` — size text and start/auth error messages.
+- `apps/web/src/bold/start-job-subagents.ts` — what Start a job sends for subagents (off, the lead's limit, on/off or unknown) and the subagent checks.
+- `apps/web/src/bold/BoldStartJob-subagents.test.tsx` — the Subagents choice and what each path sends (lead, plain job, saved recipe), and that the helpers picker is gone.
 - `apps/web/src/bold/bold-start-job.ts` — start-job model and request shaping.
 - `apps/web/src/bold/bold-recipes.css` — Recipes style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-recipes-list.css` — Recipes view switch, badges, page actions, columns, step rows and route controls.
@@ -337,7 +366,13 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/jobmap/Node.tsx` — selectable job-map layer node shell with pressed and pulse states.
 - `apps/web/src/bold/jobmap/Line.tsx` — connector line and moving dot between job-map layers.
 - `apps/web/src/bold/jobmap/Pill.tsx` — toned step and status pill.
+- `apps/web/src/bold/jobmap/SubagentLayer.tsx` — the SUBAGENTS node and its selected panel (the lead's own helpers).
+- `apps/web/src/bold/jobmap/subagent-layer-model.ts` — pure layer model: the node's title and detail, the header line, each row's time and cost.
+- `apps/web/src/bold/jobmap/use-run-job.ts` — the job a lead-decides run belongs to, from its room's job list.
 - `apps/web/src/bold/jobmap/jobmap.css` — job-map style entry; imports the area stylesheets in cascade order.
+- `apps/web/src/bold/jobmap/jobmap-subagents.css` — the SUBAGENTS node, its panel and rows.
+- `apps/web/src/bold/jobmap/JobMap-subagents.test.tsx` — the SUBAGENTS node, its header line, its panel, and a voters-only run with no swarm layer.
+- `apps/web/src/bold/jobmap/subagent-layer-model.test.ts` — the layer model's counts, cost text and row facts.
 - `apps/web/src/bold/jobmap/jobmap-base.css` — job-map shell, layer nodes, text blocks, advisor marks and pills.
 - `apps/web/src/bold/jobmap/jobmap-layers.css` — vote rows, swarm and worker layout, stop rows and check lines.
 - `apps/web/src/bold/jobmap/jobmap-lines-log.css` — connector lines and dots, session log, phone layout and motion.
@@ -410,6 +445,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/chat/composer-send.ts` — message posting, optimistic updates, rewind and send retries.
 - `apps/web/src/routes/chat/ComposerNotice.tsx` — composer notice banner and command result text.
 - `apps/web/src/routes/chat/ComposerMenu.tsx` — slash-command and agent mention menu.
+- `apps/web/src/routes/chat/ComposerMenu.test.tsx` — the slash palette shows only the selected command's note.
 - `apps/web/src/routes/chat/ComposerEditing.tsx` — edit notice and rewind confirmation.
 - `apps/web/src/routes/chat/ComposerAttachments.tsx` — attachment tray, upload progress and Knowledge save chips.
 - `apps/web/src/routes/chat/ComposerToPicker.tsx` — recipient chips, add-person menu and plan-first toggle.
@@ -608,6 +644,7 @@ likely to be the entry point for a change.
 - `apps/web/src/themes/guard-violation.ts` — protected-surface scans, glyph-shape comparison and theme-off baseline measurement.
 - `apps/web/src/themes/guard-decision.ts` — click-time checks of the protected surfaces a decision answers to.
 - `apps/web/src/themes/guard-watch.ts` — watchers for protected-surface damage and click/submit refusal while a theme is worn.
+- `apps/web/src/styles/protected-setup.css` — the subagent setup card's protected colours.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
 - `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
 
@@ -733,6 +770,7 @@ likely to be the entry point for a change.
 - `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
+- `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
 - `apps/server/src/http/rooms/route-schemas.ts` — zod schemas for room, message and query inputs.
@@ -907,6 +945,14 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port-runtime.ts` — the live adapter's shared runtime type and its method installer.
 - `apps/server/src/hermes/live/live-port-lifecycle.ts` — start, stop, status, the execution hold and Bot Desktop screen.
 - `apps/server/src/hermes/live/live-port-agents.ts` — agents, profiles, routines and model settings.
+- `apps/server/src/hermes/live/run-cost.ts` — a Hermes run's dollars from its session rows and their children, after the run ends.
+- `apps/server/src/hermes/live/subagent-policy.ts` — the per-session limits file the plugin's guard reads; whether a session is inline.
+- `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
+- `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
+- `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
+- `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
+- `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
+- `apps/server/src/hermes/live/subagent-setup.ts` — whether each profile is set up for subagents, and Apply.
 - `apps/server/src/hermes/live/live-port-runs.ts` — runs: follow, start, stop, rewind, compact, session context.
 - `apps/server/src/hermes/live/live-port-tasks.ts` — tasks, questions, outside sessions, report-back facts and costs.
 - `apps/server/src/hermes/live/live-port-settings.ts` — providers, models, sign-ins, tool servers and messaging.
@@ -1144,6 +1190,9 @@ likely to be the entry point for a change.
 
 ### Key files
 
+- `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
+- `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
+- `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.
 - `packages/contract/src/index.ts` — public contract exports and version.
 - `packages/contract/src/http.ts` — HTTP envelopes and shared request/response pieces.
 - `packages/contract/src/stream.ts` — stream event types and envelopes.
@@ -1216,6 +1265,8 @@ likely to be the entry point for a change.
 - `hermes-plugin/score_bridge/spool_format.py` — spool envelope encoding, gap events, caps and record validation.
 - `hermes-plugin/score_bridge/spool_process.py` — producer process identity for recycled-pid detection.
 - `hermes-plugin/score_bridge/spool_directory.py` — directory-quota eviction across producer outboxes and quarantine.
+- `hermes-plugin/score_bridge/session_lineage.py` — where a session came from, read-only from the profile's state.db.
+- `hermes-plugin/score_bridge/subagent_guard.py` — keeps subagents inside their limits and out of the room (local, fail closed).
 - `hermes-plugin/score_bridge/hermes_private.py` — the only calls into private Hermes functions.
 - `hermes-plugin/tests/` — pytest suite for the plugin; `conftest.py` holds fixtures shared by the split review-regression tests.
 - `hermes-plugin/score_bridge/approvals.py` — gateway approval handling.
@@ -1292,6 +1343,7 @@ likely to be the entry point for a change.
 
 - `playwright.config.ts` — main end-to-end configuration.
 - `e2e/customizer-helpers.ts` — shared customizer session, cleanup, preview and package helpers.
+- `e2e/subagents.spec.ts` — subagent limits end to end: `/subagents`, Start a job, voters alone, agent settings, phone.
 - `e2e/customizer-editing.spec.ts` — customizer build, save, export, keyboard, discard, contrast and accessibility flows.
 - `e2e/customizer-import-and-shell.spec.ts` — import preview and errors, roles/focus, settings shell and phone layout.
 - `e2e/customizer-saves.spec.ts` — save conflicts, in-use state, replaced pictures and unsaved edits.

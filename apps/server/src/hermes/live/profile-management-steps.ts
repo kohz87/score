@@ -1,3 +1,4 @@
+import { setUpNewProfileSubagents } from './subagent-setup.ts'
 import { randomBytes, randomUUID } from 'node:crypto'
 import {
   constants,
@@ -213,6 +214,9 @@ export async function runProfileStep(
       ['-p', name, 'config', 'set', 'tools.tool_search.enabled', 'off'],
       { timeoutMs: 15000, hermesHome: options.hermesHome },
     ).catch(() => undefined)
+    // Subagents are safe only inline (decision 173). Best effort too: without it they stay refused, and the Agents
+    // page offers the change.
+    await setUpNewProfileSubagents(options.runner ?? runHermes, options.hermesHome, db, name, home)
     const result = await (options.runner ?? runHermes)(
       ['-p', name, 'config', 'get', '--json', 'plugins.enabled'],
       { timeoutMs: 5000, hermesHome: options.hermesHome, captureRead: true },

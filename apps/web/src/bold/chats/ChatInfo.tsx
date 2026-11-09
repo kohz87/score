@@ -10,6 +10,7 @@ import { currentTopic } from './chat-model.ts'
 import { TopicInfo } from './TopicInfo.tsx'
 import { InfoSection } from './InfoSection.tsx'
 import { FilesAndResults } from './FilesResults.tsx'
+import { SubagentsInfo } from '../subagents/SubagentsInfo.tsx'
 
 function topicLink(room: Room, job: Pick<Job, 'id'>, everyone: boolean): string {
   const params = new URLSearchParams()
@@ -143,6 +144,18 @@ export function ChatInfo({
       </InfoSection>
       {current && !current.isDefault && (
         <TopicInfo roomId={room.id} job={current} agents={agents} />
+      )}
+      {current && !current.isDefault && (
+        <SubagentsInfo
+          job={current}
+          watchAgentId={current.activeAgents[0] ?? current.holderAgentId ?? room.leadAgentId}
+          agentName={
+            agents.find(
+              (agent) =>
+                agent.id === (current.activeAgents[0] ?? current.holderAgentId ?? room.leadAgentId),
+            )?.name
+          }
+        />
       )}
       <FilesAndResults
         jobId={current?.id ?? null}

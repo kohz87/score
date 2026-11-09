@@ -6,7 +6,17 @@ import {
 } from '@score/contract'
 
 export type { CommandResult }
-export type SlashCommand = { name: string; usage: string; description: string }
+export type SlashCommand = {
+  name: string
+  usage: string
+  description: string
+  /** What picking it inserts, when that is more than `/name ` (the `/subagents` choices). */
+  insert?: string
+  /** A key for several palette rows with the same command name. */
+  key?: string
+  /** A note under the palette, explaining a group of choices. */
+  note?: string
+}
 export type SendResult = {
   message: Message
   routedTo: string[]

@@ -1,3 +1,4 @@
+import { applySubagentHook } from './translate-subagents.ts'
 import { BridgeEventSchema, BridgeIdentifierSchema, type BridgeEvent } from '@score/contract'
 import { z } from 'zod'
 import { GateSignalSchema } from '../../domain/approvals.ts'
@@ -188,6 +189,10 @@ export function translateBridgeEvent(
           approval,
           signal,
         })
+      if (event.hook === 'subagent_start' || event.hook === 'subagent_stop') {
+        const counted = applySubagentHook(sqlite, event.hook, event.payload, producer, now)
+        return text ? [...counted, ...applyTextEvent({ event, message, text, log })] : counted
+      }
       if (text) return applyTextEvent({ event, message, text, log })
       metrics.unknownHooks++
       return []

@@ -7,10 +7,14 @@ import {
   type StartCheck,
 } from './bold-start-job.ts'
 import { checksFromPreflight } from './start-job-checks.ts'
+import { deriveSubagentChoice } from './start-job-subagents.ts'
 import { sizeText, WHAT_CHARS } from './start-job-copy.ts'
 import type { RecipeChoice, StartJobOptions } from './start-job-types.ts'
 import type { StartJobData } from './use-start-job-data.ts'
 import type { StartJobState } from './use-start-job-state.ts'
+
+/** The step count a voter's answers are sized as (the old default of 20 helper steps). */
+const VOTER_STEPS_SIZING = 20
 
 export function deriveStartJobModel(
   state: StartJobState,
@@ -29,8 +33,6 @@ export function deriveStartJobModel(
     deadline,
     deadlineEnabled,
     estimate,
-    helperNoLimit,
-    helperScan,
     inputs,
     launchesText,
     openedAt,
@@ -39,6 +41,9 @@ export function deriveStartJobModel(
     recipe,
     result,
     schedule,
+    subagentsAt,
+    subagentsOn,
+    subagentsTotal,
     triggerApp,
     triggerName,
     when,
@@ -51,11 +56,8 @@ export function deriveStartJobModel(
     autoVoteKNumber,
     autoVoteOn,
     checkFolderNow,
-    helperConcurrentNumber,
-    helperFolderNow,
-    helperIds,
-    helperStepsNumber,
     leadId,
+    leadSubagents,
     orchestrationPreflight,
     roomCheck,
     voterIds,
@@ -99,25 +101,22 @@ export function deriveStartJobModel(
       : !checkMinutesValid
         ? 'The check timeout must be 1 to 60 minutes'
         : null
-  const helpersOn = helperIds.length > 0
+  const votersOn = voterIds.length > 0
   const isCodingAgent = (id: string) => {
     const runtime = agents.find((agent) => agent.id === id)?.runtime
     return runtime !== undefined && runtime !== 'hermes'
   }
-  const codingHelpersNow = [...helperIds, ...voterIds].some(isCodingAgent)
+  const codingVotersNow = voterIds.some(isCodingAgent)
   const codingAdvisorNow = advisorId !== '' && isCodingAgent(advisorId)
   const launchesInUse =
     orchestrationWorkers.length > 0 ||
     allowedFor.some(isCodingAgent) ||
-    codingHelpersNow ||
+    codingVotersNow ||
     codingAdvisorNow
   const launchesSuggested = suggestedCodingSteps({
-    codingHelpers: codingHelpersNow,
-    helperSteps: helperNoLimit
-      ? null
-      : Number.isInteger(helperStepsNumber)
-        ? helperStepsNumber
-        : 20,
+    codingHelpers: codingVotersNow,
+    // A voter's answers are sized as the old default of 20 helper steps was; SA.3 subagents are not coding-agent launches.
+    helperSteps: VOTER_STEPS_SIZING,
     codingAdvisor: codingAdvisorNow,
   })
   const launchesNow = launchesText ?? String(launchesSuggested)
@@ -126,29 +125,20 @@ export function deriveStartJobModel(
     launchesInUse && !launchesValid
       ? `Coding-agent launches must be a whole number from 1 to ${ORCH_LIMITS.maxCodingSteps}`
       : null
-  const helperProblem = !helpersOn
-    ? voterIds.length > 0
-      ? 'Pick at least one helper, or clear the voters'
+  const votersProblem =
+    autoVoteOn &&
+    !(Number.isInteger(autoVoteKNumber) && autoVoteKNumber >= 3 && autoVoteKNumber <= 7)
+      ? 'Voters per vote must be 3 to 7'
       : null
-    : !(
-          Number.isInteger(helperConcurrentNumber) &&
-          helperConcurrentNumber >= 1 &&
-          helperConcurrentNumber <= 6
-        )
-      ? 'Helpers at once must be 1 to 6'
-      : !helperNoLimit &&
-          !(
-            Number.isInteger(helperStepsNumber) &&
-            helperStepsNumber >= 1 &&
-            helperStepsNumber <= 60
-          )
-        ? 'Helper steps must be 1 to 60'
-        : autoVoteOn &&
-            !(Number.isInteger(autoVoteKNumber) && autoVoteKNumber >= 3 && autoVoteKNumber <= 7)
-          ? 'Voters per vote must be 3 to 7'
-          : helperScan && !helperFolderNow.trim().startsWith('/')
-            ? 'The scan needs an absolute folder, like /home/you/project'
-            : null
+  // SA.3 subagents: the lead's settings are read first; the total must be a whole number, and counts only when on.
+  const subagents = deriveSubagentChoice({
+    startsNow: when === 'once',
+    hasLead: leadId !== '',
+    query: leadSubagents,
+    on: subagentsOn,
+    at: subagentsAt,
+    total: subagentsTotal,
+  })
   const optionProblems = optionProblemsFor(workflowWorkers.length, {
     concurrentValid,
     estimateValid,
@@ -307,7 +297,8 @@ export function deriveStartJobModel(
     reachCovered &&
     (!isSavedRecipe || optionProblems.length === 0) &&
     capProblem === null &&
-    (!isLead || (checkProblem === null && helperProblem === null && launchesProblem === null)) &&
+    subagents.subagentsProblem === null &&
+    (!isLead || (checkProblem === null && votersProblem === null && launchesProblem === null)) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -365,12 +356,15 @@ export function deriveStartJobModel(
     checkMinutesValid,
     checkOn,
     checkProblem,
-    helpersOn,
     launchesInUse,
     launchesNow,
     launchesValid,
     launchesProblem,
-    helperProblem,
+    votersOn,
+    votersProblem,
+    subagentsOn,
+    subagentsTotal,
+    ...subagents,
     optionProblems,
     nowOnce,
     isLead,

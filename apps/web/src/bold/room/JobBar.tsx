@@ -14,6 +14,8 @@ import { useStopJob } from './StopJob.tsx'
 import { recipeRun } from './thread-model.ts'
 import { jobDot } from './job-dot.ts'
 import { goToNearestCard } from './needs-jump-dom.ts'
+import { useJobSubagentRows } from '../subagents/subagent-queries.ts'
+import { subagentJobLine } from '../subagents/subagent-model.ts'
 
 const money = (usd: number) => `$${usd.toFixed(2)}`
 
@@ -32,6 +34,7 @@ export function jobBarLine(
   agents: AgentSummary[],
   step: string | null,
   spentUsd: number | null,
+  subagents: string | null = null,
 ): string {
   const parts: string[] = []
   const who =
@@ -48,6 +51,7 @@ export function jobBarLine(
     )
   else parts.push(jobStateLabel(job))
   if (step) parts.push(step)
+  if (subagents) parts.push(subagents)
   if (job.spendCapUsd !== null && spentUsd !== null)
     parts.push(`${money(spentUsd)} of ${money(job.spendCapUsd)}`)
   else if (job.spendCapUsd !== null) parts.push(`cap ${money(job.spendCapUsd)}`)
@@ -98,6 +102,8 @@ export function JobBar({
         )
       : stepOf(match.summary.status, match.summary.nodes.succeeded, match.summary.nodes.total)
     : null
+  const rows = useJobSubagentRows(job.subagents ? job.id : null)
+  const subagents = subagentJobLine(rows)
   return (
     <section
       className="bold-job-bar"
@@ -107,7 +113,7 @@ export function JobBar({
     >
       <JobBarBody
         job={job}
-        line={jobBarLine(job, agents, step, spent)}
+        line={jobBarLine(job, agents, step, spent, subagents)}
         onShowGraph={job.recipe ? onShowGraph : undefined}
         menu={menu}
         moreOpen={moreOpen}

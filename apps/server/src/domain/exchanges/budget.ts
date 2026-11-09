@@ -1,3 +1,4 @@
+import { subagentTotalReached } from '../subagents.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { EXCHANGE_LIMITS, type ExchangePauseReason } from '@score/contract'
 import { z } from 'zod'
@@ -58,6 +59,7 @@ export function jobLimitFor(sqlite: DatabaseSync, jobId: string): ExchangePauseR
     job.id,
   )
   if (jobTurns >= job.job_turn_limit) return 'job_limit'
+  if (subagentTotalReached(sqlite, job.id)) return 'subagent_total'
   const cap = sqlite
     .prepare('SELECT spend_cap_usd, cost_unknown_accepted_at FROM jobs WHERE id = ?')
     .get(job.id) as { spend_cap_usd: number | null; cost_unknown_accepted_at: string | null }
@@ -91,6 +93,7 @@ const BUDGET_REASONS: ExchangePauseReason[] = [
   'job_limit',
   'spend_cap',
   'cost_unknown',
+  'subagent_total',
 ]
 
 /**

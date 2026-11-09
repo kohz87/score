@@ -40,6 +40,9 @@ const WORKSPACE_ALLOWED = [
 ]
 
 export const claudeDriver: CodingDriver = {
+  // A background sub-agent makes Claude Code report a second result, and one run has one result (claude-parser). With this
+  // set the same request runs in the foreground: tested on 2.1.319 (docs/briefs/SA-subagents.md).
+  runEnv: { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' },
   runtime: 'claude-code',
   resumeRefusal: /^No conversation found with session ID\b/i,
   label: 'Claude Code',
@@ -83,7 +86,13 @@ export const claudeDriver: CodingDriver = {
     if (options.settingsPath) args.push('--settings', options.settingsPath)
     // A worker uses no MCP server the person configured for their own sessions (7.7b §3).
     if (options.worker) args.push('--strict-mcp-config')
-    args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
+    args.push(
+      '--disallowed-tools',
+      [
+        ...claudeDenyRules(options.denyPaths, options.denyFiles),
+        ...(options.subagentsOff ? ['Agent', 'Task'] : []),
+      ].join(','),
+    )
     if (options.model) args.push('--model', options.model)
     const effort = checkedEffort(options.effort, CLAUDE_EFFORTS)
     if (effort) args.push('--effort', effort)

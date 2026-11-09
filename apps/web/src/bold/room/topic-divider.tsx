@@ -3,7 +3,12 @@ import type { ReactNode } from 'react'
 import { jobStateLabel } from './room-model.ts'
 
 /** A small line the chat shows for what a command changed ("You made builder the owner"). Local to this tab. */
-export type SystemLine = { id: string; at: string; text: string }
+export type SystemLine = {
+  id: string
+  at: string
+  text: string
+  action?: { label: string; run: () => void }
+}
 
 /** What a divider says about a topic: its state in the words the mock-up uses. */
 export function topicStateText(job: Job): string {
@@ -97,6 +102,11 @@ export function SystemLineRow({ line }: { line: SystemLine }) {
   return (
     <p className="bold-system-line" role="status" data-system-line={line.id}>
       {line.text}
+      {line.action && (
+        <button type="button" className="bold-system-line-action" onClick={line.action.run}>
+          {line.action.label}
+        </button>
+      )}
     </p>
   )
 }

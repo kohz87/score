@@ -169,8 +169,14 @@ export function useRun(id: string | undefined) {
 }
 
 /** The create body as the screens build it: `advisorMode` is retired (3.14.1) and never sent. */
-export type OrchestrationCreateBody = Omit<OrchestrationCreate, 'advisorMode'> &
-  Partial<Pick<OrchestrationCreate, 'advisorMode'>>
+/** A new run's helpers name voters (SA.3): the server fills the helper limits it doesn't get, so `voterIds` is required. */
+type HelpersBody = NonNullable<OrchestrationCreate['helpers']>
+export type OrchestrationCreateBody = Omit<OrchestrationCreate, 'advisorMode' | 'helpers'> &
+  Partial<Pick<OrchestrationCreate, 'advisorMode'>> & {
+    helpers?: { voterIds: NonNullable<HelpersBody['voterIds']> } & Partial<
+      Omit<HelpersBody, 'voterIds'>
+    >
+  }
 
 export async function fetchPreflight(
   leadAgentId: string,

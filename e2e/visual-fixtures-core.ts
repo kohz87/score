@@ -35,6 +35,7 @@ export const visualFixturesCore: Record<string, unknown> = {
   [`/api/reports/journey?from=${journeyFixture.from}&to=${journeyFixture.to}`]: journeyFixture,
   '/api/approvals/fixture-approval': focusApproval,
   '/api/settings/currency': { code: 'USD', rate: 1 },
+  '/api/subagent-setup': { agents: [] },
   '/api/settings/model-visibility': { items: [] },
   '/api/agents/lead/model-settings': {
     fallbacks: [],

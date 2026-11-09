@@ -14,6 +14,7 @@ import {
 import { activeJobs, isEveryoneRoom } from './room/room-model.ts'
 import { roomJobsQuery, teamRoomQuery, teamRoomsQuery } from './room/room-queries.ts'
 import { checkOf } from './start-job-checks.ts'
+import { useAgentSubagents } from './subagents/subagent-queries.ts'
 import type { StartJobOptions } from './start-job-types.ts'
 import type { StartJobState } from './use-start-job-state.ts'
 
@@ -28,12 +29,10 @@ export function useStartJobData(
     advisorPick,
     allowed,
     chatPick,
-    helperPick,
     leftRoomId,
     planner,
     recipe,
     setAdvisorPick,
-    setHelperPick,
     setVoterPick,
     voterPick,
   } = state
@@ -132,7 +131,6 @@ export function useStartJobData(
   if (seenLead !== leadId) {
     setSeenLead(leadId)
     if (advisorPick === leadId) setAdvisorPick('')
-    if (helperPick.includes(leadId)) setHelperPick(helperPick.filter((id) => id !== leadId))
     if (voterPick.includes(leadId)) setVoterPick(voterPick.filter((id) => id !== leadId))
   }
   const roomLeadName = teamLead
@@ -152,17 +150,13 @@ export function useStartJobData(
     advisorPick !== '' && advisorPick !== leadId && agents.some((agent) => agent.id === advisorPick)
       ? advisorPick
       : ''
-  const helperIds = helperPick.filter(
-    (id) => id !== leadId && agents.some((agent) => agent.id === id),
-  )
   const voterIds = voterPick.filter(
     (id) => id !== leadId && agents.some((agent) => agent.id === id),
   )
-  // The advisor, the helpers and the voters run as steps, so the preflight checks them like allowed agents (policy and reach included).
+  // The advisor and the voters run as steps, so the preflight checks them like allowed agents (policy and reach included).
   const preflightAgents = [
     ...allowedFor,
     ...(advisorId !== '' ? [advisorId] : []),
-    ...helperIds,
     ...voterIds,
   ].filter((id, index, all) => all.indexOf(id) === index)
   const orchestrationPreflight = usePreflight(leadId, preflightAgents)
@@ -176,14 +170,12 @@ export function useStartJobData(
     allowedFor.includes(item.id),
   )?.workspace
   const checkFolderNow = state.checkFolder ?? codingWorkspace ?? ''
-  // The scan folder follows the check's folder until the person types one.
-  const helperFolderNow = state.helperFolder ?? checkFolderNow
-  const helperConcurrentNumber = Number(state.helperConcurrent)
-  const helperStepsNumber = Number(state.helperSteps)
   const autoVoteKNumber = Number(state.autoVoteK)
-  // Under "approve every step" the votes are you, so Score doesn't vote first.
+  // Under "approve every step" the votes are you, so Score doesn't vote first. Without voters there is nothing to vote.
   const autoVoteBlocked = state.ask === 'plan'
-  const autoVoteOn = state.autoVote && !autoVoteBlocked
+  const autoVoteOn = state.autoVote && !autoVoteBlocked && voterIds.length > 0
+  // SA.3: the lead's settings decide what subagents Score can offer (the job's limits only narrow them).
+  const leadSubagents = useAgentSubagents(leadId || null)
 
   const routineQueries = useQueries({
     queries: agents.map((agent) => ({
@@ -217,17 +209,14 @@ export function useStartJobData(
     workflowVersion,
     workflowPreflight,
     advisorId,
-    helperIds,
     voterIds,
     orchestrationPreflight,
     codingWorkspace,
     checkFolderNow,
-    helperFolderNow,
-    helperConcurrentNumber,
-    helperStepsNumber,
     autoVoteKNumber,
     autoVoteBlocked,
     autoVoteOn,
+    leadSubagents,
     scheduled,
   }
 }

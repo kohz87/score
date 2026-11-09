@@ -6,6 +6,7 @@ import { questionsQuery } from '../../data/question-queries.ts'
 import { agentsQuery, approvalsQuery, roomsQuery } from '../../routes/chat/queries.ts'
 import { fetchCompleteJobs } from '../bold-job-reads.ts'
 import { teamRoomQuery, teamRoomsQuery, withJob, withoutJob } from '../room/room-queries.ts'
+import { withChangedSubagents } from '../subagents/job-subagent-cache.ts'
 import { canTalkTo } from '../bold-agents.ts'
 import { buildChatLists, isChatGroup, type ChatLists } from './chat-model.ts'
 
@@ -21,11 +22,17 @@ export function chatJobsQuery(roomIds: string[]) {
         data: Object.fromEntries(ids.map((id, index) => [id, reads[index]!.items])),
       }
     },
-    types: ['job.upserted', 'job.deleted'],
+    types: ['job.upserted', 'job.deleted', 'subagents.changed'],
     reduce(data, event) {
       if (event.type === 'job.deleted') {
         const jobs = data[event.data.roomId]
         return jobs ? { ...data, [event.data.roomId]: withoutJob(jobs, event.data.id) } : data
+      }
+      if (event.type === 'subagents.changed') {
+        const jobs = data[event.data.roomId]
+        return jobs
+          ? { ...data, [event.data.roomId]: withChangedSubagents(jobs, event.data) }
+          : data
       }
       if (event.type !== 'job.upserted' || !ids.includes(event.data.roomId)) return data
       // A listed room not read yet (just made, or listed since the key was made) still gets its job: dropping it would leave

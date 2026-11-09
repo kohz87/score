@@ -15,7 +15,6 @@ import {
   type TaskSummary,
 } from '@score/contract'
 import { z } from 'zod'
-import type { OrchestrationOwner } from '../domain/orchestration/owner.ts'
 import type {
   AgentDetail,
   ConfigApplyRequest,
@@ -64,7 +63,8 @@ import type { IngestResult, Observation } from '../hub/ingest.ts'
 import type { SessionCost } from '../domain/spend.ts'
 import type { JourneyFacts } from '../domain/journey.ts'
 import type { ReportApproval, ReportFacts, ReportRun } from '../domain/reports.ts'
-import type { ProfileManagementPort } from './profile-management.ts'
+import type { ProfileManagementPort, SubagentSetupPort } from './profile-management.ts'
+import type { StartRunRequest } from './start-run-request.ts'
 import type { OutsideSessionFact, OutsideSessionHistory } from './outside-sessions.ts'
 
 export interface ObservationSink {
@@ -176,7 +176,7 @@ export type CompatibilityEvaluation = SystemStatus['compatibility'] & {
 
 export type ProviderBase = Omit<ProviderItem, 'usedBy'>
 
-export interface HermesPort extends ProfileManagementPort {
+export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
   stop(): Promise<void>
@@ -345,27 +345,7 @@ export interface HermesPort extends ProfileManagementPort {
   searchConfig(query: string): Promise<ConfigItem[]>
   previewConfig(changes: ConfigChange[]): Promise<ConfigPreviewResponse>
   applyConfig(req: ConfigApplyRequest): Promise<ConfigApplyResponse>
-  startRun(req: {
-    agentId: string
-    input: string
-    turnId: string
-    sessionId?: string
-    model?: string
-    /** Per-request provider (an alias's own); Hermes honours it with or without `model`. */
-    provider?: string
-    /** Media ids of the person's image attachments, in message order. */
-    images?: string[]
-    /**
-     * Orchestration dispatch (PLAN 7.5): the executor owns recovery of this admission, so generic intent recovery must
-     * never resend it.
-     */
-    owner?: 'orchestration' | OrchestrationOwner
-    /**
-     * Applied to the stored input only for the payload sent to Hermes, in memory. The orchestrator uses it to insert a
-     * per-turn capability that must never be stored.
-     */
-    render?: (stored: string) => string
-  }): Promise<{ runId: string }>
+  startRun(req: StartRunRequest): Promise<{ runId: string }>
   /**
    * `unconfirmed` (coding agents only) = Stop was asked but the work is not proven ended; callers must not record the
    * Stop as acknowledged and should ask again. Hermes returns nothing.

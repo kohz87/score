@@ -47,6 +47,7 @@ export function pauseOptions(sqlite: DatabaseSync, row: ExchangeRow): ExchangeOp
     no_decision: ['ask_again', 'send_back', 'close'],
     author_stalled: ['ask_again', 'close'],
     question_stopped: ['continue', 'stop'],
+    subagent_total: ['more_subagents', 'step_in', 'stop'],
   }
   return row.pause_reason ? options[row.pause_reason] : []
 }

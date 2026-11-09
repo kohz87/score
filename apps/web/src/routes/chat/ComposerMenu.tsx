@@ -22,6 +22,8 @@ export function ComposerMenu({
   select: (position: number) => void
 }) {
   if (!menu || count === 0) return null
+  // Only the selected command's note shows, so a note never sits under the other commands.
+  const note = menu === 'slash' ? slashItems[index]?.note : null
   return (
     <div
       className="chat-menu"
@@ -32,7 +34,7 @@ export function ComposerMenu({
       {menu === 'slash'
         ? slashItems.map((item, position) => (
             <button
-              key={item.name}
+              key={item.key ?? item.name}
               id={optionId(position)}
               type="button"
               role="option"
@@ -41,7 +43,7 @@ export function ComposerMenu({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => select(position)}
             >
-              <span className="chat-menu-command">/{item.name}</span>
+              <span className="chat-menu-command">{item.insert ?? `/${item.name}`}</span>
               <span className="chat-menu-detail" title={item.description}>
                 {item.description}
               </span>
@@ -65,6 +67,7 @@ export function ComposerMenu({
               </span>
             </button>
           ))}
+      {note && <div className="chat-menu-note">{note}</div>}
     </div>
   )
 }

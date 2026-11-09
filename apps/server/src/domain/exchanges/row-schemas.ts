@@ -12,6 +12,10 @@ export const JobRowSchema = z.object({
   exchange_budget: z.int(),
   job_turn_limit: z.int(),
   spend_cap_usd: z.number().nullable(),
+  subagents_enabled: z.int(),
+  subagents_max_concurrent: z.int().nullable(),
+  subagents_max_total: z.int(),
+  subagents_used: z.int(),
   recipe_kind: z.enum(['orchestration', 'workflow']).nullable(),
   recipe_ref: z.string().nullable(),
   created_at: z.string(),
@@ -46,6 +50,7 @@ export const ExchangeRowSchema = z.object({
       'no_decision',
       'author_stalled',
       'question_stopped',
+      'subagent_total',
     ])
     .nullable(),
   held: z.string().nullable(),

@@ -14,12 +14,14 @@ import {
 
 // 3.15 (decision 151): the job map is a pure summary of one lead-decides job, one node per layer. No React, no DOM.
 
-export type LayerId = 'you' | 'lead' | 'advisor' | 'votes' | 'swarm' | 'workers' | 'check'
+export type LayerId =
+  'you' | 'lead' | 'advisor' | 'subagents' | 'votes' | 'swarm' | 'workers' | 'check'
 
 export const LAYER_LABEL: Record<LayerId, string> = {
   you: 'You',
   lead: 'Lead',
   advisor: 'Advisor',
+  subagents: 'Subagents',
   votes: 'Fork layer',
   swarm: 'Swarm',
   workers: 'Workers',
@@ -229,22 +231,24 @@ export function buildJobMap(
         }
       : null
 
-  // --- swarm: one node per helper agent, from its latest helper step
-  const swarm: JobMapModel['swarm'] = run.helpers
-    ? [...groupBy(helperSteps, (step) => step.agentId)].map(([agentId, list]) => {
-        const latest = list[list.length - 1] as StepView
-        const visual = visualOfStep(run, latest)
-        return {
-          agentId,
-          name: nameOf(agentId),
-          role: latest.helperRole ?? 'helper',
-          visual,
-          tone: toneOf(visual),
-          lastSign: latest.lastActivityAt ? clock(latest.lastActivityAt) : null,
-          running: !over && visual === 'running',
-        }
-      })
-    : null
+  // --- swarm: one node per helper agent, from its latest helper step. A run that names only voters (SA.3) has no
+  // helper agents, so it has no swarm layer at all; its votes still show.
+  const swarm: JobMapModel['swarm'] =
+    run.helpers && run.helpers.agentIds.length > 0
+      ? [...groupBy(helperSteps, (step) => step.agentId)].map(([agentId, list]) => {
+          const latest = list[list.length - 1] as StepView
+          const visual = visualOfStep(run, latest)
+          return {
+            agentId,
+            name: nameOf(agentId),
+            role: latest.helperRole ?? 'helper',
+            visual,
+            tone: toneOf(visual),
+            lastSign: latest.lastActivityAt ? clock(latest.lastActivityAt) : null,
+            running: !over && visual === 'running',
+          }
+        })
+      : null
 
   // --- workers
   const workers: WorkerNode[] = [...groupBy(workerSteps, (step) => step.agentId)].map(

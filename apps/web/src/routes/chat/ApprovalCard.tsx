@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { useArrival } from '../../motion/Arrival.tsx'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
-import { approvalsQuery } from './queries.ts'
+import { agentsQuery, approvalsQuery } from './queries.ts'
+import { agentDisplayName } from '../../bold/bold-agents.ts'
 import { newId } from '../../data/ids.ts'
 import { approvalChip } from '../../live/resolved.ts'
 import { ResolvedChip } from '../../live/ResolvedChip.tsx'
@@ -27,6 +28,12 @@ export function whereToAnswer(approval: Approval) {
   if (approval.origin === 'gateway')
     return <p className="chat-approval-note">Answer it in the chat app the agent asked in.</p>
   return <p className="chat-approval-note">This approval can only be answered in Hermes.</p>
+}
+
+// The agent's name as the person knows it; the id only while the agents list is still loading.
+const displayName = (agents: readonly { id: string; name: string }[], agentId: string) => {
+  const agent = agents.find((item) => item.id === agentId)
+  return agent ? agentDisplayName(agent) : agentId
 }
 
 const approvalKey = (approvalId: string) => ['chat', 'approval', approvalId] as const
@@ -94,6 +101,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const [more, setMore] = useState(false)
   const listed = data?.find((item) => item.id === approvalId)
   const byId = useApprovalById(approvalId, status === 'success' && !listed)
+  const agents = useStreamQuery(agentsQuery).data ?? []
   const known = listed ?? byId.data
   // The POST response is fresher than the list until the stream catches up.
   const approval = posted && (!known || known.delivery === 'none') ? posted : known
@@ -138,7 +146,11 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
       aria-label={`Approval: ${approval.title}`}
     >
       <div className="chat-approval-body">
-        <span className="chat-approval-title">{approval.title}</span>
+        <span className="chat-approval-title">
+          {approval.subagentId
+            ? `A subagent of ${displayName(agents, approval.agentId)} wants to run this`
+            : approval.title}
+        </span>
         {approval.command && <code className="chat-approval-command">{approval.command}</code>}
         {approval.description && approval.description !== approval.title && (
           <span className="chat-approval-description">{approval.description}</span>

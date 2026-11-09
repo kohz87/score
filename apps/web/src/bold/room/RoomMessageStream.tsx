@@ -30,6 +30,8 @@ import {
 } from './room-message-pages.tsx'
 import { RoomTyping } from './RoomTyping.tsx'
 import { useRoomLiveCards } from './use-room-live-cards.ts'
+import { useSubagentCards } from '../subagents/use-subagent-cards.ts'
+import { MessageSubagentCard } from '../subagents/MessageSubagentCard.tsx'
 
 /** The chat as one conversation: every topic's messages in time order, a divider where each topic starts. */
 export function RoomMessageStream({
@@ -167,6 +169,7 @@ export function RoomMessageStream({
     () => allItems.filter((message) => !hidden.has(message.id)),
     [allItems, hidden],
   )
+  const subagentCards = useSubagentCards(jobs, allItems)
 
   useEffect(() => {
     if (status !== 'success') return
@@ -301,6 +304,7 @@ export function RoomMessageStream({
               {extras?.below}
               {/* 3.24.0: a needs-you card for this message (or the end of its topic) is drawn right after it. */}
               <NeedsSlot id={slotIds.message(message.id)} />
+              <MessageSubagentCard rows={subagentCards.get(message.id)} agents={agents} />
               {message.jobId && lastOfTopic.get(message.jobId) === message.id && (
                 <NeedsSlot id={slotIds.topic(message.jobId)} />
               )}

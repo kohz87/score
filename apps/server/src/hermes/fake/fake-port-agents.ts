@@ -4,8 +4,10 @@ import {
   type AgentDetail,
   type AgentSummary,
   type ProfileStepName,
+  type SubagentSetup,
 } from '@score/contract'
 import { z } from 'zod'
+import type { HermesSubagentConfig } from '../profile-management.ts'
 import { excerpt } from '../agent-files.ts'
 import { MEMORY_DETAIL_ITEMS } from '../agent-tabs.ts'
 import { permissionsOf } from '../approvals.ts'
@@ -20,6 +22,39 @@ import { fakeReportHistory } from './report-history.ts'
 import { exampleAgents } from './scenario.ts'
 
 export abstract class FakePortAgents extends FakePortSettings {
+  async subagentSetup(): Promise<SubagentSetup> {
+    return {
+      agents: (await this.listAgents()).map((agent) => ({
+        agentId: agent.id,
+        inline: true,
+        guard: true,
+      })),
+    }
+  }
+
+  async applySubagentSetup(): Promise<SubagentSetup> {
+    return this.subagentSetup()
+  }
+
+  refreshSubagentPolicies(): void {}
+
+  private subagentConfigs = new Map<string, HermesSubagentConfig>()
+
+  async subagentConfig(agentId: string): Promise<HermesSubagentConfig> {
+    return (
+      this.subagentConfigs.get(agentId) ?? {
+        maxConcurrent: 4,
+        model: null,
+        maxIterations: 50,
+        timeoutSeconds: null,
+      }
+    )
+  }
+
+  async setSubagentConfig(agentId: string, change: Partial<HermesSubagentConfig>): Promise<void> {
+    this.subagentConfigs.set(agentId, { ...(await this.subagentConfig(agentId)), ...change })
+  }
+
   async listAgents(): Promise<AgentSummary[]> {
     return structuredClone([...this.agents.values()])
   }

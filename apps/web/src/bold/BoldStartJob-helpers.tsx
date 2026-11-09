@@ -210,6 +210,8 @@ export const startJobState = {
   teamJobs: [] as Record<string, unknown>[],
   endReply: (() => Response.json({}, { status: 500 })) as () => Response,
   disposers: [] as (() => void)[],
+  subagentControl: 'limits' as 'limits' | 'on_off' | 'none' | 'error', // SA.3: `error` = unreadable
+  subagentMax: 4,
 }
 
 export function beginStartJobTest() {
@@ -229,6 +231,8 @@ export function beginStartJobTest() {
   state.teamJobs = []
   state.endReply = () => Response.json({}, { status: 500 })
   state.codingLead = null
+  state.subagentControl = 'limits'
+  state.subagentMax = 4
   state.securityReply = () => Response.json({ ok: true })
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -327,6 +331,18 @@ export function beginStartJobTest() {
         state.toolsListed = 'ok'
         return json({ agentId: 'lead', scope: 'profile' })
       }
+      if (/^\/api\/agents\/[^/]+\/subagents$/.test(url.pathname))
+        return state.subagentControl === 'error'
+          ? json({ error: { code: 'internal', message: 'no' } }, 500)
+          : json({
+              agentId: url.pathname.split('/')[3],
+              control: state.subagentControl,
+              enabled: true,
+              maxConcurrent: state.subagentMax,
+              model: null,
+              maxIterations: 50,
+              timeoutSeconds: null,
+            })
       if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/routines'))
         return json({ items: url.pathname.includes('/agents/lead/') ? [routine] : [] })
       if (url.pathname === '/api/rooms/team-room/jobs' && method === 'GET')
