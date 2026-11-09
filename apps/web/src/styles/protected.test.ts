@@ -414,9 +414,8 @@ test('the needs-you card and its buttons wear Score’s own colours under a cust
   )
   expect(css).toContain(`${card} .btn.ghost {`)
   expect(css).toContain(`${card} .btn {`)
-  expect(css).toContain(
-    "[data-ui='bold'][data-look='light'] :is(.bold-request, .bold-subagent-setup)[data-protected]",
-  )
+  expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-request[data-protected]")
+  expect(css).toContain("[data-ui='bold'][data-look='light'] .bold-subagent-setup[data-protected]")
   expect(protectedClasses).toContain('bold-subagent-setup')
   expect(css).toContain(
     "html[data-look='custom'] [data-ui='bold'] .bold-subagent-setup[data-protected]",
