@@ -759,6 +759,12 @@ official stored-session reads and the compaction-stable `conversation_id`. Check
 list (prepared compaction, plugin auto-update) can be changed from Settings. Hermes's Bot Mode Group Chats overlap with
 Score's rooms: nothing to adopt.
 
+## Subagents instead of named swarms (owner 2026-11-09; decision 173; design docs/briefs/SA-subagents.md; nothing built)
+A named agent spins up its own subagents; chat rooms, hand-offs, named recipe steps and votes stay as they are. Default on,
+up to 4 at once, with `/subagents`, a job and recipe setting, and an agent ceiling. First the note's checks and review, then
+**SA.1 safety** (`delegation.gateway_mode: inline` on every profile with the owner's OK, a warning, children blocked from
+Score's room tools), **SA.2 limits**, **SA.3 UI** from an approved mock-up, **SA.4 retire the helpers picker**.
+
 ## Code structure (owner 2026-11-07; decision 168)
 Owner: "tidying the entire code structure, making each file dedicated function with code map (not more than 450 lines
 of codes) so it will help with troubleshooting, optimizing and less token wastage". Rules in AGENTS.md "File size and
