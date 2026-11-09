@@ -52,7 +52,7 @@ export function setLimits(
       .run(body.deadlineAt, orchId)
   if (body.moreSubagents !== undefined) {
     const jobId = runJobScope(sqlite, orchId).jobId
-    if (jobId) allowMoreSubagents(sqlite, jobId, body.moreSubagents)
+    if (jobId) ctx.events.push(...allowMoreSubagents(sqlite, jobId, body.moreSubagents))
   }
   if (body.acceptUnknownSpend !== undefined)
     sqlite

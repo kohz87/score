@@ -103,6 +103,19 @@ class SubagentGuard:
         home = self._home or score_home()
         return next((one for one in chain if policy_path(home, one).exists()), session_id)
 
+    def stopped_child(self, child_session_id) -> str | None:
+        """The id a subagent started under: its own changes if it compresses, and Score knows its row by the first."""
+        if not isinstance(child_session_id, str) or not child_session_id:
+            return None
+        chain, _child = self._lineage_of(child_session_id)
+        first = child_session_id
+        for one in chain:
+            row = self._lineage(one)
+            if row is None or row[1] != "subagent":
+                break
+            first = one
+        return first
+
     def _lineage_of(self, session_id: str) -> tuple[tuple[str, ...], bool]:
         """The session and its ancestors, and whether it is a subagent. Score's own ids need no lookup."""
         if not session_id or session_id.startswith(SCORE_SESSION_PREFIXES):
@@ -114,7 +127,9 @@ class SubagentGuard:
         chain = [session_id]
         child = False
         complete = False
-        for _ in range(MAX_LINEAGE_HOPS):
+        for hop in range(MAX_LINEAGE_HOPS + 1):
+            if hop == MAX_LINEAGE_HOPS:
+                raise ValueError("lineage too long to trust")
             row = self._lineage(chain[-1])
             if row is None:
                 break
@@ -125,7 +140,7 @@ class SubagentGuard:
                 break
             chain.append(parent)
         result = (tuple(chain), child)
-        # A row can appear later, and a lineage this long is not trusted to be whole; neither is kept.
+        # A row can appear later, so a lineage that ended on a missing one isn't kept.
         if complete:
             with self._lock:
                 self._remember(self._chains, session_id, result)

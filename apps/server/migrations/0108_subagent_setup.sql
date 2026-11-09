@@ -12,11 +12,15 @@ ALTER TABLE jobs ADD COLUMN subagents_enabled INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE jobs ADD COLUMN subagents_max_concurrent INTEGER;
 ALTER TABLE jobs ADD COLUMN subagents_max_total INTEGER NOT NULL DEFAULT 20;
 ALTER TABLE jobs ADD COLUMN subagents_used INTEGER NOT NULL DEFAULT 0;
+-- subagents_chain: the person's request a room's own thread last started its count for.
+ALTER TABLE jobs ADD COLUMN subagents_chain TEXT;
 -- Which job a session's limits come from, so a change reaches every session of the job, and a started subagent counts.
+-- inline: Hermes froze the session's mode when it began, so once seen as background it stays so.
 CREATE TABLE subagent_sessions (
   session_id TEXT PRIMARY KEY,
   profile TEXT NOT NULL,
-  job_id TEXT NOT NULL
+  job_id TEXT NOT NULL,
+  inline INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX subagent_sessions_job ON subagent_sessions (job_id);
 -- One row per subagent, for the chat's status card and the job map. id: the child's Hermes session, or Claude Code's call.

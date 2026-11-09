@@ -10,7 +10,11 @@ import {
   subagentPolicyPath,
   writeSubagentPolicy,
 } from '../../../src/hermes/live/subagent-policy.ts'
-import { applySubagentSetup, readSubagentSetup } from '../../../src/hermes/live/subagent-setup.ts'
+import {
+  applySubagentSetup,
+  readSubagentSetup,
+  setUpNewProfileSubagents,
+} from '../../../src/hermes/live/subagent-setup.ts'
 
 let dir: string
 let db: ScoreDb
@@ -173,6 +177,15 @@ test('the settings it reads are allowed through the Hermes runner', () => {
     'delegation.child_timeout_seconds',
   ])
     expect(captureReadShape(['-p', 'lead', 'config', 'get', '--json', key])).toBe(true)
+})
+
+test('a new profile whose pinned plugin has no guard stays refused', async () => {
+  await setUpNewProfileSubagents(runner, dir, db, 'lead', join(dir, 'lead'))
+  expect(writes()).toEqual([])
+  guardFor('lead')
+  await setUpNewProfileSubagents(runner, dir, db, 'lead', join(dir, 'lead'))
+  expect(config['lead']?.['delegation.gateway_mode']).toBe('inline')
+  expect(since('lead')).toBeDefined()
 })
 
 test('the plugin folder may be either spelling', async () => {

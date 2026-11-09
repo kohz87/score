@@ -77,7 +77,10 @@ export function allowMoreSubagents(
 
 export function subagentTotalReached(sqlite: DatabaseSync, jobId: string): boolean {
   const row = jobLimits(sqlite, jobId)
-  return row !== null && row.subagents_used >= row.subagents_max_total
+  // Off means nothing more can start, so there's nothing to ask about.
+  return (
+    row !== null && row.subagents_enabled === 1 && row.subagents_used >= row.subagents_max_total
+  )
 }
 
 export function addSubagentUse(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
@@ -89,12 +92,18 @@ export function addSubagentUse(sqlite: DatabaseSync, jobId: string): DomainEvent
  * A room's own thread never ends, so its total can't be a lifetime's: each request from the person starts it again. A
  * job you start has one piece of work, and keeps its count.
  */
-export function startRoomThreadCount(sqlite: DatabaseSync, jobId: string): DomainEventDraft[] {
+export function startRoomThreadCount(
+  sqlite: DatabaseSync,
+  jobId: string,
+  chainId: string,
+): DomainEventDraft[] {
+  // Once per request: one message to two agents is one request, whichever starts second.
   const changed = sqlite
     .prepare(
-      'UPDATE jobs SET subagents_used = 0 WHERE id = ? AND is_default = 1 AND subagents_used > 0',
+      `UPDATE jobs SET subagents_used = 0, subagents_chain = ?
+       WHERE id = ? AND is_default = 1 AND subagents_chain IS NOT ?`,
     )
-    .run(jobId).changes
+    .run(chainId, jobId, chainId).changes
   return changed ? subagentsEvent(sqlite, jobId) : []
 }
 
@@ -104,29 +113,34 @@ export const jobOfSession = (sqlite: DatabaseSync, sessionId: string): string | 
       { job_id: string } | undefined
   )?.job_id ?? null
 
+/** The answer is the session's for good: one seen as background never becomes inline. */
 export function rememberSubagentSession(
   sqlite: DatabaseSync,
   sessionId: string,
   profile: string,
   jobId: string,
-): void {
-  sqlite
+  inline: boolean,
+): boolean {
+  const row = sqlite
     .prepare(
-      `INSERT INTO subagent_sessions (session_id, profile, job_id) VALUES (?, ?, ?)
-       ON CONFLICT (session_id) DO UPDATE SET profile = excluded.profile, job_id = excluded.job_id`,
+      `INSERT INTO subagent_sessions (session_id, profile, job_id, inline) VALUES (?, ?, ?, ?)
+       ON CONFLICT (session_id) DO UPDATE SET
+         profile = excluded.profile, job_id = excluded.job_id, inline = MIN(inline, excluded.inline)
+       RETURNING inline`,
     )
-    .run(sessionId, profile, jobId)
+    .get(sessionId, profile, jobId, inline ? 1 : 0) as { inline: number }
+  return row.inline === 1
 }
 
 export function subagentSessionsOf(
   sqlite: DatabaseSync,
   jobId: string,
-): { sessionId: string; profile: string }[] {
+): { sessionId: string; profile: string; inline: boolean }[] {
   return (
     sqlite
-      .prepare('SELECT session_id, profile FROM subagent_sessions WHERE job_id = ?')
-      .all(jobId) as { session_id: string; profile: string }[]
-  ).map((row) => ({ sessionId: row.session_id, profile: row.profile }))
+      .prepare('SELECT session_id, profile, inline FROM subagent_sessions WHERE job_id = ?')
+      .all(jobId) as { session_id: string; profile: string; inline: number }[]
+  ).map((row) => ({ sessionId: row.session_id, profile: row.profile, inline: row.inline === 1 }))
 }
 
 export interface AgentCeiling {

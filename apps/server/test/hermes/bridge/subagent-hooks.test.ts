@@ -56,7 +56,7 @@ beforeEach(() => {
          VALUES ('job-1', 'room-1', 'A job', 'job', 8, 40, 'now', 'now')`,
       )
       .run()
-    rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1')
+    rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1', true)
   })
 })
 afterEach(() => {
@@ -106,6 +106,24 @@ test('after a compression the plugin names the session Score knows', () => {
   )
   expect(used()).toBe(1)
   expect(subagentRowsOf(db.sqlite, 'job-1')).toHaveLength(1)
+})
+
+test('a compressed child’s stop closes the row it started under', () => {
+  start('child-1')
+  db.tx((sqlite) =>
+    applySubagentHook(
+      sqlite,
+      'subagent_stop',
+      {
+        child_session_id: 'child-tip',
+        child_root_session_id: 'child-1',
+        child_status: 'completed',
+      },
+      producer,
+      NOW,
+    ),
+  )
+  expect(subagentRowsOf(db.sqlite, 'job-1')[0]?.state).toBe('done')
 })
 
 test('a replayed start doesn’t count twice', () => {

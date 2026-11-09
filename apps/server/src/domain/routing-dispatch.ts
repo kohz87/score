@@ -212,7 +212,7 @@ export class RoutingDispatcher {
           await this.ingest.submit({
             source: 'routing',
             identity: `subagents-new-request:${job.turn_id}`,
-            apply: ({ sqlite }) => startRoomThreadCount(sqlite, jobId),
+            apply: ({ sqlite }) => startRoomThreadCount(sqlite, jobId, job.chain_id),
           })
         }
         // A Hermes agent's turn in an exchanges room acts through the bridge tools with a capability of its own: a

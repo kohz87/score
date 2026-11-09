@@ -30,7 +30,7 @@ export const SUBAGENT_LIMITS = {
   /** The lead's default: a total per job, then the job pauses and asks. */
   defaultTotal: 20,
   maxConcurrent: 16,
-  maxTotal: 500,
+  maxTotal: 5000,
   /** "Allow N more" at a pause. */
   moreMax: 200,
 } as const

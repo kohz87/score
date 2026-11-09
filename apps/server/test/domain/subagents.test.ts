@@ -110,7 +110,7 @@ test('an unknown job is refused', () => {
 })
 
 test('a use counts against the job, and tells the room', () => {
-  db.tx((sqlite) => rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1'))
+  db.tx((sqlite) => rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1', true))
   expect(jobOfSession(db.sqlite, 'score-1')).toBe('job-1')
   expect(jobOfSession(db.sqlite, 'outside')).toBeNull()
   const drafts = db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
@@ -129,7 +129,7 @@ test('a use counts against the job, and tells the room', () => {
 
 test('only a room’s own thread starts its count again at a new request', () => {
   db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
-  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1'))).toEqual([])
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1', 'm1'))).toEqual([])
   expect(job().subagents_used).toBe(1)
   const thread = (
     db.sqlite.prepare("SELECT id FROM jobs WHERE room_id = 'room-1' AND is_default = 1").get() as {
@@ -137,16 +137,20 @@ test('only a room’s own thread starts its count again at a new request', () =>
     }
   ).id
   db.tx((sqlite) => addSubagentUse(sqlite, thread))
-  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toHaveLength(1)
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread, 'm1'))).toHaveLength(1)
   expect(effectiveLimits(db.sqlite, 'lead', thread).used).toBe(0)
-  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toEqual([])
+  db.tx((sqlite) => addSubagentUse(sqlite, thread))
+  // The same request's second agent doesn't start it again; the next request does.
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread, 'm1'))).toEqual([])
+  expect(effectiveLimits(db.sqlite, 'lead', thread).used).toBe(1)
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread, 'm2'))).toHaveLength(1)
 })
 
 test('sessions of a job are listed for the refresh, and a session moves with its job', () => {
   db.tx((sqlite) => {
-    rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1')
-    rememberSubagentSession(sqlite, 'score-2', 'builder', 'job-1')
-    rememberSubagentSession(sqlite, 'score-2', 'builder', 'job-1')
+    rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1', true)
+    rememberSubagentSession(sqlite, 'score-2', 'builder', 'job-1', true)
+    rememberSubagentSession(sqlite, 'score-2', 'builder', 'job-1', true)
   })
   expect(subagentSessionsOf(db.sqlite, 'job-1')).toHaveLength(2)
 })
@@ -184,4 +188,24 @@ test('a run’s limits are the job it was started as', () => {
   expect(runJobScope(db.sqlite, 'orc-1')).toEqual({ jobId: 'job-1' })
   expect(runSubagentTotalReached(db.sqlite, 'orc-1')).toBe(true)
   expect(runJobScope(db.sqlite, 'orc-other')).toEqual({})
+})
+
+test('a session seen as background stays so', () => {
+  const see = (inline: boolean) =>
+    db.tx((sqlite) => rememberSubagentSession(sqlite, 'score-1', 'lead', 'job-1', inline))
+  expect(see(true)).toBe(true)
+  expect(see(false)).toBe(false)
+  expect(see(true)).toBe(false)
+  expect(subagentSessionsOf(db.sqlite, 'job-1')[0]?.inline).toBe(false)
+})
+
+test('turned off, a job at its total has nothing to ask', () => {
+  db.tx((sqlite) => {
+    changeJobSubagents(sqlite, 'job-1', { maxTotal: 1 })
+    addSubagentUse(sqlite, 'job-1')
+  })
+  expect(subagentTotalReached(db.sqlite, 'job-1')).toBe(true)
+  db.tx((sqlite) => changeJobSubagents(sqlite, 'job-1', { enabled: false }))
+  expect(subagentTotalReached(db.sqlite, 'job-1')).toBe(false)
+  expect(jobLimitFor(db.sqlite, 'job-1')).toBeNull()
 })

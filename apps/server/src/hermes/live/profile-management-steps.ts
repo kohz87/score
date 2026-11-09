@@ -216,7 +216,7 @@ export async function runProfileStep(
     ).catch(() => undefined)
     // Subagents are safe only inline (decision 173). Best effort too: without it they stay refused, and the Agents
     // page offers the change.
-    await setUpNewProfileSubagents(options.runner ?? runHermes, options.hermesHome, db, name)
+    await setUpNewProfileSubagents(options.runner ?? runHermes, options.hermesHome, db, name, home)
     const result = await (options.runner ?? runHermes)(
       ['-p', name, 'config', 'get', '--json', 'plugins.enabled'],
       { timeoutMs: 5000, hermesHome: options.hermesHome, captureRead: true },

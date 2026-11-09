@@ -24,6 +24,11 @@ export const subagentPolicyPath = (scoreHome: string, sessionId: string): string
   join(scoreHome, 'subagents', `${createHash('sha256').update(sessionId).digest('hex')}.json`)
 
 /** Written whole, so the guard never reads half a file: anything it can't parse it refuses. */
+/** Nothing stale stays behind a failed write: with no file the guard refuses a session Score named. */
+export function dropSubagentPolicy(scoreHome: string, sessionId: string): void {
+  rmSync(subagentPolicyPath(scoreHome, sessionId), { force: true })
+}
+
 export function writeSubagentPolicy(
   scoreHome: string,
   sessionId: string,
@@ -67,13 +72,8 @@ export function sessionIsInline(
 export function subagentPolicyFor(
   sqlite: DatabaseSync,
   profile: string,
-  sessionId: string,
   jobId: string | null,
-  hermesStartedAtMs: number | null,
+  inline: boolean,
 ): SubagentPolicy {
-  return {
-    v: 1,
-    inline: sessionIsInline(sqlite, profile, sessionId, hermesStartedAtMs),
-    ...effectiveLimits(sqlite, profile, jobId),
-  }
+  return { v: 1, inline, ...effectiveLimits(sqlite, profile, jobId) }
 }

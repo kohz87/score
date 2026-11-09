@@ -98,6 +98,8 @@ export const SubagentStartSchema = z.object({
 })
 export const SubagentStopSchema = z.object({
   child_session_id: z.string().min(1).nullish(),
+  /** The id the child started under: its own changes if it compresses. */
+  child_root_session_id: z.string().min(1).nullish(),
   child_status: z.string().nullish(),
 })
 

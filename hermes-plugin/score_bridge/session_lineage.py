@@ -13,10 +13,11 @@ _STATE_DB = Path(__file__).resolve().parents[2] / "state.db"
 
 
 def session_row(session_id: str, path: Path = _STATE_DB) -> tuple[str | None, str | None] | None:
-    """(parent id, source), or None for a session this profile has no row for yet."""
+    """(parent id, source), or None for a session this profile has no row for yet. Quick to give up: Hermes treats a slow
+    pre_tool_call as a refusal of every tool for a minute, while an error here refuses only this call."""
     if not path.exists():
         return None
-    db = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=1)
+    db = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=0.2)
     try:
         return db.execute("SELECT parent_session_id, source FROM sessions WHERE id = ?", (session_id,)).fetchone()
     finally:

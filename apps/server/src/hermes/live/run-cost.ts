@@ -21,6 +21,7 @@ const SessionRowSchema = z.object({
   actual_cost_usd: z.number().nullable(),
   input_tokens: z.int().nullable(),
   output_tokens: z.int().nullable(),
+  api_call_count: z.int().nullable(),
 })
 
 export interface SessionTreeCost {
@@ -43,7 +44,10 @@ function rowCost(
   if (row.cost_status === 'estimated' && row.estimated_cost_usd !== null)
     return { usd: row.estimated_cost_usd, estimated: true }
   // A session that never reached the model cost nothing, whatever its status says.
-  return !row.input_tokens && !row.output_tokens ? { usd: 0, estimated: false } : null
+  // No counted calls, not merely no counted tokens: a reply can arrive with its usage missing.
+  return !row.api_call_count && !row.input_tokens && !row.output_tokens
+    ? { usd: 0, estimated: false }
+    : null
 }
 
 export function readSessionTreeCost(db: DatabaseSync, sessionId: string): SessionTreeCost | null {
@@ -54,7 +58,7 @@ export function readSessionTreeCost(db: DatabaseSync, sessionId: string): Sessio
            SELECT id FROM sessions WHERE id = ?
            UNION SELECT s.id FROM sessions s JOIN tree t ON s.parent_session_id = t.id
          )
-         SELECT s.id, s.parent_session_id, s.started_at, s.cost_status, s.estimated_cost_usd, s.actual_cost_usd, s.input_tokens, s.output_tokens
+         SELECT s.id, s.parent_session_id, s.started_at, s.cost_status, s.estimated_cost_usd, s.actual_cost_usd, s.input_tokens, s.output_tokens, s.api_call_count
          FROM sessions s JOIN tree t ON s.id = t.id ORDER BY s.started_at LIMIT ?`,
       )
       .all(sessionId, MAX_TREE_ROWS + 1),
@@ -92,7 +96,7 @@ export function runCostObservation(
   runId: string,
   cost: SessionTreeCost,
   round: number,
-  startTolerance = 60_000,
+  startTolerance = 2000,
 ): Observation {
   return {
     source: 'run-cost',

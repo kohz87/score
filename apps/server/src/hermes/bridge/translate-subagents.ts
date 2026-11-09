@@ -14,9 +14,10 @@ export function applySubagentHook(
 ): DomainEventDraft[] {
   if (hook === 'subagent_stop') {
     const stopped = SubagentStopSchema.safeParse(payload).data
-    if (!stopped?.child_session_id) return []
-    const ok = stopped.child_status === 'completed' || stopped.child_status === 'success'
-    return endSubagentRow(sqlite, stopped.child_session_id, ok ? 'done' : 'failed', now)
+    const child = stopped?.child_root_session_id ?? stopped?.child_session_id
+    if (!child) return []
+    const ok = stopped?.child_status === 'completed' || stopped?.child_status === 'success'
+    return endSubagentRow(sqlite, child, ok ? 'done' : 'failed', now)
   }
   const started = SubagentStartSchema.safeParse(payload).data
   const parent = started?.policy_session_id ?? started?.parent_session_id

@@ -24,13 +24,14 @@ const row = (
     estimated?: number | null
     actual?: number | null
     tokens?: number
+    calls?: number
     startedAt?: number
   },
 ) =>
   state
     .prepare(
       `INSERT INTO sessions (id, parent_session_id, started_at, cost_status, estimated_cost_usd, actual_cost_usd,
-         input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+         input_tokens, output_tokens, api_call_count) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
     )
     .run(
       id,
@@ -40,6 +41,7 @@ const row = (
       values.estimated ?? null,
       values.actual ?? null,
       values.tokens ?? 100,
+      values.calls ?? (values.tokens === 0 ? 0 : 1),
     )
 
 const addRun = (
@@ -86,7 +88,7 @@ beforeEach(() => {
   migrate(db, fileURLToPath(new URL('../../../migrations/', import.meta.url)))
   state = new DatabaseSync(':memory:')
   state.exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, started_at REAL, cost_status TEXT,
-    estimated_cost_usd REAL, actual_cost_usd REAL, input_tokens INTEGER, output_tokens INTEGER)`)
+    estimated_cost_usd REAL, actual_cost_usd REAL, input_tokens INTEGER, output_tokens INTEGER, api_call_count INTEGER)`)
 })
 afterEach(() => {
   state.close()
@@ -213,4 +215,15 @@ test('a run’s end gives its subagents their own figures, including where Herme
       sqlite.prepare("SELECT cost_usd, tokens FROM subagents WHERE id = 'child'").get(),
     ),
   ).toMatchObject({ cost_usd: null, tokens: 500 })
+})
+
+test('a reply with its usage missing is unknown, not free', () => {
+  row('score-1', { status: 'unknown', estimated: 0, tokens: 0, calls: 1 })
+  expect(readSessionTreeCost(state, 'score-1')!.usd).toBeNull()
+})
+
+test('a session that began seconds before Score’s first run in it is not charged to the run', () => {
+  addRun('r1', '2026-11-09T10:00:30.000Z')
+  settle('r1', known(7))
+  expect(stored('r1')).toMatchObject({ cost_usd: null, cost_kind: 'unknown' })
 })

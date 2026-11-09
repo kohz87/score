@@ -98,7 +98,10 @@ export async function setUpNewProfileSubagents(
   hermesHome: string,
   db: ScoreDb | undefined,
   agentId: string,
+  home: string,
 ): Promise<void> {
+  // A pinned plugin older than the guard: inline would leave subagents unlimited, so they stay refused for now.
+  if (!hasGuard(home)) return
   try {
     await setInline(runner, hermesHome, agentId, SUBAGENT_LIMITS.defaultConcurrent)
     if (db) recordInline(db, agentId, new Date().toISOString())

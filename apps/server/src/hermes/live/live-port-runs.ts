@@ -3,7 +3,12 @@ import { runHermes } from './cli.ts'
 import { resolveHermesHome } from './paths.ts'
 import { hermesSessionStartedAt, settleRunCost } from './run-cost.ts'
 import { rememberSubagentSession } from '../../domain/subagents.ts'
-import { subagentPolicyFor, writeSubagentPolicy } from './subagent-policy.ts'
+import {
+  dropSubagentPolicy,
+  sessionIsInline,
+  subagentPolicyFor,
+  writeSubagentPolicy,
+} from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 import { HttpError } from '../../errors.ts'
@@ -24,8 +29,8 @@ import { readRun, runLifecycle, runLostObservation } from './translate.ts'
 import type { LivePortRuntime } from './live-port-runtime.ts'
 
 /**
- * Before the run, so the guard reads this session's limits. If this fails the guard refuses a session Score named, but
- * it can't tell a room continuing an outside session from the owner's own: that run doesn't start without its limits.
+ * Before the run, so the guard reads this session's limits. A run doesn't start without them: an older file may say
+ * more than the job now allows, and the guard can't tell a room continuing an outside session from the owner's own.
  */
 async function writeRunSubagentPolicy(
   port: LivePortRuntime,
@@ -43,16 +48,22 @@ async function writeRunSubagentPolicy(
     )
     const started = hermesSessionStartedAt(profile, sessionId, port.options.hermesHome)
     const policy = db.tx((sqlite) => {
-      if (jobId) rememberSubagentSession(sqlite, sessionId, profile, jobId)
-      return subagentPolicyFor(sqlite, profile, sessionId, jobId, started)
+      const seen =
+        mode.state === 'ok' &&
+        mode.value === 'inline' &&
+        sessionIsInline(sqlite, profile, sessionId, started)
+      const inline = jobId ? rememberSubagentSession(sqlite, sessionId, profile, jobId, seen) : seen
+      return subagentPolicyFor(sqlite, profile, jobId, inline)
     })
-    // Turned back outside Score: the profile's setting is the truth for a session this run may start.
-    const inline = policy.inline && mode.state === 'ok' && mode.value === 'inline'
-    writeSubagentPolicy(port.options.scoreHome, sessionId, { ...policy, inline })
+    writeSubagentPolicy(port.options.scoreHome, sessionId, policy)
   } catch (error) {
     port.options.onError?.(error)
-    if (!/^(score-|orc-)/.test(sessionId))
-      throw new HttpError(500, 'internal', 'Couldn’t set this session’s subagent limits.')
+    try {
+      dropSubagentPolicy(port.options.scoreHome, sessionId)
+    } catch (dropped) {
+      port.options.onError?.(dropped)
+    }
+    throw new HttpError(500, 'internal', 'Couldn’t set this session’s subagent limits.')
   }
 }
 

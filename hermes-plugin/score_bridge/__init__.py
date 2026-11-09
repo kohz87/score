@@ -30,8 +30,10 @@ def _make_hook(hook, guard=None):
             current = _current_sender()
             if current is not None:
                 # Score knows a job by the session it started; after a compression the parent's id is a new one.
-                if guard is not None:
+                if guard is not None and hook == "subagent_start":
                     kwargs = {**kwargs, "policy_session_id": guard.policy_session(kwargs.get("parent_session_id"))}
+                elif guard is not None and hook == "subagent_stop":
+                    kwargs = {**kwargs, "child_root_session_id": guard.stopped_child(kwargs.get("child_session_id"))}
                 current.enqueue(hook, args, kwargs)
         except Exception:
             if current is not None:
@@ -137,7 +139,7 @@ def register(ctx):
             on_unload(unload)
         for hook in HOOKS:
             try:
-                ctx.register_hook(hook, _make_hook(hook, guard if hook == "subagent_start" else None))
+                ctx.register_hook(hook, _make_hook(hook, guard if hook in ("subagent_start", "subagent_stop") else None))
             except Exception:
                 sender.record_error("register:" + hook)
     except Exception:

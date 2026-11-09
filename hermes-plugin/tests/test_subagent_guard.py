@@ -312,3 +312,18 @@ def test_a_raised_total_lets_more_through(guard, tmp_path):
     assert message(delegate(guard))
     write(tmp_path, maxTotal=2)
     assert delegate(guard) is None
+
+
+def test_a_lineage_too_long_to_follow_refuses(guard, tmp_path):
+    for n in range(40):
+        ROWS[f"s{n}"] = (f"s{n + 1}", "api_server")
+    assert "refused" in message(delegate(guard, session="s0"))
+
+
+def test_a_stopped_child_is_named_by_the_id_it_started_under(guard):
+    ROWS["child-tip"] = ("child-1", "subagent")
+    ROWS["child-1"] = (SESSION, "subagent")
+    ROWS[SESSION] = (None, "api_server")
+    assert guard.stopped_child("child-tip") == "child-1"
+    assert guard.stopped_child("child-1") == "child-1"
+    assert guard.stopped_child(None) is None
