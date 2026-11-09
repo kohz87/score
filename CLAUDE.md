@@ -14,7 +14,8 @@
    Opus advisor). No review before fixes, and no review of each task or fix round: a batch gets one review when its fix work is done.
    Read-only, findings only, in the task's worktree: `codex exec --disable apps -m gpt-6.1-terra -c model_reasoning_effort=max
    -s read-only "$(cat review-prompt.md)" </dev/null` (without `</dev/null` it hangs on open stdin). Word the prompt as checking Score's
-   guarantees: attack wording gets flagged. The lead verifies each finding. If Codex has no quota, the lead reviews.
+   guarantees: attack wording gets flagged. The lead verifies each finding. **Only if Codex is unavailable** (owner, 2026-11-09), fall back to Sonnet with an Opus advisor, same timing:
+   `claude -p --model claude-sonnet-5-5 --advisor claude-opus-5-5 --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git log:*)" < review-prompt.md`.
 3. **Machine load is measured for the whole system, and 80% is a safety ceiling** (the owner's other projects share
    this VM; the point is that it never crashes). Before starting or adding any task, run `node scripts/capacity.mjs`
    (CPU and memory of the whole machine, sampled). Under 50%: start more parallel tasks (independent worktrees), one at
