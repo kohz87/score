@@ -1,3 +1,4 @@
+import { settleRunCost } from './run-cost.ts'
 import { defaultSubagentPolicy, sessionIsInline, writeSubagentPolicy } from './subagent-policy.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
@@ -65,6 +66,15 @@ export const runMethods = {
           signal,
         )
       }
+      if (!signal.aborted)
+        await settleRunCost({
+          db,
+          sink,
+          signal,
+          hermesHome: this.options.hermesHome,
+          runId,
+          wait: this.options.following?.wait ?? waitForRun,
+        }).catch((error: unknown) => this.options.onError?.(error))
     })().finally(() => this.followers.delete(runId))
     this.followers.set(runId, pending)
   },

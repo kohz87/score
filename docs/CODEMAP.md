@@ -907,6 +907,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/live-port-runtime.ts` — the live adapter's shared runtime type and its method installer.
 - `apps/server/src/hermes/live/live-port-lifecycle.ts` — start, stop, status, the execution hold and Bot Desktop screen.
 - `apps/server/src/hermes/live/live-port-agents.ts` — agents, profiles, routines and model settings.
+- `apps/server/src/hermes/live/run-cost.ts` — a Hermes run's dollars from its session rows and their children, after the run ends.
 - `apps/server/src/hermes/live/subagent-policy.ts` — the per-session limits file the plugin's guard reads; whether a session is inline.
 - `apps/server/src/hermes/live/subagent-setup.ts` — whether each profile is set up for subagents, and Apply.
 - `apps/server/src/hermes/live/live-port-runs.ts` — runs: follow, start, stop, rewind, compact, session context.

@@ -205,9 +205,13 @@ Three sources, and what each can do:
   doesn't read them yet; it should. That is the only figure in time for a limit during a turn.
 - **At the end of a turn:** read the session row and its children by `parent_session_id` directly, not through the ~15 minute
   sweep.
-- **Not covered:** a compression continuation is a new, unlinked session (`budget.ts` already says it can't see these), so
-  the sum can run low. So a dollar limit on a Hermes job is best effort and the screen says "about"; **the count limit is the
-  control that acts in time.**
+- **Compression continuations are linked** (corrected while building SA.1; this note said they weren't): a continuation is a
+  row with `parent_session_id`, as `recover.ts` already relies on, so the tree covers it. `budget.ts` keeps live spend provisional
+  anyway. Still, a dollar limit on a Hermes job is best effort and the screen says "about"; **the count limit is the control
+  that acts in time.**
+- **`cost_status: unknown` rows say `0.0`** (found on gem38's free model: 31 of 35 rows). That isn't a price, so such a run is
+  unknown, not $0, and a job with a dollar cap pauses and asks, as it does today. `included` (a subscription route) is $0, and
+  its tokens are what's shown.
 
 While a turn stays open under `inline`, its reservation stays held and its spend provisional: the safe direction, already
 how `budget.ts` treats an open run. A batch over `max_concurrent_children` gets an error back, not a queue (from the code); the
