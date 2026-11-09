@@ -127,10 +127,15 @@ test('only a room’s own thread starts its count again at a new request', () =>
   db.tx((sqlite) => addSubagentUse(sqlite, 'job-1'))
   expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1'))).toEqual([])
   expect(job().subagents_used).toBe(1)
-  db.tx((sqlite) => sqlite.prepare("UPDATE jobs SET is_default = 1 WHERE id = 'job-1'").run())
-  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1'))).toHaveLength(1)
-  expect(job().subagents_used).toBe(0)
-  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, 'job-1'))).toEqual([])
+  const thread = (
+    db.sqlite.prepare("SELECT id FROM jobs WHERE room_id = 'room-1' AND is_default = 1").get() as {
+      id: string
+    }
+  ).id
+  db.tx((sqlite) => addSubagentUse(sqlite, thread))
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toHaveLength(1)
+  expect(effectiveLimits(db.sqlite, 'lead', thread).used).toBe(0)
+  expect(db.tx((sqlite) => startRoomThreadCount(sqlite, thread))).toEqual([])
 })
 
 test('sessions of a job are listed for the refresh, and a session moves with its job', () => {
