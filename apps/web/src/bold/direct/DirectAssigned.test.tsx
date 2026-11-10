@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { screen } from '@testing-library/react'
 import type { AgentAssigned, TaskSummary } from '@score/contract'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -110,4 +112,10 @@ test('following a link leaves the sheet', async () => {
   const job = await screen.findByRole('link', { name: /^Morning summary/ })
   job.click()
   expect(onNavigate).toHaveBeenCalledTimes(1)
+})
+
+test('on a phone "All in Tasks" is a 44px target', () => {
+  const css = readFileSync(join(__dirname, './bold-direct.css'), 'utf8')
+  const phone = css.slice(css.indexOf('@media (max-width: 860px)'))
+  expect(phone).toMatch(/\.bold-dm-assigned-all \{[^}]*min-height: 44px/)
 })

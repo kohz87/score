@@ -1,5 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { useMediaQuery } from '../../data/use-media.ts'
 import { agentsQuery, roomsQuery } from '../../routes/chat/queries.ts'
@@ -39,8 +40,13 @@ export function BoldRepeatingPage() {
   const agentsState = useStreamQuery(agentsQuery)
   const roomsState = useStreamQuery(roomsQuery)
   const actions = useRepeatingActions()
-  const [filter, setFilter] = useState<RowFilter>(null)
+  // The agent page's Assigned links: ?agent={id} filters to that agent, ?new=1&agent={id} opens the new-job panel with
+  // that agent assigned.
+  const [params] = useSearchParams()
+  const wanted = params.get('agent')
+  const [filter, setFilter] = useState<RowFilter>(wanted)
   const [open, setOpen] = useState<Open>(null)
+  const [wantsNew, setWantsNew] = useState(params.get('new') === '1')
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
@@ -95,14 +101,19 @@ export function BoldRepeatingPage() {
     )
   }
   const busy = actions.run.isPending || actions.runRecipe.isPending
-  const firstAgentId =
-    (active && byId(active) && hermes.some((a) => a.id === active) ? active : hermes[0]?.id) ?? ''
-  const close = () => setOpen(null)
-  const label = open?.job ? `Edit ${open.job.title}` : 'New repeating job'
-  const panel = open && (
+  const preferred = [wanted, active].find((id) => id && hermes.some((a) => a.id === id))
+  const firstAgentId = preferred ?? hermes[0]?.id ?? ''
+  const close = () => {
+    setOpen(null)
+    setWantsNew(false)
+  }
+  // The link's panel opens once the agents are known, so the form starts with the right one.
+  const opened: Open = open ?? (wantsNew && hermes.length > 0 ? { job: null } : null)
+  const label = opened?.job ? `Edit ${opened.job.title}` : 'New repeating job'
+  const panel = opened && (
     <RepeatingPanel
-      key={open.job?.id ?? 'new'}
-      job={open.job}
+      key={opened.job?.id ?? 'new'}
+      job={opened.job}
       agents={hermes}
       rooms={rooms}
       directs={directs}
@@ -117,7 +128,10 @@ export function BoldRepeatingPage() {
     now,
     busy,
     onRun: run,
-    onEdit: (row: Row) => setOpen({ job: row.job }),
+    onEdit: (row: Row) => {
+      setWantsNew(false)
+      setOpen({ job: row.job })
+    },
   }
 
   return (
@@ -131,7 +145,10 @@ export function BoldRepeatingPage() {
               className="bold-rj-new"
               aria-label="New repeating job"
               disabled={hermes.length === 0}
-              onClick={() => setOpen({ job: null })}
+              onClick={() => {
+                setWantsNew(false)
+                setOpen({ job: null })
+              }}
             >
               {phone ? '+' : '+ New repeating job'}
             </button>
@@ -163,26 +180,26 @@ export function BoldRepeatingPage() {
         <p className="bold-tb-none">No repeating jobs yet. Add one, and it runs on its schedule.</p>
       )}
       {rows.length > 0 && (
-        <>
-          <Chips label="Assigned to" options={options} value={active} onPick={setFilter} />
-          <div className={`bold-rj-layout${open && wide ? ' has-panel' : ''}`}>
-            <div className="bold-rj-main">
-              {phone ? <RepeatingCards {...list} /> : <RepeatingTable {...list} />}
-            </div>
-            {open && wide && (
-              <aside className="bold-rj-aside" aria-label={label}>
-                {panel}
-              </aside>
-            )}
-          </div>
-          <p className="bold-rj-footnote">
-            An agent’s job runs in Hermes even when Score is closed. A recipe’s runs are started by
-            Score, so Score has to be running at that time; a run it missed shows here as missed,
-            with Run now.
-          </p>
-        </>
+        <Chips label="Assigned to" options={options} value={active} onPick={setFilter} />
       )}
-      {open && !wide && (
+      <div className={`bold-rj-layout${opened && wide ? ' has-panel' : ''}`}>
+        <div className="bold-rj-main">
+          {rows.length > 0 && (phone ? <RepeatingCards {...list} /> : <RepeatingTable {...list} />)}
+        </div>
+        {opened && wide && (
+          <aside className="bold-rj-aside" aria-label={label}>
+            {panel}
+          </aside>
+        )}
+      </div>
+      {rows.length > 0 && (
+        <p className="bold-rj-footnote">
+          An agent’s job runs in Hermes even when Score is closed. A recipe’s runs are started by
+          Score, so Score has to be running at that time; a run it missed shows here as missed, with
+          Run now.
+        </p>
+      )}
+      {opened && !wide && (
         <Sheet side={!phone} onClose={close} label={label} className="bold-rj-sheet">
           {panel}
         </Sheet>

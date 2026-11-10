@@ -38,7 +38,7 @@ export abstract class FakePortState {
   protected readonly routines = new Map<string, RoutineSummary>()
   protected readonly routineOutputs = new Map<
     string,
-    { file: string; at: string; text: string }[]
+    { file: string; at: string; text: string | null }[]
   >()
   protected readonly routineKeys = new Map<string, string>()
   protected routineCount = 0

@@ -57,14 +57,14 @@ test('a new job: agent chips (Hermes agents only), fields, and one create with a
   })
 })
 
-test('Custom takes cron or every 2h as typed and refuses what Hermes would not', async () => {
+test('Custom takes any single line as typed and refuses an empty one', async () => {
   seed()
   mount()
   const panel = await openEdit('Morning summary')
   fireEvent.click(within(panel).getByRole('radio', { name: 'Custom' }))
-  fireEvent.change(within(panel).getByLabelText('Schedule'), { target: { value: 'whenever' } })
+  fireEvent.change(within(panel).getByLabelText('Schedule'), { target: { value: '' } })
   fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
-  expect((await within(panel).findByRole('alert')).textContent).toMatch(/isn’t a schedule/)
+  expect((await within(panel).findByRole('alert')).textContent).toMatch(/one line/)
   fireEvent.change(within(panel).getByLabelText('Schedule'), { target: { value: 'every 2h' } })
   fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(sent('PATCH')).toHaveLength(1))

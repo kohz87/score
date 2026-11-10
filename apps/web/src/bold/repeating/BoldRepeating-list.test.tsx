@@ -173,3 +173,29 @@ test('results into an agent’s direct chat read "{agent} (direct)"', async () =
   mount()
   expect(await screen.findByText('builder (direct)')).toBeTruthy()
 })
+
+test('the first job on an empty list opens its panel on a wide page', async () => {
+  state.wide = true
+  mount()
+  await screen.findByText(/No repeating jobs yet/)
+  fireEvent.click(screen.getByRole('button', { name: 'New repeating job' }))
+  const panel = await screen.findByRole('complementary', { name: 'New repeating job' })
+  expect(within(panel).getByRole('button', { name: 'Save' })).toBeTruthy()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+  expect(screen.queryByRole('complementary')).toBeNull()
+})
+
+test('rows say whether the model follows the agent or is pinned', async () => {
+  state.jobs = [
+    job('f1', 'builder', { title: 'First follower' }),
+    job('f2', 'builder', { title: 'Second follower' }),
+    job('p1', 'builder', { title: 'Pinned one', model: 'deep' }),
+  ]
+  mount()
+  const table = await screen.findByRole('table')
+  expect(await within(table).findAllByText('its own · demo-model')).toHaveLength(2)
+  const rows = within(table).getAllByRole('row')
+  expect(within(rows[1]!).getByText('its own · demo-model')).toBeTruthy()
+  expect(within(rows[2]!).getByText('its own · demo-model')).toBeTruthy()
+  expect(within(rows[3]!).getByText('deep · pinned')).toBeTruthy()
+})

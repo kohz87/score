@@ -57,3 +57,30 @@ test('what it can’t read, or what never fires, has no next time', () => {
   expect(parseSchedule('61 * * * *')).toBeNull()
   expect(nextFire('0 0 31 2 *', 'UTC', at('2026-11-10T00:00:00Z'))).toBeNull()
 })
+
+test('a time the clocks skip moves on past the jump; a time that happens twice fires once', () => {
+  // New York springs forward on 8 Mar 2026: 02:30 doesn't exist, so it fires at 03:30 EDT (07:30 UTC), never 01:30.
+  expect(
+    nextFire('30 2 * * *', 'America/New_York', at('2026-03-08T05:00:00Z'))?.toISOString(),
+  ).toBe('2026-03-08T07:30:00.000Z')
+  // It falls back on 1 Nov 2026: 01:30 happens twice; the first (EDT, 05:30 UTC) fires and the second doesn't.
+  expect(
+    nextFire('30 1 * * *', 'America/New_York', at('2026-11-01T04:00:00Z'))?.toISOString(),
+  ).toBe('2026-11-01T05:30:00.000Z')
+  expect(
+    nextFire('30 1 * * *', 'America/New_York', at('2026-11-01T05:30:00Z'))?.toISOString(),
+  ).toBe('2026-11-02T06:30:00.000Z')
+})
+
+test('1-7 is Monday to Sunday, a leap day is found years ahead, and every minute is quick', () => {
+  expect(nextFire('0 9 * * 1-7', 'UTC', at('2026-11-14T10:00:00Z'))?.toISOString()).toBe(
+    '2026-11-15T09:00:00.000Z',
+  )
+  expect(nextFire('0 0 29 2 *', 'UTC', at('2026-11-10T00:00:00Z'))?.toISOString()).toBe(
+    '2028-02-29T00:00:00.000Z',
+  )
+  const started = performance.now()
+  for (let i = 0; i < 50; i += 1)
+    nextFire('* * * * *', 'Asia/Singapore', at('2026-11-10T15:59:30Z'))
+  expect(performance.now() - started).toBeLessThan(500)
+})

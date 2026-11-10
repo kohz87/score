@@ -77,7 +77,10 @@ export function registerRepeatingRoutes(
 
   app.get('/api/agents/:agentId/assigned', async (request) => {
     const { agentId } = AgentParams.parse(request.params)
-    const listed = await port.listRoutines(agentId).catch(() => [])
+    // Unreadable jobs are said as such, never shown as "nothing assigned".
+    const listed = await port.listRoutines(agentId).catch(() => {
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read this agent’s repeating jobs.')
+    })
     return AgentAssignedSchema.parse({
       agentId,
       repeating: db.read((sqlite) => listed.map((one) => repeatingJob(sqlite, one))),

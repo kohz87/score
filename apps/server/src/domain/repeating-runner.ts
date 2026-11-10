@@ -2,8 +2,15 @@ import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { Orchestrator } from './orchestration/executor.ts'
-import { dueFires, recordFire, scheduledRun } from './recipe-schedules.ts'
-import { postOutput, targets } from './routine-targets.ts'
+import {
+  cannotFire,
+  dueFires,
+  noteFailed,
+  noteStarted,
+  recordFire,
+  scheduledRun,
+} from './recipe-schedules.ts'
+import { advanceTarget, postOutput, targets } from './routine-targets.ts'
 
 /**
  * Decision 183: what Score does on its own every tick: start the recipe fires that are due (or record the ones it found
@@ -24,21 +31,33 @@ export function repeatingRunner(deps: {
 } {
   const { orchestrator, db, ingest, port } = deps
   const now = () => new Date(deps.clock()).toISOString()
-  /** Starts one run of a recipe's schedule; what happened is recorded either way, and the schedule moves on. */
+  /**
+   * Starts one run of a recipe's schedule. The fire is claimed first (the schedule moves on and records `started`), so a
+   * crash or a second tick never starts it twice; what the run turned out to be is filled in after.
+   */
   async function fire(
     workflowId: string,
     at: string,
   ): Promise<{ outcome: 'started' } | { outcome: 'failed'; reason: string }> {
+    const refusal = db.tx((sqlite) => {
+      const why = cannotFire(sqlite, workflowId)
+      recordFire(
+        sqlite,
+        workflowId,
+        why ? { at, outcome: 'failed', reason: why } : { at, outcome: 'started' },
+        now(),
+      )
+      return why
+    })
+    if (refusal) return { outcome: 'failed', reason: refusal }
     try {
       const body = db.read((sqlite) => scheduledRun(sqlite, workflowId, now()))
       const created = await orchestrator.createWorkflowRun(body, await port.listAgents())
-      db.tx((sqlite) =>
-        recordFire(sqlite, workflowId, { at, outcome: 'started', briefId: created.run.id }, now()),
-      )
+      db.tx((sqlite) => noteStarted(sqlite, workflowId, at, created.run.briefId))
       return { outcome: 'started' }
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'The run couldn’t start.'
-      db.tx((sqlite) => recordFire(sqlite, workflowId, { at, outcome: 'failed', reason }, now()))
+      db.tx((sqlite) => noteFailed(sqlite, workflowId, at, reason))
       return { outcome: 'failed', reason }
     }
   }
@@ -47,7 +66,12 @@ export function repeatingRunner(deps: {
     for (const due of db.read((sqlite) => dueFires(sqlite, now()))) {
       if (due.late)
         db.tx((sqlite) =>
-          recordFire(sqlite, due.workflowId, { at: due.at, outcome: 'missed' }, now()),
+          recordFire(
+            sqlite,
+            due.workflowId,
+            { at: due.at, outcome: 'missed', missed: due.missed },
+            now(),
+          ),
         )
       else await fire(due.workflowId, due.at)
     }
@@ -57,7 +81,12 @@ export function repeatingRunner(deps: {
         await ingest.submit({
           source: 'routines',
           identity: `routine-output:${target.routineId}:${output.file}`,
-          apply: ({ sqlite, now: stamp }) => postOutput(sqlite, target, output, stamp),
+          apply: ({ sqlite, now: stamp }) => {
+            const drafts = postOutput(sqlite, target, output, stamp)
+            // The next look starts here: a backlog longer than one page is worked through in order.
+            advanceTarget(sqlite, target.routineId, output.at)
+            return drafts
+          },
         })
     }
   }

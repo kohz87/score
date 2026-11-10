@@ -227,6 +227,8 @@ export class LiveRoutines {
     req: z.infer<typeof CreateRoutineSchema>,
     key: string,
     db: ScoreDb,
+    /** A move's other settings from the original job (before `--`). */
+    extra: string[] = [],
   ): Promise<RoutineSummary> {
     const before = this.jobs(profile).map((job) => job.id)
     // Hermes has no idempotency key for cron create, so Score records the intent and, on a retry,
@@ -234,6 +236,7 @@ export class LiveRoutines {
     const args = [
       'create',
       ...fieldArgs({ title: req.title, timezone: req.timezone, model: req.model ?? undefined }),
+      ...extra,
       '--',
       req.schedule,
       req.prompt,
@@ -362,21 +365,42 @@ export class LiveRoutines {
     if (!target.success || !profileHome(this.hermesHome, target.data))
       throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     if (target.data === profile) return { job: summary(profile, job), leftBehind: null }
-    const moved = await this.create(
-      target.data,
-      {
-        title: job.name?.trim() || (job.prompt ?? '').trim().slice(0, 50) || 'Routine',
-        schedule: scheduleText(job),
-        prompt: job.prompt ?? '',
-        ...(job.timezone ? { timezone: job.timezone } : {}),
-        ...(job.model?.trim()
-          ? { model: { model: job.model.trim(), provider: job.provider?.trim() || null } }
-          : {}),
-      },
-      `move:${key}`,
-      db,
+    const raw = job as Record<string, unknown>
+    if (raw.script || raw.monitor_script || raw.monitor_url || raw.no_agent)
+      throw new HttpError(409, 'conflict', 'This job runs a script, so move it in Hermes.')
+    // Everything the job does goes with it (the full prompt, untrimmed), and a paused job is made paused.
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value.trim() : null
+    const repeat = z.object({ times: z.int().positive().nullish() }).safeParse(raw.repeat)
+    const extra = [
+      ...(text(raw.deliver) && text(raw.deliver) !== 'local'
+        ? [`--deliver=${text(raw.deliver)}`]
+        : []),
+      ...(Array.isArray(raw.skills)
+        ? raw.skills.filter((one) => text(one)).map((one) => `--skill=${String(one)}`)
+        : []),
+      ...(text(raw.workdir) ? [`--workdir=${text(raw.workdir)}`] : []),
+      ...(repeat.success && repeat.data.times ? [`--repeat=${repeat.data.times}`] : []),
+      ...(text(raw.reasoning_effort) ? [`--reasoning-effort=${text(raw.reasoning_effort)}`] : []),
+      ...(job.enabled === false ? ['--paused'] : []),
+    ]
+    const moved = await this.serial(() =>
+      this.createLocked(
+        target.data,
+        {
+          title: job.name?.trim() || (job.prompt ?? '').trim().slice(0, 50) || 'Routine',
+          schedule: scheduleText(job),
+          prompt: job.prompt ?? '',
+          ...(job.timezone ? { timezone: job.timezone } : {}),
+          ...(job.model?.trim()
+            ? { model: { model: job.model.trim(), provider: job.provider?.trim() || null } }
+            : {}),
+        },
+        `move:${key}`,
+        db,
+        extra,
+      ),
     )
-    if (job.enabled === false) await this.patch(moved.id, { enabled: false })
     try {
       await this.mutate(profile, ['remove', '--', job.id])
       return {
@@ -388,7 +412,7 @@ export class LiveRoutines {
     }
   }
   /** Decision 183: the job's saved results since a time (read-only; see routine-outputs.ts). */
-  outputs(id: string, since: string): { file: string; at: string; text: string }[] {
+  outputs(id: string, since: string): { file: string; at: string; text: string | null }[] {
     return readRoutineOutputs(this.hermesHome, id, since)
   }
   async run(id: string): Promise<void> {

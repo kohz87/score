@@ -36,6 +36,15 @@ export function registerRoutineRoutes(
     provider: one.provider ?? null,
     deliverTo: null,
   })
+  // Where results go is checked before Hermes changes anything, so a bad chat never leaves a half-made change.
+  const assertChat = (roomId: string | null | undefined) => {
+    if (
+      db &&
+      roomId &&
+      !db.read((sqlite) => sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(roomId))
+    )
+      throw new HttpError(400, 'bad_request', 'Couldn’t find that chat.')
+  }
   const receipts = requestIdempotency(db, clock)
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
@@ -50,6 +59,7 @@ export function registerRoutineRoutes(
     if (db) assertAgentAdmits(db.sqlite, agentId)
     const req = CreateRoutineSchema.parse(request.body)
     const key = KeySchema.parse(request.headers['idempotency-key'] ?? randomUUID())
+    assertChat(req.deliverTo)
     const made = await port.createRoutine(agentId, req, key)
     // Decision 183: where its results go is Score's own.
     if (db && req.deliverTo)
@@ -82,7 +92,8 @@ export function registerRoutineRoutes(
     if (db) assertAgentAdmits(db.sqlite, agentId)
     const key = KeySchema.parse(request.headers['idempotency-key'] ?? randomUUID())
     const moved = await port.moveRoutine(routineId, agentId, key)
-    if (db && moved.job.id !== routineId && !moved.leftBehind)
+    // Results follow the job, also when the old copy is still there (the person removes it).
+    if (db && moved.job.id !== routineId)
       db.tx((sqlite) => moveTarget(sqlite, routineId, moved.job.id, stamp()))
     return MovedRepeatingJobSchema.parse({
       job: db ? db.read((sqlite) => repeatingJob(sqlite, moved.job)) : asJob(moved.job),
@@ -97,6 +108,7 @@ export function registerRoutineRoutes(
   app.patch('/api/routines/:routineId', mutation, async (request) => {
     const { routineId } = RoutineParamsSchema.parse(request.params)
     const req = PatchRoutineSchema.parse(request.body)
+    assertChat(req.deliverTo)
     const patched = await port.patchRoutine(routineId, req)
     if (!db) return patched
     db.tx((sqlite) => {

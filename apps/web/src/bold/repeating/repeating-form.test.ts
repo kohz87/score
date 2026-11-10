@@ -72,9 +72,11 @@ test('pin, unpin and results', () => {
 test('a custom schedule as typed, and problems in plain words', () => {
   const form = { ...blankForm('builder'), title: 'T', prompt: 'P' }
   expect(formProblem({ ...form, kind: 'custom', custom: 'every 2h' }, 'd')).toBeNull()
-  expect(formProblem({ ...form, kind: 'custom', custom: 'whenever' }, 'd')).toMatch(
-    /isn’t a schedule/,
-  )
+  // Hermes takes any single line, so unchanged schedules like these save.
+  for (const custom of ['whenever', '30m', 'every monday 9am'])
+    expect(formProblem({ ...form, kind: 'custom', custom }, 'd')).toBeNull()
+  expect(formProblem({ ...form, kind: 'custom', custom: '   ' }, 'd')).toMatch(/one line/)
+  expect(formProblem({ ...form, kind: 'custom', custom: 'a\nb' }, 'd')).toMatch(/one line/)
   expect(formProblem({ ...form, title: ' ' }, 'd')).toMatch(/title/)
   expect(formProblem({ ...form, time: '8am' }, 'd')).toMatch(/HH:MM/)
   expect(formProblem({ ...form, modelMode: 'pinned' }, 'd')).toMatch(/model/)

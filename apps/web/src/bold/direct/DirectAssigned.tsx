@@ -80,7 +80,7 @@ export function DirectAssigned({
           ))}
         </ul>
       )}
-      <Link className="bold-chat-knowledge" to="/b/tasks" onClick={onNavigate}>
+      <Link className="bold-chat-knowledge bold-dm-assigned-all" to="/b/tasks" onClick={onNavigate}>
         All in Tasks
       </Link>
       <p className="small muted">Read here, set in Tasks.</p>

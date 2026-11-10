@@ -178,3 +178,44 @@ test('a result saved before results were sent to the chat is not posted', async 
   await runner().tick()
   expect(messages()).toEqual([])
 })
+
+test('switching the results to another chat never sends it results saved before the switch', async () => {
+  const other = RoomSchema.parse(
+    (
+      await send('POST', '/api/team-rooms', {
+        name: 'other',
+        members: ['lead', 'builder'],
+        leadAgentId: 'lead',
+      })
+    ).json(),
+  ).id
+  const job = (
+    await send('POST', '/api/agents/builder/routines', {
+      title: 'Digest',
+      schedule: 'every 1h',
+      prompt: 'x',
+      deliverTo: roomId,
+    })
+  ).json()
+  await scheduler.advance(1000)
+  await send('POST', `/api/routines/${job.id}/run`, {})
+  await scheduler.advance(1000)
+  await send('PATCH', `/api/routines/${job.id}`, { deliverTo: other })
+  await runner().tick()
+  const inOther = db.sqlite
+    .prepare("SELECT 1 FROM messages WHERE room_id = ? AND author_kind = 'agent'")
+    .all(other)
+  expect(inOther).toEqual([])
+})
+
+test('a chat that doesn’t exist is refused before Hermes changes anything', async () => {
+  const before = (await list()).items.length
+  const refused = await send('POST', '/api/agents/builder/routines', {
+    title: 'Nowhere',
+    schedule: 'every 1h',
+    prompt: 'x',
+    deliverTo: 'no-such-chat',
+  })
+  expect(refused.statusCode).toBe(400)
+  expect((await list()).items).toHaveLength(before)
+})

@@ -76,6 +76,8 @@ export const protectedClasses = [
   // TR.2: Tasks › Repeating: the move / "still has it" / delete notes and a recipe's missed or failed run
   'bold-rj-note',
   'bold-rj-problem',
+  // TR.2: a recipe schedule's missed / failed run and the Stop repeating question (Recipes › a recipe › Repeats)
+  'bold-rs-note',
   // 3.8.0: Delete a recipe with its runs (typed name)
   'bold-rp-confirm',
   // 2.5.0: a run's step that waits on the person, and the Runs list's Needs you count

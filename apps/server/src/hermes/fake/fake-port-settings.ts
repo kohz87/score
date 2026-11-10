@@ -369,7 +369,7 @@ export abstract class FakePortSettings extends FakePortProviders {
   async readRoutineOutputs(
     id: string,
     since: string,
-  ): Promise<{ file: string; at: string; text: string }[]> {
+  ): Promise<{ file: string; at: string; text: string | null }[]> {
     return (this.routineOutputs.get(id) ?? []).filter((output) => output.at > since)
   }
   async deleteRoutine(id: string): Promise<void> {

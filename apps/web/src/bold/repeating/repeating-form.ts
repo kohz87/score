@@ -1,5 +1,5 @@
 import {
-  ScheduleTextSchema,
+  RoutineScheduleSchema,
   type CreateRepeatingJob,
   type PatchRepeatingJob,
   type PinnedModel,
@@ -91,8 +91,10 @@ export function formProblem(form: RepeatingForm, directId: string | null): strin
   if (!form.prompt.trim()) return 'Say what it does first.'
   const schedule = scheduleOf(form)
   if (schedule === null) return 'Give the time as HH:MM, like 08:00.'
-  if (!ScheduleTextSchema.safeParse(schedule).success)
-    return 'That isn’t a schedule Hermes takes. Use five cron fields (0 8 * * *) or every 2h.'
+  // An agent's job is Hermes's own: it takes any single line (30m, every monday 9am, cron), so only empty or
+  // multi-line text is refused here. Recipe schedules are Score's and keep the stricter ScheduleTextSchema.
+  if (!RoutineScheduleSchema.safeParse(schedule).success)
+    return 'Give the schedule on one line, like 0 8 * * * or every 2h.'
   if (form.modelMode === 'pinned' && !form.pinned)
     return 'Pick the model to pin, or choose Its own.'
   if (form.deliver === 'chat' && !form.roomId) return 'Pick the chat the results go to.'

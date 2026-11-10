@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
@@ -58,6 +58,8 @@ export const repeating = {
   schedules: [] as Record<string, unknown>[],
   moveLeftBehind: null as string | null,
   fail: new Set<string>(),
+  /** `METHOD path`s whose next request is lost on the way (a network error), once each. */
+  drop: new Set<string>(),
   phone: false,
   wide: true,
   requests: [] as { method: string; path: string; body: unknown; key: string | null }[],
@@ -97,6 +99,7 @@ beforeEach(() => {
     schedules: [],
     moveLeftBehind: null,
     fail: new Set<string>(),
+    drop: new Set<string>(),
     phone: false,
     wide: true,
     requests: [],
@@ -122,6 +125,8 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) : null
       const key = new Headers(init?.headers).get('Idempotency-Key')
       repeating.requests.push({ method, path, body, key })
+      if (repeating.drop.delete(`${method} ${path}`))
+        return Promise.reject(new TypeError('Failed to fetch'))
       if (method !== 'GET' && repeating.fail.has(`${method} ${path}`))
         return Promise.resolve(
           json({ error: { code: 'bad_request', message: 'Hermes said no.' } }, 400),
@@ -130,6 +135,17 @@ beforeEach(() => {
         return Promise.resolve(json({ items: repeating.jobs, unreadable: repeating.unreadable }))
       if (path === '/api/recipe-schedules')
         return Promise.resolve(json({ items: repeating.schedules }))
+      if (/^\/api\/agents\/[^/]+\/assigned$/.test(path))
+        return Promise.resolve(
+          json({ agentId: path.split('/')[3], repeating: [], recipeSteps: [] }),
+        )
+      if (path === '/api/tasks')
+        return Promise.resolve(
+          json({
+            asOfSeq: 1,
+            columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
+          }),
+        )
       if (path === '/api/agents')
         return Promise.resolve(
           json({
@@ -221,7 +237,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-export function mount() {
+export function mount(entry = '/b/tasks/repeating', extra: RouteObject[] = []) {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client)
@@ -233,9 +249,10 @@ export function mount() {
   const router = createMemoryRouter(
     [
       { path: '/b/tasks/repeating', Component: BoldRepeatingPage },
+      ...extra,
       { path: '*', element: <p>elsewhere</p> },
     ],
-    { initialEntries: ['/b/tasks/repeating'] },
+    { initialEntries: [entry] },
   )
   render(
     <QueryClientProvider client={queryClient}>

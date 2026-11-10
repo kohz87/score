@@ -328,3 +328,53 @@ test('decision 183: a move whose removal fails leaves both and says which', asyn
   expect(moved.leftBehind).toBe('builder:a1b2c3d4e5f6')
   expect(readJobs().some((job) => job.id === 'a1b2c3d4e5f6')).toBe(true)
 })
+
+test('decision 183: a move carries what the job does (skills, results lane, work folder) and a paused job stays paused', async () => {
+  fs.mkdirSync(join(home, 'profiles', 'lead', 'cron'), { recursive: true })
+  fs.writeFileSync(
+    join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+    JSON.stringify({ jobs: [] }),
+  )
+  const jobs = readJobs()
+  Object.assign(jobs[1]!, { skills: ['release-notes'], deliver: 'telegram', workdir: '/srv/app' })
+  writeJobs(jobs)
+  runner.mockImplementation(async (args) => {
+    if (args[1] === 'lead' && args[3] === 'create') {
+      fs.writeFileSync(
+        join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+        JSON.stringify({
+          jobs: [
+            {
+              id: 'moved3',
+              name: 'Dependency check',
+              prompt: 'Check for outdated dependencies.',
+              enabled: false,
+            },
+          ],
+        }),
+      )
+      return { exitCode: 0 }
+    }
+    return { exitCode: hermes(args) }
+  })
+  await routines.move('builder:0f1e2d3c4b5a', 'lead', 'm3', db)
+  const create = runner.mock.calls.find(([args]) => args[1] === 'lead' && args[3] === 'create')![0]
+  expect(create).toEqual(
+    expect.arrayContaining([
+      '--deliver=telegram',
+      '--skill=release-notes',
+      '--workdir=/srv/app',
+      '--paused',
+    ]),
+  )
+  expect(create.indexOf('--paused')).toBeLessThan(create.indexOf('--'))
+})
+
+test('decision 183: a job that runs a script is not moved', async () => {
+  const jobs = readJobs()
+  Object.assign(jobs[0]!, { script: 'check.sh' })
+  writeJobs(jobs)
+  await expect(routines.move('builder:a1b2c3d4e5f6', 'lead', 'm4', db)).rejects.toMatchObject({
+    status: 409,
+  })
+})

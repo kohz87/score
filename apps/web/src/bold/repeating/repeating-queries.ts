@@ -9,7 +9,7 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
-import { newId } from '../../data/ids.ts'
+import { useIdempotencyKeys } from './idempotency-keys.ts'
 
 // Contract section 22. Neither list is on the stream, so these are plain reads that every change invalidates.
 export const repeatingKey = ['bold', 'repeating', 'jobs'] as const
@@ -34,11 +34,11 @@ export function useRecipeSchedules() {
 }
 
 const enc = encodeURIComponent
-// Every change carries its own Idempotency-Key, as the agent page's routine controls always did: a retried request is
-// answered once.
-const send = (method: string, body?: unknown, key = true): RequestInit => ({
+// Every change carries an Idempotency-Key, as the agent page's routine controls always did: a retried request is
+// answered once (the key is kept until the action succeeds, see useIdempotencyKeys).
+const send = (method: string, key: string, body?: unknown): RequestInit => ({
   method,
-  ...(key ? { headers: { 'Idempotency-Key': newId() } } : {}),
+  headers: { 'Idempotency-Key': key },
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 })
 
@@ -56,43 +56,73 @@ export function useRepeatingActions() {
       ]),
     ])
   }
+  const keys = useIdempotencyKeys()
   const create = useMutation({
     mutationFn: async ({ agentId, body }: { agentId: string; body: CreateRepeatingJob }) =>
       RepeatingJobSchema.parse(
-        await apiFetch(`agents/${enc(agentId)}/routines`, send('POST', body, true)),
+        await apiFetch(
+          `agents/${enc(agentId)}/routines`,
+          send('POST', keys.take(`create:${agentId}`, body), body),
+        ),
       ),
-    onSuccess: (job) => refresh(job.agentId),
+    onSuccess: (job, vars) => {
+      keys.done(`create:${vars.agentId}`)
+      return refresh(job.agentId)
+    },
   })
   const patch = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: PatchRepeatingJob }) =>
-      RepeatingJobSchema.parse(await apiFetch(`routines/${enc(id)}`, send('PATCH', body))),
-    onSuccess: (job) => refresh(job.agentId),
+      RepeatingJobSchema.parse(
+        await apiFetch(`routines/${enc(id)}`, send('PATCH', keys.take(`patch:${id}`, body), body)),
+      ),
+    onSuccess: (job, vars) => {
+      keys.done(`patch:${vars.id}`)
+      return refresh(job.agentId)
+    },
   })
   const move = useMutation({
     mutationFn: async ({ id, agentId }: { id: string; agentId: string; from: string }) =>
       MovedRepeatingJobSchema.parse(
-        await apiFetch(`routines/${enc(id)}/move`, send('POST', { agentId }, true)),
+        await apiFetch(
+          `routines/${enc(id)}/move`,
+          send('POST', keys.take(`move:${id}`, { agentId }), { agentId }),
+        ),
       ),
-    onSuccess: (moved, vars) => refresh(moved.job.agentId, vars.from),
+    onSuccess: (moved, vars) => {
+      keys.done(`move:${vars.id}`)
+      return refresh(moved.job.agentId, vars.from)
+    },
   })
   const run = useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`routines/${enc(id)}/run`, send('POST', undefined, true))
+      await apiFetch(`routines/${enc(id)}/run`, send('POST', keys.take(`run:${id}`)))
     },
-    onSuccess: () => refresh(),
+    onSuccess: (_none, id) => {
+      keys.done(`run:${id}`)
+      return refresh()
+    },
   })
   const runRecipe = useMutation({
     mutationFn: async (workflowId: string) =>
       RecipeScheduleSchema.parse(
-        await apiFetch(`workflows/${enc(workflowId)}/schedule/run`, send('POST', {}, true)),
+        await apiFetch(
+          `workflows/${enc(workflowId)}/schedule/run`,
+          send('POST', keys.take(`run-recipe:${workflowId}`, {}), {}),
+        ),
       ),
-    onSuccess: () => refresh(),
+    onSuccess: (_done, workflowId) => {
+      keys.done(`run-recipe:${workflowId}`)
+      return refresh()
+    },
   })
   const remove = useMutation({
     mutationFn: async ({ id }: { id: string; agentId: string }) => {
-      await apiFetch(`routines/${enc(id)}`, send('DELETE', undefined, true))
+      await apiFetch(`routines/${enc(id)}`, send('DELETE', keys.take(`delete:${id}`)))
     },
-    onSuccess: (_none, vars) => refresh(vars.agentId),
+    onSuccess: (_none, vars) => {
+      keys.done(`delete:${vars.id}`)
+      return refresh(vars.agentId)
+    },
   })
   return { create, patch, move, run, runRecipe, remove }
 }

@@ -246,6 +246,9 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/repeating/RepeatingAssignField.tsx` — Assigned to: agent chips, and "A recipe…" listing the recipes (links to Tasks › Recipes).
 - `apps/web/src/bold/repeating/RepeatingModelField.tsx` — Model: Its own or Pinned, picked from the agent's aliases and models (`useModelChoices`).
 - `apps/web/src/bold/repeating/RepeatingResultsField.tsx` — Results go to: the agent's direct chat, a picked chat, or nowhere.
+- `apps/web/src/bold/repeating/idempotency-keys.ts` — one Idempotency-Key per action until it succeeds, so a retried click never makes a second job or run.
+- `apps/web/src/bold/repeating/BoldRepeating-links.test.tsx` — the agent page's Assigned links land on the filter chip / the new-job panel.
+- `apps/web/src/bold/repeating/BoldRepeating-retry.test.tsx` — a retried create or Run now sends the same key.
 - `apps/web/src/bold/repeating/RepeatingNotes.tsx` — the protected notes: the move note, "still has it" with Remove, the delete confirm.
 - `apps/web/src/bold/repeating/bold-repeating.css` — style entry; imports the list and panel sheets.
 - `apps/web/src/bold/repeating/bold-repeating-list.css` — header button, table, cards and the phone 44px rules.
@@ -762,6 +765,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, call intake, queue, lifecycle, payload rendering and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
+- `apps/server/src/domain/workflows/step-tuning.ts` — a recipe step's own model and effort, read for its dispatch (decision 183).
 - `apps/server/src/domain/workflows/` — workflow definitions, planner pass modules, runs and split view modules.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, event translation, ingest and retention.
@@ -1042,6 +1046,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
+- `apps/server/src/hermes/live/routine-outputs.ts` — a repeating job's saved results, read-only (no links followed), the answer only.
 - `apps/server/src/hermes/dispatch-marks.ts` — marks a refusal raised before anything reached Hermes (`notDispatched`).
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter: state, construction and the method install (methods in the files below).
 - `apps/server/src/hermes/live/live-port-types.ts` — live adapter options, state schema and constants.

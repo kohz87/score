@@ -251,7 +251,7 @@ export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   readRoutineOutputs(
     id: string,
     since: string,
-  ): Promise<{ file: string; at: string; text: string }[]>
+  ): Promise<{ file: string; at: string; text: string | null }[]>
   /** Decision 182: pin the agent's repeating jobs that follow its model onto the model it has now; their ids. */
   pinFollowingRoutines(agentId: string): Promise<string[]>
   /** SOUL.md / AGENTS.md of a profile. A missing file reads as empty text. */

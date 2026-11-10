@@ -119,12 +119,12 @@ test('Pause keeps the schedule and turns it off; Resume shows the agents and ack
   mount()
   const repeats = await card()
   const pause = await within(repeats).findByRole('button', { name: 'Pause' })
-  // Pausing keeps what the schedule is bound to, so it waits for the recipe's agents.
-  await waitFor(() => expect((pause as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(pause)
   await waitFor(() => expect(within(repeats).getByText('Paused')).toBeDefined())
-  expect(calls[0]!.body).toMatchObject({
+  // Pausing sends no agents and no acknowledgement: the server keeps the binding it has.
+  expect(calls[0]!.body).toEqual({
     schedule: '0 16 * * 5',
+    timezone: 'UTC',
     roomId: 'room-release',
     enabled: false,
   })

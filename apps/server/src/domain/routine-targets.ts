@@ -49,10 +49,19 @@ export function setTarget(
   sqlite
     .prepare(
       `INSERT INTO routine_targets (routine_id, room_id, title, since, set_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (routine_id) DO UPDATE SET room_id = excluded.room_id, title = excluded.title,
-         set_at = excluded.set_at`,
+       ON CONFLICT (routine_id) DO UPDATE SET title = excluded.title, set_at = excluded.set_at,
+         -- Another chat gets only results from now on, never ones saved while the first was chosen.
+         since = CASE WHEN room_id = excluded.room_id THEN since ELSE excluded.since END,
+         room_id = excluded.room_id`,
     )
     .run(routineId, roomId, title, now, now)
+}
+
+/** Moves where the job is in its results: the next look starts after this result. */
+export function advanceTarget(sqlite: DatabaseSync, routineId: string, at: string): void {
+  sqlite
+    .prepare('UPDATE routine_targets SET since = ? WHERE routine_id = ? AND since < ?')
+    .run(at, routineId, at)
 }
 
 export function retitleTarget(sqlite: DatabaseSync, routineId: string, title: string): void {
@@ -87,7 +96,7 @@ export function targets(
 export function postOutput(
   sqlite: DatabaseSync,
   target: { routineId: string; roomId: string; title: string },
-  output: { file: string; at: string; text: string },
+  output: { file: string; at: string; text: string | null },
   now: string,
 ): DomainEventDraft[] {
   const done = sqlite
@@ -110,7 +119,12 @@ export function postOutput(
       parts: [
         {
           kind: 'text',
-          text: `**${target.title}** · repeating job\n\n${output.text || 'The run finished with nothing to say.'}`,
+          // A run without an answer (failed or blocked) is said in plain words: its document repeats the prompt.
+          text: `**${target.title}** · repeating job\n\n${
+            output.text === null
+              ? `This run didn’t answer. Its details are in ${agentOf(target.routineId)}’s runs.`
+              : output.text || 'The run finished with nothing to say.'
+          }`,
         },
       ],
       createdAt: output.at,
