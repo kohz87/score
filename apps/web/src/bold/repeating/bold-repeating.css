@@ -1,0 +1,3 @@
+/* TR.2: Tasks › Repeating. Entry; the list and the panel have their own sheets. Mock-ups: docs/design/bold/mockups/28-tasks-*.dc.html. */
+@import './bold-repeating-list.css';
+@import './bold-repeating-panel.css';

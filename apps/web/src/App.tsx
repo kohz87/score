@@ -12,6 +12,7 @@ import { BoldTeam } from './bold/BoldTeam.tsx'
 import { BoldKnowledgePage } from './bold/BoldKnowledge.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { BoldTasksPage } from './bold/BoldTasks.tsx'
+import { BoldRepeatingPage } from './bold/repeating/BoldRepeating.tsx'
 import { BoldScreensPage } from './bold/BoldScreens.tsx'
 
 function keepSearch(request: Request, path: string) {
@@ -90,6 +91,7 @@ export const appRoutes: RouteObject[] = [
           },
           { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'tasks', Component: BoldTasksPage },
+          { path: 'tasks/repeating', Component: BoldRepeatingPage },
           { path: 'screens', Component: BoldScreensPage },
           // 3.27.0: Recipes live in Settings; the old addresses keep their query and hash.
           {

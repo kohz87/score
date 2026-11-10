@@ -18,6 +18,7 @@ import { Chips } from './BoldTasksFilters.tsx'
 import { PhoneNeedsCard } from './BoldTasksNeeds.tsx'
 import { TaskPanel } from './BoldTasksPanel.tsx'
 import { Sheet } from './BoldTasksSheet.tsx'
+import { TasksTabs } from './repeating/TasksTabs.tsx'
 import { roomName, type Lookup } from './bold-tasks-page-model.ts'
 import './bold-tasks.css'
 
@@ -111,6 +112,7 @@ export function BoldTasksPage() {
             archive any of them.
           </p>
         </div>
+        <TasksTabs />
         {needsCount > 0 ? (
           <span className="bold-tb-pill" data-protected="inline-flex">
             {needsCount} need you

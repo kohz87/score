@@ -1,0 +1,36 @@
+/* TR.2: Board · Repeating · Recipes under the Tasks header (mock-up 28-tasks-main, 28-tasks-phone). */
+[data-ui='bold'] .bold-rj-tabs {
+  display: flex;
+  gap: 6px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-rj-tabs a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-rj-tabs a[aria-current='page'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-rj-tabs {
+    width: 100%;
+  }
+
+  [data-ui='bold'] .bold-rj-tabs a {
+    flex: 1;
+    min-height: 44px;
+    padding: 0;
+  }
+}
