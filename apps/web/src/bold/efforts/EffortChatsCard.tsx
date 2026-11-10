@@ -1,11 +1,12 @@
+import { Link } from 'react-router'
+import { boldOneToOneLink } from '../bold-links.ts'
 import { EFFORT_HINTS, ownEffortLabel } from './effort-model.ts'
 import { useAgentEfforts } from './effort-queries.ts'
 import './efforts.css'
 
 /**
- * Agent settings › Model: the chats this agent's effort is set differently in, each with its level (mock-up
- * 25-effort-agent-settings). Nothing shows when there are none. The chats are named, not linked: the room's route is not
- * in this change.
+ * Agent settings › Model: the chats this agent's effort is set differently in, each with its level and a link to it
+ * (mock-up 25-effort-agent-settings). Nothing shows when there are none.
  */
 export function EffortChatsCard({ agentId }: { agentId: string }) {
   const efforts = useAgentEfforts(agentId).data
@@ -20,7 +21,15 @@ export function EffortChatsCard({ agentId }: { agentId: string }) {
         {efforts.chats.map((chat) => (
           <li key={chat.roomId}>
             <span>
-              {chat.roomName}
+              <Link
+                to={
+                  chat.roomKind === 'direct'
+                    ? boldOneToOneLink(agentId)
+                    : `/b?room=${encodeURIComponent(chat.roomId)}`
+                }
+              >
+                {chat.roomName}
+              </Link>
               {chat.jobTitle && <span className="bold-effort-chats-job"> · {chat.jobTitle}</span>}
             </span>
             <span className="bold-effort-level" title={EFFORT_HINTS[chat.effort]}>

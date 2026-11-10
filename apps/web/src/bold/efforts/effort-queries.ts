@@ -24,7 +24,7 @@ const roomPath = (roomId: string) => `rooms/${encodeURIComponent(roomId)}/effort
 const agentPath = (agentId: string) => `agents/${encodeURIComponent(agentId)}/efforts`
 
 /** A chat's efforts plus the last change Score made itself (`reason: model`), which the chat says in a line. */
-export type RoomEfforts = ChatEffortsResponse & {
+export type RoomEfforts = Omit<ChatEffortsResponse, 'asOfSeq'> & {
   notice: { seq: number; agentId: string } | null
 }
 
@@ -36,8 +36,10 @@ export function roomEffortsQuery(roomId: string) {
   return defineStreamQuery<RoomEfforts>({
     key: ['bold', 'efforts', 'room', roomId],
     async fetch(signal) {
-      const response = ChatEffortsResponseSchema.parse(await apiFetch(roomPath(roomId), { signal }))
-      return { asOfSeq: 0, data: { ...response, notice: null } }
+      const { asOfSeq, items } = ChatEffortsResponseSchema.parse(
+        await apiFetch(roomPath(roomId), { signal }),
+      )
+      return { asOfSeq, data: { items, notice: null } }
     },
     types: ['effort.changed'],
     reduce(data, event) {

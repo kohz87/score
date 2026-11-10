@@ -1,7 +1,7 @@
 import {
   AgentEffortsSchema,
   ChatEffortRequestSchema,
-  ChatEffortSchema,
+  ChatEffortChangeSchema,
   ChatEffortsResponseSchema,
 } from '@score/contract'
 import { randomUUID } from 'node:crypto'
@@ -17,6 +17,7 @@ import {
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
+import { snapshot } from '../hub/snapshot.ts'
 
 const RoomParams = z.object({ roomId: z.string().min(1).max(256) })
 const MemberParams = RoomParams.extend({ agentId: z.string().min(1).max(256) })
@@ -36,9 +37,8 @@ export function registerChatEffortRoutes(
 
   app.get('/api/rooms/:roomId/efforts', async (request) => {
     const { roomId } = RoomParams.parse(request.params)
-    return ChatEffortsResponseSchema.parse({
-      items: db.read((sqlite) => chatEffortsOfRoom(sqlite, roomId)),
-    })
+    const result = snapshot(db, (sqlite) => chatEffortsOfRoom(sqlite, roomId))
+    return ChatEffortsResponseSchema.parse({ asOfSeq: result.asOfSeq, items: result.data })
   })
 
   app.put('/api/rooms/:roomId/efforts/:agentId', mutation, async (request) => {
@@ -66,9 +66,7 @@ export function registerChatEffortRoutes(
       identity: randomUUID(),
       apply: ({ sqlite, now }) => setChatEffort(sqlite, roomId, agentId, effort, now),
     })
-    return effort === null
-      ? { roomId, agentId, effort: null }
-      : ChatEffortSchema.parse({ roomId, agentId, effort })
+    return ChatEffortChangeSchema.parse({ roomId, agentId, effort })
   })
 
   app.get('/api/agents/:agentId/efforts', async (request) => {

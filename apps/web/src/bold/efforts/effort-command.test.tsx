@@ -44,6 +44,7 @@ function stub(
       }
       if (path.endsWith('/rooms/room-1/efforts'))
         return jsonResponse({
+          asOfSeq: 0,
           items: effort ? [{ roomId: 'room-1', agentId: 'builder', effort }] : [],
         })
       const agent = /\/agents\/(\w+)\/efforts$/.exec(path)?.[1]

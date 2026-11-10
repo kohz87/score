@@ -3110,9 +3110,9 @@ An agent's reasoning effort for one chat. It wins over the agent's own setting i
 
 | Endpoint | Needs | Body | Answer |
 | --- | --- | --- | --- |
-| `GET /api/rooms/:roomId/efforts` | | | `ChatEffortsResponse`: the agents set differently here; an agent not listed uses its own |
-| `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | the chat's effort for that agent. `400` for an agent not in the chat or a level it doesn't take (the message lists the levels). `404` for no such chat |
-| `GET /api/agents/:agentId/efforts` | | | `AgentEfforts`: `own` (null: the model's default), `levels` a chat can choose, and `chats` where it's set differently |
+| `GET /api/rooms/:roomId/efforts` | | | `ChatEffortsResponse` (`asOfSeq`, `items`): the agents set differently here; an agent not listed uses its own |
+| `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | `ChatEffortChange` (`effort` null: its own). `400` for an agent not in the chat or a level it doesn't take (the message lists the levels). `404` for no such chat |
+| `GET /api/agents/:agentId/efforts` | | | `AgentEfforts`: `own` (null: the model's default), `levels` a chat can choose, and `chats` where it's set differently (`roomKind` says whether it opens as a direct chat or a group) |
 
 - Levels: a Hermes agent `HERMES_CHAT_EFFORTS`; a coding agent its CLI's (`CODING_EFFORTS`).
 - Each turn runs at the chat's effort: Hermes gets it as the run's `model_options.reasoning_effort`, never as the agent's config; Claude Code and Codex as their effort flag for that turn.

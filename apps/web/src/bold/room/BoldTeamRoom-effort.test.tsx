@@ -19,7 +19,7 @@ test('@reviewer /effort max sets that agent for this chat and is never posted as
       if (method === 'PUT' && url.endsWith('/efforts/reviewer'))
         return jsonResponse({ roomId: 'room-1', agentId: 'reviewer', effort: 'max' })
       if (url.includes('/rooms/') && url.endsWith('/efforts') && method === 'GET')
-        return jsonResponse({ items: [] })
+        return jsonResponse({ asOfSeq: 0, items: [] })
       const agent = /\/agents\/([^/]+)\/efforts$/.exec(url)?.[1]
       if (agent)
         return jsonResponse({
@@ -61,7 +61,7 @@ test('a bare /effort with no To chip acts on the agent the footer names (the lea
       if (method === 'PUT' && url.includes('/efforts/'))
         return jsonResponse({ roomId: 'room-1', agentId: 'lead', effort: 'high' })
       if (url.includes('/rooms/') && url.endsWith('/efforts') && method === 'GET')
-        return jsonResponse({ items: [] })
+        return jsonResponse({ asOfSeq: 0, items: [] })
       const agent = /\/agents\/([^/]+)\/efforts$/.exec(url)?.[1]
       if (agent)
         return jsonResponse({

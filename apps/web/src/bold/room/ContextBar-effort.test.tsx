@@ -14,7 +14,7 @@ function stub(items: unknown[]) {
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
-      if (url.endsWith('/rooms/room-1/efforts')) return jsonResponse({ items })
+      if (url.endsWith('/rooms/room-1/efforts')) return jsonResponse({ asOfSeq: 0, items })
       if (url.endsWith('/agents/lead/efforts'))
         return jsonResponse({
           agentId: 'lead',

@@ -44,7 +44,17 @@ function stub(chat: ChatEffortsResponse['items'], agentEfforts: AgentEfforts = e
         const body = JSON.parse(String(init?.body)) as { effort: string | null }
         return jsonResponse({ roomId: 'room-1', agentId: builder.id, effort: body.effort })
       }
-      if (path.endsWith('/rooms/room-1/efforts')) return jsonResponse({ items: chat })
+      if (path.endsWith('/rooms/room-1/efforts')) return jsonResponse({ asOfSeq: 0, items: chat })
+      if (path.endsWith('/agents/builder/subagents'))
+        return jsonResponse({
+          agentId: 'builder',
+          control: 'limits',
+          enabled: true,
+          maxConcurrent: 3,
+          model: null,
+          maxIterations: 50,
+          timeoutSeconds: null,
+        })
       if (path.endsWith(`/agents/${builder.id}/efforts`)) return jsonResponse(agentEfforts)
       return jsonResponse({}, 404)
     }),
@@ -142,8 +152,20 @@ test('the agent settings list names each chat with its level and the line under 
     [],
     efforts({
       chats: [
-        { roomId: 'room-1', roomName: 'Team room', jobTitle: 'Release notes 2.4', effort: 'max' },
-        { roomId: 'room-2', roomName: 'builder', jobTitle: null, effort: 'low' },
+        {
+          roomId: 'room-1',
+          roomName: 'Team room',
+          roomKind: 'group',
+          jobTitle: 'Release notes 2.4',
+          effort: 'max',
+        },
+        {
+          roomId: 'room-2',
+          roomName: 'builder',
+          roomKind: 'direct',
+          jobTitle: null,
+          effort: 'low',
+        },
       ],
     }),
   )
@@ -166,4 +188,5 @@ test('This chat says Its own when the chat sets nothing', async () => {
   renderInRoom(<DirectEffortBlock agent={builder} roomId="room-1" />)
   expect(await screen.findByText('Its own')).toBeTruthy()
   expect(screen.queryByRole('button', { name: /Back to its own/ })).toBeNull()
+  expect(await screen.findByText('up to 3')).toBeTruthy()
 })

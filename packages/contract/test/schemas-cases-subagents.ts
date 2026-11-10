@@ -52,7 +52,12 @@ export const subagentCases = [
     { roomId: 'room-1', agentId: 'builder', effort: 'high' },
     { roomId: 'room-1', agentId: 'builder', effort: 'High!' },
   ],
-  ['ChatEffortsResponseSchema', { items: [] }, { items: [{ roomId: 'room-1' }] }],
+  ['ChatEffortsResponseSchema', { asOfSeq: 1, items: [] }, { items: [] }],
+  [
+    'ChatEffortChangeSchema',
+    { roomId: 'r', agentId: 'builder', effort: null },
+    { roomId: 'r', agentId: 'builder' },
+  ],
   ['ChatEffortRequestSchema', { effort: null }, { effort: 'high', extra: 1 }],
   [
     'AgentEffortsSchema',
@@ -60,7 +65,7 @@ export const subagentCases = [
       agentId: 'builder',
       own: null,
       levels: ['low'],
-      chats: [{ roomId: 'r', roomName: 'Team', jobTitle: null, effort: 'max' }],
+      chats: [{ roomId: 'r', roomName: 'Team', roomKind: 'group', jobTitle: null, effort: 'max' }],
     },
     { agentId: 'builder', own: null, levels: ['low'] },
   ],

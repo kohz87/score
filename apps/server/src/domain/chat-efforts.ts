@@ -61,20 +61,33 @@ export function chatEffortsOfRoom(
 export function chatEffortsOfAgent(
   sqlite: DatabaseSync,
   agentId: string,
-): { roomId: string; roomName: string; jobTitle: string | null; effort: string }[] {
+): {
+  roomId: string
+  roomName: string
+  roomKind: 'group' | 'direct'
+  jobTitle: string | null
+  effort: string
+}[] {
   return (
     sqlite
       .prepare(
-        `SELECT e.room_id, r.name, e.effort,
+        `SELECT e.room_id, r.name, r.role, e.effort,
            (SELECT title FROM jobs j WHERE j.room_id = e.room_id AND j.is_default = 0 AND j.state != 'closed'
               AND j.deleted_at IS NULL ORDER BY j.updated_at DESC LIMIT 1) AS job_title
          FROM chat_efforts e JOIN rooms r ON r.id = e.room_id
          WHERE e.agent_id = ? ORDER BY r.name`,
       )
-      .all(agentId) as { room_id: string; name: string; effort: string; job_title: string | null }[]
+      .all(agentId) as {
+      room_id: string
+      name: string
+      role: string
+      effort: string
+      job_title: string | null
+    }[]
   ).map((row) => ({
     roomId: row.room_id,
     roomName: row.name,
+    roomKind: row.role === 'direct' ? ('direct' as const) : ('group' as const),
     jobTitle: row.job_title,
     effort: row.effort,
   }))

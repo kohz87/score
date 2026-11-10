@@ -67,7 +67,13 @@ test('setting, listing and going back to the agent’s own', () => {
     { roomId: 'room-1', agentId: 'reviewer', effort: 'max' },
   ])
   expect(chatEffortsOfAgent(db.sqlite, 'reviewer')).toEqual([
-    { roomId: 'room-1', roomName: 'Team room', jobTitle: 'Release notes 2.4', effort: 'max' },
+    {
+      roomId: 'room-1',
+      roomName: 'Team room',
+      roomKind: 'group',
+      jobTitle: 'Release notes 2.4',
+      effort: 'max',
+    },
   ])
   db.tx((sqlite) => setChatEffort(sqlite, 'room-1', 'reviewer', null, NOW))
   expect(chatEffortsOfRoom(db.sqlite, 'room-1')).toHaveLength(1)
