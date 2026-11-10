@@ -97,6 +97,8 @@ export type LivePortPublicMethods = PublicMethods<
     | 'deleteRoutine'
     | 'runRoutine'
     | 'pinFollowingRoutines'
+    | 'moveRoutine'
+    | 'readRoutineOutputs'
     | 'setAgentModel'
     | 'readModelSettings'
     | 'updateModelSettings'

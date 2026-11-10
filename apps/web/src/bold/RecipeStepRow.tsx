@@ -1,6 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { TrashIcon } from './BoldIcons.tsx'
+import { StepPins } from './recipe-step/StepPins.tsx'
 import {
   RECIPE_STEP_LABEL,
   RECIPE_STEP_MARK,
@@ -81,6 +82,7 @@ export function RecipeStepRow({
             )}
           </span>
         </button>
+        {node.kind === 'agent' && <StepPins node={node} index={row.index} onChange={onSelect} />}
         <div className="bold-recipes-rowactions">
           <button
             type="button"

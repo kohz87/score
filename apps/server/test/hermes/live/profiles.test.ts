@@ -79,6 +79,10 @@ test('routines come from the profile cron jobs file, redacted and skipping malfo
       lastRunAt: '2026-10-08T07:00:02.000Z',
       enabled: true,
       model: null,
+      nextRunAt: '2026-10-09T09:00:00.000Z',
+      provider: null,
+      // The prompt holds a token, so what Score shows of it is redacted and can't be edited back.
+      descriptionComplete: false,
     },
     {
       id: 'builder:0f1e2d3c4b5a',
@@ -88,6 +92,9 @@ test('routines come from the profile cron jobs file, redacted and skipping malfo
       lastRunAt: null,
       enabled: false,
       model: null,
+      nextRunAt: null,
+      provider: null,
+      descriptionComplete: true,
     },
   ])
   fs.writeFileSync(join(home, 'profiles', 'builder', 'cron', 'jobs.json'), '{broken')

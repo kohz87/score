@@ -204,7 +204,7 @@ export function BoldRoom() {
           ? chat.startsWith('/b?with=')
             ? chat
             : `${chat}&work=graph`
-          : `/b/settings/recipes?run=${encodeURIComponent(runId)}`,
+          : `/b/tasks/recipes?run=${encodeURIComponent(runId)}`,
         { replace: true },
       )
     }

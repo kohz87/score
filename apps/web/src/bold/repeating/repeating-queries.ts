@@ -1,0 +1,128 @@
+import {
+  MovedRepeatingJobSchema,
+  RecipeScheduleSchema,
+  RecipeSchedulesResponseSchema,
+  RepeatingJobSchema,
+  RepeatingJobsResponseSchema,
+  type CreateRepeatingJob,
+  type PatchRepeatingJob,
+} from '@score/contract'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '../../data/api.ts'
+import { useIdempotencyKeys } from './idempotency-keys.ts'
+
+// Contract section 22. Neither list is on the stream, so these are plain reads that every change invalidates.
+export const repeatingKey = ['bold', 'repeating', 'jobs'] as const
+export const recipeSchedulesKey = ['bold', 'repeating', 'recipe-schedules'] as const
+
+export function useRepeatingJobs() {
+  return useQuery({
+    queryKey: repeatingKey,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      RepeatingJobsResponseSchema.parse(await apiFetch('routines', { signal })),
+  })
+}
+
+export function useRecipeSchedules() {
+  return useQuery({
+    queryKey: recipeSchedulesKey,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      RecipeSchedulesResponseSchema.parse(await apiFetch('recipe-schedules', { signal })),
+  })
+}
+
+const enc = encodeURIComponent
+// Every change carries an Idempotency-Key, as the agent page's routine controls always did: a retried request is
+// answered once (the key is kept until the action succeeds, see useIdempotencyKeys).
+const send = (method: string, key: string, body?: unknown): RequestInit => ({
+  method,
+  headers: { 'Idempotency-Key': key },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+})
+
+export function useRepeatingActions() {
+  const client = useQueryClient()
+  // The agent page's card and the Overview read the same jobs under their own keys.
+  const refresh = async (...agentIds: string[]) => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: repeatingKey }),
+      client.invalidateQueries({ queryKey: recipeSchedulesKey }),
+      ...agentIds.flatMap((id) => [
+        client.invalidateQueries({ queryKey: ['team', 'routines', id], exact: true }),
+        client.invalidateQueries({ queryKey: ['team', 'detail', id], exact: true }),
+        client.invalidateQueries({ queryKey: ['bold', 'assigned', id], exact: true }),
+      ]),
+    ])
+  }
+  const keys = useIdempotencyKeys()
+  const create = useMutation({
+    mutationFn: async ({ agentId, body }: { agentId: string; body: CreateRepeatingJob }) =>
+      RepeatingJobSchema.parse(
+        await apiFetch(
+          `agents/${enc(agentId)}/routines`,
+          send('POST', keys.take(`create:${agentId}`, body), body),
+        ),
+      ),
+    onSuccess: (job, vars) => {
+      keys.done(`create:${vars.agentId}`)
+      return refresh(job.agentId)
+    },
+  })
+  const patch = useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: PatchRepeatingJob }) =>
+      RepeatingJobSchema.parse(
+        await apiFetch(`routines/${enc(id)}`, send('PATCH', keys.take(`patch:${id}`, body), body)),
+      ),
+    onSuccess: (job, vars) => {
+      keys.done(`patch:${vars.id}`)
+      return refresh(job.agentId)
+    },
+  })
+  const move = useMutation({
+    mutationFn: async ({ id, agentId }: { id: string; agentId: string; from: string }) =>
+      MovedRepeatingJobSchema.parse(
+        await apiFetch(
+          `routines/${enc(id)}/move`,
+          send('POST', keys.take(`move:${id}`, { agentId }), { agentId }),
+        ),
+      ),
+    onSuccess: (moved, vars) => {
+      keys.done(`move:${vars.id}`)
+      return refresh(moved.job.agentId, vars.from)
+    },
+  })
+  const run = useMutation({
+    mutationFn: async (id: string) => {
+      await apiFetch(`routines/${enc(id)}/run`, send('POST', keys.take(`run:${id}`)))
+    },
+    onSuccess: (_none, id) => {
+      keys.done(`run:${id}`)
+      return refresh()
+    },
+  })
+  const runRecipe = useMutation({
+    mutationFn: async (workflowId: string) =>
+      RecipeScheduleSchema.parse(
+        await apiFetch(
+          `workflows/${enc(workflowId)}/schedule/run`,
+          send('POST', keys.take(`run-recipe:${workflowId}`, {}), {}),
+        ),
+      ),
+    onSuccess: (_done, workflowId) => {
+      keys.done(`run-recipe:${workflowId}`)
+      return refresh()
+    },
+  })
+  const remove = useMutation({
+    mutationFn: async ({ id }: { id: string; agentId: string }) => {
+      await apiFetch(`routines/${enc(id)}`, send('DELETE', keys.take(`delete:${id}`)))
+    },
+    onSuccess: (_none, vars) => {
+      keys.done(`delete:${vars.id}`)
+      return refresh(vars.agentId)
+    },
+  })
+  return { create, patch, move, run, runRecipe, remove }
+}

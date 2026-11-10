@@ -18,6 +18,7 @@ import { Chips } from './BoldTasksFilters.tsx'
 import { PhoneNeedsCard } from './BoldTasksNeeds.tsx'
 import { TaskPanel } from './BoldTasksPanel.tsx'
 import { Sheet } from './BoldTasksSheet.tsx'
+import { TasksTabs } from './tasks-tabs/TasksTabs.tsx'
 import { roomName, type Lookup } from './bold-tasks-page-model.ts'
 import './bold-tasks.css'
 
@@ -111,13 +112,17 @@ export function BoldTasksPage() {
             archive any of them.
           </p>
         </div>
-        {needsCount > 0 ? (
-          <span className="bold-tb-pill" data-protected="inline-flex">
-            {needsCount} need you
-          </span>
-        ) : (
-          <span className="bold-tb-quiet">Nothing needs you</span>
-        )}
+        {/* Decision 183: the Tasks views end the header on every Tasks page; what needs you sits before them. */}
+        <div className="bold-tb-side">
+          {needsCount > 0 ? (
+            <span className="bold-tb-pill" data-protected="inline-flex">
+              {needsCount} need you
+            </span>
+          ) : (
+            <span className="bold-tb-quiet">Nothing needs you</span>
+          )}
+          <TasksTabs />
+        </div>
       </header>
 
       {making && (

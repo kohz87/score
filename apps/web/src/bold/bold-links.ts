@@ -1,7 +1,7 @@
 /**
  * Every destination inside the bold shell. The query parameters are read by later tasks:
  * `job`/`message` by the room (11.4), `with`/`chat` by one-to-ones (11.7), `note` by Library (11.10e),
- * `start` by Start a job (11.10c), `/b/settings/recipes[/:id]` is the Recipes page (2.8.0), `first` by first run (11.10b),
+ * `start` by Start a job (11.10c), `/b/tasks/recipes[/:id]` is the Recipes page (2.8.0), `first` by first run (11.10b),
  * `add` by Add an agent (11.8c), and `command` by the composer's slash-command hand-off (11.4a).
  */
 
@@ -43,7 +43,7 @@ export function boldOneToOneLink(agentId: string, search = ''): string {
   return `/b?${params.toString()}`
 }
 
-/** 11.12b search: a repeating job lives in the agent's Agents page, under More › Routines. */
+/** 11.12b search: a repeating job is listed as Assigned in the agent's Work (decision 183: it is managed in Tasks). */
 export function boldAgentRoutinesLink(agentId: string): string {
   return `/b/agents/${encodeURIComponent(agentId)}#agent-routines`
 }
@@ -68,7 +68,7 @@ export function boldStartJobLink(recipeId?: string): string {
 
 /** 2.8.0 Recipes: the page, or one recipe (`new` starts a new one). */
 export function boldRecipesLink(recipeId?: string): string {
-  return recipeId ? `/b/settings/recipes/${encodeURIComponent(recipeId)}` : '/b/settings/recipes'
+  return recipeId ? `/b/tasks/recipes/${encodeURIComponent(recipeId)}` : '/b/tasks/recipes'
 }
 
 /** 11.10b First run: replay it. */

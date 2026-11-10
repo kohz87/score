@@ -318,6 +318,8 @@ export abstract class FakePortSettings extends FakePortProviders {
       description: req.prompt.slice(0, 600),
       lastRunAt: null,
       enabled: true,
+      ...(req.model ? { model: req.model.model, provider: req.model.provider } : {}),
+      nextRunAt: new Date(Date.parse(this.now()) + 3_600_000).toISOString(),
     }
     this.routines.set(id, routine)
     this.routineKeys.set(intent, id)
@@ -332,15 +334,59 @@ export abstract class FakePortSettings extends FakePortProviders {
     if (req.enabled !== undefined) routine.enabled = req.enabled
     if (req.schedule !== undefined) routine.schedule = req.schedule
     if (req.prompt !== undefined) routine.description = req.prompt.slice(0, 600)
+    if (req.title !== undefined) routine.title = req.title
+    if (req.model !== undefined) {
+      routine.model = req.model?.model ?? null
+      routine.provider = req.model?.provider ?? null
+    }
     return structuredClone(routine)
+  }
+  async moveRoutine(
+    id: string,
+    agentId: string,
+    key: string,
+  ): Promise<{ job: RoutineSummary; leftBehind: string | null }> {
+    const routine = this.routine(id)
+    if (id.startsWith(`${agentId}:`)) return { job: structuredClone(routine), leftBehind: null }
+    const moved = await this.createRoutine(
+      agentId,
+      {
+        title: routine.title,
+        schedule: routine.schedule,
+        prompt: routine.description || routine.title,
+        ...(routine.model
+          ? { model: { model: routine.model, provider: routine.provider ?? null } }
+          : {}),
+      },
+      `move:${key}`,
+    )
+    const made = this.routine(moved.id)
+    made.enabled = routine.enabled
+    this.routineOutputs.set(moved.id, this.routineOutputs.get(id) ?? [])
+    this.routines.delete(id)
+    return { job: structuredClone(made), leftBehind: null }
+  }
+  async readRoutineOutputs(
+    id: string,
+    since: string,
+  ): Promise<{ file: string; at: string; text: string | null }[]> {
+    return (this.routineOutputs.get(id) ?? []).filter((output) => output.at > since)
   }
   async deleteRoutine(id: string): Promise<void> {
     this.routine(id)
     this.routines.delete(id)
   }
   async runRoutine(id: string): Promise<void> {
-    // Real Hermes runs on its next tick; the fake records the run immediately.
-    this.routine(id).lastRunAt = this.now()
+    // Real Hermes runs on its next tick; the fake records the run, and saves a result, immediately.
+    const routine = this.routine(id)
+    routine.lastRunAt = this.now()
+    const outputs = this.routineOutputs.get(id) ?? []
+    outputs.push({
+      file: `${routine.lastRunAt.slice(0, 19).replace('T', '_').replaceAll(':', '-')}.md`,
+      at: routine.lastRunAt,
+      text: `${routine.title}: done. (A result from the fake agent.)`,
+    })
+    this.routineOutputs.set(id, outputs)
   }
   async pinFollowingRoutines(agentId: string): Promise<string[]> {
     if (!this.agents.has(agentId))

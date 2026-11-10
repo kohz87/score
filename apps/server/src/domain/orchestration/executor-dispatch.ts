@@ -1,3 +1,4 @@
+import { stepTuning } from '../workflows/step-tuning.ts'
 import { runJobScope } from './subagent-scope.ts'
 import { withCapability } from './capability.ts'
 import { type Ctx } from './ctx.ts'
@@ -46,6 +47,8 @@ export const dispatchMethods = {
         turnId: coding?.turnId ?? attempt.turn_id,
         sessionId: attempt.session_id,
         ...runJobScope(this.options.db.sqlite, attempt.orchestration_id),
+        // Decision 183: a recipe step's own model and effort.
+        ...stepTuning(this.options.db.sqlite, attempt.orchestration_id, attempt.step_id),
         owner: coding ? this.ownerOf(attempt, coding) : 'orchestration',
         ...(capability ? { render: (stored: string) => withCapability(stored, capability) } : {}),
       })

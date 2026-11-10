@@ -11,7 +11,9 @@ import { BoldSettings } from './bold/BoldSettings.tsx'
 import { BoldTeam } from './bold/BoldTeam.tsx'
 import { BoldKnowledgePage } from './bold/BoldKnowledge.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
+import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 import { BoldTasksPage } from './bold/BoldTasks.tsx'
+import { BoldRepeatingPage } from './bold/repeating/BoldRepeating.tsx'
 import { BoldScreensPage } from './bold/BoldScreens.tsx'
 
 function keepSearch(request: Request, path: string) {
@@ -48,7 +50,7 @@ function runRedirect({ request, params }: { request: Request; params: { briefId?
   const url = new URL(request.url)
   const search = new URLSearchParams(url.search)
   search.set('run', params.briefId ?? '')
-  return redirect(`/b/settings/recipes?${search.toString()}${hashOf(url)}`)
+  return redirect(`/b/tasks/recipes?${search.toString()}${hashOf(url)}`)
 }
 
 /** Every address the classic shell served, each of which now leads into the new shell (see classicRedirectFor). */
@@ -90,25 +92,28 @@ export const appRoutes: RouteObject[] = [
           },
           { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'tasks', Component: BoldTasksPage },
+          { path: 'tasks/recipes', Component: BoldRecipesPage },
+          { path: 'tasks/recipes/:workflowId', Component: BoldRecipesPage },
+          { path: 'tasks/repeating', Component: BoldRepeatingPage },
           { path: 'screens', Component: BoldScreensPage },
-          // 3.27.0: Recipes live in Settings; the old addresses keep their query and hash.
+          // Decision 183: Recipes live in Tasks (they were in Settings from 3.27.0); every older address keeps its query and hash.
           {
             path: 'recipes',
-            loader: ({ request }) => redirect(keepAll(request, '/b/settings/recipes')),
+            loader: ({ request }) => redirect(keepAll(request, '/b/tasks/recipes')),
           },
           {
             path: 'recipes/:workflowId',
             loader: ({ request, params }) =>
-              redirect(keepAll(request, `/b/settings/recipes/${params.workflowId ?? ''}`)),
+              redirect(keepAll(request, `/b/tasks/recipes/${params.workflowId ?? ''}`)),
           },
           {
             path: 'workflows',
-            loader: ({ request }) => redirect(keepAll(request, '/b/settings/recipes')),
+            loader: ({ request }) => redirect(keepAll(request, '/b/tasks/recipes')),
           },
           {
             path: 'workflows/:workflowId',
             loader: ({ request, params }) =>
-              redirect(keepAll(request, `/b/settings/recipes/${params.workflowId ?? ''}`)),
+              redirect(keepAll(request, `/b/tasks/recipes/${params.workflowId ?? ''}`)),
           },
           { path: 'runs/:briefId', loader: runRedirect },
           // 2.6.0: Watch is the replay on the agent's screen page.
@@ -122,7 +127,15 @@ export const appRoutes: RouteObject[] = [
           // Decision 131 E: the Customizer lives inside Settings › Look; BoldSettings loads it.
           { path: 'settings/look/customize', Component: BoldSettings },
           { path: 'settings/look/customize/:themeId', Component: BoldSettings },
-          { path: 'settings/recipes/:workflowId', Component: BoldSettings },
+          {
+            path: 'settings/recipes',
+            loader: ({ request }) => redirect(keepAll(request, '/b/tasks/recipes')),
+          },
+          {
+            path: 'settings/recipes/:workflowId',
+            loader: ({ request, params }) =>
+              redirect(keepAll(request, `/b/tasks/recipes/${params.workflowId ?? ''}`)),
+          },
           { path: 'settings', Component: BoldSettings },
           { path: 'settings/:section', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },
@@ -132,12 +145,12 @@ export const appRoutes: RouteObject[] = [
       ...CLASSIC_PATHS.map((path): RouteObject => ({ path, loader: classicLoader })),
       {
         path: '/workflows',
-        loader: ({ request }) => redirect(keepAll(request, '/b/settings/recipes')),
+        loader: ({ request }) => redirect(keepAll(request, '/b/tasks/recipes')),
       },
       {
         path: '/workflows/:workflowId',
         loader: ({ request, params }) =>
-          redirect(keepAll(request, `/b/settings/recipes/${params.workflowId ?? ''}`)),
+          redirect(keepAll(request, `/b/tasks/recipes/${params.workflowId ?? ''}`)),
       },
       { path: '/runs/:briefId', loader: runRedirect },
       // Stored links and notifications from before 11.11 still open the page they meant.
@@ -148,12 +161,12 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: '/now/flow/workflows',
-        loader: ({ request }) => redirect(keepAll(request, '/b/settings/recipes')),
+        loader: ({ request }) => redirect(keepAll(request, '/b/tasks/recipes')),
       },
       {
         path: '/now/flow/workflows/:workflowId',
         loader: ({ request, params }) =>
-          redirect(keepAll(request, `/b/settings/recipes/${params.workflowId ?? ''}`)),
+          redirect(keepAll(request, `/b/tasks/recipes/${params.workflowId ?? ''}`)),
       },
       {
         path: '/now/flow/:briefId',

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tasks, Repeating on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="padding:14px 16px 8px;display:flex;align-items:center;gap:10px">
+    <h1 style="margin:0;flex:1;font-family:'Bricolage Grotesque',sans-serif;font-size:30px">Tasks</h1>
+    <button type="button" aria-label="New repeating job" style="width:44px;height:44px;border-radius:50%;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:22px;font-weight:700">+</button>
+  </div>
+  <nav aria-label="Tasks views" style="padding:0 16px 10px;display:flex;gap:6px;font-size:14px;font-weight:600">
+    <a href="#" style="flex:1;text-align:center;padding:12px 0;border-radius:999px;background:#1A1C23;color:#C4C6D0;text-decoration:none">Board</a><a href="#" aria-current="page" style="flex:1;text-align:center;padding:12px 0;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Repeating</a><a href="#" style="flex:1;text-align:center;padding:12px 0;border-radius:999px;background:#1A1C23;color:#C4C6D0;text-decoration:none">Recipes</a>
+  </nav>
+  <div role="group" aria-label="Assigned to" style="padding:0 16px 10px;display:flex;gap:6px;overflow:hidden"><button type="button" style="flex:none;height:44px;padding:0 14px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:13px;font-weight:600">Everyone · 5</button><button type="button" style="flex:none;height:44px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">builder · 2</button><button type="button" style="flex:none;height:44px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">lead · 1</button><button type="button" style="flex:none;height:44px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">Recipes</button></div>
+  <ul style="list-style:none;margin:0;padding:0 12px;display:flex;flex-direction:column;gap:8px">
+    <li style="padding:14px 16px;border-radius:20px;background:#1A1C23;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:16px">Morning summary</b><span style="font-size:13px;color:#7FE3C1;font-weight:600">On</span></div>
+      <div style="font-size:13px;color:#C4C6D0">Every day, 08:00 · next in 14 h</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none;display:inline-block"></span>builder<span style="flex:1"></span><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700;white-space:nowrap">its own · demo-model</span></div>
+      <div style="display:flex;gap:8px"><button type="button" aria-label="Run Morning summary now" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button><button type="button" aria-label="Edit Morning summary" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></div>
+    </li>
+    <li style="padding:14px 16px;border-radius:20px;background:#1A1C23;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:16px">Release notes</b><span style="font-size:13px;color:#7FE3C1;font-weight:600">On</span></div>
+      <div style="font-size:13px;color:#C4C6D0">Fridays, 16:00 · recipe, 4 steps</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px #C4C6D0;flex:none;display:inline-block"></span>Recipe<span style="flex:1"></span><span style="padding:3px 10px;border-radius:999px;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18);color:#C4C6D0;font-size:12px;font-weight:700;white-space:nowrap">per step</span></div>
+      <div style="display:flex;gap:8px"><button type="button" aria-label="Run Release notes now" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button><button type="button" aria-label="Edit Release notes" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></div>
+    </li>
+  </ul>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -53,6 +53,9 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
   const requests: { url: string; init?: RequestInit }[] = []
   const disposers: (() => void)[] = []
   let post: PostHandler = () => undefined
+  // Decision 183: a test's own answer for any method and address (the schedules, models and levels); the rest falls
+  // through to the workflow fixtures.
+  let extra: PostHandler = () => undefined
   const getPost = options.getPost ?? (() => post)
   const resetPost =
     options.resetPost ??
@@ -63,6 +66,7 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
   beforeEach(() => {
     requests.length = 0
     resetPost()
+    extra = () => undefined
     vi.stubGlobal(
       'matchMedia',
       (query: string) =>
@@ -79,6 +83,8 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
         const url = String(input)
         requests.push({ url, ...(init ? { init } : {}) })
         const method = init?.method ?? 'GET'
+        const own = extra(url, init)
+        if (own) return Promise.resolve(own)
         if (method === 'POST') {
           const custom = getPost()(url, init)
           if (custom) return Promise.resolve(custom)
@@ -113,7 +119,7 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
     vi.restoreAllMocks()
   })
 
-  function mount(path = '/b/settings/recipes/wf-release') {
+  function mount(path = '/b/tasks/recipes/wf-release') {
     const queryClient = createQueryClient()
     const client = createStreamClient({ EventSourceImpl: Source })
     const queries = createStreamQueryRegistry(queryClient, client)
@@ -124,8 +130,8 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
     })
     const router = createMemoryRouter(
       [
-        { path: '/b/settings/recipes', Component: BoldRecipesPage },
-        { path: '/b/settings/recipes/:workflowId', Component: BoldRecipesPage },
+        { path: '/b/tasks/recipes', Component: BoldRecipesPage },
+        { path: '/b/tasks/recipes/:workflowId', Component: BoldRecipesPage },
         { path: '*', element: <p>elsewhere</p> },
       ],
       { initialEntries: [path] },
@@ -175,8 +181,13 @@ export function setUpRecipeTests(options: RecipeTestOptions = {}) {
     })
   }
 
+  const onRequest = (handler: PostHandler) => {
+    extra = handler
+  }
+
   return {
     requests,
+    onRequest,
     json,
     mount,
     saveButton,

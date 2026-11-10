@@ -71,7 +71,7 @@ test('Ctrl+` opens the terminal and returns, but not while typing', async () => 
 test('an old ?run= address lands on the Recipes page’s run every time, even the same one again', async () => {
   shellState.phone = true
   const router = open('/b?run=brief-x')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes'))
   expect(router.state.location.search).toBe('?run=brief-x')
   await act(async () => {
     await router.navigate('/b')
@@ -79,7 +79,7 @@ test('an old ?run= address lands on the Recipes page’s run every time, even th
   await act(async () => {
     await router.navigate('/b?run=brief-x')
   })
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes'))
   expect(router.state.location.search).toBe('?run=brief-x')
   // The side sheet is not what opens for a run any more.
   expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
@@ -113,7 +113,7 @@ test('?note= and ?library=1 open Knowledge instead, and can be repeated', async 
 
 test('/runs/:id opens the run on the Recipes page, keeping other parameters', async () => {
   const router = open('/runs/brief-x?from=search')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes'))
   expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-x')
   expect(new URLSearchParams(router.state.location.search).get('from')).toBe('search')
 })

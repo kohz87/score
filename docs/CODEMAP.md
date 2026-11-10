@@ -79,9 +79,10 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/agent-page/NameList.tsx` — rule and plugin names on one line, each its own span.
 - `apps/web/src/bold/agent-page/MemorySection.tsx` — Remembers and Skills summaries that open the full cards.
 - `apps/web/src/bold/agent-page/OpenCard.tsx` — a summary (a region named by its title) that opens today's full card in place; `useOpenState` opens it from a link.
-- `apps/web/src/bold/agent-page/WorkSection.tsx` — Work: Recent runs, Repeating jobs and Todo as summaries, and the Files panel (opened by a `?path=` link).
+- `apps/web/src/bold/agent-page/WorkSection.tsx` — Work: Recent runs, Assigned and Todo as summaries, and the Files panel (opened by a `?path=` link).
 - `apps/web/src/bold/agent-page/RunsTile.tsx` — Recent runs: the last two runs, one line each; All runs opens the full card.
-- `apps/web/src/bold/agent-page/WorkTiles.tsx` — Repeating jobs and Todo: one line each and the action that opens the full card.
+- `apps/web/src/bold/agent-page/WorkTiles.tsx` — Todo: one line and the action that opens the full card.
+- `apps/web/src/bold/agent-page/AssignedTile.tsx` — Assigned: a read-only line of the agent's repeating jobs, recipe steps and open tasks, with Open in Tasks and Start a repeating job.
 - `apps/web/src/bold/agent-page/use-agent-files.ts` — whether the Files panel is open, from the `?path=` link.
 - `apps/web/src/bold/agent-page/CodingSections.tsx` — a coding agent's sections: Personality, Model, Safety, Tools, Work.
 - `apps/web/src/bold/agent-page/agent-page.css` — header, section menu (sticky; chips on a phone), sections, tiles and Model rows.
@@ -131,7 +132,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/efforts/ChatRowEffort.tsx` — the chat list's small level tag beside a one-to-one's name.
 - `apps/web/src/bold/models/` — model per chat on screen (decision 182): `/model` palette and command, the chat's models, the tag text and menu part, the agent's chats list, the repeating jobs' warning.
 - `apps/web/src/bold/models/model-queries.ts` — the chat's models kept live by `model.changed`, the agent's chats list, the PUT (with `replaced` for Undo) and the routines pin POST.
-- `apps/web/src/bold/models/model-model.ts` — pure words: the tag's parts, amber rule, accessible name, coding programs, a job's model line, the jobs note.
+- `apps/web/src/bold/models/model-model.ts` — pure words: the tag's parts, amber rule, accessible name, coding programs, a job's model line.
 - `apps/web/src/bold/models/use-model-choices.ts` — what an agent's model can be set to: its aliases and Hermes's models, or a coding agent's program models, narrowed by a search.
 - `apps/web/src/bold/models/model-menu.ts` — the `/model` palette rows (aliases, models with a count, Back to its own, header, note).
 - `apps/web/src/bold/models/use-model-palette.ts` — the composer's hook that reads and builds those rows for the addressed agent.
@@ -230,6 +231,33 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldTaskMoves.tsx` — task column moves and their request state.
 - `apps/web/src/bold/BoldTaskArchive.tsx` — in-place archive confirmation and action.
 - `apps/web/src/bold/bold-task-edit-model.ts` — task edit request messages and the ready-agent filter.
+- `apps/web/src/bold/repeating/` — Tasks › Repeating (decision 183): the Tasks tabs, the list of every repeating job (agents' Hermes jobs and recipe schedules), the new / edit panel, phone cards and sheet.
+- `apps/web/src/bold/repeating/BoldRepeating.tsx` — the `/b/tasks/repeating` page: reads, filter chips, table or cards, the panel beside the list or as a sheet.
+- `apps/web/src/bold/repeating/RepeatingList.tsx` — the table and the phone cards.
+- `apps/web/src/bold/repeating/RepeatingCells.tsx` — row cells shared by both: when, assigned to, model pill, state and missed-run note, Run now / Edit.
+- `apps/web/src/bold/repeating/repeating-rows.ts` — jobs and recipe schedules as one row type, the filter and the per-agent counts.
+- `apps/web/src/bold/repeating/repeating-queries.ts` — `GET /api/routines` and `/api/recipe-schedules` reads; create, patch, move, run, recipe run and delete mutations that refresh the lists.
+- `apps/web/src/bold/repeating/schedule-words.ts` — a schedule in words ("Every day, 08:00"), its parse/build round trip, "next …" text and the panel's next-fire preview.
+- `apps/web/src/bold/repeating/recipe-schedule-words.ts` — a recipe schedule's presets, its words and next-time text (the Repeats card).
+- `apps/web/src/bold/repeating/repeating-form.ts` — the panel's form, its problems in words, the create body and the only-what-changed patch body.
+- `apps/web/src/bold/repeating/RepeatingPanel.tsx` — the new / edit panel: save (move first, then patch the new id), Pause/Resume, Delete….
+- `apps/web/src/bold/repeating/RepeatingFields.tsx` — the panel's labelled field and pill radios.
+- `apps/web/src/bold/repeating/RepeatingWhenField.tsx` — When: Every day / Weekdays / Every week / Every month / Custom, time and the zone line.
+- `apps/web/src/bold/repeating/RepeatingAssignField.tsx` — Assigned to: agent chips, and "A recipe…" listing the recipes (links to Tasks › Recipes).
+- `apps/web/src/bold/repeating/RepeatingModelField.tsx` — Model: Its own or Pinned, picked from the agent's aliases and models (`useModelChoices`).
+- `apps/web/src/bold/repeating/RepeatingResultsField.tsx` — Results go to: the agent's direct chat, a picked chat, or nowhere.
+- `apps/web/src/bold/repeating/idempotency-keys.ts` — one Idempotency-Key per action until it succeeds, so a retried click never makes a second job or run.
+- `apps/web/src/bold/repeating/BoldRepeating-links.test.tsx` — the agent page's Assigned links land on the filter chip / the new-job panel.
+- `apps/web/src/bold/repeating/BoldRepeating-retry.test.tsx` — a retried create or Run now sends the same key.
+- `apps/web/src/bold/repeating/RepeatingNotes.tsx` — the protected notes: the move note, "still has it" with Remove, the delete confirm.
+- `apps/web/src/bold/repeating/bold-repeating.css` — style entry; imports the list and panel sheets.
+- `apps/web/src/bold/repeating/bold-repeating-list.css` — header button, table, cards and the phone 44px rules.
+- `apps/web/src/bold/repeating/bold-repeating-panel.css` — the panel, its fields and notes, and the full-height phone sheet.
+- `apps/web/src/bold/repeating/repeating-helpers.tsx` — shared test state, fixtures, fetch stub and mount for the Repeating suites.
+- `apps/web/src/bold/repeating/BoldRepeating-list.test.tsx` — the list, filters, missed runs, unreadable agents, Run now, tabs, phone cards and CSS.
+- `apps/web/src/bold/repeating/BoldRepeating-panel.test.tsx` — the panel: new, edit-only-changes, model, results, move with and without leftBehind, delete, pause, recipes, sheet.
+- `apps/web/src/bold/repeating/repeating-form.test.ts` — the form's problems and the create and patch bodies.
+- `apps/web/src/bold/repeating/schedule-words.test.ts` — schedule words, round trip, next text and preview.
 - `apps/web/src/bold/use-task-dialog-focus.ts` — modal task dialog focus and Escape lifecycle.
 - `apps/web/src/bold/BoldTasks.tsx` — Tasks route state, filters and board/panel composition.
 - `apps/web/src/bold/BoldTasksCards.tsx` — task cards, card contents and board columns.
@@ -252,6 +280,14 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-knowledge-note.css` — Knowledge note and side-panel layout with mid-width and phone page layouts.
 - `apps/web/src/bold/direct/DirectChat.tsx` — one-to-one chat entry: loads the agent's chats and switches between loading, empty and loaded states.
 - `apps/web/src/bold/direct/DirectChatBar.tsx` — the one-to-one header, choosing the phone or desktop bar.
+- `apps/web/src/bold/direct/DirectAssigned.tsx` — Info's "Assigned to {agent}": repeating jobs, recipe steps and open tasks as links into Tasks.
+- `apps/web/src/bold/direct/DirectAssigned.test.tsx` — the Assigned section: each kind's words and links, empty, following a link.
+- `apps/web/src/bold/assigned/` — Assigned (decision 183): what is set to an agent, read-only on the agent page and in the direct chat's Info.
+- `apps/web/src/bold/assigned/assigned-queries.ts` — the agent's `GET /api/agents/:id/assigned` read (read-only).
+- `apps/web/src/bold/assigned/assigned-model.ts` — pure parts of Assigned: which tasks count, task state words, the counts, names and "next in N h".
+- `apps/web/src/bold/assigned/assigned-test-data.ts` — fixtures for the Assigned tests: jobs, tasks, the task snapshot and the assigned answer.
+- `apps/web/src/bold/assigned/assigned-model.test.ts` — the Assigned counts, names, task words and next-run text.
+- `apps/web/src/bold/agent-page/AssignedTile.test.tsx` — the agent page's Assigned line: empty, jobs and recipe steps, task count, links and a failed read.
 - `apps/web/src/bold/direct/Welcome.tsx` — the one-to-one welcome with privacy note and starter questions.
 - `apps/web/src/bold/direct/NoRoomYet.tsx` — first-chat creation for an agent with no direct room yet.
 - `apps/web/src/bold/direct/LoadedDirect.tsx` — the loaded one-to-one surface: stream, sharing, composer and chat menus.
@@ -296,7 +332,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-tasks-cards.css` — Task cards, badges, agent attribution, progress and empty states.
 - `apps/web/src/bold/bold-tasks-details.css` — Task details panel, needs/approval, steps, comments, phone tabs and sheets.
 - `apps/web/src/bold/bold-tasks-edit.css` — New task, edit, move, archive and confirm dialog surfaces.
-- `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
+- `apps/web/src/bold/BoldRecipes.tsx` — Tasks › Recipes route (decision 183): the Tasks header and tabs, the recipes list, the library or the editor, and for a saved recipe its Repeats cards.
 - `apps/web/src/bold/BoldRecipes-helpers.tsx` — shared fetch setup, mount and fixtures helpers for the Recipes test suites.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.
 - `apps/web/src/bold/BoldRecipeEditor.tsx` — recipe editor composition and export dialog.
@@ -729,6 +765,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/orchestration/` — orchestrator state, executor method modules, journal, fences and checks.
 - `apps/server/src/domain/triggers/` — webhook triggers, signatures, call intake, queue, lifecycle, payload rendering and report-back.
 - `apps/server/src/domain/workflows/` — workflow definitions, planner, runs and views.
+- `apps/server/src/domain/workflows/step-tuning.ts` — a recipe step's own model and effort, read for its dispatch (decision 183).
 - `apps/server/src/domain/workflows/` — workflow definitions, planner pass modules, runs and split view modules.
 - `apps/server/src/hermes/` — the Node-side Hermes boundary and its public adapter surface.
 - `apps/server/src/hermes/bridge/` — Python bridge producers, routes, event translation, ingest and retention.
@@ -838,6 +875,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
 - `apps/server/src/http/chat-models.ts` — routes for an agent's model per chat (contract section 21).
+- `apps/server/src/http/repeating.ts` — recipe schedules, assignments, and the timer for Score's own repeating work (section 22).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -1008,6 +1046,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
+- `apps/server/src/hermes/live/routine-outputs.ts` — a repeating job's saved results, read-only (no links followed), the answer only.
 - `apps/server/src/hermes/dispatch-marks.ts` — marks a refusal raised before anything reached Hermes (`notDispatched`).
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter: state, construction and the method install (methods in the files below).
 - `apps/server/src/hermes/live/live-port-types.ts` — live adapter options, state schema and constants.
@@ -1020,6 +1059,10 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
 - `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
 - `apps/server/src/domain/chat-models.ts` — an agent's model in one chat: set, list, and the model a turn runs on.
+- `apps/server/src/domain/recipe-schedules.ts` — a recipe's schedule: set, list, due fires, missed and failed runs.
+- `apps/server/src/domain/repeating-runner.ts` — each tick: start due recipe runs, post repeating jobs' new results.
+- `apps/server/src/domain/routine-targets.ts` — where a repeating job's results go, and posting each result once.
+- `apps/server/src/domain/schedule-next.ts` — when a cron or `every` schedule fires next, in a time zone.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1263,6 +1306,8 @@ likely to be the entry point for a change.
 
 - `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
 - `packages/contract/src/chat-models.ts` — model per chat: requests, answers, the event and the routines pin (section 21).
+- `packages/contract/src/repeating.ts` — Tasks › Repeating and Recipes: jobs across agents, recipe schedules, assignments (section 22).
+- `packages/contract/src/workflow-limits.ts` — the limits a recipe definition and run keep to (section 15).
 - `packages/contract/src/routines.ts` — an agent's repeating jobs (`RoutineSummary`).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
@@ -1460,3 +1505,8 @@ likely to be the entry point for a change.
 - `e2e/locks.ts` — cross-worker test locks.
 - `e2e/global-teardown.ts` — shared fake-server teardown.
 - `e2e/now-fixture.ts` — deterministic clock fixture.
+- `apps/web/src/bold/tasks-tabs/` — the Tasks views nav (Board · Repeating · Recipes) every Tasks page renders, and its styles.
+- `apps/web/src/bold/repeating/` — a recipe's schedule (decision 183): the Repeats card and its editor, the side cards (Before each run, Last runs), the recipes list on the left, the schedule queries, the chats a run can start in, and `schedule-words.ts` (a schedule in words, the presets, the next time).
+- `apps/web/src/bold/recipe-step/` — a step's own model and effort (decision 183): the row pills, the two selects in the step settings, and the pure `setStepPin`.
+- `apps/web/src/bold/BoldRecipes-step-model.test.tsx` — a step's model and effort: pills, choices, saved into the definition, cleared.
+- `apps/web/src/bold/BoldRecipes-repeats.test.tsx` — the Repeats card (none, set, paused, missed, failed, stop asks first) and the recipes list.

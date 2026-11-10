@@ -1,5 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { runtimeLabel } from '../../components/runtime-label.ts'
+import { StepModelFields } from '../../bold/recipe-step/StepModelFields.tsx'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { TemplateField } from './TemplateField.tsx'
 import { EstimateField } from './NodeInspectorFields.tsx'
@@ -65,6 +66,7 @@ export function NodeAgentSettings({
         rows={8}
         invalid={issueFor('instruction') || node.instruction.trim() === ''}
       />
+      <StepModelFields draft={draft} node={node} agents={agents} commit={commit} />
       <div className="orch-row">
         <label className="orch-field">
           <span>Retries</span>

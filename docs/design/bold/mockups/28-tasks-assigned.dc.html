@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Where assignments show</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1120px;height:640px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;gap:24px">
+  <aside aria-label="Chat info for builder" style="width:340px;flex:none;box-sizing:border-box;padding:18px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:12px;font-size:14px">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">DIRECT CHAT WITH BUILDER · INFO</div>
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ECECF1">ASSIGNED TO BUILDER</div>
+    <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+      <li><a href="#" style="font-weight:600">Morning summary</a> <span style="color:#A6A8B4">· every day 08:00 · next in 14 h</span></li>
+      <li><a href="#" style="font-weight:600">Dependency check</a> <span style="color:#A6A8B4">· Mondays 09:00</span></li>
+      <li><a href="#" style="font-weight:600">Release notes</a> <span style="color:#A6A8B4">· recipe step 2 · Fridays 16:00</span></li>
+      <li><a href="#" style="font-weight:600">Fix the feed cursor</a> <span style="color:#A6A8B4">· task · in progress</span></li>
+      <li><a href="#" style="font-weight:600">Paginate the feed</a> <span style="color:#A6A8B4">· task · to do</span></li>
+    </ul>
+    <a href="#" style="font-weight:600;font-size:13px">All in Tasks</a>
+    <div style="font-size:13px;line-height:1.45;color:#A6A8B4">Read here, set in Tasks. A recipe&#39;s step counts as assigned to its agent.</div>
+  </aside>
+  <section aria-label="Agent page, Work" style="flex:1;min-width:0;padding:20px 24px;border-radius:28px;background:#1A1C23;display:flex;flex-direction:column;gap:14px">
+    <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:24px">Work</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <div style="padding:16px;border-radius:20px;background:#22242C;display:flex;flex-direction:column;gap:6px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px">Recent runs</b><span style="font-size:14px;color:#C4C6D0">Chat run · Completed · 2 min</span><span style="font-size:14px;color:#C4C6D0">Morning summary · Completed · 1 min</span><a href="#" style="font-size:13px;font-weight:700">All runs</a></div>
+      <div style="padding:16px;border-radius:20px;background:#22242C;display:flex;flex-direction:column;gap:6px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px">Assigned · 3 repeating, 2 tasks</b><span style="font-size:14px;color:#C4C6D0">Morning summary · Dependency check · Release notes (step 2)</span><a href="#" style="font-size:13px;font-weight:700">Open in Tasks</a></div>
+    </div>
+    <div style="padding:12px 14px;border-radius:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12);font-size:13px;color:#C4C6D0">Option to decide: keep this read-only &#34;Assigned&#34; line on the agent page (shown), or drop it, since the direct chat&#39;s Info lists the same.</div>
+    <div style="font-size:13px;color:#A6A8B4">The &#34;Repeating jobs&#34; card and its editor leave the agent page; creating and editing move to Tasks › Repeating.</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1120,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

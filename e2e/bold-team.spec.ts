@@ -86,7 +86,7 @@ for (const viewport of sizes) {
       'Remembers',
       'Skills',
       'Can use',
-      'Repeating jobs',
+      'Assigned',
       'Plugins',
       'Reachable on',
       'Never rules',

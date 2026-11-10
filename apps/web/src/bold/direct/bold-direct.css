@@ -214,6 +214,13 @@
   [data-ui='bold'] .bold-dm-starters .btn {
     min-height: 44px;
   }
+
+  /* Info › Assigned: "All in Tasks" is a 44px target on a phone. */
+  [data-ui='bold'] .bold-dm-assigned-all {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 
 [data-ui='bold'] .bold-dm-add-confirm {

@@ -6,7 +6,7 @@ import { setUpRecipeTests } from './BoldRecipes-helpers.tsx'
 const { mount, phoneMedia } = setUpRecipeTests()
 
 test('deleting a middle step joins the step before to the step after, says so, and focuses the joined card', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   fireEvent.keyDown(card, { key: 'Delete' })
@@ -33,7 +33,7 @@ test('after an insert, focus goes to the new card', async () => {
 
 test('phone sheet: compact with the instruction, focus moves in and back, Escape closes it from anywhere, More settings expands it', async () => {
   phoneMedia()
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   fireEvent.click(card)
   const sheet = screen.getByRole('complementary', { name: 'Selected step' })
@@ -60,7 +60,7 @@ test('phone sheet: compact with the instruction, focus moves in and back, Escape
 
 test('phone sheet: Delete step removes the step with its join, and an insert keeps focus on the new card', async () => {
   phoneMedia()
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   fireEvent.click(await screen.findByRole('button', { name: /Agent step Review the draft/ }))
   const sheet = screen.getByRole('complementary', { name: 'Selected step' })
   fireEvent.click(within(sheet).getByRole('button', { name: 'Delete step' }))

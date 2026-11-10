@@ -1,5 +1,6 @@
 import type { AgentSummary, WorkflowNode } from '@score/contract'
 import { runtimeLabel } from '../components/runtime-label.ts'
+import { StepModelFields } from './recipe-step/StepModelFields.tsx'
 import { TemplateField } from '../routes/workflows/TemplateField.tsx'
 import { addRule, removeRule, updateRule, type Draft } from '../routes/workflows/workflow-model.ts'
 import {
@@ -105,6 +106,7 @@ export function RecipeInspector({
             <code>{`{{nodes.${agentNodes.find((item) => item.id !== node.id)?.id ?? 'name'}.output}}`}</code>
             .
           </p>
+          <StepModelFields draft={draft} node={node} agents={agents} commit={commit} />
           <div className="bold-recipes-inspector-grid">
             <label className="orch-field">
               <span>Retries</span>

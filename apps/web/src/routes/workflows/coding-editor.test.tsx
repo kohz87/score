@@ -125,8 +125,8 @@ function mountEditor() {
     queryClient.clear()
   })
   const router = createMemoryRouter(
-    [{ path: '/b/settings/recipes/:workflowId', Component: BoldRecipesPage }],
-    { initialEntries: ['/b/settings/recipes/wf-release'] },
+    [{ path: '/b/tasks/recipes/:workflowId', Component: BoldRecipesPage }],
+    { initialEntries: ['/b/tasks/recipes/wf-release'] },
   )
   render(
     <QueryClientProvider client={queryClient}>

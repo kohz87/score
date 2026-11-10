@@ -11,7 +11,6 @@ import { BoldSecurity } from './BoldSecurity.tsx'
 import { BoldConnections } from './BoldConnections.tsx'
 import { BoldLook } from './BoldLook.tsx'
 import { BoldSystem } from './BoldSystem.tsx'
-import { BoldRecipesPage } from './BoldRecipes.tsx'
 import { BoldTools } from './BoldTools.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
 import { BoldWorkspaces } from './BoldWorkspaces.tsx'
@@ -38,7 +37,6 @@ type SettingsSection =
   | 'connections'
   | 'workspaces'
   | 'tools'
-  | 'recipes'
   | 'rules'
   | 'notifications'
   | 'look'
@@ -72,11 +70,6 @@ export const SETTINGS_SECTIONS: readonly SettingsItem[] = [
     title: 'Tools and triggers',
     description: 'Apps agents use; webhooks that start jobs',
     phase: '11.9a',
-  },
-  {
-    id: 'recipes',
-    title: 'Recipes',
-    description: 'Saved plans agents run',
   },
   { id: 'rules', title: 'Rules', description: 'What agents may do alone', phase: '11.9b' },
   {
@@ -116,8 +109,6 @@ function Section({
       return <BoldWorkspaces agents={agents} rooms={rooms} />
     case 'tools':
       return <BoldTools agents={agents} />
-    case 'recipes':
-      return <BoldRecipesPage />
     case 'look':
       return <BoldLook />
     case 'rules':
@@ -149,17 +140,11 @@ export function BoldSettings() {
   const location = useLocation()
   // Decision 131 E: /b/settings/look/customize[/:themeId] is the Customizer, framed by Settings with Look selected.
   const customizing = /^\/b\/settings\/look\/customize(\/|$)/.test(location.pathname)
-  // 3.27.0: /b/settings/recipes/:workflowId is a recipe in the Recipes section (that route has no :section).
-  const recipe = /^\/b\/settings\/recipes(\/|$)/.test(location.pathname)
-  // 3.29.0: the editor (a recipe, or a new one) fills the page without the Settings list; the library steps the list aside on a phone.
-  const recipeEditor = /^\/b\/settings\/recipes\/[^/]+/.test(location.pathname)
   const section = customizing
     ? 'look'
-    : recipe
-      ? 'recipes'
-      : isSettingsSection(params.section)
-        ? params.section
-        : 'usage'
+    : isSettingsSection(params.section)
+      ? params.section
+      : 'usage'
   // A section is a page of its own: moving to another one starts at its top (a #hash link keeps its anchor).
   const shown = useRef(section)
   useEffect(() => {
@@ -171,13 +156,8 @@ export function BoldSettings() {
   if (params.section !== undefined && !isSettingsSection(params.section))
     return <Navigate to="/b/settings/usage" replace />
   return (
-    <div className={`page bold-settings-page${recipeEditor ? ' page--wide' : ''}`}>
-      <div
-        className="setgrid"
-        data-section-page={
-          customizing ? true : recipeEditor ? 'editor' : recipe ? 'library' : undefined
-        }
-      >
+    <div className="page bold-settings-page">
+      <div className="setgrid" data-section-page={customizing ? true : undefined}>
         <nav className="setnav" aria-label="Settings">
           <h1>Settings</h1>
           {SETTINGS_SECTIONS.map((item) => (

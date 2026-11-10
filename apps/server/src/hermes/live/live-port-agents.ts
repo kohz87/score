@@ -168,6 +168,13 @@ export const agentMethods = {
     this.requireStarted()
     await this.routines.remove(id)
   },
+  async moveRoutine(this: LivePortRuntime, id: string, agentId: string, key: string) {
+    const { db } = this.requireStarted()
+    return this.routines.move(id, agentId, key, db)
+  },
+  async readRoutineOutputs(this: LivePortRuntime, id: string, since: string) {
+    return this.routines.outputs(id, since)
+  },
   async pinFollowingRoutines(this: LivePortRuntime, agentId: string) {
     this.requireStarted()
     return this.routines.pinFollowing(agentId)

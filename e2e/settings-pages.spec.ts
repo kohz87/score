@@ -2,12 +2,12 @@ import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
 // PLAN 10.1, on the bold shell: Settings is one page per section, with the section list as real navigation. The
-// section list is the nine sections of the bold frame (decision 131/132 retired the eleven classic ones).
+// section list is the sections of the bold frame (decision 131/132 retired the eleven classic ones; decision 183 moved
+// Recipes to Tasks).
 const sections = [
   { id: 'connections', label: 'Connections', heading: 'Connections' },
   { id: 'workspaces', label: 'Workspaces', heading: 'Workspaces' },
   { id: 'tools', label: 'Tools and triggers', heading: 'Tools and triggers' },
-  { id: 'recipes', label: 'Recipes', heading: 'Recipes' },
   { id: 'rules', label: 'Rules', heading: 'Rules' },
   { id: 'notifications', label: 'Notifications', heading: 'Notifications' },
   { id: 'look', label: 'Look', heading: 'Look' },
