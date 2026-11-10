@@ -185,6 +185,17 @@ test('create a file and a folder, then delete both (a folder with files needs it
   await expect(panel.getByRole('treeitem', { name: /scratch/ })).toHaveCount(0)
 })
 
+test('closing the Files panel clears the link from the address, and the link opens it again', async ({
+  page,
+}) => {
+  const panel = await openWorkspace(page, 'lead')
+  await panel.getByRole('button', { name: 'Close files' }).click()
+  await expect(page.locator('#agent-files')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/b\/agents\/lead$/)
+  // The link opens the panel again (a fresh visit; an in-page hash change is checked by hand, see TASKLOG 3.34.0).
+  await openWorkspace(page, 'lead')
+})
+
 test('a remote terminal backend makes the workspace unavailable, with the reason', async ({
   page,
 }) => {

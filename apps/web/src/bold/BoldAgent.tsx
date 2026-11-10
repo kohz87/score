@@ -51,8 +51,14 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const [editing, setEditing] = useState(false)
   // A workspace link opens the Files panel: on one file with `?path=`, at the root without it.
   const wantsFiles = ['#agent-workspace', '#agent-files'].includes(location.hash)
-  const { files, close: closeFiles } = useAgentFiles(search.get('path') ?? (wantsFiles ? '' : null))
+  const { files, close: dropFiles } = useAgentFiles(search.get('path') ?? (wantsFiles ? '' : null))
   const navigate = useNavigate()
+  // Closing also clears the link from the address, so following the same link again reopens the panel.
+  const closeFiles = () => {
+    dropFiles()
+    if (search.has('path') || wantsFiles)
+      void navigate({ pathname: location.pathname, search: '', hash: '' }, { replace: true })
+  }
   // A removal can show as `removed` in the list before the operation card reads `completed`: leave either way.
   const lifeState = (agents.data?.find((agent) => agent.id === agentId) ?? detail.data)?.lifecycle
     ?.state

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useOpenState } from './OpenCard.tsx'
 import type { AgentDetail, ModelSettings } from '@score/contract'
 import { AliasEditor } from '../../components/model-settings/AliasEditor.tsx'
 import { EffortSetting } from '../../components/model-settings/EffortSetting.tsx'
@@ -20,15 +21,40 @@ import {
 
 type RowId = 'model' | 'effort' | 'fallback' | 'aliases' | 'voice' | 'subagents'
 
-/** Model (mock-up 26): one summary row per setting, each opening today's form for it in place, one at a time. */
+/**
+ * Model (mock-up 26): one summary row per setting, each opening today's form for it in place. Rows open independently,
+ * so opening one never drops another's unsaved draft.
+ */
 export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initialOpen?: string }) {
-  const [open, setOpen] = useState<RowId | null>(initialOpen === 'subagents' ? 'subagents' : null)
+  const [open, setOpen] = useState<ReadonlySet<RowId>>(new Set())
+  // A link to `#agent-subagents` opens that row, also when it arrives on a page that is already open.
+  const [subagentsLinked, setSubagentsLinked] = useOpenState(initialOpen === 'subagents')
   const [chats, setChats] = useState(false)
   const settings = useModelSettings(agent.id)
   const efforts = useAgentEfforts(agent.id).data
   const subagents = useAgentSubagents(agent.id).data
   const data: ModelSettings | undefined = settings.data
-  const toggle = (row: RowId) => setOpen((now) => (now === row ? null : row))
+  const isOpen = (row: RowId) => open.has(row) || (row === 'subagents' && subagentsLinked)
+  const toggle = (row: RowId) => {
+    const next = !isOpen(row)
+    if (row === 'subagents') setSubagentsLinked(false)
+    setOpen((now) => {
+      const copy = new Set(now)
+      if (next) copy.add(row)
+      else copy.delete(row)
+      return copy
+    })
+  }
+  // A form that needs the Hermes settings says why it is empty instead of opening blank.
+  const pending = settings.isError ? (
+    <p role="alert" className="small">
+      Couldn’t read this from Hermes. Try again later.
+    </p>
+  ) : (
+    <p role="status" className="small muted">
+      Reading Hermes…
+    </p>
+  )
   const differing = efforts?.chats.length ?? 0
   return (
     <section className="bold-agent-section" id="agent-model" aria-labelledby="agent-model-title">
@@ -50,7 +76,7 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           }
           action="Change"
           actionLabel="Change the model"
-          open={open === 'model'}
+          open={isOpen('model')}
           onToggle={() => toggle('model')}
         >
           <ModelChangeForm agent={agent} />
@@ -81,10 +107,14 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           }
           action="Change"
           actionLabel="Change default effort"
-          open={open === 'effort'}
+          open={isOpen('effort')}
           onToggle={() => toggle('effort')}
         >
-          {data && <EffortSetting key={data.effort ?? ''} agentId={agent.id} settings={data} />}
+          {data ? (
+            <EffortSetting key={data.effort ?? ''} agentId={agent.id} settings={data} />
+          ) : (
+            pending
+          )}
         </ModelRow>
         {chats && differing > 0 && <EffortChatsCard agentId={agent.id} />}
         <ModelRow
@@ -93,15 +123,17 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           summary={fallbackSummary(agent, data)}
           action={data && data.fallbacks.length > 0 ? 'Edit' : 'Add fallback'}
           actionLabel={data && data.fallbacks.length > 0 ? 'Edit fallback models' : 'Add fallback'}
-          open={open === 'fallback'}
+          open={isOpen('fallback')}
           onToggle={() => toggle('fallback')}
         >
-          {data && (
+          {data ? (
             <FallbackChain
               key={JSON.stringify(data.fallbacks)}
               agentId={agent.id}
               settings={data}
             />
+          ) : (
+            pending
           )}
         </ModelRow>
         <ModelRow
@@ -110,7 +142,7 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           summary={aliasSummary(data)}
           action="Edit"
           actionLabel="Edit model aliases"
-          open={open === 'aliases'}
+          open={isOpen('aliases')}
           onToggle={() => toggle('aliases')}
         >
           <AliasEditor agentId={agent.id} />
@@ -121,11 +153,13 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           summary={speechSummary(data)}
           action="Edit"
           actionLabel="Edit voice"
-          open={open === 'voice'}
+          open={isOpen('voice')}
           onToggle={() => toggle('voice')}
         >
-          {data && (
+          {data ? (
             <SpeechModels key={JSON.stringify(data.speech)} agentId={agent.id} settings={data} />
+          ) : (
+            pending
           )}
         </ModelRow>
         <ModelRow
@@ -134,7 +168,7 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
           summary={subagentsSummary(subagents)}
           action="Edit"
           actionLabel="Edit subagents"
-          open={open === 'subagents'}
+          open={isOpen('subagents')}
           onToggle={() => toggle('subagents')}
         >
           <SubagentsCard agent={agent} />

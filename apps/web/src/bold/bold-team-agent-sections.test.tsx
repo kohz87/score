@@ -130,20 +130,25 @@ test('the Model section has a summary row for each setting, and each button open
   fireEvent.click(within(model).getByRole('button', { name: 'Change the model' }))
   expect(within(model).getByRole('form', { name: 'Change model' })).toBeDefined()
 
-  // One row at a time: opening the aliases closes the model form.
+  // Rows open independently (review, 3.34.0): opening the aliases keeps the model form, and its draft, open.
   fireEvent.click(within(model).getByRole('button', { name: 'Edit model aliases' }))
-  expect(within(model).queryByRole('form', { name: 'Change model' })).toBeNull()
+  expect(within(model).getByRole('form', { name: 'Change model' })).toBeDefined()
   expect(within(model).getByRole('heading', { name: 'Aliases' })).toBeDefined()
 
   fireEvent.click(within(model).getByRole('button', { name: 'Change default effort' }))
   expect(within(model).getByRole('button', { name: 'Save effort' })).toBeDefined()
+  expect(within(model).getByRole('heading', { name: 'Aliases' })).toBeDefined()
+  // Each row's own button closes only that row.
+  fireEvent.click(within(model).getByRole('button', { name: 'Close model aliases' }))
   expect(within(model).queryByRole('heading', { name: 'Aliases' })).toBeNull()
+  expect(within(model).getByRole('form', { name: 'Change model' })).toBeDefined()
 
   fireEvent.click(within(model).getByRole('button', { name: 'Add fallback' }))
   expect(within(model).getByRole('heading', { name: 'Fallback models' })).toBeDefined()
 
   fireEvent.click(within(model).getByRole('button', { name: 'Edit voice' }))
-  expect(within(model).getByRole('button', { name: /Save/ })).toBeDefined()
+  const voice = document.getElementById('agent-model-voice-form')!
+  expect(within(voice).getByRole('button', { name: /Save/ })).toBeDefined()
 
   fireEvent.click(within(model).getByRole('button', { name: 'Edit subagents' }))
   expect(await within(model).findByRole('heading', { name: 'Subagents', level: 3 })).toBeDefined()
@@ -187,6 +192,33 @@ test('a link to #agent-workspace without a file opens the Files panel at the roo
   open('/b/agents/builder#agent-workspace')
   expect(await screen.findByRole('heading', { name: 'Files' })).toBeDefined()
   expect(document.getElementById('agent-files')).not.toBeNull()
+})
+
+test('a row whose Hermes settings could not be read says so instead of opening an empty form', async () => {
+  const base = vi.mocked(fetch).getMockImplementation()!
+  vi.mocked(fetch).mockImplementation((input, init) =>
+    new URL(String(input), 'http://x').pathname === '/api/agents/builder/model-settings'
+      ? Promise.resolve(
+          Response.json({ error: { code: 'unavailable', message: 'no' } }, { status: 503 }),
+        )
+      : base(input, init),
+  )
+  open('/b/agents/builder')
+  const model = await screen.findByRole('region', { name: 'Model' })
+  fireEvent.click(within(model).getByRole('button', { name: 'Change default effort' }))
+  const form = document.getElementById('agent-model-effort-form')!
+  expect(await within(form).findByRole('alert')).toBeDefined()
+  expect(within(form).getByText(/Couldn’t read this from Hermes/)).toBeDefined()
+})
+
+test('Edit moves focus into the panel, and Close gives it back to Edit', async () => {
+  open('/b/agents/builder')
+  const edit = await screen.findByRole('button', { name: 'Change name, role and look' })
+  fireEvent.click(edit)
+  const panel = await screen.findByRole('region', { name: 'Edit name, role and look' })
+  await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
+  fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(document.activeElement).toBe(edit))
 })
 
 test('Edit stays available (Looks always was), while Name and role needs a ready agent', async () => {
