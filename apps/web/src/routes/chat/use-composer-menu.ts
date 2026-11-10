@@ -81,8 +81,10 @@ export function useComposerMenu({
         item.name.startsWith(addressedQuery),
       )
     if (slash === null) return modelOpen ? modelRows : []
+    // Where the chat handles `/model` itself (decision 182), its own row replaces the server's generic one.
+    const chatModel = topicCommands?.typedOnly?.includes('model') ?? false
     return [
-      ...(commands.data ?? []),
+      ...(commands.data ?? []).filter((item) => !(chatModel && item.name === 'model')),
       ...LOCAL_COMMAND_MENU.filter(
         (local) => !commands.data?.some((item) => item.name === local.name),
       ),

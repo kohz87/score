@@ -117,6 +117,11 @@ test('changing the agent’s model asks about its repeating jobs; Keep the jobs 
       .click()
     await expect(page.getByText(/pinned/).first()).toBeVisible()
   } finally {
+    // Leave the team as other specs expect it: no repeating job of ours, the agent's own model back.
+    const made = (await routine.json()) as { id: string }
+    await page.request.delete(`/api/routines/${encodeURIComponent(made.id)}`, {
+      headers: headers(),
+    })
     await page.request.put('/api/agents/builder/model', {
       headers: headers(),
       data: { model: original },

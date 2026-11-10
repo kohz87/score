@@ -322,9 +322,7 @@ export function LoadedTeamRoom({
         messages={baseMessages.data?.items ?? []}
       />
       {empty ? (
-        <>
-          <RoomEmpty agents={agents} onStart={startWith} />
-        </>
+        <RoomEmpty agents={agents} onStart={startWith} notes={systemLines} />
       ) : phone && !phoneJob && jobsStatus !== 'success' ? (
         <p className="bold-stream-note" role="status">
           Opening the room…
