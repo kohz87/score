@@ -38,10 +38,28 @@ for (const size of [
     if (size.name === 'desktop') {
       const message = await textMiddle(page, '.bold-agent-actions .btn', 'Message')
       const pause = await textMiddle(page, '.bold-agent-actions .btn', 'Pause')
-      const edit = await textMiddle(page, '.bold-agent-edit-btn', 'Edit')
-      const name = await textMiddle(page, '.bold-agent-namerow .big', 'builder')
       expect(Math.abs(message - pause)).toBeLessThanOrEqual(1)
-      expect(Math.abs(edit - name)).toBeLessThanOrEqual(12)
+      // Edit sits on the name's baseline with the role (mock-up 26): its text bottom is level with the role's.
+      const textBottom = (sel: string) =>
+        page.evaluate((selector) => {
+          const range = document.createRange()
+          range.selectNodeContents(document.querySelector(selector)!)
+          return range.getBoundingClientRect().bottom
+        }, sel)
+      const edit = await textBottom('.bold-agent-edit-btn')
+      const role = await textBottom('.bold-agent-namerow .bold-agent-role')
+      expect(Math.abs(edit - role)).toBeLessThanOrEqual(3)
     }
+    // The ⋯ menu's items start at the same left edge, whether a link or a button.
+    await page.getByRole('button', { name: 'More actions' }).click()
+    const lefts = await page.getByRole('menuitem').evaluateAll((items) =>
+      items.map((item) => {
+        const range = document.createRange()
+        range.selectNodeContents(item)
+        return Math.round(range.getBoundingClientRect().left)
+      }),
+    )
+    expect(lefts.length).toBeGreaterThan(1)
+    expect(new Set(lefts).size).toBe(1)
   })
 }

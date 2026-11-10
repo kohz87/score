@@ -35,9 +35,9 @@
   font-weight: 600;
 }
 
+/* Edit sits on the name's baseline, with the role (mock-up 26), not centred on the tall name. */
 [data-ui='bold'] .bold-agent-edit-btn {
   min-height: 32px;
-  align-self: center;
 }
 
 [data-ui='bold'] .bold-agent-more {

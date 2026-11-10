@@ -52,14 +52,6 @@
   color: var(--ink2);
 }
 
-[data-ui='bold'] .bold-agent-actions .bold-agent-watch,
-[data-ui='bold'] .bold-agent-actions .bold-agent-remove {
-  align-self: center;
-  /* The link (an anchor) and the button centre their text the same way, level with the pills' labels. */
-  display: inline-flex;
-  align-items: center;
-}
-
 [data-ui='bold'] .bold-up-card {
   scroll-margin-top: 16px;
 }
