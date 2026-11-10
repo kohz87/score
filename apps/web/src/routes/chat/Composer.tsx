@@ -127,6 +127,9 @@ export function Composer({
     compactSubject,
     setCompactSubject,
   } = useComposerRoom({ roomId, messagesKey, agents, leadAgentId, to, setNotice })
+  // `/effort` (decision 178) acts on one agent: the To chip, else the agent the footer names (no chip: whoever answered last,
+  // else the lead). Two chips name no one, so the command says who to pick.
+  const addressee = to.length === 0 ? subject : to.length === 1 ? (to[0] ?? null) : null
 
   const { voice, toggleVoice } = useComposerVoice({ text, setText, setCaret, textarea })
   useEffect(() => {
@@ -151,6 +154,7 @@ export function Composer({
     offered,
     orchestrate,
     topicCommands,
+    addressee,
     ids,
     textarea,
     setText,
@@ -193,6 +197,7 @@ export function Composer({
     uploading,
     attachments,
     to,
+    addressee,
     planFirst,
     setText,
     setCaret,

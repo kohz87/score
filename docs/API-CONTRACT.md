@@ -3103,3 +3103,21 @@ at each `delegate_task`: no file for a session Score named, or one it can't trus
 - `GET /api/jobs/:jobId/subagents` → `{ asOfSeq, items: SubagentRow[] }`, with event `subagent.upserted`: one row per subagent for the chat's status card and the job map. Its steps stay in Watch. `costUsd` fills when the parent's turn ends; `tokens` is what a route with no dollars shows.
 - `Approval.subagentId`: the request came from a subagent of `agentId`, so the card says "A subagent of lead wants to run this".
 - At the total: the job's next agent-started turn pauses with `pause_reason: subagent_total` (options `more_subagents { count }`, `step_in`, `stop`). An orchestration pauses with `pauseReason: subagent_total` and `LimitsDecision.moreSubagents` lifts it. Claude Code has no count limit of its own, so its count is after the fact.
+
+## 20. Effort per chat (decision 178; schemas in `packages/contract/src/efforts.ts`; design docs/briefs/EF-effort.md)
+
+An agent's reasoning effort for one chat. It wins over the agent's own setting in that chat only.
+
+| Endpoint | Needs | Body | Answer |
+| --- | --- | --- | --- |
+| `GET /api/rooms/:roomId/efforts` | | | `ChatEffortsResponse` (`asOfSeq`, `items`): the agents set differently here; an agent not listed uses its own |
+| `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | `ChatEffortChange` (`effort` null: its own). `400` for setting a level for an agent not in the chat (going back to its own is always allowed) or a level it doesn't take (the message lists the levels). `404` for no such chat |
+| `GET /api/agents/:agentId/efforts` | | | `AgentEfforts`: `own` (null: the model's default), `levels` a chat can choose, and `chats` where it's set differently (`roomKind` says whether it opens as a direct chat or a group) |
+
+- Levels: a Hermes agent `CHAT_EFFORT_LEVELS`; a coding agent its CLI's (`CODING_EFFORTS`).
+- Each turn runs at the chat's effort: Hermes gets it as the run's `model_options.reasoning_effort`, never as the agent's config; Claude Code and Codex as their effort flag for that turn.
+- `Message.effort`: the effort the chat asked for on that reply's turn. A model may run at the nearest level it supports.
+- Event `effort.changed` `{ roomId, agentId, effort, reason }`: `reason: model` when Score put it back because the agent no longer takes that level, `member` when the agent was taken out of the chat.
+- `GET /api/agents/:agentId/efforts` answers `503` when Hermes can't say the agent's own effort (null `own` always means the model's default).
+- A Hermes chat that continues a session started outside Score may run at the agent's own effort: Hermes routes such a turn without per-run options.
+- The composer handles `/effort` itself, as it does `/subagents`: `/effort`, `/effort <level>`, `/effort default`; in a group `@agent /effort <level>` or the agent the message is addressed to.

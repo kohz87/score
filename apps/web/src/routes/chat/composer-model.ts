@@ -16,6 +16,8 @@ export type SlashCommand = {
   key?: string
   /** A note under the palette, explaining a group of choices. */
   note?: string
+  /** A line above the palette, shown with the first item of a group (`/effort`'s "Effort for builder…"). */
+  header?: string
 }
 export type SendResult = {
   message: Message
@@ -49,6 +51,17 @@ export function insertMention(text: string, caret: number, start: number, agentI
 export function slashQuery(text: string) {
   const match = /^\/([\w-]*)$/.exec(text)
   return match ? match[1]!.toLowerCase() : null
+}
+
+/**
+ * `@agent /eff…` with `/effort` still being typed (decision 178): the palette is the effort choices for that agent, since
+ * `@agent /effort <level>` is the only command addressed this way. Null for anything else.
+ */
+export function addressedEffortQuery(text: string) {
+  const match = /^@([\w-]+)\s+\/([\w-]*)$/.exec(text)
+  const query = match?.[2]?.toLowerCase()
+  if (!match || query === undefined || !'effort'.startsWith(query)) return null
+  return { agentId: match[1]!, query }
 }
 
 const draftKey = (roomId: string) => `score.chat.draft.${roomId}`

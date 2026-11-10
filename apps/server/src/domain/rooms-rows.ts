@@ -48,6 +48,7 @@ export const MessageRowSchema = z.object({
   progress_at: z.string().nullish(),
   job_id: z.string().nullish(),
   alternative_of: z.string().nullish(),
+  effort: z.string().nullish(),
   reply_kind: z.enum(['person', 'handoff']).nullish(),
   speed: z.string().nullish(),
 })

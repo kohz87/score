@@ -59,6 +59,7 @@ export function InfoSection({
   title,
   summary,
   needsYou = false,
+  opensWhen = false,
   forceOpen = 0,
   headingRef,
   testId,
@@ -71,6 +72,8 @@ export function InfoSection({
   /** Shown after the title while folded ("11", "none", "3 open"). */
   summary?: string | undefined
   needsYou?: boolean
+  /** Open while this is true, from the start and whenever it turns true (Members with an effort set differently). Not remembered. */
+  opensWhen?: boolean
   /** A counter: each increase opens the section and (the caller scrolls) lands on it. */
   forceOpen?: number
   headingRef?: Ref<HTMLHeadingElement>
@@ -79,7 +82,9 @@ export function InfoSection({
   children: ReactNode
 }) {
   const bodyId = useId()
-  const [open, setOpenState] = useState(() => readOpen(kind) || needsYou || forceOpen > 0)
+  const [open, setOpenState] = useState(
+    () => readOpen(kind) || needsYou || opensWhen || forceOpen > 0,
+  )
   const setOpen = (next: boolean) => {
     setOpenState(next)
     saveOpen(kind, next)
@@ -90,6 +95,11 @@ export function InfoSection({
     if (needsYou && !wasWaiting.current) setOpenState(true)
     wasWaiting.current = needsYou
   }, [needsYou])
+  const wasOpensWhen = useRef(opensWhen)
+  useEffect(() => {
+    if (opensWhen && !wasOpensWhen.current) setOpenState(true)
+    wasOpensWhen.current = opensWhen
+  }, [opensWhen])
   const seenForce = useRef(forceOpen)
   useEffect(() => {
     if (forceOpen !== seenForce.current) {

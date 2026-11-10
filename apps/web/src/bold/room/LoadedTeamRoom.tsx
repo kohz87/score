@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
 import { useEditRoomParams } from './use-edit-room-params.ts'
-import { newId } from '../../data/ids.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
 import { Composer } from '../../routes/chat/Composer.tsx'
@@ -28,7 +27,9 @@ import {
 import { BusyDialog, type BusyStart } from './BusyDialog.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { ContextBar } from './ContextBar.tsx'
-import { useTopicCommands } from './topic-commands.ts'
+import { isOlderRoom, useTopicCommands } from './topic-commands.ts'
+import { chatSay } from '../efforts/chat-notes.ts'
+import { useEffortChat } from '../efforts/use-effort-chat.ts'
 import type { SystemLine } from './topic-divider.tsx'
 import { changeCachedJob, roomChatMessagesQuery } from './room-queries.ts'
 import { RoomJobStrip } from './RoomJobStrip.tsx'
@@ -200,7 +201,7 @@ export function LoadedTeamRoom({
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   // Removed agents stay in `agents` for the history's names; @ and To offer only agents that can take a message (3.7.10).
   const talkable = useMemo(() => agents.filter(canTalkTo), [agents])
-  const olderRoom = room.role !== 'team' && room.routing === 'mentions'
+  const olderRoom = isOlderRoom(room)
   const toLabel = lead ? `To: ${agentDisplayName(lead)}` : 'No lead yet — use @name'
 
   // The job's ⋯ menu: on the dividers of an older chat that holds several jobs, and on the job bar otherwise.
@@ -236,6 +237,7 @@ export function LoadedTeamRoom({
 
   const editParams = useEditRoomParams()
 
+  const sayLine = chatSay(setSystemLines)
   const topicCommands = useTopicCommands({
     room,
     agents,
@@ -248,15 +250,12 @@ export function LoadedTeamRoom({
         next.delete('message')
         next.delete('jobs')
       }),
-    say: (text, action) =>
-      setSystemLines((lines) => [
-        ...lines,
-        { id: newId(), at: new Date().toISOString(), text, ...(action ? { action } : {}) },
-      ]),
+    say: sayLine,
     offer: (command) => editParams((next) => next.set('command', command)),
     onBusy: (busy, options) => setBusyStart({ busy, options }),
   })
 
+  const runEffort = useEffortChat(room.id, 'group', agents, sayLine)
   function startWith(text: string) {
     saveDraft(room.id, text)
     setComposerKey((value) => value + 1)
@@ -371,9 +370,10 @@ export function LoadedTeamRoom({
                 ? 'Message this room'
                 : 'Message the chat · @ someone · / for commands'
           }
-          topicCommands={olderRoom ? undefined : topicCommands}
+          topicCommands={topicCommands}
           footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
+              runEffort={runEffort}
               finishedReplies={finishedReplies}
               compactSignal={compactSignal}
               compactSubject={compactSubject}

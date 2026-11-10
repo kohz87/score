@@ -46,4 +46,32 @@ export const subagentCases = [
   ['SubagentControlSchema', 'on_off', 'sometimes'],
   ['AgentSubagentsSchema', ceiling, { ...ceiling, control: 'sometimes' }],
   ['AgentSubagentsRequestSchema', { maxConcurrent: 2, model: null }, { model: '-oops' }],
+  // Decision 178: effort per chat.
+  [
+    'ChatEffortSchema',
+    { roomId: 'room-1', agentId: 'builder', effort: 'high' },
+    { roomId: 'room-1', agentId: 'builder', effort: 'High!' },
+  ],
+  ['ChatEffortsResponseSchema', { asOfSeq: 1, items: [] }, { items: [] }],
+  [
+    'ChatEffortChangeSchema',
+    { roomId: 'r', agentId: 'builder', effort: null },
+    { roomId: 'r', agentId: 'builder' },
+  ],
+  ['ChatEffortRequestSchema', { effort: null }, { effort: 'high', extra: 1 }],
+  [
+    'AgentEffortsSchema',
+    {
+      agentId: 'builder',
+      own: null,
+      levels: ['low'],
+      chats: [{ roomId: 'r', roomName: 'Team', roomKind: 'group', jobTitle: null, effort: 'max' }],
+    },
+    { agentId: 'builder', own: null, levels: ['low'] },
+  ],
+  [
+    'EffortChangedSchema',
+    { roomId: 'r', agentId: 'builder', effort: null, reason: 'model' },
+    { roomId: 'r', agentId: 'builder', effort: null, reason: 'time' },
+  ],
 ] as const

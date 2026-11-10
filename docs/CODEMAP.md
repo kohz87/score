@@ -82,6 +82,24 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/subagents/SubagentsInfo.tsx` — the side panel's SUBAGENTS section.
 - `apps/web/src/bold/subagents/job-subagent-cache.ts` — applies `subagents.changed` to the cached jobs.
 - `apps/web/src/bold/subagents/subagents.css` — subagent card, control and side-panel styles.
+- `apps/web/src/bold/choice-menu.ts` — the choice-menu behaviour shared by the subagent and effort controls: arrow keys, Home/End, outside click, Escape, focus on the checked choice.
+- `apps/web/src/bold/efforts/` — effort per chat on screen (decision 178): `/effort` labels, queries, the command, the context bar and Members controls, This chat, the agent's chats list.
+- `apps/web/src/bold/room/agent-model-query.ts` — `useAgentModel`: the agent's own model, read once for the context bar and This chat.
+- `apps/web/src/bold/efforts/effort-queries.ts` — the chat's efforts kept live by `effort.changed` (with the last `reason: model` notice), the agent's efforts, and the PUT.
+- `apps/web/src/bold/efforts/effort-model.ts` — pure labels: level descriptions, the amber `max` rule, "its own" wording.
+- `apps/web/src/bold/efforts/effort-command.ts` — `/effort` parsing and the command: show, set, back to own, the wrong-level answer, Undo.
+- `apps/web/src/bold/efforts/effort-menu.ts` — the `/effort` palette for the addressed agent: its levels, then "Back to its own".
+- `apps/web/src/bold/efforts/use-effort-chat.ts` — what an open chat wires for effort: the model-change note, the chat's note listener, and the runner.
+- `apps/web/src/bold/efforts/use-effort-model-notice.ts` — says in the chat when Score put an agent back on its own effort (`reason: model`).
+- `apps/web/src/bold/efforts/use-run-effort.ts` — runs `/effort` from a control (context bar, Chat info) with the chat's note and Undo.
+- `apps/web/src/bold/efforts/chat-notes.ts` — notes a control outside the composer puts in its chat, and the chat's `say` line builder.
+- `apps/web/src/bold/efforts/EffortPicker.tsx` — the choices for one agent's effort in a chat (levels, Back to its own), as a radio menu.
+- `apps/web/src/bold/efforts/EffortControl.tsx` — the shared effort button and menu, the context bar's "Effort max", and the Members tag.
+- `apps/web/src/bold/efforts/MemberEffortTag.tsx` — Chat info › Members: one agent's tag from the chat's efforts; on a phone, the "Its own" button.
+- `apps/web/src/bold/efforts/DirectEffortBlock.tsx` — Chat info › This chat for a one-to-one: Effort, Change effort, Back to its own.
+- `apps/web/src/bold/efforts/EffortChatsCard.tsx` — agent settings › Model: "Set differently in N chats", each with its level.
+- `apps/web/src/bold/efforts/efforts.css` — effort control, menu, tag, This chat and agent list styles; the composer's palette header and the reply's effort label.
+- `apps/web/src/bold/efforts/ChatRowEffort.tsx` — the chat list's small level tag beside a one-to-one's name.
 - `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
 - `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
 - `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.
@@ -361,6 +379,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/chats-conversation.css` — topic divider, system line, composer palette, context bar, side tabs and top-bar links.
 - `apps/web/src/bold/chats/chats-topic.css` — This topic, context details, Graph tab, phone chat menu and phone topic targets.
 - `apps/web/src/bold/chats/chats-files.css` — Info files rows and the viewer sheet.
+- `apps/web/src/bold/chats/MembersInfo.tsx` — Chat info › Members: the member list with effort tags; opens by itself, and its header counts agents set differently here.
 - `apps/web/src/bold/jobmap/JobMap.tsx` — job-map public entry, loaded-data graph view and live-job wrapper.
 - `apps/web/src/bold/jobmap/WorkerBox.tsx` — worker layer node with its coding program, recent step chips and advisor asks.
 - `apps/web/src/bold/jobmap/Node.tsx` — selectable job-map layer node shell with pressed and pulse states.
@@ -770,6 +789,7 @@ likely to be the entry point for a change.
 - `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
+- `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -949,6 +969,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/subagent-policy.ts` — the per-session limits file the plugin's guard reads; whether a session is inline.
 - `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
+- `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1190,6 +1211,7 @@ likely to be the entry point for a change.
 
 ### Key files
 
+- `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
 - `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.

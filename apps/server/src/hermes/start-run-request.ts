@@ -6,6 +6,8 @@ export interface StartRunRequest {
   turnId: string
   sessionId?: string
   model?: string
+  /** Decision 178: this chat's effort for the agent; absent = the agent's own. */
+  effort?: string
   /** The job whose subagent limits the run works under (decision 173). */
   jobId?: string
   /** Per-request provider (an alias's own); Hermes honours it with or without `model`. */

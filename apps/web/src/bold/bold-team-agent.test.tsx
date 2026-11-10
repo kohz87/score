@@ -162,3 +162,51 @@ test('the agent page keeps "needs you" and the overview facts on one row', async
   expect(row?.querySelector('.bold-agent-state')).not.toBeNull()
   expect(row?.querySelector('.bold-agent-facts')).not.toBeNull()
 })
+
+test('a coding agent’s Model card names the chats its effort is set differently in, and nothing when none is', async () => {
+  const base = vi.mocked(fetch).getMockImplementation()!
+  const efforts = (chats: unknown[]) =>
+    Response.json({
+      agentId: 'coder',
+      own: 'high',
+      levels: ['low', 'high', 'max'],
+      chats,
+    })
+  vi.mocked(fetch).mockImplementation((input, init) =>
+    String(input).endsWith('/api/agents/coder/efforts')
+      ? Promise.resolve(
+          efforts([
+            {
+              roomId: 'room-2',
+              roomName: 'Ship it',
+              roomKind: 'group',
+              jobTitle: null,
+              effort: 'max',
+            },
+          ]),
+        )
+      : base(input, init),
+  )
+  open('/b/agents/coder')
+  expect(await screen.findByText('Set differently in 1 chat')).toBeDefined()
+  expect(screen.getByRole('link', { name: 'Ship it' })).toBeDefined()
+  expect(screen.getByText(/Every other chat uses high/)).toBeDefined()
+})
+
+test('a coding agent shows no "Set differently" card when no chat sets its effort', async () => {
+  const base = vi.mocked(fetch).getMockImplementation()!
+  let asked = false
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    if (String(input).endsWith('/api/agents/coder/efforts')) {
+      asked = true
+      return Promise.resolve(
+        Response.json({ agentId: 'coder', own: 'high', levels: ['low', 'high', 'max'], chats: [] }),
+      )
+    }
+    return base(input, init)
+  })
+  open('/b/agents/coder')
+  expect(await screen.findByRole('heading', { name: 'coder', level: 1 })).toBeDefined()
+  await waitFor(() => expect(asked).toBe(true))
+  expect(screen.queryByText(/Set differently in/)).toBeNull()
+})

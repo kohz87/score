@@ -248,7 +248,7 @@ export class CodingRuntimeExecution extends CodingRuntimeLaunch {
           prompt: delivery.prompt,
           permission: agent.permission,
           model,
-          effort: agent.effort,
+          effort: entry.effort ?? agent.effort,
           sessionId: resume,
           settingsPath: frozenPolicy?.policy.settings?.path ?? settingsPath,
           denyPaths: this.denyPaths(),

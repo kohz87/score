@@ -81,6 +81,8 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         type !== 'question.updated' &&
         // The fake adapter starts no subagents of its own (e2e/subagents.spec.ts covers the limits).
         type !== 'subagent.upserted' &&
+        // A chat's effort is set by the person (decision 178).
+        type !== 'effort.changed' &&
         type !== 'subagents.changed',
     )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())

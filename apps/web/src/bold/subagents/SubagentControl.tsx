@@ -1,26 +1,9 @@
 import type { Job, JobSubagentsRequest } from '@score/contract'
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useChoiceMenu, onChoiceMenuKeyDown } from '../choice-menu.ts'
 import { useAgentSubagents, useSetJobSubagents } from './subagent-queries.ts'
 import { subagentControlLabel } from './subagent-model.ts'
 import './subagents.css'
-
-const menuItems = (menu: HTMLElement | null) =>
-  Array.from(menu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])
-
-/** Up and Down step through the choices (wrapping), Home and End jump to the first and the last. */
-function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, menu: HTMLElement | null) {
-  const items = menuItems(menu)
-  if (items.length === 0) return
-  const index = items.indexOf(document.activeElement as HTMLButtonElement)
-  let target: number
-  if (event.key === 'ArrowDown') target = index + 1 >= items.length ? 0 : index + 1
-  else if (event.key === 'ArrowUp') target = index <= 0 ? items.length - 1 : index - 1
-  else if (event.key === 'Home') target = 0
-  else if (event.key === 'End') target = items.length - 1
-  else return
-  event.preventDefault()
-  items[target]?.focus()
-}
 
 /**
  * SA.3: the context bar's "Subagents: up to 4" beside the model. It opens the same choices as `/subagents`: off, the
@@ -35,32 +18,7 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
   const save = useSetJobSubagents(job.id)
   const limits = job.subagents
 
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(event: PointerEvent) {
-      if (!button.current?.parentElement?.contains(event.target as Node)) setOpen(false)
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      event.preventDefault()
-      event.stopPropagation()
-      setOpen(false)
-      requestAnimationFrame(() => button.current?.focus())
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown, true)
-    }
-  }, [open])
-
-  // The menu opens on its checked choice, so the keyboard starts where the person is.
-  useEffect(() => {
-    if (!open) return
-    const items = menuItems(menu.current)
-    ;(items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus()
-  }, [open])
+  useChoiceMenu({ open, setOpen, button, menu })
 
   if (!limits || ceiling.data?.control === 'none') return null
   const max = ceiling.data?.maxConcurrent ?? limits.maxConcurrent ?? 1
@@ -114,7 +72,7 @@ export function SubagentControl({ job, agentId }: { job: Job; agentId: string })
           id={menuId}
           role="menu"
           aria-label="Subagents"
-          onKeyDown={(event) => onMenuKeyDown(event, menu.current)}
+          onKeyDown={(event) => onChoiceMenuKeyDown(event, menu.current)}
         >
           {options.map((option) => {
             const off = option.enabled === false

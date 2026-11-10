@@ -24,6 +24,8 @@ export function ComposerMenu({
   if (!menu || count === 0) return null
   // Only the selected command's note shows, so a note never sits under the other commands.
   const note = menu === 'slash' ? slashItems[index]?.note : null
+  // A group's header (`/effort`'s "Effort for builder…") sits above its first item.
+  const header = menu === 'slash' ? slashItems[0]?.header : null
   return (
     <div
       className="chat-menu"
@@ -31,6 +33,11 @@ export function ComposerMenu({
       id={`${ids}-menu`}
       aria-label={menu === 'slash' ? 'Commands' : 'Agents'}
     >
+      {header && (
+        <div className="bold-composer-menu-header" role="presentation">
+          {header}
+        </div>
+      )}
       {menu === 'slash'
         ? slashItems.map((item, position) => (
             <button

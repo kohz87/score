@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Effort on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;position:relative">
+  <div style="padding:14px 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <a href="#" aria-label="Back to chats" style="width:44px;height:44px;border-radius:50%;background:#1A1C23;display:flex;align-items:center;justify-content:center;flex:none">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <div style="flex:1;min-width:0">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:700">Team room</div>
+      <div style="font-size:13px;color:#A6A8B4">Release notes 2.4 · working</div>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px;opacity:0.35">
+    <div style="font-size:13px;color:#7FE3C1;font-weight:600">builder</div>
+    <div style="padding:9px 14px;border-radius:18px;background:#22242C;font-size:15px;margin-top:-6px">First draft is in docs/release-2.4.md.</div>
+  </div>
+
+  <section aria-label="Chat info" style="position:absolute;left:0;right:0;bottom:0;padding:10px 18px 22px;border-radius:28px 28px 0 0;background:#1A1C23;box-shadow:0 -12px 32px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:12px">
+    <span aria-hidden="true" style="align-self:center;width:44px;height:5px;border-radius:999px;background:#3A3D48"></span>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:700">Members · 4</div>
+      <button type="button" aria-label="Close" style="width:44px;height:44px;border-radius:50%;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:18px">×</button>
+    </div>
+    <ul aria-label="Members" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+      <li style="display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>
+        <span style="flex:1;font-weight:600;font-size:15px">lead <span style="color:#A6A8B4;font-weight:400">· owner</span></span>
+      </li>
+      <li style="display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>
+        <span style="flex:1;font-weight:600;font-size:15px">builder</span>
+        <button type="button" aria-label="builder's effort in this chat: high. Change" style="min-height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">Effort high</button>
+      </li>
+      <li style="display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span aria-hidden="true" style="width:22px;height:22px;border-radius:4px;transform:rotate(45deg) scale(0.8);box-shadow:inset 0 0 0 2px #F2B33D;flex:none"></span>
+        <span style="flex:1;font-weight:600;font-size:15px">reviewer</span>
+        <button type="button" aria-label="reviewer's effort in this chat: max. Change" style="min-height:44px;padding:0 14px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">Effort max</button>
+      </li>
+      <li style="display:flex;align-items:center;gap:12px;min-height:52px">
+        <span aria-hidden="true" style="width:26px;height:26px;border-radius:7px;box-shadow:inset 0 0 0 2px #FF7A9A;flex:none"></span>
+        <span style="flex:1;font-weight:600;font-size:15px">designer</span>
+        <button type="button" aria-label="designer's effort: its own. Set for this chat" style="min-height:44px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:#A6A8B4;font:inherit;font-size:13px;font-weight:600">Its own</button>
+      </li>
+    </ul>
+    <div style="font-size:13px;line-height:1.45;color:#A6A8B4">Tap a tag to change it. Only this chat changes.</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

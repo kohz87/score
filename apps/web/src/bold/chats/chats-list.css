@@ -150,12 +150,16 @@
 
 [data-ui='bold'] .bold-chat-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 6px;
   min-width: 0;
 }
 
+/* The name keeps its width; a level tag that doesn't fit wraps onto the next line instead of cutting the name down. */
 [data-ui='bold'] .bold-chat-top b {
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;

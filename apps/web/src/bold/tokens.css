@@ -19,6 +19,10 @@
   --code-ink: #c9ccd4;
   --ok: #5ee3bf;
   --warn: #ffc94d;
+  /* Effort per chat, `max` (decision 178): the mock-up's amber, beside --warn. */
+  --effort-max-bg: #3a3220;
+  --effort-max-line: rgba(242, 179, 61, 0.6);
+  --effort-max-ink: #ffe2a8;
   --bad: #ff97ae;
   --live: #d93a4e;
   --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
@@ -57,6 +61,9 @@
   --code-ink: #d6d8de;
   --ok: #00694f;
   --warn: #8a5a00;
+  --effort-max-bg: #fbefd2;
+  --effort-max-line: rgba(138, 90, 0, 0.45);
+  --effort-max-ink: #6b4700;
   --bad: #b01e43;
   --thumb: rgba(18, 19, 26, 0.14);
   --thumb-hi: rgba(18, 19, 26, 0.38);

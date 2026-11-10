@@ -52,6 +52,11 @@ export const StartRunSchema = z.object({
   sessionId: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   provider: z.string().min(1).optional(),
+  /** Decision 178: sent as `model_options.reasoning_effort`; Hermes ignores a level it doesn't know. */
+  effort: z
+    .string()
+    .regex(/^[a-z]{1,12}$/)
+    .optional(),
   // Media ids only: bytes are read when the request is sent (never stored in the intent).
   images: z.array(z.string().min(1)).max(16).optional(),
   /**

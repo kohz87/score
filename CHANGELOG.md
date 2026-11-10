@@ -3,6 +3,18 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.33.0] — 2026-11-10
+
+### Added
+- **Effort per chat.** Set how hard an agent thinks in one chat, without changing it anywhere else: `/effort high` in a direct chat,
+  `@reviewer /effort max` in a group (or `/effort high` for the agent you're writing to), `/effort default` to go back to its own. Only the levels
+  the agent's program takes are offered. A note with Undo says what changed.
+- **You can see it everywhere it applies.** The context bar shows "Effort max" for the agent you're writing to; Chat info's Members tags every agent
+  set differently (and opens when there is one, so it isn't missed); a direct chat's Info has a "This chat" block; replies say "builder · effort high";
+  the chat list shows the level; an agent's settings list the chats where it's set differently. `max` is amber.
+- Hermes gets the level per run (`model_options.reasoning_effort`); Claude Code and Codex get their effort flag for that turn. The agent's own setting is
+  never changed. An agent taken out of the chat, or one that no longer takes the level, goes back to its own, and the chat says so.
+
 ## [3.32.1] — 2026-11-09
 
 ### Fixed
