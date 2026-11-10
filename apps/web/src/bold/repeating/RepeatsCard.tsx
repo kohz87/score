@@ -7,7 +7,7 @@ import {
   useRecipeScheduleActions,
   useScheduleBinding,
 } from './recipe-schedule-queries.ts'
-import { describeSchedule, whenText } from './schedule-words.ts'
+import { describeSchedule, whenText } from './recipe-schedule-words.ts'
 
 const said = (error: unknown) =>
   error instanceof ApiError ? error.message : 'Couldn’t do that. Try again.'

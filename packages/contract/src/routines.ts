@@ -12,6 +12,8 @@ export const RoutineSummarySchema = z.object({
   model: z.string().nullish(),
   /** Decision 183: Hermes's next fire time and the pinned model's provider, when it says. */
   nextRunAt: z.iso.datetime().nullish(),
+  /** False when `description` isn't the whole prompt (cut, or redacted): it can't be edited from Score then. */
+  descriptionComplete: z.boolean().nullish(),
   provider: z.string().nullish(),
 })
 export type RoutineSummary = z.infer<typeof RoutineSummarySchema>

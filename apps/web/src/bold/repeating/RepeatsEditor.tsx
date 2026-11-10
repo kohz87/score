@@ -10,7 +10,7 @@ import {
   scheduleFromDraft,
   WEEKDAYS,
   type SchedulePreset,
-} from './schedule-words.ts'
+} from './recipe-schedule-words.ts'
 
 /**
  * Setting or changing a recipe's schedule (decision 183, mock-up 28-tasks-edit): when (the presets, a time, or a custom

@@ -23,3 +23,18 @@
   background: var(--hi-bg);
   color: var(--hi-ink);
 }
+
+/* On a phone the three views share the row, each a 44px chip (mock-up 28-tasks-phone). */
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-tt {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  [data-ui='bold'] .bold-tt-tab {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+  }
+}

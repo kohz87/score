@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useWorkflow, useWorkflows } from '../../routes/workflows/workflow-queries.ts'
 import { boldRecipesLink } from '../bold-links.ts'
 import { useRecipeSchedules } from './recipe-schedule-queries.ts'
-import { describeSchedule } from './schedule-words.ts'
+import { describeSchedule } from './recipe-schedule-words.ts'
 import './repeating.css'
 
 function Item({

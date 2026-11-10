@@ -231,6 +231,30 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldTaskMoves.tsx` — task column moves and their request state.
 - `apps/web/src/bold/BoldTaskArchive.tsx` — in-place archive confirmation and action.
 - `apps/web/src/bold/bold-task-edit-model.ts` — task edit request messages and the ready-agent filter.
+- `apps/web/src/bold/repeating/` — Tasks › Repeating (decision 183): the Tasks tabs, the list of every repeating job (agents' Hermes jobs and recipe schedules), the new / edit panel, phone cards and sheet.
+- `apps/web/src/bold/repeating/BoldRepeating.tsx` — the `/b/tasks/repeating` page: reads, filter chips, table or cards, the panel beside the list or as a sheet.
+- `apps/web/src/bold/repeating/RepeatingList.tsx` — the table and the phone cards.
+- `apps/web/src/bold/repeating/RepeatingCells.tsx` — row cells shared by both: when, assigned to, model pill, state and missed-run note, Run now / Edit.
+- `apps/web/src/bold/repeating/repeating-rows.ts` — jobs and recipe schedules as one row type, the filter and the per-agent counts.
+- `apps/web/src/bold/repeating/repeating-queries.ts` — `GET /api/routines` and `/api/recipe-schedules` reads; create, patch, move, run, recipe run and delete mutations that refresh the lists.
+- `apps/web/src/bold/repeating/schedule-words.ts` — a schedule in words ("Every day, 08:00"), its parse/build round trip, "next …" text and the panel's next-fire preview.
+- `apps/web/src/bold/repeating/recipe-schedule-words.ts` — a recipe schedule's presets, its words and next-time text (the Repeats card).
+- `apps/web/src/bold/repeating/repeating-form.ts` — the panel's form, its problems in words, the create body and the only-what-changed patch body.
+- `apps/web/src/bold/repeating/RepeatingPanel.tsx` — the new / edit panel: save (move first, then patch the new id), Pause/Resume, Delete….
+- `apps/web/src/bold/repeating/RepeatingFields.tsx` — the panel's labelled field and pill radios.
+- `apps/web/src/bold/repeating/RepeatingWhenField.tsx` — When: Every day / Weekdays / Every week / Every month / Custom, time and the zone line.
+- `apps/web/src/bold/repeating/RepeatingAssignField.tsx` — Assigned to: agent chips, and "A recipe…" listing the recipes (links to Tasks › Recipes).
+- `apps/web/src/bold/repeating/RepeatingModelField.tsx` — Model: Its own or Pinned, picked from the agent's aliases and models (`useModelChoices`).
+- `apps/web/src/bold/repeating/RepeatingResultsField.tsx` — Results go to: the agent's direct chat, a picked chat, or nowhere.
+- `apps/web/src/bold/repeating/RepeatingNotes.tsx` — the protected notes: the move note, "still has it" with Remove, the delete confirm.
+- `apps/web/src/bold/repeating/bold-repeating.css` — style entry; imports the list and panel sheets.
+- `apps/web/src/bold/repeating/bold-repeating-list.css` — header button, table, cards and the phone 44px rules.
+- `apps/web/src/bold/repeating/bold-repeating-panel.css` — the panel, its fields and notes, and the full-height phone sheet.
+- `apps/web/src/bold/repeating/repeating-helpers.tsx` — shared test state, fixtures, fetch stub and mount for the Repeating suites.
+- `apps/web/src/bold/repeating/BoldRepeating-list.test.tsx` — the list, filters, missed runs, unreadable agents, Run now, tabs, phone cards and CSS.
+- `apps/web/src/bold/repeating/BoldRepeating-panel.test.tsx` — the panel: new, edit-only-changes, model, results, move with and without leftBehind, delete, pause, recipes, sheet.
+- `apps/web/src/bold/repeating/repeating-form.test.ts` — the form's problems and the create and patch bodies.
+- `apps/web/src/bold/repeating/schedule-words.test.ts` — schedule words, round trip, next text and preview.
 - `apps/web/src/bold/use-task-dialog-focus.ts` — modal task dialog focus and Escape lifecycle.
 - `apps/web/src/bold/BoldTasks.tsx` — Tasks route state, filters and board/panel composition.
 - `apps/web/src/bold/BoldTasksCards.tsx` — task cards, card contents and board columns.

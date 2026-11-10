@@ -73,6 +73,9 @@ export const protectedClasses = [
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',
+  // TR.2: Tasks › Repeating: the move / "still has it" / delete notes and a recipe's missed or failed run
+  'bold-rj-note',
+  'bold-rj-problem',
   // 3.8.0: Delete a recipe with its runs (typed name)
   'bold-rp-confirm',
   // 2.5.0: a run's step that waits on the person, and the Runs list's Needs you count

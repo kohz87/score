@@ -4,11 +4,16 @@ export function Sheet({
   children,
   onClose,
   side = false,
+  label = 'Task details',
+  className = '',
 }: {
   children: React.ReactNode
   onClose: () => void
   /** 601-1279px: a sheet on the right over the board instead of the phone's full screen. */
   side?: boolean
+  /** The dialog's accessible name; the board's details by default. */
+  label?: string
+  className?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
   // The page re-renders on every stream event with a new onClose: read it through a ref so focus moves only when the
@@ -34,10 +39,10 @@ export function Sheet({
   return (
     <div
       ref={ref}
-      className={`bold-tb-sheet${side ? ' bold-tb-sheet--side' : ''}`}
+      className={`bold-tb-sheet${side ? ' bold-tb-sheet--side' : ''}${className ? ` ${className}` : ''}`}
       role="dialog"
       aria-modal="true"
-      aria-label="Task details"
+      aria-label={label}
       tabIndex={-1}
     >
       <span className="bold-tb-sheet-grip" aria-hidden="true" />

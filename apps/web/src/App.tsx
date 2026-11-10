@@ -13,6 +13,7 @@ import { BoldKnowledgePage } from './bold/BoldKnowledge.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 import { BoldTasksPage } from './bold/BoldTasks.tsx'
+import { BoldRepeatingPage } from './bold/repeating/BoldRepeating.tsx'
 import { BoldScreensPage } from './bold/BoldScreens.tsx'
 
 function keepSearch(request: Request, path: string) {
@@ -93,6 +94,7 @@ export const appRoutes: RouteObject[] = [
           { path: 'tasks', Component: BoldTasksPage },
           { path: 'tasks/recipes', Component: BoldRecipesPage },
           { path: 'tasks/recipes/:workflowId', Component: BoldRecipesPage },
+          { path: 'tasks/repeating', Component: BoldRepeatingPage },
           { path: 'screens', Component: BoldScreensPage },
           // Decision 183: Recipes live in Tasks (they were in Settings from 3.27.0); every older address keeps its query and hash.
           {

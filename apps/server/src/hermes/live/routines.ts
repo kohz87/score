@@ -100,6 +100,7 @@ function summary(profile: string, job: Job): RoutineSummary {
     title: redactBounded(job.name?.trim() || prompt.trim().slice(0, 50) || 'Routine', 400),
     schedule: redactBounded(scheduleText(job), 200),
     description: redactBounded(prompt, 600),
+    descriptionComplete: redactBounded(prompt, 600) === prompt,
     lastRunAt: last && !Number.isNaN(last.getTime()) ? last.toISOString() : null,
     enabled: job.enabled !== false,
     model: job.model?.trim() ? redactBounded(job.model.trim(), 200) : null,
