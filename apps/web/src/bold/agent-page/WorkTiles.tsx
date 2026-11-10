@@ -3,6 +3,7 @@ import { todoProgress, useAgentTodos } from '../../components/TodoList.tsx'
 import { useRoutines } from '../../routes/team/routine-queries.ts'
 import { RoutinesCard } from '../agent-more/RoutinesCard.tsx'
 import { TodoCard } from '../agent-more/TodoCard.tsx'
+import { routineModelText } from '../models/model-model.ts'
 import { OpenCard, useOpenState } from './OpenCard.tsx'
 
 /** Repeating jobs (mock-up 26): one line of jobs; the action opens today's full card in place. */
@@ -25,7 +26,7 @@ export function RoutinesTile({ agent, initialOpen }: { agent: AgentDetail; initi
               ? items
                   .map(
                     (routine) =>
-                      `${routine.title} · ${routine.schedule}${routine.enabled ? '' : ' · Paused'}`,
+                      `${routine.title} · ${routine.schedule}${routine.enabled ? '' : ' · Paused'} · ${routineModelText(routine.model, agent.model?.id).model}`,
                   )
                   .join(' · ')
               : 'None yet.'

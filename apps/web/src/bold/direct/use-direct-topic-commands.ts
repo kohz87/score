@@ -30,9 +30,10 @@ export function useDirectTopicCommands({
 }) {
   const base = useTopicCommands({ room, agents, jobs: chats, current, pick, say })
   return {
-    // `/effort` is typed-only and palette-by-agent (decision 178): the base hook supplies both, so the one-to-one gets them too.
+    // `/effort` and `/model` are typed-only and palette-by-agent (decisions 178, 182): the base hook supplies both, so the one-to-one gets them too.
     typedOnly: base.typedOnly,
     menuFor: base.menuFor,
+    useModelMenu: base.useModelMenu,
     items: [DIRECT_NEW_COMMAND, ...base.items]
       .filter((item) => DIRECT_COMMANDS.has(item.name))
       .map((item) =>

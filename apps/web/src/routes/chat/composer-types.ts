@@ -27,7 +27,9 @@ export type TopicCommands = {
   typedOnly?: string[]
   /** Palette items for the one agent a bare command acts on (`/effort`'s levels); none when there isn't one. */
   menuFor?: (addressee: string | null) => SlashCommand[]
-  /** Only `/effort` is handled here (an older room): a word it doesn't know is sent as text, with no "I don't know" notice. */
+  /** The `/model` palette rows for an agent, narrowed by what follows `/model `; a hook (`query` null: nothing is read). */
+  useModelMenu?: (agentId: string | null, query: string | null) => SlashCommand[]
+  /** Only `/effort` and `/model` are handled here (an older room): a word it doesn't know is sent as text, with no "I don't know" notice. */
   effortOnly?: boolean
   /** `target` is the agent the command acts on: the addressee, or the one named before it (`@agent /effort max`). */
   run: (name: string, args: string, target?: string) => Promise<void>

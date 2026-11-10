@@ -11,10 +11,12 @@ import { codingCases } from './schemas-cases-coding.ts'
 import { themeCases } from './schemas-cases-themes.ts'
 import { exchangeCases } from './schemas-cases-exchanges.ts'
 import { subagentCases } from './schemas-cases-subagents.ts'
+import { chatModelCases } from './schemas-cases-chat-models.ts'
 
 export const cases = [
   ...agentCases,
   ...subagentCases,
+  ...chatModelCases,
   ...nowTaskCases,
   ...watchStreamCases,
   ...securitySettingsCases,

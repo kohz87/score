@@ -264,6 +264,17 @@
 /* The chat list's level tag sits beside a one-to-one's name. */
 [data-ui='bold'] .bold-chat-effort {
   flex: none;
+  max-width: 132px;
   margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   vertical-align: middle;
+}
+
+/* The chat list is narrow: only what this chat sets, not "its own". */
+[data-ui='bold'] .bold-chat-effort .bold-me-own,
+[data-ui='bold'] .bold-chat-effort .bold-me-own + .bold-me-sep,
+[data-ui='bold'] .bold-chat-effort .bold-me-sep:has(+ .bold-me-own) {
+  display: none;
 }

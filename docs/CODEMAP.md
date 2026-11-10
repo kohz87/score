@@ -123,12 +123,30 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/efforts/use-run-effort.ts` — runs `/effort` from a control (context bar, Chat info) with the chat's note and Undo.
 - `apps/web/src/bold/efforts/chat-notes.ts` — notes a control outside the composer puts in its chat, and the chat's `say` line builder.
 - `apps/web/src/bold/efforts/EffortPicker.tsx` — the choices for one agent's effort in a chat (levels, Back to its own), as a radio menu.
-- `apps/web/src/bold/efforts/EffortControl.tsx` — the shared effort button and menu, the context bar's "Effort max", and the Members tag.
+- `apps/web/src/bold/efforts/EffortControl.tsx` — the shared button and two-part menu (Model, Effort), the context bar's "model · effort" tag, and the Members tag.
 - `apps/web/src/bold/efforts/MemberEffortTag.tsx` — Chat info › Members: one agent's tag from the chat's efforts; on a phone, the "Its own" button.
 - `apps/web/src/bold/efforts/DirectEffortBlock.tsx` — Chat info › This chat for a one-to-one: Effort, Change effort, Back to its own.
 - `apps/web/src/bold/efforts/EffortChatsCard.tsx` — agent settings › Model: "Set differently in N chats", each with its level.
 - `apps/web/src/bold/efforts/efforts.css` — effort control, menu, tag, This chat and agent list styles; the composer's palette header and the reply's effort label.
 - `apps/web/src/bold/efforts/ChatRowEffort.tsx` — the chat list's small level tag beside a one-to-one's name.
+- `apps/web/src/bold/models/` — model per chat on screen (decision 182): `/model` palette and command, the chat's models, the tag text and menu part, the agent's chats list, the repeating jobs' warning.
+- `apps/web/src/bold/models/model-queries.ts` — the chat's models kept live by `model.changed`, the agent's chats list, the PUT (with `replaced` for Undo) and the routines pin POST.
+- `apps/web/src/bold/models/model-model.ts` — pure words: the tag's parts, amber rule, accessible name, coding programs, a job's model line, the jobs note.
+- `apps/web/src/bold/models/use-model-choices.ts` — what an agent's model can be set to: its aliases and Hermes's models, or a coding agent's program models, narrowed by a search.
+- `apps/web/src/bold/models/model-menu.ts` — the `/model` palette rows (aliases, models with a count, Back to its own, header, note).
+- `apps/web/src/bold/models/use-model-palette.ts` — the composer's hook that reads and builds those rows for the addressed agent.
+- `apps/web/src/bold/models/model-command.ts` — `/model` parsing and the command: show, set, back to own, Undo.
+- `apps/web/src/bold/models/use-run-model.ts` — runs `/model` from a control (the tag's menu) with the chat's note and Undo.
+- `apps/web/src/bold/models/ModelPartPicker.tsx` — the Model part of the tag's menu, as a radio menu.
+- `apps/web/src/bold/models/ChatTagText.tsx` — the tag's "model · effort" text with the own parts muted.
+- `apps/web/src/bold/models/ModelChatsCard.tsx` — agent settings › Model: "Set differently in N chats", each with its model label.
+- `apps/web/src/bold/models/RoutinesModelWarning.tsx` — the protected warning before the agent's model changes while repeating jobs follow it.
+- `apps/web/src/bold/models/models.css` — palette group labels, the combined menu, reply model label, job model lines and the warning.
+- `apps/web/src/bold/models/model-menu.test.ts` — palette rows, `/model` arguments and query, the tag's parts, amber rule and name, job model lines.
+- `apps/web/src/bold/models/ModelTags.test.tsx` — the tag on each surface, the two-part menu, a coding agent's list, This chat, and `model.changed`.
+- `apps/web/src/bold/room/BoldTeamRoom-model.test.tsx` — `@agent /model …` in a group: the palette, narrowing, the PUT with Undo, back to own.
+- `apps/web/src/bold/bold-team-agent-model.test.tsx` — agent page: the Model row's lines, the chats list, the jobs' models, the warning's three buttons and the pin failure.
+- `apps/web/src/routes/chat/MessageItem-model.test.tsx` — a reply's name line carries its model and effort in the bold shell only.
 - `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
 - `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
 - `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.
@@ -819,6 +837,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
+- `apps/server/src/http/chat-models.ts` — routes for an agent's model per chat (contract section 21).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -989,6 +1008,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
+- `apps/server/src/hermes/dispatch-marks.ts` — marks a refusal raised before anything reached Hermes (`notDispatched`).
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter: state, construction and the method install (methods in the files below).
 - `apps/server/src/hermes/live/live-port-types.ts` — live adapter options, state schema and constants.
 - `apps/server/src/hermes/live/live-port-runtime.ts` — the live adapter's shared runtime type and its method installer.
@@ -999,6 +1019,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
 - `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
+- `apps/server/src/domain/chat-models.ts` — an agent's model in one chat: set, list, and the model a turn runs on.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1241,6 +1262,8 @@ likely to be the entry point for a change.
 ### Key files
 
 - `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
+- `packages/contract/src/chat-models.ts` — model per chat: requests, answers, the event and the routines pin (section 21).
+- `packages/contract/src/routines.ts` — an agent's repeating jobs (`RoutineSummary`).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
 - `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coding agent: /model within its program</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1040px;height:760px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;gap:24px">
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;position:relative">
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08)">
+      <span aria-hidden="true" style="width:30px;height:30px;border-radius:9px;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>
+      <div style="flex:1"><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700">coder</div><div style="font-size:13px;color:#A6A8B4">Coding agent · usually Claude Code</div></div>
+    </div>
+    <div style="flex:1"></div>
+    <div role="listbox" aria-label="Commands" style="padding:8px;border-radius:20px;background:#262833;box-shadow:0 12px 32px rgba(0,0,0,0.45);display:flex;flex-direction:column;gap:2px">
+      <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">Model for <b style="color:#ECECF1">coder</b> in this chat · its own is <b style="color:#ECECF1">Claude Code · sonnet</b></div>
+        <div style="padding:8px 12px 2px;font-size:11px;font-weight:700;letter-spacing:1.1px;color:#A6A8B4">CLAUDE CODE · your Claude plan</div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">/model sonnet</b> <span style="color:#C4C6D0">its own</span></div>
+        <div role="option" aria-selected="true" style="padding:9px 12px;border-radius:14px;background:#343743;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">/model opus</b> <span style="color:#C4C6D0">thinks longer, uses more of the plan</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">/model haiku</b> <span style="color:#C4C6D0">quick, light</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">/model default</b> <span style="color:#C4C6D0">Back to coder&#39;s own (Claude Code · sonnet)</span></div>
+      <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">Only the models coder&#39;s program (Claude Code) takes. For Codex, message a Codex agent.</div>
+    </div>
+    <div role="status" style="align-self:center;display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:#1A1C23;font-size:13px;color:#C4C6D0;max-width:620px">
+      <span>coder uses <b style="color:#ECECF1">opus</b> in this chat (its own is sonnet). Same Claude Code session; opus uses more of your Claude plan.</span>
+      <a href="#" style="font-weight:600;padding:2px 4px">Undo</a>
+    </div>
+    <div style="padding:13px 18px;border-radius:24px;background:#1A1C23;font-family:'JetBrains Mono',monospace;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.28)">/model op</div>
+    <div style="font-size:13px;color:#A6A8B4;display:flex;gap:12px;align-items:center;padding:0 8px">
+      <span>Context 12%</span><button type="button" aria-label="In this chat: model opus, effort its own. Change" style="height:32px;padding:0 12px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">opus · <span style="font-weight:600">its own</span></button><span>Limits: Claude 5 h 94% left</span>
+    </div>
+  </main>
+  <aside style="width:280px;flex:none;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5;color:#C4C6D0">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">ONE PROGRAM PER AGENT</div>
+    <div>A coding agent&#39;s /model lists only its own program&#39;s models; the session, plan and limits stay the same.</div>
+    <div>Want Codex for this work? Message a Codex agent: switching program mid-chat isn&#39;t offered.</div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1040,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

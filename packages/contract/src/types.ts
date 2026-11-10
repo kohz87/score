@@ -1,5 +1,6 @@
 import { CostKindSchema, RuntimeSchema } from './run-kinds.ts'
 import { z } from 'zod'
+import { RoutineSummarySchema } from './routines.ts'
 import { AutoSummarySchema, RoomImportSchema } from './conversations.ts'
 
 export const AgentIdSchema = z.string().min(1)
@@ -80,16 +81,6 @@ export const AgentSummarySchema = z.object({
     .optional(),
 })
 export type AgentSummary = z.infer<typeof AgentSummarySchema>
-
-export const RoutineSummarySchema = z.object({
-  id: z.string().min(1),
-  title: z.string(),
-  schedule: z.string(),
-  description: z.string(),
-  lastRunAt: z.iso.datetime().nullable(),
-  enabled: z.boolean(),
-})
-export type RoutineSummary = z.infer<typeof RoutineSummarySchema>
 
 export const AgentDetailSchema = AgentSummarySchema.extend({
   tagline: z.string(),
@@ -469,6 +460,9 @@ export const MessageSchema = z.object({
    */
   alternativeOf: z.string().min(1).nullish(),
   effort: z.string().nullish(),
+  /** Decision 182, agent replies: the model the turn was asked to run on when it wasn't the agent's own (a chat's
+   * `/model`, Try another). Absent: its own. */
+  model: z.string().nullish(),
   /**
    * 3.5.0, agent replies only: `true` when it answers the person's own message (Retry and Try another apply), `false`
    * for a reply from a hand-off, a summary or an orchestration turn. Absent when Score doesn't know (older or imported

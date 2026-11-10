@@ -9,6 +9,9 @@ import { useModelSettings } from '../../routes/team/model-settings-queries.ts'
 import { SubagentsCard } from '../agent-more/SubagentsCard.tsx'
 import { EffortChatsCard } from '../efforts/EffortChatsCard.tsx'
 import { useAgentEfforts } from '../efforts/effort-queries.ts'
+import { ModelChatsCard } from '../models/ModelChatsCard.tsx'
+import { useAgentChatModels } from '../models/model-queries.ts'
+import { useRoutines } from '../../routes/team/routine-queries.ts'
 import { useAgentSubagents } from '../subagents/subagent-queries.ts'
 import { ModelChangeForm } from './ModelChangeForm.tsx'
 import { ModelRow } from './ModelRow.tsx'
@@ -30,9 +33,13 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
   // A link to `#agent-subagents` opens that row, also when it arrives on a page that is already open.
   const [subagentsLinked, setSubagentsLinked] = useOpenState(initialOpen === 'subagents')
   const [chats, setChats] = useState(false)
+  const [modelChats, setModelChats] = useState(false)
   const settings = useModelSettings(agent.id)
   const efforts = useAgentEfforts(agent.id).data
   const subagents = useAgentSubagents(agent.id).data
+  const modelDiffering = useAgentChatModels(agent.id).data?.chats.length ?? 0
+  // Repeating jobs with no model of their own follow the agent's, so they change when the agent's model does.
+  const following = (useRoutines(agent.id).data ?? []).filter((routine) => !routine.model).length
   const data: ModelSettings | undefined = settings.data
   const isOpen = (row: RowId) => open.has(row) || (row === 'subagents' && subagentsLinked)
   const toggle = (row: RowId) => {
@@ -72,6 +79,28 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
                   · {agent.model.via ? `Through ${agent.model.via}.` : 'Provider unavailable.'}
                 </span>
               )}
+              <span className="small muted bold-model-note">
+                Every chat uses this unless it sets its own with /model.
+                {following > 0 && (
+                  <>
+                    {' '}
+                    {following} repeating {following === 1 ? 'job follows' : 'jobs follow'} it.
+                  </>
+                )}
+                {modelDiffering > 0 && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="link"
+                      aria-expanded={modelChats}
+                      onClick={() => setModelChats((value) => !value)}
+                    >
+                      Set differently in {modelDiffering} {modelDiffering === 1 ? 'chat' : 'chats'}
+                    </button>
+                  </>
+                )}
+              </span>
             </>
           }
           action="Change"
@@ -81,6 +110,9 @@ export function ModelSection({ agent, initialOpen }: { agent: AgentDetail; initi
         >
           <ModelChangeForm agent={agent} />
         </ModelRow>
+        {modelChats && modelDiffering > 0 && (
+          <ModelChatsCard agentId={agent.id} own={agent.model?.id} />
+        )}
         <ModelRow
           id="agent-model-effort"
           label="Default effort"

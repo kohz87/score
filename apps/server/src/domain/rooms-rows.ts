@@ -49,6 +49,7 @@ export const MessageRowSchema = z.object({
   job_id: z.string().nullish(),
   alternative_of: z.string().nullish(),
   effort: z.string().nullish(),
+  model: z.string().nullish(),
   reply_kind: z.enum(['person', 'handoff']).nullish(),
   speed: z.string().nullish(),
 })

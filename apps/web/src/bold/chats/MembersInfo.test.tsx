@@ -32,12 +32,10 @@ test('with a member set differently the section starts open and its folded heade
   renderInRoom(<MembersInfo room={room} agents={agents} />, ['/b'])
   const toggle = await screen.findByRole('button', { name: /Members/ })
   expect(toggle.getAttribute('aria-expanded')).toBe('true')
-  expect(screen.getByText('Effort high')).toBeTruthy()
+  expect(screen.getByText('high')).toBeTruthy()
   fireEvent.click(toggle)
   expect(toggle.getAttribute('aria-expanded')).toBe('false')
-  expect(toggle.textContent).toContain(
-    `Members · ${room.members.length} · 1 at a different effort here`,
-  )
+  expect(toggle.textContent).toContain(`Members · ${room.members.length} · 1 set differently here`)
 })
 
 test('with none set the section folds as it always has, and its header only counts the members', async () => {
@@ -46,5 +44,5 @@ test('with none set the section folds as it always has, and its header only coun
   const toggle = await screen.findByRole('button', { name: /Members/ })
   expect(toggle.getAttribute('aria-expanded')).toBe('false')
   expect(toggle.textContent).toContain(`Members · ${room.members.length}`)
-  expect(toggle.textContent).not.toContain('at a different effort')
+  expect(toggle.textContent).not.toContain('set differently')
 })

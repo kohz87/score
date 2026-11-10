@@ -1,38 +1,56 @@
 import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useChoiceMenu } from '../choice-menu.ts'
+import { onChoiceMenuKeyDown, useChoiceMenu } from '../choice-menu.ts'
 import { agentDisplayName } from '../bold-agents.ts'
-import type { AgentSummary } from '@score/contract'
+import { ApiError } from '../../data/api.ts'
+import type { AgentSummary, ChatModel } from '@score/contract'
 import { EffortPicker } from './EffortPicker.tsx'
-import { effortButtonLabel, isAmberEffort } from './effort-model.ts'
 import { useAgentEfforts } from './effort-queries.ts'
+import { ChatTagText } from '../models/ChatTagText.tsx'
+import { ModelPartPicker } from '../models/ModelPartPicker.tsx'
+import { chatTagLabel, isAmberChat } from '../models/model-model.ts'
+import { useModelChoices } from '../models/use-model-choices.ts'
 import './efforts.css'
+import '../models/models.css'
 
 /** Runs `/effort <args>` for an agent in this chat, from `useRunEffort` (its note and Undo come with it). */
 export type RunEffort = (agent: AgentSummary, args: string) => Promise<void>
+/** Runs `/model <args>` for an agent in this chat, from `useRunModel`. */
+export type RunModel = (agent: AgentSummary, args: string, provider?: string) => Promise<void>
+
+/** What a chat sets for one agent, and the runners that change it. */
+export type ChatTagState = {
+  agent: AgentSummary
+  /** The model this chat sets for the agent; null when it uses its own. */
+  model: ChatModel | null
+  /** The effort this chat sets for the agent; null when it uses its own. */
+  current: string | null
+  runEffort: RunEffort
+  runModel: RunModel
+}
 
 /**
- * A button that opens the choices for one agent's effort in this chat. Shared by the context bar and the Members tags, so
- * both change an effort the same way: through the chat's `/effort` command.
+ * A button that opens one menu for an agent in this chat, with two parts: Model (the `/model` list) and Effort (the
+ * levels), each with "Back to its own" (decision 182, mock-up 27-model-main). Shared by the context bar, the Members tags
+ * and This chat, so all of them change either through the chat's own commands.
  */
 export function EffortChoice({
   agent,
+  model,
   current,
   runEffort,
+  runModel,
   className,
   label,
   children,
   showWhenOwn = false,
   placement = 'up',
   align = 'start',
-}: {
-  agent: AgentSummary
-  current: string | null
-  runEffort: RunEffort
+}: ChatTagState & {
   className: string
   label: string
   children: ReactNode
-  /** Shown for an agent on its own too (Chat info's "Change effort"), not only once this chat sets one. */
+  /** Shown for an agent on its own too (Chat info's "Change effort"), not only once this chat sets something. */
   showWhenOwn?: boolean
   /** Where the choices open: up over the context bar, down in the narrow Chat info panels. */
   placement?: 'up' | 'down'
@@ -40,25 +58,32 @@ export function EffortChoice({
   align?: 'start' | 'end'
 }) {
   const [open, setOpen] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<{ part: 'effort' | 'model'; message: string | null } | null>(
+    null,
+  )
   const [saving, setSaving] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const menuId = useId()
   const levels = useAgentEfforts(agent.id)
   const efforts = levels.data
-  // The choices are ready once the agent's efforts have answered, or the read failed (the menu then says so).
-  const ready = Boolean(efforts) || levels.isError
+  const choices = useModelChoices(agent, open ? '' : null)
+  // The choices are ready once the agent's efforts and models have answered, or the efforts read failed (the menu then says so).
+  const ready = (Boolean(efforts) || levels.isError) && choices.ready
   useChoiceMenu({ open, setOpen, button, menu, ready })
-  if (current === null && !showWhenOwn) return null
+  if (current === null && model === null && !showWhenOwn) return null
 
-  function choose(level: string | null) {
+  function choose(part: 'effort' | 'model', value: string | null, provider?: string) {
     button.current?.focus()
     setOpen(false)
-    setFailed(false)
+    setFailed(null)
     setSaving(true)
-    runEffort(agent, level ?? 'default')
-      .catch(() => setFailed(true))
+    const run =
+      part === 'effort' ? runEffort : (a: AgentSummary, v: string) => runModel(a, v, provider)
+    run(agent, value ?? 'default')
+      .catch((error: unknown) =>
+        setFailed({ part, message: error instanceof ApiError ? error.message : null }),
+      )
       .finally(() => setSaving(false))
   }
 
@@ -70,7 +95,7 @@ export function EffortChoice({
       <button
         ref={button}
         type="button"
-        className={`${className}${isAmberEffort(current) ? ' bold-effort--max' : ''}`}
+        className={`${className}${isAmberChat(model, current) ? ' bold-effort--max' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -83,72 +108,64 @@ export function EffortChoice({
         {children}
       </button>
       {open && ready && (
-        <EffortPicker
+        <div
+          ref={menu}
+          className="bold-me-menu"
           id={menuId}
-          menuRef={menu}
-          name={name}
-          levels={efforts?.levels ?? null}
-          own={efforts ? efforts.own : undefined}
-          current={current}
-          onChoose={choose}
-        />
+          onKeyDown={(event) => onChoiceMenuKeyDown(event, menu.current)}
+        >
+          <div className="bold-me-part-title">MODEL</div>
+          <ModelPartPicker
+            name={name}
+            choices={choices}
+            current={model}
+            onChoose={(value, provider) => choose('model', value, provider)}
+          />
+          <div className="bold-me-part-title">EFFORT</div>
+          <EffortPicker
+            name={name}
+            levels={efforts?.levels ?? null}
+            own={efforts ? efforts.own : undefined}
+            current={current}
+            onChoose={(level) => choose('effort', level)}
+          />
+        </div>
       )}
       {failed && (
         <span className="bold-effort-error" role="alert">
-          Couldn’t change the effort. Try again.
+          {failed.message ?? `Couldn’t change the ${failed.part}. Try again.`}
         </span>
       )}
     </span>
   )
 }
 
-/** The context bar's "Effort max" beside the model: shown only when this chat sets an effort for the agent. */
-export function EffortControl({
-  agent,
-  current,
-  runEffort,
-}: {
-  agent: AgentSummary
-  current: string | null
-  runEffort: RunEffort
-}) {
-  if (current === null) return null
+/** The context bar's "deep · max" beside the model: shown only when this chat sets a model or an effort for the agent. */
+export function EffortControl(state: ChatTagState) {
+  if (state.current === null && state.model === null) return null
   return (
     <EffortChoice
-      agent={agent}
-      current={current}
-      runEffort={runEffort}
+      {...state}
       className="bold-effort-button"
-      label={`Effort in this chat: ${current}. Change`}
+      label={chatTagLabel(agentDisplayName(state.agent), state.model, state.current)}
     >
-      {effortButtonLabel(current)}
+      <ChatTagText model={state.model} effort={state.current} />
     </EffortChoice>
   )
 }
 
 /** Chat info › Members: the tag on an agent set differently in this chat. An agent on its own has none. */
-export function EffortTag({
-  agent,
-  current,
-  runEffort,
-}: {
-  agent: AgentSummary
-  current: string | null
-  runEffort: RunEffort
-}) {
-  if (current === null) return null
-  const name = agentDisplayName(agent)
+export function EffortTag(state: ChatTagState) {
+  if (state.current === null && state.model === null) return null
   return (
     <EffortChoice
-      agent={agent}
-      current={current}
-      runEffort={runEffort}
+      {...state}
       className="bold-effort-tag"
       placement="down"
       align="end"
-      label={`${name}’s effort in this chat: ${current}. Change`}
+      label={chatTagLabel(agentDisplayName(state.agent), state.model, state.current)}
     >
-      {effortButtonLabel(current)}
+      <ChatTagText model={state.model} effort={state.current} />
     </EffortChoice>
   )
 }

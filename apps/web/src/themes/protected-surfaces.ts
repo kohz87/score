@@ -132,6 +132,8 @@ export const protectedClasses = [
   'bold-tb-confirm',
   // 3.18.0: the Screens page's "Someone has control" control badge and row line
   'bold-sc-control',
+  // 3.35.0: the warning before an agent's model changes while repeating jobs follow it
+  'bold-model-jobs-warning',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',

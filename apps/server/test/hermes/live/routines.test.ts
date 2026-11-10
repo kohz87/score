@@ -40,6 +40,8 @@ function hermes(args: string[]): number {
     for (const arg of rest) {
       if (arg.startsWith('--schedule=')) job.schedule_display = arg.slice(11)
       if (arg.startsWith('--prompt=')) job.prompt = arg.slice(9)
+      // `--pin` locks the profile's current model onto the job (Hermes `cron edit --pin`).
+      if (arg === '--pin') job.model = 'example-model'
     }
   } else if (verb === 'pause' || verb === 'resume') {
     jobs.find((candidate) => candidate.id === id)!.enabled = verb === 'resume'
@@ -185,4 +187,32 @@ test('a failing mutation maps to 409 and an unreachable CLI to 502', async () =>
   await expect(routines.run('builder:a1b2c3d4e5f6')).rejects.toMatchObject({ status: 409 })
   runner.mockRejectedValueOnce(new Error('spawn'))
   await expect(routines.remove('builder:a1b2c3d4e5f6')).rejects.toMatchObject({ status: 502 })
+})
+
+test('pinning keeps the jobs that follow the agent on its current model, and leaves pinned ones alone', async () => {
+  const jobs = readJobs()
+  jobs[1]!.model = 'deep-model'
+  writeJobs(jobs)
+  expect(routines.list('builder').map((routine) => routine.model ?? null)).toEqual([
+    null,
+    'deep-model',
+  ])
+  expect(await routines.pinFollowing('builder')).toEqual(['builder:a1b2c3d4e5f6'])
+  expect(call(0)).toEqual([
+    ['-p', 'builder', 'cron', 'edit', '--pin', '--', 'a1b2c3d4e5f6'],
+    opts(),
+  ])
+  expect(runner).toHaveBeenCalledTimes(1)
+  expect(routines.list('builder').map((routine) => routine.model)).toEqual([
+    'example-model',
+    'deep-model',
+  ])
+  // Nothing left to pin: no Hermes call.
+  expect(await routines.pinFollowing('builder')).toEqual([])
+  expect(runner).toHaveBeenCalledTimes(1)
+})
+
+test('a pin Hermes refuses stops there, and says so', async () => {
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  await expect(routines.pinFollowing('builder')).rejects.toMatchObject({ status: 409 })
 })

@@ -168,6 +168,10 @@ export const agentMethods = {
     this.requireStarted()
     await this.routines.remove(id)
   },
+  async pinFollowingRoutines(this: LivePortRuntime, agentId: string) {
+    this.requireStarted()
+    return this.routines.pinFollowing(agentId)
+  },
   async runRoutine(this: LivePortRuntime, id: string) {
     // A routine run is an agent turn: refused like every other outgoing execution while Score holds all agent work.
     assertThawed(this.options.frozen)

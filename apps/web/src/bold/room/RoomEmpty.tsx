@@ -1,5 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { SystemLineRow, type SystemLine } from './topic-divider.tsx'
 
 const STARTERS = [
   {
@@ -47,9 +48,12 @@ function GlyphStack({ agents, ids }: { agents: AgentSummary[]; ids: readonly str
 export function RoomEmpty({
   agents,
   onStart,
+  notes = [],
 }: {
   agents: AgentSummary[]
   onStart: (text: string) => void
+  /** What a command said (`/effort`, `/model`, with Undo) before the room has a job: shown here, as the stream would. */
+  notes?: SystemLine[]
 }) {
   return (
     <div className="bold-empty-room">
@@ -74,6 +78,9 @@ export function RoomEmpty({
           </button>
         ))}
       </div>
+      {notes.map((line) => (
+        <SystemLineRow key={line.id} line={line} />
+      ))}
     </div>
   )
 }

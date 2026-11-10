@@ -2,6 +2,7 @@ import type { AgentDetail } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SubagentsCard } from '../agent-more/SubagentsCard.tsx'
 import { EffortChatsCard } from '../efforts/EffortChatsCard.tsx'
+import { ModelChatsCard } from '../models/ModelChatsCard.tsx'
 import { codingAgentsQuery } from '../../routes/team/coding-agent-queries.ts'
 import { CodingAccessCard } from '../../routes/team/CodingAccessCard.tsx'
 import { CodingAlerts } from '../../routes/team/CodingAlerts.tsx'
@@ -59,6 +60,7 @@ export function CodingSections({
           coding={coding}
           onChanged={changed}
         />
+        <ModelChatsCard agentId={agent.id} own={agent.model?.id} />
         <EffortChatsCard agentId={agent.id} />
         <SubagentsCard agent={agent} />
       </div>

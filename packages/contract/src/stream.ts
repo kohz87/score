@@ -1,5 +1,6 @@
 import { SubagentRowSchema, SubagentsChangedSchema } from './subagents.ts'
 import { EffortChangedSchema } from './efforts.ts'
+import { ModelChangedSchema } from './chat-models.ts'
 import { z } from 'zod'
 import { AgentQuestionSchema } from './questions.ts'
 import { RoomProjectSchema } from './conversations.ts'
@@ -131,6 +132,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('job.upserted'), data: JobSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('subagent.upserted'), data: SubagentRowSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('effort.changed'), data: EffortChangedSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('model.changed'), data: ModelChangedSchema }),
   StreamEnvelopeSchema.extend({
     type: z.literal('subagents.changed'),
     data: SubagentsChangedSchema,

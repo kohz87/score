@@ -92,7 +92,42 @@ export function roomChanged(
       .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
       .run(now, id)
   rememberBusy(sqlite, id, after.activeAgents)
-  return [{ type: 'room.upserted', data: after }]
+  return [{ type: 'room.upserted', data: after }, ...dropOverridesOfNonMembers(sqlite, id)]
+}
+
+/**
+ * Decisions 178, 182: an agent taken out of a chat loses its effort and model there at once (added again, it starts from
+ * its own), and the chat is told. Every change of a room's members ends here.
+ */
+function dropOverridesOfNonMembers(sqlite: DatabaseSync, id: string): DomainEventDraft[] {
+  const gone = (table: 'chat_models' | 'chat_efforts') =>
+    (
+      sqlite
+        .prepare(
+          `SELECT agent_id FROM ${table} WHERE room_id = ?
+             AND agent_id NOT IN (SELECT value FROM json_each((SELECT members FROM rooms WHERE id = ?)))`,
+        )
+        .all(id, id) as { agent_id: string }[]
+    ).map((row) => row.agent_id)
+  const models = gone('chat_models')
+  const efforts = gone('chat_efforts')
+  for (const table of ['chat_models', 'chat_efforts'])
+    sqlite
+      .prepare(
+        `DELETE FROM ${table} WHERE room_id = ?
+           AND agent_id NOT IN (SELECT value FROM json_each((SELECT members FROM rooms WHERE id = ?)))`,
+      )
+      .run(id, id)
+  return [
+    ...models.map((agentId): DomainEventDraft => ({
+      type: 'model.changed',
+      data: { roomId: id, agentId, model: null, label: null, reason: 'member' },
+    })),
+    ...efforts.map((agentId): DomainEventDraft => ({
+      type: 'effort.changed',
+      data: { roomId: id, agentId, effort: null, reason: 'member' },
+    })),
+  ]
 }
 
 /** The busy set last sent for a room: room updates go out only when the set differs from it. */

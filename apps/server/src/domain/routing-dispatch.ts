@@ -1,4 +1,5 @@
 import { effortForTurn } from './chat-efforts.ts'
+import { modelForTurn } from './chat-models.ts'
 import { startRoomThreadCount } from './subagents.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -253,9 +254,25 @@ export class RoutingDispatcher {
               turnId: job.turn_id,
             })
             effort = chosen.effort
-            return chosen.drafts
+            // Decision 182: this chat's model for the agent, recorded on the turn beside its effort (a turn that already
+            // names one, Try another, keeps it).
+            return [
+              ...chosen.drafts,
+              ...modelForTurn(sqlite, {
+                roomId: job.room_id,
+                agentId: job.agent_id,
+                turnId: job.turn_id,
+              }).drafts,
+            ]
           },
         })
+        // What the turn runs on, as recorded: the chat's model, Try another's, or none (its own).
+        const route = this.db.read(
+          (sqlite) =>
+            sqlite
+              .prepare('SELECT model, provider FROM message_runs WHERE turn_id = ?')
+              .get(job.turn_id) as { model: string | null; provider: string | null } | undefined,
+        )
         // A turn sent again (a retry, a restart) finds its observation already applied: its effort is the recorded one.
         effort ??= this.db.read(
           (sqlite) =>
@@ -272,8 +289,8 @@ export class RoutingDispatcher {
           turnId: job.turn_id,
           sessionId,
           ...(job.job_id ? { jobId: job.job_id } : {}),
-          ...(job.model ? { model: job.model } : {}),
-          ...(frozen.provider ? { provider: frozen.provider } : {}),
+          ...(route?.model ? { model: route.model } : {}),
+          ...(route?.provider ? { provider: route.provider } : {}),
           ...(images.length ? { images } : {}),
           ...(capability ? { render: (stored: string) => withXtc(stored, capability) } : {}),
         })

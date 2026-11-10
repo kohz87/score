@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Changing the agent model warns about its jobs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1040px;height:700px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;gap:24px">
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+    <section aria-label="Change builder's model" data-protected="block" style="padding:18px 20px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:12px;font-size:15px">
+      <div style="display:flex;align-items:center;gap:12px"><span style="width:120px;color:#A6A8B4">Model</span><span style="flex:1"><span style="color:#A6A8B4">example-model →</span> <b>example-large</b></span></div>
+      <div role="alert" style="padding:14px 16px;border-radius:18px;background:#ECECF1;color:#12131A;display:flex;flex-direction:column;gap:10px">
+        <div style="font-weight:700">2 repeating jobs follow builder&#39;s model</div>
+        <div style="font-size:14px">Morning summary (every day, 08:00) and Dependency check (Mondays, 09:00) will run on example-large from their next run. Weekly report is pinned to deep and won&#39;t change.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:#12131A;color:#ECECF1;font:inherit;font-size:14px;font-weight:700">Keep the jobs on example-model, then change</button>
+          <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(18,19,26,0.4);color:#12131A;font:inherit;font-size:14px;font-weight:600">Change, jobs too</button>
+          <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:transparent;color:#12131A;font:inherit;font-size:14px;font-weight:600;text-decoration:underline">Cancel</button>
+        </div>
+        <div style="font-size:13px">Only want it for one conversation? Type <b style="font-family:'JetBrains Mono',monospace;font-weight:500">/model example-large</b> in that chat instead: the agent and its jobs stay as they are.</div>
+      </div>
+    </section>
+    <section aria-label="Repeating jobs" style="padding:16px 20px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:10px">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700">Repeating jobs · 3</div>
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+      <li style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:#22242C">
+        <span style="flex:1;min-width:0"><b>Morning summary</b><span style="display:block;font-size:13px;color:#A6A8B4">Every day at 08:00</span></span>
+        <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700">its own · example-model</span><span style="font-size:12px;color:#A6A8B4">follows the agent</span></span>
+      </li>
+      <li style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:#22242C">
+        <span style="flex:1;min-width:0"><b>Dependency check</b><span style="display:block;font-size:13px;color:#A6A8B4">Mondays at 09:00</span></span>
+        <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700">its own · example-model</span><span style="font-size:12px;color:#A6A8B4">follows the agent</span></span>
+      </li>
+      <li style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:#22242C">
+        <span style="flex:1;min-width:0"><b>Weekly report</b><span style="display:block;font-size:13px;color:#A6A8B4">Fridays at 17:00</span></span>
+        <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="padding:3px 10px;border-radius:999px;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font-size:12px;font-weight:700">deep · pinned</span><span style="font-size:12px;color:#A6A8B4">set by builder, 2 d ago</span></span>
+      </li>
+      </ul>
+      <div style="font-size:13px;color:#A6A8B4">Shown, not set here: a job follows the agent&#39;s model unless it&#39;s pinned. To pin or move one, ask the agent in a chat.</div>
+    </section>
+  </div>
+  <aside style="width:280px;flex:none;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5;color:#C4C6D0">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">WHEN THE WARNING SHOWS</div>
+    <div>Only when the agent&#39;s own model changes (its page, Change) and at least one repeating job follows it. A chat&#39;s /model never asks: it touches no job.</div>
+    <div>&#34;Keep the jobs on example-model&#34; pins those jobs to the current model first, then changes the agent. The cards then say pinned.</div>
+    <div>Nothing is changed until a button is pressed.</div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1040,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

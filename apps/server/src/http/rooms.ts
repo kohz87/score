@@ -17,6 +17,7 @@ import type { AgentWorkspaces } from '../workspace/agent-workspace.ts'
 import { requestIdempotency } from './idempotency.ts'
 import { registerJobRoutes } from './jobs.ts'
 import { registerChatEffortRoutes } from './chat-efforts.ts'
+import { registerChatModelRoutes } from './chat-models.ts'
 import { registerSessionCompactionRoutes } from './session-compaction.ts'
 import type { RoomRouteDeps } from './rooms/context.ts'
 import { registerMessagePostRoutes } from './rooms/message-post-routes.ts'
@@ -61,6 +62,7 @@ export function registerRoomRoutes(
     await routing.close()
   })
   registerChatEffortRoutes(app, { db, ingest, port, mutation })
+  registerChatModelRoutes(app, { db, ingest, port, mutation })
   registerJobRoutes(app, {
     db,
     ingest,

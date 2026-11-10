@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { RoomProjectSchema } from './conversations.ts'
+import { RoutineSummarySchema } from './routines.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -11,7 +12,6 @@ import {
   MessageSchema,
   RefSchema,
   RoomSchema,
-  RoutineSummarySchema,
   TaskColumnSchema,
   TaskSummarySchema,
 } from './types.ts'

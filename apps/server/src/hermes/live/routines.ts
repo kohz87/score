@@ -28,6 +28,8 @@ const JobSchema = z
     schedule: z.unknown().optional(),
     enabled: z.boolean().optional(),
     last_run_at: z.string().nullish(),
+    /** Decision 182: the model the job is pinned to; empty or absent follows the agent's model at fire time. */
+    model: z.string().nullish(),
   })
   .passthrough()
 const JobsFileSchema = z.union([z.object({ jobs: z.array(z.unknown()) }), z.array(z.unknown())])
@@ -96,6 +98,7 @@ function summary(profile: string, job: Job): RoutineSummary {
     description: redactBounded(prompt, 600),
     lastRunAt: last && !Number.isNaN(last.getTime()) ? last.toISOString() : null,
     enabled: job.enabled !== false,
+    model: job.model?.trim() ? redactBounded(job.model.trim(), 200) : null,
   })
 }
 
@@ -310,5 +313,21 @@ export class LiveRoutines {
   async run(id: string): Promise<void> {
     const { profile, job } = this.find(id)
     await this.mutate(profile, ['run', '--', job.id])
+  }
+  /**
+   * Decision 182: before an agent's model changes, lock each job that follows it onto the model it has now (`cron edit
+   * --pin` takes the profile's current model and provider). Stops at the first refusal, so what's listed was pinned.
+   */
+  pinFollowing(agentId: string): Promise<string[]> {
+    const profile = ProfileNameSchema.safeParse(agentId)
+    if (!profile.success) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    return this.serial(async () => {
+      const pinned: string[] = []
+      for (const job of this.jobs(profile.data).filter((one) => !one.model?.trim())) {
+        await this.mutate(profile.data, ['edit', '--pin', '--', job.id])
+        pinned.push(`${profile.data}:${job.id}`)
+      }
+      return pinned
+    })
   }
 }

@@ -46,7 +46,6 @@ import type {
   SessionContextReading,
   SessionSize,
 } from '@score/contract'
-import { HttpError } from '../errors.ts'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
@@ -254,6 +253,8 @@ export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   deleteRoutine(id: string): Promise<void>
   /** Asks Hermes to run the job on its next scheduler tick; resolves once it is queued. */
   runRoutine(id: string): Promise<void>
+  /** Decision 182: pin the agent's repeating jobs that follow its model onto the model it has now; their ids. */
+  pinFollowingRoutines(agentId: string): Promise<string[]>
   /** SOUL.md / AGENTS.md of a profile. A missing file reads as empty text. */
   readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile>
   /** Compare-and-swap write; rejects with AgentFileConflictError when `etag` is stale. */
@@ -474,20 +475,7 @@ export class ApprovalDeliveryError extends Error {
   }
 }
 
-/** Marks a refusal raised before anything was sent to Hermes (callers may conclude nothing was dispatched). */
-export function notDispatched(error: unknown): unknown {
-  return error instanceof HttpError
-    ? new HttpError(error.status, error.code, error.message, { notDispatched: true })
-    : error
-}
-export function isNotDispatched(error: unknown): boolean {
-  return (
-    error instanceof HttpError &&
-    typeof error.details === 'object' &&
-    error.details !== null &&
-    (error.details as { notDispatched?: unknown }).notDispatched === true
-  )
-}
+export { isNotDispatched, notDispatched } from './dispatch-marks.ts'
 
 /** What a Stop request found: delivered to a live run, nothing to stop, or not proven ended yet. */
 export type StopOutcome = 'stopped' | 'not_running' | 'unconfirmed'

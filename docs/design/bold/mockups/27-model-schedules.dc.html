@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tasks, Repeating: schedules as assignments</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:760px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;gap:24px">
+  <section aria-label="Repeating" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+    <nav aria-label="Tasks views" style="display:flex;gap:6px;font-size:14px;font-weight:600">
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Board</a>
+      <a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Repeating</a>
+    </nav>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:700">Repeating · 4</div>
+      <button type="button" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:14px;font-weight:700">New repeating job</button>
+    </div>
+    <div style="padding:6px 10px;border-radius:24px;background:#1A1C23">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:12px;letter-spacing:1px;color:#A6A8B4;text-align:left">
+          <th style="padding:10px;font-weight:700">JOB</th><th style="padding:10px;font-weight:700">WHEN</th><th style="padding:10px;font-weight:700">ASSIGNED TO</th><th style="padding:10px;font-weight:700">MODEL</th><th style="padding:10px;font-weight:700">STATE</th><th></th>
+        </tr></thead>
+        <tbody>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:12px 10px"><b>Morning summary</b><span style="display:block;font-size:13px;color:#A6A8B4">Summarise yesterday&#39;s chats and tasks</span></td>
+          <td style="padding:12px 10px;font-size:14px">Every day, 08:00</td>
+          <td style="padding:12px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>builder</span></td>
+          <td style="padding:12px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700">its own · example-model</span></td>
+          <td style="padding:12px 10px;font-size:14px;color:#7FE3C1">On</td>
+          <td style="padding:12px 10px;text-align:right"><button type="button" aria-label="Edit Morning summary" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:12px 10px"><b>Dependency check</b><span style="display:block;font-size:13px;color:#A6A8B4">Look for outdated packages and open a task</span></td>
+          <td style="padding:12px 10px;font-size:14px">Mondays, 09:00</td>
+          <td style="padding:12px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>builder</span></td>
+          <td style="padding:12px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700">its own · example-model</span></td>
+          <td style="padding:12px 10px;font-size:14px;color:#7FE3C1">On</td>
+          <td style="padding:12px 10px;text-align:right"><button type="button" aria-label="Edit Dependency check" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:12px 10px"><b>Weekly report</b><span style="display:block;font-size:13px;color:#A6A8B4">Write the week&#39;s report for the team room</span></td>
+          <td style="padding:12px 10px;font-size:14px">Fridays, 17:00</td>
+          <td style="padding:12px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>lead</span></td>
+          <td style="padding:12px 10px"><span style="padding:3px 10px;border-radius:999px;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font-size:12px;font-weight:700">deep · pinned</span></td>
+          <td style="padding:12px 10px;font-size:14px;color:#7FE3C1">On</td>
+          <td style="padding:12px 10px;text-align:right"><button type="button" aria-label="Edit Weekly report" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:12px 10px"><b>Release notes</b><span style="display:block;font-size:13px;color:#A6A8B4">builder drafts, reviewer checks</span></td>
+          <td style="padding:12px 10px;font-size:14px">Fridays, 17:00</td>
+          <td style="padding:12px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px #C4C6D0;flex:none"></span>Recipe: Release notes</span></td>
+          <td style="padding:12px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700">per step</span></td>
+          <td style="padding:12px 10px;font-size:14px;color:#A6A8B4">Later</td>
+          <td style="padding:12px 10px;text-align:right"><button type="button" aria-label="Edit Release notes" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Edit</button></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:13px;color:#A6A8B4">Assign a job to an agent, like sharing a workspace. Reassigning moves it to the other agent; its model and history come along.</div>
+  </section>
+  <aside aria-label="Chat info for builder" style="width:320px;flex:none;box-sizing:border-box;padding:18px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:12px;font-size:14px">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">DIRECT CHAT WITH BUILDER · INFO</div>
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ECECF1">ASSIGNED TO BUILDER</div>
+    <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px">
+      <li><a href="#" style="font-weight:600">Morning summary</a> <span style="color:#A6A8B4">· every day 08:00 · next in 14 h</span></li>
+      <li><a href="#" style="font-weight:600">Dependency check</a> <span style="color:#A6A8B4">· Mondays 09:00</span></li>
+      <li><a href="#" style="font-weight:600">Fix the feed cursor</a> <span style="color:#A6A8B4">· task · in progress</span></li>
+      <li><a href="#" style="font-weight:600">Paginate the feed</a> <span style="color:#A6A8B4">· task · to do</span></li>
+    </ul>
+    <a href="#" style="font-weight:600;font-size:13px">All in Tasks</a>
+    <div style="font-size:13px;line-height:1.45;color:#A6A8B4">The agent page&#39;s Work shows the same list, read-only. Editing and assigning happen in Tasks.</div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -3,6 +3,28 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.35.0] — 2026-11-10
+
+### Added
+- **Model per chat.** `/model` sets an agent's model for one chat only, like `/effort`: `/model deep` in a direct chat, `@reviewer /model deep` in a
+  group, `/model default` to go back to its own. The list shows the agent's aliases first, then the models its providers offer (type to narrow); a
+  coding agent lists its own program's models. A note with Undo says what changed. The agent's own model, its other chats and its repeating jobs
+  stay as they are.
+- **One "model · effort" tag** where the effort tag was: the bar under the message box, Chat info's Members, the direct chat's Info and the chat
+  list ("deep · max", the part that is the agent's own says "its own"). Clicking it changes or clears either. Replies say what they ran on
+  ("builder · example-large · effort high").
+- **The agent page** says "Every chat uses this unless it sets its own with /model", lists the chats set differently, and shows each repeating
+  job's model ("its own" or "pinned").
+- **A warning before an agent's own model changes** when repeating jobs follow it: keep those jobs on the current model (Hermes pins them), change
+  them too, or cancel. Only want it for one conversation? `/model` in that chat.
+
+### Changed
+- In the new shell, `/model` no longer changes the agent's model everywhere (the classic shell's `/model` is unchanged; the agent page's Change does
+  that). An agent taken out of a chat loses its chat model and effort there at once, and the chat says so.
+
+### Fixed
+- A command's note (with Undo) shows in a new chat that has no messages yet.
+
 ## [3.34.1] — 2026-11-10
 
 ### Fixed

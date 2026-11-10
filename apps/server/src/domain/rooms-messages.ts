@@ -39,6 +39,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
     ...(row.effort ? { effort: row.effort } : {}),
+    ...(row.model ? { model: row.model } : {}),
     ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
     ...(speedOf(row.speed) ? { speed: speedOf(row.speed) } : {}),
   })
@@ -112,12 +113,13 @@ export function storeMessage(
     )
   if (!result.changes) return []
   // Without a job the insert trigger placed it in the room's default job: the event says which.
-  // An agent's reply also takes its turn's effort from the insert trigger (decision 178).
+  // An agent's reply also takes its turn's effort and model from the insert triggers (decisions 178, 182).
   const stored = sqlite
-    .prepare('SELECT job_id, effort FROM messages WHERE id = ?')
+    .prepare('SELECT job_id, effort, model FROM messages WHERE id = ?')
     .get(message.id) as {
     job_id: string | null
     effort: string | null
+    model: string | null
   }
   return [
     {
@@ -126,6 +128,7 @@ export function storeMessage(
         ...message,
         ...(stored.job_id ? { jobId: stored.job_id } : {}),
         ...(stored.effort ? { effort: stored.effort } : {}),
+        ...(stored.model ? { model: stored.model } : {}),
       },
     },
     ...roomChanged(sqlite, message.roomId, now, before),

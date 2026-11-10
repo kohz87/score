@@ -120,6 +120,7 @@ export const builderSectionFixtures: Record<string, unknown> = {
       },
     ],
   },
+  '/api/agents/builder/chat-models': { agentId: 'builder', chats: [] },
   '/api/agents/builder/efforts': {
     agentId: 'builder',
     own: null,

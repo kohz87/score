@@ -1,0 +1,161 @@
+/* Model per chat (decision 182). Values from the approved mock-ups 27-model-*; colours are the shell's own tokens.
+   These are settings and status, so nothing here carries data-protected except the repeating-jobs warning. */
+
+/* The `/` palette's group labels and the "+ N more" line. */
+[data-ui='bold'] .bold-composer-menu-group {
+  padding: 8px 12px 2px;
+  color: var(--ink2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+[data-ui='bold'] .bold-composer-menu-more {
+  padding: 4px 12px;
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+/* The combined tag: "deep · max". The part that is the agent's own is muted. */
+[data-ui='bold'] .bold-me-own {
+  color: var(--ink2);
+  font-weight: 500;
+}
+
+[data-ui='bold'] .bold-me-sep {
+  margin: 0 4px;
+  opacity: 0.6;
+}
+
+/* One menu, two parts: Model then Effort, each with its own "Back to its own". */
+[data-ui='bold'] .bold-me-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--field);
+  box-shadow: var(--menu-shadow);
+}
+
+[data-ui='bold'] .bold-me-menu .bold-effort-menu {
+  position: static;
+  width: auto;
+  padding: 4px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-effort-choice--down .bold-me-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+  width: min(296px, calc(100vw - 48px));
+}
+
+[data-ui='bold'] .bold-effort-choice--end .bold-me-menu {
+  left: auto;
+  right: 0;
+}
+
+[data-ui='bold'] .bold-me-part-title {
+  padding: 6px 12px 0;
+  color: var(--ink2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+/* Replies: "builder · deep · effort high". */
+[data-ui='bold'] .bold-reply-model {
+  margin-left: 4px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+/* Agent page: the model row's lines and the repeating jobs' models. */
+[data-ui='bold'] .bold-model-job {
+  display: inline-flex;
+  gap: 6px;
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+/* The warning before the agent's model changes while repeating jobs follow it (mock-up 27-model-jobs). */
+[data-ui='bold'] .bold-model-jobs-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  /* The person decides here: the light object "for you" (mock-up 27-model-jobs), as needs-you requests are. */
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-model-jobs-warning h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-model-jobs-warning ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-model-jobs-warning li small {
+  display: block;
+}
+
+[data-ui='bold'] .bold-model-jobs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-model-jobs-actions button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hi-sub);
+  color: var(--hi-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-model-jobs-actions button.bold-model-jobs-keep {
+  background: var(--hi-ink);
+  box-shadow: none;
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-model-jobs-tip,
+[data-ui='bold'] .bold-model-jobs-warning li small {
+  margin: 0;
+  color: var(--hi-sub);
+  font-size: 13px;
+}
+
+/* On a phone the /model palette's options and the tag menu's choices are at least 44px tall. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .chat-menu button[role='option'],
+  [data-ui='bold'] .bold-me-menu .bold-effort-menu button {
+    min-height: 44px;
+  }
+}

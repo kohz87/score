@@ -18,6 +18,10 @@ export type SlashCommand = {
   note?: string
   /** A line above the palette, shown with the first item of a group (`/effort`'s "Effort for builder…"). */
   header?: string
+  /** A label above the first item of a group of rows (`/model`'s "ALIASES"); empty or absent: none. */
+  group?: string
+  /** A muted line right after this row (`/model`'s "+ 14 more: keep typing to narrow"). */
+  after?: string
 }
 export type SendResult = {
   message: Message
@@ -62,6 +66,24 @@ export function addressedEffortQuery(text: string) {
   const query = match?.[2]?.toLowerCase()
   if (!match || query === undefined || !'effort'.startsWith(query)) return null
   return { agentId: match[1]!, query }
+}
+
+/**
+ * `/model` being typed (decision 182), bare (`/mod…`, `/model de…`) or addressed (`@agent /model de…`): what follows
+ * `/model ` narrows the models. `agentId` is the addressed agent, null for the bare form (the composer's addressee).
+ */
+export function modelPaletteQuery(text: string): { agentId: string | null; query: string } | null {
+  const bare = /^\/(?:model\s+(\S*)|(mo[a-z]*))$/i.exec(text)
+  if (bare) {
+    const word = bare[2]?.toLowerCase()
+    if (word !== undefined && !'model'.startsWith(word)) return null
+    return { agentId: null, query: bare[1] ?? '' }
+  }
+  const addressed = /^@([\w-]+)\s+\/(?:model\s+(\S*)|(mo[a-z]*))$/i.exec(text)
+  if (!addressed) return null
+  const word = addressed[3]?.toLowerCase()
+  if (word !== undefined && !'model'.startsWith(word)) return null
+  return { agentId: addressed[1]!, query: addressed[2] ?? '' }
 }
 
 const draftKey = (roomId: string) => `score.chat.draft.${roomId}`

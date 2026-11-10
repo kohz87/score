@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import type { AgentSummary } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import type { SlashCommand } from './composer-model.ts'
@@ -40,21 +41,32 @@ export function ComposerMenu({
       )}
       {menu === 'slash'
         ? slashItems.map((item, position) => (
-            <button
-              key={item.key ?? item.name}
-              id={optionId(position)}
-              type="button"
-              role="option"
-              tabIndex={-1}
-              aria-selected={position === index}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => select(position)}
-            >
-              <span className="chat-menu-command">{item.insert ?? `/${item.name}`}</span>
-              <span className="chat-menu-detail" title={item.description}>
-                {item.description}
-              </span>
-            </button>
+            <Fragment key={item.key ?? item.name}>
+              {item.group && item.group !== slashItems[position - 1]?.group && (
+                <div className="bold-composer-menu-group" role="presentation">
+                  {item.group}
+                </div>
+              )}
+              <button
+                id={optionId(position)}
+                type="button"
+                role="option"
+                tabIndex={-1}
+                aria-selected={position === index}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => select(position)}
+              >
+                <span className="chat-menu-command">{item.insert ?? `/${item.name}`}</span>
+                <span className="chat-menu-detail" title={item.description}>
+                  {item.description}
+                </span>
+              </button>
+              {item.after && (
+                <div className="bold-composer-menu-more" role="presentation">
+                  {item.after}
+                </div>
+              )}
+            </Fragment>
           ))
         : mentionItems.map((agent, position) => (
             <button
