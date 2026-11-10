@@ -79,9 +79,10 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/agent-page/NameList.tsx` — rule and plugin names on one line, each its own span.
 - `apps/web/src/bold/agent-page/MemorySection.tsx` — Remembers and Skills summaries that open the full cards.
 - `apps/web/src/bold/agent-page/OpenCard.tsx` — a summary (a region named by its title) that opens today's full card in place; `useOpenState` opens it from a link.
-- `apps/web/src/bold/agent-page/WorkSection.tsx` — Work: Recent runs, Repeating jobs and Todo as summaries, and the Files panel (opened by a `?path=` link).
+- `apps/web/src/bold/agent-page/WorkSection.tsx` — Work: Recent runs, Assigned and Todo as summaries, and the Files panel (opened by a `?path=` link).
 - `apps/web/src/bold/agent-page/RunsTile.tsx` — Recent runs: the last two runs, one line each; All runs opens the full card.
-- `apps/web/src/bold/agent-page/WorkTiles.tsx` — Repeating jobs and Todo: one line each and the action that opens the full card.
+- `apps/web/src/bold/agent-page/WorkTiles.tsx` — Todo: one line and the action that opens the full card.
+- `apps/web/src/bold/agent-page/AssignedTile.tsx` — Assigned: a read-only line of the agent's repeating jobs, recipe steps and open tasks, with Open in Tasks and Start a repeating job.
 - `apps/web/src/bold/agent-page/use-agent-files.ts` — whether the Files panel is open, from the `?path=` link.
 - `apps/web/src/bold/agent-page/CodingSections.tsx` — a coding agent's sections: Personality, Model, Safety, Tools, Work.
 - `apps/web/src/bold/agent-page/agent-page.css` — header, section menu (sticky; chips on a phone), sections, tiles and Model rows.
@@ -131,7 +132,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/efforts/ChatRowEffort.tsx` — the chat list's small level tag beside a one-to-one's name.
 - `apps/web/src/bold/models/` — model per chat on screen (decision 182): `/model` palette and command, the chat's models, the tag text and menu part, the agent's chats list, the repeating jobs' warning.
 - `apps/web/src/bold/models/model-queries.ts` — the chat's models kept live by `model.changed`, the agent's chats list, the PUT (with `replaced` for Undo) and the routines pin POST.
-- `apps/web/src/bold/models/model-model.ts` — pure words: the tag's parts, amber rule, accessible name, coding programs, a job's model line, the jobs note.
+- `apps/web/src/bold/models/model-model.ts` — pure words: the tag's parts, amber rule, accessible name, coding programs, a job's model line.
 - `apps/web/src/bold/models/use-model-choices.ts` — what an agent's model can be set to: its aliases and Hermes's models, or a coding agent's program models, narrowed by a search.
 - `apps/web/src/bold/models/model-menu.ts` — the `/model` palette rows (aliases, models with a count, Back to its own, header, note).
 - `apps/web/src/bold/models/use-model-palette.ts` — the composer's hook that reads and builds those rows for the addressed agent.
@@ -252,6 +253,14 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-knowledge-note.css` — Knowledge note and side-panel layout with mid-width and phone page layouts.
 - `apps/web/src/bold/direct/DirectChat.tsx` — one-to-one chat entry: loads the agent's chats and switches between loading, empty and loaded states.
 - `apps/web/src/bold/direct/DirectChatBar.tsx` — the one-to-one header, choosing the phone or desktop bar.
+- `apps/web/src/bold/direct/DirectAssigned.tsx` — Info's "Assigned to {agent}": repeating jobs, recipe steps and open tasks as links into Tasks.
+- `apps/web/src/bold/direct/DirectAssigned.test.tsx` — the Assigned section: each kind's words and links, empty, following a link.
+- `apps/web/src/bold/assigned/` — Assigned (decision 183): what is set to an agent, read-only on the agent page and in the direct chat's Info.
+- `apps/web/src/bold/assigned/assigned-queries.ts` — the agent's `GET /api/agents/:id/assigned` read (read-only).
+- `apps/web/src/bold/assigned/assigned-model.ts` — pure parts of Assigned: which tasks count, task state words, the counts, names and "next in N h".
+- `apps/web/src/bold/assigned/assigned-test-data.ts` — fixtures for the Assigned tests: jobs, tasks, the task snapshot and the assigned answer.
+- `apps/web/src/bold/assigned/assigned-model.test.ts` — the Assigned counts, names, task words and next-run text.
+- `apps/web/src/bold/agent-page/AssignedTile.test.tsx` — the agent page's Assigned line: empty, jobs and recipe steps, task count, links and a failed read.
 - `apps/web/src/bold/direct/Welcome.tsx` — the one-to-one welcome with privacy note and starter questions.
 - `apps/web/src/bold/direct/NoRoomYet.tsx` — first-chat creation for an agent with no direct room yet.
 - `apps/web/src/bold/direct/LoadedDirect.tsx` — the loaded one-to-one surface: stream, sharing, composer and chat menus.

@@ -12,8 +12,10 @@ export type InfoSectionKind =
   | 'chats'
   | 'add'
   | 'subagents'
+  | 'assigned'
 
 const DEFAULT_OPEN: Record<InfoSectionKind, boolean> = {
+  assigned: true,
   members: false,
   workspace: false,
   topic: true,

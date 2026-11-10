@@ -14,6 +14,7 @@ import { chatDay, currentChat, listedChats, matchesChat } from './direct-model.t
 import { createDirectChat, directChatsQuery } from './direct-queries.ts'
 import { ScreenShortcut, hasScreen } from './DirectHeader.tsx'
 import { AddSomeone } from './direct-parts.tsx'
+import { DirectAssigned } from './DirectAssigned.tsx'
 import { InfoSection } from '../chats/InfoSection.tsx'
 import { FilesAndResults } from '../chats/FilesResults.tsx'
 import './bold-direct.css'
@@ -96,6 +97,7 @@ export function DirectInfo({
           {hasScreen(agent) && <ScreenShortcut agent={agent} />}
         </div>
       </InfoSection>
+      <DirectAssigned agent={agent} onNavigate={onNavigate} />
       <InfoSection
         kind="workspace"
         headingId="dm-info-workspace"

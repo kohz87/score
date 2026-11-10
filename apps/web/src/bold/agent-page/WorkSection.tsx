@@ -1,9 +1,10 @@
 import type { AgentDetail } from '@score/contract'
 import { WorkspaceTab } from '../../routes/team/WorkspaceTab.tsx'
-import { RoutinesTile, TodoTile } from './WorkTiles.tsx'
+import { TodoTile } from './WorkTiles.tsx'
 import { RunsTile } from './RunsTile.tsx'
+import { AssignedTile } from './AssignedTile.tsx'
 
-/** Work (mock-up 26): Recent runs, Repeating jobs and Todo as one-line summaries, with the Files panel when a workspace link opened it. */
+/** Work (mock-up 26; decision 183): Recent runs, Assigned (read-only; set in Tasks) and Todo as one-line summaries, with the Files panel when a workspace link opened it. */
 export function WorkSection({
   agent,
   coding,
@@ -22,7 +23,7 @@ export function WorkSection({
       <h2 id="agent-work-title">Work</h2>
       <div className={`bold-agent-tiles${coding ? '' : ' bold-agent-tiles-3'}`}>
         <RunsTile agent={agent} initialOpen={initialOpen === 'runs'} />
-        {!coding && <RoutinesTile agent={agent} initialOpen={initialOpen === 'routines'} />}
+        {!coding && <AssignedTile agent={agent} />}
         {!coding && <TodoTile agent={agent} initialOpen={initialOpen === 'todo'} />}
       </div>
       {files && (
