@@ -204,3 +204,41 @@ test('pinning the repeating jobs that follow the agent keeps them on its current
   expect(list.items[0].model).toBeTruthy()
   expect((await post('/api/agents/builder/routines/pin', {})).json()).toEqual({ pinned: [] })
 })
+
+test('Undo puts back the exact model and provider with the label it was chosen by', async () => {
+  const back = await app.inject({
+    method: 'PUT',
+    url: `/api/rooms/${roomId}/models/builder`,
+    headers: { ...headers, 'idempotency-key': 'undo-1' },
+    payload: { model: 'fake-model', provider: 'local', label: 'deep' },
+  })
+  expect(back.statusCode).toBe(200)
+  expect(back.json().current).toMatchObject({
+    model: 'fake-model',
+    provider: 'local',
+    label: 'deep',
+  })
+})
+
+test('a model two providers offer needs the provider: a pick from the list sends it', async () => {
+  const option = {
+    providerLabel: 'P',
+    model: 'shared-model',
+    available: true,
+    reason: null,
+    free: true,
+    price: null,
+  }
+  vi.spyOn(port, 'listModels').mockResolvedValue([
+    { ...option, provider: 'one' },
+    { ...option, provider: 'two' },
+  ])
+  const vague = await put('builder', 'shared-model')
+  expect(vague.statusCode).toBe(400)
+  expect(vague.json().error.message).toBe(
+    'Several providers offer shared-model: pick it from the list.',
+  )
+  const exact = await put('builder', 'shared-model', 'two')
+  expect(exact.statusCode).toBe(200)
+  expect(exact.json().current).toMatchObject({ model: 'shared-model', provider: 'two' })
+})

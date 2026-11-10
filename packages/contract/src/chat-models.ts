@@ -12,7 +12,7 @@ export const ChatModelNameSchema = z
   .string()
   .min(1)
   .max(200)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/@+#-]*$/)
 
 export const ChatModelSchema = z.object({
   roomId: z.string().min(1),
@@ -38,6 +38,8 @@ export const ChatModelRequestSchema = z
   .object({
     model: ChatModelNameSchema.nullable(),
     provider: z.string().min(1).max(100).nullish(),
+    /** Undo only: the tag's label to keep with an exact model and provider (an alias it was chosen by). */
+    label: z.string().min(1).max(200).optional(),
   })
   .strict()
 export type ChatModelRequest = z.infer<typeof ChatModelRequestSchema>

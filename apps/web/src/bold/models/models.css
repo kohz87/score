@@ -151,3 +151,11 @@
   color: var(--hi-sub);
   font-size: 13px;
 }
+
+/* On a phone the /model palette's options and the tag menu's choices are at least 44px tall. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .chat-menu button[role='option'],
+  [data-ui='bold'] .bold-me-menu .bold-effort-menu button {
+    min-height: 44px;
+  }
+}

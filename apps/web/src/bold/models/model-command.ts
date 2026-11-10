@@ -26,6 +26,7 @@ export async function runModelCommand({
   roomKind,
   agent,
   args,
+  provider,
   queryClient,
   say,
 }: {
@@ -33,6 +34,8 @@ export async function runModelCommand({
   roomKind: 'direct' | 'group'
   agent: AgentSummary
   args: string
+  /** The provider of a model picked from a list; a typed name carries none. */
+  provider?: string
   queryClient: QueryClient
   say: EffortSay
 }): Promise<void> {
@@ -54,26 +57,25 @@ export async function runModelCommand({
     say(`${name} already uses its own model in this chat.`)
     return
   }
-  if (next !== null && current && (current.label === next || current.model === next)) {
+  if (
+    next !== null &&
+    current &&
+    (current.label === next || current.model === next) &&
+    (!provider || current.provider === provider)
+  ) {
     say(`${name} already runs ${chosenLabel(current)} in this chat.`)
     return
   }
 
-  const change = await putRoomModel(roomId, agent.id, next)
+  const change = await putRoomModel(roomId, agent.id, next, provider)
   await queryClient.invalidateQueries({ queryKey: agentChatModelsKey(agent.id) })
 
   const undo = {
     label: 'Undo',
     run: () => {
       const back = change.replaced
-      // An alias goes back as the alias (the server resolves it again and keeps it as the tag's label).
-      const aliased = back !== null && back.label !== back.model
-      void putRoomModel(
-        roomId,
-        agent.id,
-        back ? (aliased ? back.label : back.model) : null,
-        aliased ? undefined : back?.provider,
-      )
+      // Exactly what was replaced: its model, provider and the label the person chose it by.
+      void putRoomModel(roomId, agent.id, back ? back.model : null, back?.provider, back?.label)
         .then(() => {
           void queryClient.invalidateQueries({ queryKey: agentChatModelsKey(agent.id) })
           say(

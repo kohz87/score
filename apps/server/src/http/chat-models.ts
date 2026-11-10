@@ -47,13 +47,18 @@ export function registerChatModelRoutes(
     // Going back to its own is always allowed, so a member taken out can still be cleared.
     if (body.model !== null && !db.read((sqlite) => isMember(sqlite, roomId, agentId)))
       throw new HttpError(400, 'bad_request', `${agentId} isn’t in this chat.`)
-    const chosen =
+    const picked =
       body.model === null ? null : await choose(agentId, body.model, body.provider ?? null)
+    // Undo sends the exact model and provider it replaced, with the label (an alias) it was chosen by.
+    const chosen = picked && body.label ? { ...picked, label: body.label } : picked
     let replaced: ChatModel | null = null
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
+        // Checked again in the write: the agent may have been taken out while the model was being looked up.
+        if (chosen !== null && !isMember(sqlite, roomId, agentId))
+          throw new HttpError(400, 'bad_request', `${agentId} isn’t in this chat.`)
         const result = setChatModel(sqlite, roomId, agentId, chosen, now)
         replaced = result.replaced
         return result.drafts
@@ -78,7 +83,8 @@ export function registerChatModelRoutes(
   /**
    * What a chat runs: a coding agent takes the name as its CLI's `--model` (one of its own program's models; the
    * picker lists them, and a name its CLI refuses fails that turn visibly). A Hermes agent's alias is resolved to the
-   * model and provider it stands for; another name must be one Hermes lists, when Hermes can list them.
+   * model and provider it stands for; the model must be one Hermes lists as available, when Hermes can list them. A
+   * name several providers offer needs the provider (a pick from the list sends it).
    */
   async function choose(
     agentId: string,
@@ -91,22 +97,30 @@ export function registerChatModelRoutes(
     if (coding) return { model: name, provider: null, label: name }
     if (!(await port.listAgents()).some((agent) => agent.id === agentId))
       throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
-    if (!provider) {
-      const alias = await resolveAlias(port, agentId, name)
-      if (alias)
-        return { model: alias.model, provider: alias.provider, label: name.trim().toLowerCase() }
-    }
+    const alias = provider ? null : await resolveAlias(port, agentId, name)
+    const label = alias ? name.trim().toLowerCase() : name
+    const model = alias ? alias.model : name
+    const wanted = alias ? alias.provider : provider
     // The whole catalogue: a search for the name would come back empty for an unknown model and look like no catalogue.
     const listed = await port.listModels(undefined, undefined, Infinity).catch(() => null)
-    if (listed && listed.length) {
-      const match = listed.find(
-        (option) => option.model === name && (!provider || option.provider === provider),
-      )
-      if (!match) throw new HttpError(400, 'bad_request', `${name} isn’t available for ${agentId}.`)
-      if (!match.available)
-        throw new HttpError(400, 'bad_request', match.reason ?? `${name} isn’t available now.`)
-      return { model: name, provider: provider ?? (match.provider || null), label: name }
+    if (!listed || !listed.length) return { model, provider: wanted, label }
+    const matches = listed.filter(
+      (option) => option.model === model && (!wanted || option.provider === wanted),
+    )
+    if (!matches.length) {
+      // An alias Hermes routes itself (a model the catalogue doesn't list) is still the person's own setting.
+      if (alias) return { model, provider: wanted, label }
+      throw new HttpError(400, 'bad_request', `${name} isn’t available for ${agentId}.`)
     }
-    return { model: name, provider, label: name }
+    if (new Set(matches.map((option) => option.provider)).size > 1)
+      throw new HttpError(
+        400,
+        'bad_request',
+        `Several providers offer ${model}: pick it from the list.`,
+      )
+    const match = matches[0]!
+    if (!match.available)
+      throw new HttpError(400, 'bad_request', match.reason ?? `${model} isn’t available now.`)
+    return { model, provider: wanted ?? (match.provider || null), label }
   }
 }

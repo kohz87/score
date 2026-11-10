@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { AgentSummary, StreamEvent } from '@score/contract'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -221,4 +223,11 @@ test('model.changed sets or clears an agent’s model in the chat’s list, endi
   ])
   expect(query.reduce(set, event('other', 'other', 'room-2'))).toBe(set)
   expect(query.reduce(set, event(null, null)).items).toEqual([])
+})
+
+test('CSS: on a phone the /model palette options and the tag menu choices are 44px tall, in the bold shell only', () => {
+  const css = readFileSync(join(__dirname, 'models.css'), 'utf8')
+  expect(css).toMatch(
+    /@media \(max-width: 860px\) \{\s*\[data-ui='bold'\] \.chat-menu button\[role='option'\],\s*\[data-ui='bold'\] \.bold-me-menu \.bold-effort-menu button \{\s*min-height: 44px;/,
+  )
 })

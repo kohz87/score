@@ -11,11 +11,12 @@ import {
   type ChatModelsResponse,
   type RoutinesPinned,
 } from '@score/contract'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
-import { useStreamQuery } from '../../data/query-client.ts'
+import { useStream, useStreamQuery } from '../../data/query-client.ts'
 
 const roomPath = (roomId: string) => `rooms/${encodeURIComponent(roomId)}/models`
 const agentPath = (agentId: string) => `agents/${encodeURIComponent(agentId)}/chat-models`
@@ -74,6 +75,17 @@ export const agentChatModelsKey = (agentId: string) =>
 
 /** The chats where an agent runs another model than its own. */
 export function useAgentChatModels(agentId: AgentId | null) {
+  const stream = useStream()
+  const queryClient = useQueryClient()
+  // A chat's model changing (here or elsewhere) moves a row in or out of this list.
+  useEffect(
+    () =>
+      stream.subscribe((event) => {
+        if (event.type === 'model.changed')
+          void queryClient.invalidateQueries({ queryKey: agentChatModelsKey(agentId ?? '') })
+      }),
+    [stream, queryClient, agentId],
+  )
   return useQuery({
     queryKey: agentChatModelsKey(agentId ?? ''),
     enabled: Boolean(agentId),
@@ -90,12 +102,17 @@ export async function putRoomModel(
   agentId: string,
   model: string | null,
   provider?: string | null,
+  label?: string,
 ): Promise<ChatModelChange> {
   return ChatModelChangeSchema.parse(
     await apiFetch(`${roomPath(roomId)}/${encodeURIComponent(agentId)}`, {
       method: 'PUT',
       headers: { 'Idempotency-Key': newId() },
-      body: JSON.stringify(provider ? { model, provider } : { model }),
+      body: JSON.stringify({
+        model,
+        ...(provider ? { provider } : {}),
+        ...(label ? { label } : {}),
+      }),
     }),
   )
 }

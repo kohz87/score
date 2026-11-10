@@ -11,6 +11,7 @@ import {
   setChatModel,
 } from '../../src/domain/chat-models.ts'
 import { storeMessage } from '../../src/domain/rooms.ts'
+import { roomChanged } from '../../src/domain/rooms-write.ts'
 
 let dir: string
 let db: ScoreDb
@@ -165,4 +166,71 @@ test('an agent taken out of the chat goes back to its own, and the chat is told'
   })
   expect(chatModelsOfRoom(db.sqlite, 'room-1')).toEqual([])
   expect(turnRoute('t-4')).toEqual({ model: null, provider: null })
+})
+
+test('taking an agent out of the chat drops its overrides at once and tells the chat; deleting the chat drops them too', () => {
+  const drafts = db.tx((sqlite) => {
+    setChatModel(sqlite, 'room-1', 'reviewer', DEEP, NOW)
+    setChatModel(sqlite, 'room-1', 'builder', DEEP, NOW)
+    sqlite
+      .prepare(
+        "INSERT INTO chat_efforts (room_id, agent_id, effort, set_at) VALUES ('room-1', 'reviewer', 'max', ?)",
+      )
+      .run(NOW)
+    sqlite.prepare(`UPDATE rooms SET members = '["builder"]' WHERE id = 'room-1'`).run()
+    return roomChanged(sqlite, 'room-1', NOW)
+  })
+  expect(drafts.filter((draft) => draft.type !== 'room.upserted')).toEqual([
+    {
+      type: 'model.changed',
+      data: { roomId: 'room-1', agentId: 'reviewer', model: null, label: null, reason: 'member' },
+    },
+    {
+      type: 'effort.changed',
+      data: { roomId: 'room-1', agentId: 'reviewer', effort: null, reason: 'member' },
+    },
+  ])
+  expect(chatModelsOfRoom(db.sqlite, 'room-1').map((row) => row.agentId)).toEqual(['builder'])
+  // Added again, it starts from its own.
+  db.tx((sqlite) => {
+    sqlite.prepare(`UPDATE rooms SET members = '["builder","reviewer"]' WHERE id = 'room-1'`).run()
+    roomChanged(sqlite, 'room-1', NOW)
+  })
+  expect(chatModelsOfRoom(db.sqlite, 'room-1').map((row) => row.agentId)).toEqual(['builder'])
+  db.tx((sqlite) => {
+    sqlite
+      .prepare(
+        `INSERT INTO rooms (id, name, kind, members, created_at, updated_at, role, routing)
+         VALUES ('room-2', 'Other', 'room', '["builder"]', ?, ?, 'room', 'exchanges')`,
+      )
+      .run(NOW, NOW)
+    setChatModel(sqlite, 'room-2', 'builder', DEEP, NOW)
+    // A room's own rows go first, as room deletion does them.
+    sqlite.prepare("DELETE FROM jobs WHERE room_id = 'room-2'").run()
+    sqlite.prepare("DELETE FROM rooms WHERE id = 'room-2'").run()
+  })
+  expect(chatModelsOfRoom(db.sqlite, 'room-2')).toEqual([])
+})
+
+test('a retry runs on what the turn it repeats ran on, its own included', () => {
+  reserve('t-5')
+  // The first attempt ran on the agent's own: decided, nothing recorded.
+  db.tx((sqlite) => modelForTurn(sqlite, { roomId: 'room-1', agentId: 'builder', turnId: 't-5' }))
+  // A model is chosen afterwards; a turn marked as decided keeps its own.
+  db.tx((sqlite) => setChatModel(sqlite, 'room-1', 'builder', DEEP, NOW))
+  db.tx((sqlite) =>
+    sqlite
+      .prepare(
+        `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at, model_chosen)
+         VALUES ('reply:t-6', 'room-1', 'builder', 'm-1', 0, 't-6', 'm-1', 'Fix it', '[]', 'now', 1)`,
+      )
+      .run(),
+  )
+  db.tx((sqlite) => modelForTurn(sqlite, { roomId: 'room-1', agentId: 'builder', turnId: 't-6' }))
+  expect(turnRoute('t-6')).toEqual({ model: null, provider: null })
+  expect(
+    db.sqlite.prepare("SELECT model_chosen FROM message_runs WHERE turn_id = 't-5'").get(),
+  ).toEqual({
+    model_chosen: 1,
+  })
 })

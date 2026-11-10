@@ -11,7 +11,8 @@ export function RoutinesModelWarning({
   next,
   jobs,
   busy,
-  failed,
+  pinFailed,
+  unreadable = false,
   onKeep,
   onChange,
   onCancel,
@@ -22,12 +23,32 @@ export function RoutinesModelWarning({
   next: string
   jobs: RoutineSummary[]
   busy: boolean
-  /** Set when pinning the jobs failed: nothing was changed. */
-  failed: boolean
+  /** Set when Hermes refused to pin a job: how many jobs were pinned before it stopped (from a re-read). */
+  pinFailed: { pinned: number } | null
+  /** Set when the jobs couldn't be read: the person may still change the model, knowing it isn't checked. */
+  unreadable?: boolean
   onKeep: () => void
   onChange: () => void
   onCancel: () => void
 }) {
+  if (unreadable) {
+    return (
+      <div className="bold-model-jobs-warning" role="alert" data-protected="block">
+        <h3>Couldn’t check whether repeating jobs follow {agentName}’s model.</h3>
+        <p>
+          If any do, they will run on {next} from their next run. Change it only if that is fine.
+        </p>
+        <div className="bold-model-jobs-actions">
+          <button type="button" className="bold-model-jobs-keep" onClick={onChange}>
+            Change anyway
+          </button>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
   const following = jobs.filter((job) => !job.model)
   const pinned = jobs.filter((job) => job.model)
   const count = following.length
@@ -49,7 +70,13 @@ export function RoutinesModelWarning({
           ))}
         </ul>
       )}
-      {failed && <p role="alert">Couldn’t keep the jobs on {current}. Nothing was changed.</p>}
+      {pinFailed && (
+        <p role="alert">
+          Hermes refused to pin a job, so {agentName}’s model wasn’t changed.
+          {pinFailed.pinned > 0 &&
+            ` ${pinFailed.pinned} ${pinFailed.pinned === 1 ? 'job was' : 'jobs were'} pinned before that and ${pinFailed.pinned === 1 ? 'keeps' : 'keep'} ${current}.`}
+        </p>
+      )}
       <div className="bold-model-jobs-actions">
         <button type="button" className="bold-model-jobs-keep" disabled={busy} onClick={onKeep}>
           Keep the jobs on {current}, then change

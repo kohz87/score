@@ -1,7 +1,8 @@
 import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useChoiceMenu } from '../choice-menu.ts'
+import { onChoiceMenuKeyDown, useChoiceMenu } from '../choice-menu.ts'
 import { agentDisplayName } from '../bold-agents.ts'
+import { ApiError } from '../../data/api.ts'
 import type { AgentSummary, ChatModel } from '@score/contract'
 import { EffortPicker } from './EffortPicker.tsx'
 import { useAgentEfforts } from './effort-queries.ts'
@@ -15,7 +16,7 @@ import '../models/models.css'
 /** Runs `/effort <args>` for an agent in this chat, from `useRunEffort` (its note and Undo come with it). */
 export type RunEffort = (agent: AgentSummary, args: string) => Promise<void>
 /** Runs `/model <args>` for an agent in this chat, from `useRunModel`. */
-export type RunModel = (agent: AgentSummary, args: string) => Promise<void>
+export type RunModel = (agent: AgentSummary, args: string, provider?: string) => Promise<void>
 
 /** What a chat sets for one agent, and the runners that change it. */
 export type ChatTagState = {
@@ -57,7 +58,9 @@ export function EffortChoice({
   align?: 'start' | 'end'
 }) {
   const [open, setOpen] = useState(false)
-  const [failed, setFailed] = useState<'effort' | 'model' | null>(null)
+  const [failed, setFailed] = useState<{ part: 'effort' | 'model'; message: string | null } | null>(
+    null,
+  )
   const [saving, setSaving] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
@@ -70,14 +73,17 @@ export function EffortChoice({
   useChoiceMenu({ open, setOpen, button, menu, ready })
   if (current === null && model === null && !showWhenOwn) return null
 
-  function choose(part: 'effort' | 'model', value: string | null) {
+  function choose(part: 'effort' | 'model', value: string | null, provider?: string) {
     button.current?.focus()
     setOpen(false)
     setFailed(null)
     setSaving(true)
-    const run = part === 'effort' ? runEffort : runModel
+    const run =
+      part === 'effort' ? runEffort : (a: AgentSummary, v: string) => runModel(a, v, provider)
     run(agent, value ?? 'default')
-      .catch(() => setFailed(part))
+      .catch((error: unknown) =>
+        setFailed({ part, message: error instanceof ApiError ? error.message : null }),
+      )
       .finally(() => setSaving(false))
   }
 
@@ -102,13 +108,18 @@ export function EffortChoice({
         {children}
       </button>
       {open && ready && (
-        <div ref={menu} className="bold-me-menu" id={menuId}>
+        <div
+          ref={menu}
+          className="bold-me-menu"
+          id={menuId}
+          onKeyDown={(event) => onChoiceMenuKeyDown(event, menu.current)}
+        >
           <div className="bold-me-part-title">MODEL</div>
           <ModelPartPicker
             name={name}
             choices={choices}
             current={model}
-            onChoose={(value) => choose('model', value)}
+            onChoose={(value, provider) => choose('model', value, provider)}
           />
           <div className="bold-me-part-title">EFFORT</div>
           <EffortPicker
@@ -122,7 +133,7 @@ export function EffortChoice({
       )}
       {failed && (
         <span className="bold-effort-error" role="alert">
-          Couldn’t change the {failed}. Try again.
+          {failed.message ?? `Couldn’t change the ${failed.part}. Try again.`}
         </span>
       )}
     </span>

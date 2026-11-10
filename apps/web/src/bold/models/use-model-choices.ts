@@ -9,7 +9,13 @@ import { apiFetch } from '../../data/api.ts'
 import { isCodingAgent, programGroup, programName } from './model-model.ts'
 
 /** One row a chat's model can be set to: what to type after `/model`, and how it reads in a list. */
-export type ModelChoice = { value: string; label: string; detail: string }
+export type ModelChoice = {
+  value: string
+  label: string
+  detail: string
+  /** The provider of a model picked from the list, sent with it so two providers offering one name stay apart. */
+  provider?: string
+}
 
 export type ModelChoices = {
   /** The agent's own model, as the header and "Back to its own" read it; undefined until it is known. */
@@ -109,6 +115,7 @@ export function useModelChoices(
         .map((item) => ({
           value: item.model,
           label: item.model,
+          provider: item.provider,
           detail: [item.providerLabel, item.model === own ? 'its own' : item.free ? 'free' : null]
             .filter(Boolean)
             .join(' · '),

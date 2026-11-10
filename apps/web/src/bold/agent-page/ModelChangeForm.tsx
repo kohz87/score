@@ -26,11 +26,19 @@ export function ModelChangeForm({ agent }: { agent: AgentDetail }) {
   const [saved, setSaved] = useState('')
   // Repeating jobs follow the agent's model (decision 182): in the bold shell a change asks first when any of them would move.
   const queryClient = useQueryClient()
-  const routines = useRoutines(agent.id).data ?? []
-  const [warn, setWarn] = useState<{ next: ModelChoice; busy: boolean; failed: boolean } | null>(
-    null,
-  )
+  const routinesRead = useRoutines(agent.id)
+  const routines = routinesRead.data ?? []
+  const [warn, setWarn] = useState<{
+    next: ModelChoice
+    busy: boolean
+    pinFailed: { pinned: number } | null
+    unreadable: boolean
+  } | null>(null)
   const choice = draft ?? current
+  const differs = (next: ModelChoice) =>
+    next.model.trim() !== current.model || (next.provider ?? null) !== current.provider
+  // A change can't skip the question: while the jobs are being read it waits, and when they can't be read it says so.
+  const checking = inBold && differs(choice) && routinesRead.isPending
 
   function save(next: ModelChoice) {
     const model = next.model.trim()
@@ -46,24 +54,33 @@ export function ModelChangeForm({ agent }: { agent: AgentDetail }) {
       },
     )
   }
+  // Save and Retry both go through here, so neither can reach the change without the jobs having been checked.
+  function check(next: ModelChoice) {
+    if (!inBold || !differs(next)) return save(next)
+    if (routinesRead.isPending) return
+    if (routinesRead.isError) setWarn({ next, busy: false, pinFailed: null, unreadable: true })
+    else if (routines.some((job) => !job.model))
+      setWarn({ next, busy: false, pinFailed: null, unreadable: false })
+    else save(next)
+  }
   function submit(event: FormEvent) {
     event.preventDefault()
-    const differs = choice.model.trim() !== current.model
-    if (inBold && differs && routines.some((job) => !job.model))
-      setWarn({ next: choice, busy: false, failed: false })
-    else save(choice)
+    check(choice)
   }
   function keepThenChange(next: ModelChoice) {
-    setWarn({ next, busy: true, failed: false })
+    const before = routines.filter((job) => job.model).length
+    setWarn({ next, busy: true, pinFailed: null, unreadable: false })
     pinRoutines(agent.id)
       .then(() => {
         setWarn(null)
         save(next)
       })
-      .catch(() => {
-        // Some jobs may have been pinned before it stopped: the list shows what Hermes holds now.
-        void queryClient.invalidateQueries({ queryKey: routinesKey(agent.id) })
-        setWarn({ next, busy: false, failed: true })
+      .catch(async () => {
+        // Some jobs may have been pinned before it stopped: the model stays, and the re-read says how many.
+        await queryClient.refetchQueries({ queryKey: routinesKey(agent.id), exact: true })
+        const now = queryClient.getQueryData<typeof routines>(routinesKey(agent.id)) ?? []
+        const pinned = Math.max(0, now.filter((job) => job.model).length - before)
+        setWarn({ next, busy: false, pinFailed: { pinned }, unreadable: false })
       })
   }
   return (
@@ -89,7 +106,7 @@ export function ModelChangeForm({ agent }: { agent: AgentDetail }) {
             {change.error instanceof ApiError && change.error.code === 'needs_key' && (
               <Link to={inBold ? '/b/settings/connections' : '/settings'}>Open Connections</Link>
             )}{' '}
-            <button type="button" className="team-pill-button" onClick={() => save(choice)}>
+            <button type="button" className="team-pill-button" onClick={() => check(choice)}>
               Retry
             </button>
           </p>
@@ -101,7 +118,8 @@ export function ModelChangeForm({ agent }: { agent: AgentDetail }) {
             next={warn.next.model.trim()}
             jobs={routines}
             busy={warn.busy}
-            failed={warn.failed}
+            pinFailed={warn.pinFailed}
+            unreadable={warn.unreadable}
             onKeep={() => keepThenChange(warn.next)}
             onChange={() => {
               setWarn(null)
@@ -111,8 +129,8 @@ export function ModelChangeForm({ agent }: { agent: AgentDetail }) {
           />
         )}
         <div className="team-style-actions">
-          <button type="submit" className="team-primary" disabled={change.isPending}>
-            {change.isPending ? 'Saving…' : 'Change model'}
+          <button type="submit" className="team-primary" disabled={change.isPending || checking}>
+            {change.isPending ? 'Saving…' : checking ? 'Checking repeating jobs…' : 'Change model'}
           </button>
         </div>
         {change.isPending && (

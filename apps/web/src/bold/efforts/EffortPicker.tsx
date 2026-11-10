@@ -1,9 +1,8 @@
-import { onChoiceMenuKeyDown } from '../choice-menu.ts'
 import { EFFORT_HINTS, ownEffortLabel, unlistedLevelsNote } from './effort-model.ts'
 
 /**
  * The choices for one agent's effort in one chat (mock-up 25-effort-group): its levels, then "Back to its own". The menu
- * is a `role="menu"` of radio items, so the keyboard works as it does for `/subagents`. `levels` is null when the read
+ * is a `role="menu"` of radio items; the tag's wrapper owns the keyboard, so it is one list with the Model part. `levels` is null when the read
  * failed: then only "Back to its own" is offered, and the note says the levels can't be listed.
  */
 export function EffortPicker({
@@ -22,12 +21,7 @@ export function EffortPicker({
   onChoose: (level: string | null) => void
 }) {
   return (
-    <div
-      className="bold-effort-menu"
-      role="menu"
-      aria-label={`Effort for ${name}`}
-      onKeyDown={(event) => onChoiceMenuKeyDown(event, event.currentTarget)}
-    >
+    <div className="bold-effort-menu" role="menu" aria-label={`Effort for ${name}`}>
       <div className="bold-effort-menu-head">
         Effort for <b>{name}</b> in this chat · its own setting is <b>{ownEffortLabel(own)}</b>
       </div>

@@ -157,15 +157,38 @@ test('the menu takes the keyboard: focus starts on the checked choice, arrows an
   const modelMenu = screen.getByRole('menu', { name: `Model for ${builder.name}` })
   const modelOwn = within(modelMenu).getByRole('menuitemradio', { name: /\/model default/ })
   await waitFor(() => expect(document.activeElement).toBe(modelOwn))
-  items[checked]!.focus()
+  // Down from the last Model choice lands on the first Effort choice; further arrows reach the checked one, no manual focus.
+  fireEvent.keyDown(menu, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(items[0])
+  for (let step = 0; step < checked; step++) fireEvent.keyDown(menu, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(items[checked])
   fireEvent.keyDown(menu, { key: 'ArrowDown' })
   expect(document.activeElement).toBe(items[checked + 1])
   fireEvent.keyDown(menu, { key: 'End' })
   expect(document.activeElement).toBe(items[items.length - 1])
   fireEvent.keyDown(menu, { key: 'Escape' })
-  await waitFor(() => expect(screen.queryByRole('menu', { name: /Effort for/ })).toBeNull())
+  await waitFor(() => expect(screen.queryAllByRole('menu')).toHaveLength(0))
   // Focus goes back to the button a frame later (the subagents control does the same).
   await waitFor(() => expect(document.activeElement).toBe(button))
+})
+
+test('Down from the last Model choice lands on the first Effort choice, and Up goes back', async () => {
+  stub([{ roomId: 'room-1', agentId: builder.id, effort: 'medium' }])
+  renderInRoom(<ContextBarProbe />)
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort medium\. Change/,
+    }),
+  )
+  const modelMenu = await screen.findByRole('menu', { name: `Model for ${builder.name}` })
+  const effortMenu = screen.getByRole('menu', { name: `Effort for ${builder.name}` })
+  const lastModel = within(modelMenu).getAllByRole('menuitemradio').at(-1)!
+  const firstEffort = within(effortMenu).getAllByRole('menuitemradio')[0]!
+  await waitFor(() => expect(document.activeElement).toBe(lastModel)) // checked: the chat sets no model
+  fireEvent.keyDown(lastModel, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(firstEffort)
+  fireEvent.keyDown(firstEffort, { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(lastModel)
 })
 
 test('a Members tag opens the choices for that agent', async () => {

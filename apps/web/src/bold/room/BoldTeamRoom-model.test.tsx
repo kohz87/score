@@ -156,7 +156,7 @@ test('picking deep and sending sets this chat only, says so with Undo, and never
   const back = calls.filter(
     (call) => call.method === 'PUT' && call.url.endsWith('/models/reviewer'),
   )[1]!
-  expect(back.body).toEqual({ model: 'free-model' })
+  expect(back.body).toEqual({ model: 'free-model', label: 'free-model' }) // exactly what was replaced, never the alias name again
 })
 
 test('/model default goes back to the agent’s own', async () => {

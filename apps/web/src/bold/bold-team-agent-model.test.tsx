@@ -162,8 +162,9 @@ test('when pinning fails it says so and changes nothing', async () => {
   open('/b/agents/builder')
   await startChange('demo/other')
   fireEvent.click(await screen.findByRole('button', { name: /Keep the jobs on/ }))
+  // Jobs re-read after the refusal: none were pinned here, so only the first sentence shows.
   expect(
-    await screen.findByText('Couldn’t keep the jobs on demo/next-model. Nothing was changed.'),
+    await screen.findByText(/Hermes refused to pin a job, so .*’s model wasn’t changed\./),
   ).toBeDefined()
   expect(puts(calls)).toHaveLength(0)
 })

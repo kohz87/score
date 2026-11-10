@@ -1,5 +1,4 @@
 import type { ChatModel } from '@score/contract'
-import { onChoiceMenuKeyDown } from '../choice-menu.ts'
 import { PALETTE_MODELS } from './model-model.ts'
 import { ownModelText } from './model-menu.ts'
 import type { ModelChoices } from './use-model-choices.ts'
@@ -17,8 +16,8 @@ export function ModelPartPicker({
   name: string
   choices: ModelChoices
   current: ChatModel | null
-  /** A model or alias, or null for back to the agent's own. */
-  onChoose: (value: string | null) => void
+  /** A model or alias (a listed model with its provider), or null for back to the agent's own. */
+  onChoose: (value: string | null, provider?: string) => void
 }) {
   const shown = choices.models.slice(0, PALETTE_MODELS)
   const more = choices.models.length - shown.length
@@ -26,12 +25,7 @@ export function ModelPartPicker({
   const checked = (value: string) =>
     current !== null && (current.label === value || current.model === value)
   return (
-    <div
-      className="bold-effort-menu"
-      role="menu"
-      aria-label={`Model for ${name}`}
-      onKeyDown={(event) => onChoiceMenuKeyDown(event, event.currentTarget)}
-    >
+    <div className="bold-effort-menu" role="menu" aria-label={`Model for ${name}`}>
       <div className="bold-effort-menu-head">
         Model for <b>{name}</b> in this chat · its own is <b>{ownModelText(choices)}</b>
       </div>
@@ -41,7 +35,7 @@ export function ModelPartPicker({
           type="button"
           role="menuitemradio"
           aria-checked={checked(row.value)}
-          onClick={() => onChoose(row.value)}
+          onClick={() => onChoose(row.value, row.provider)}
         >
           <code>/model {row.value}</code>
           <small>{row.detail}</small>

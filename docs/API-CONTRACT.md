@@ -3131,7 +3131,7 @@ says what it ran on.
 | Endpoint | Needs | Body | Answer |
 | --- | --- | --- | --- |
 | `GET /api/rooms/:roomId/models` | | | `ChatModelsResponse` (`asOfSeq`, `items: ChatModel[]`): the agents set to another model here; an agent not listed uses its own |
-| `PUT /api/rooms/:roomId/models/:agentId` | paired browser, Idempotency-Key | `{ model: string \| null, provider?: string \| null }` (null: back to its own) | `ChatModelChange` `{ roomId, agentId, current, replaced }`: `current` null when back to its own; `replaced` is what it had in this chat before this change, read in the same write (Undo puts that back). `400` for an agent not in the chat (going back to its own is always allowed), a name that isn't a model name, or a model Hermes lists as unknown or unavailable. `409` for an alias with its own endpoint. `404` for no such chat or agent |
+| `PUT /api/rooms/:roomId/models/:agentId` | paired browser, Idempotency-Key | `{ model: string \| null, provider?: string \| null, label?: string }` (null: back to its own; `label` is Undo's, sent with the exact model and provider it replaced) | `ChatModelChange` `{ roomId, agentId, current, replaced }`: `current` null when back to its own; `replaced` is what it had in this chat before this change, read in the same write (Undo puts that back). `400` for an agent not in the chat (checked again in the write; going back to its own is always allowed), a name that isn't a model name, a model Hermes lists as unknown or unavailable, or a name several providers offer without the provider ("Several providers offer {model}: pick it from the list."). `409` for an alias with its own endpoint. `404` for no such chat or agent |
 | `GET /api/agents/:agentId/chat-models` | | | `AgentChatModels`: the `chats` where it runs another model (`roomKind` says whether it opens as a direct chat or a group) |
 | `POST /api/agents/:agentId/routines/pin` | paired browser, Idempotency-Key | `{}` | `RoutinesPinned` `{ pinned: string[] }`: the repeating jobs that followed the agent's model, now locked onto the model it has (Hermes `cron edit --pin`). Used before changing the agent's own model. `409` when Hermes refuses one (those listed before it were pinned) |
 
@@ -3140,9 +3140,15 @@ says what it ran on.
 - A Hermes agent: an alias of the agent is resolved to its model and provider; another name must be in Hermes's model list when
   Hermes can list models. A coding agent: one of its own program's models (`GET /api/coding-agents/runtimes/:runtime/models`),
   sent as its CLI's `--model` for that turn. No switching program in a chat.
-- Each turn records its model on the turn when it's dispatched (a turn that already names one, Try another, keeps it), so a
-  retry or restart sends it the same way. Hermes gets it as the run's `model`/`provider`, never as the agent's config. A
-  turn already running keeps its model; a change applies from the next one.
+- Each turn decides its model when it's dispatched and records the decision on the turn, the agent's own included (a turn that
+  already names one, Try another, keeps it): a retry or restart runs on what the turn it repeats ran on, never on a model chosen
+  since. Hermes gets it as the run's `model`/`provider`, never as the agent's config. A turn already running keeps its model; a
+  change applies from the next one.
+- In a one-to-one, the setting covers that agent's direct room (all its chats with you there), as `/effort` does.
+- An agent taken out of a chat loses its model and effort there at once (`model.changed`/`effort.changed` with `reason: member`);
+  added again, it starts from its own. A deleted chat's settings go with it.
+- A chat's effort is checked against the agent's program, not the chosen model; a model may run a level at the nearest it
+  supports.
 - `Message.model`: on an agent reply, the model its turn was asked to run on when it wasn't the agent's own (a chat's
   `/model`, Try another). Absent: its own.
 - Event `model.changed` `{ roomId, agentId, model, label, reason }`: `model` null is back to its own; `reason: member` when Score

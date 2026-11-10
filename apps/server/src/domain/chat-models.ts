@@ -131,9 +131,11 @@ export function modelForTurn(
   turn: { roomId: string; agentId: string; turnId: string },
 ): { drafts: DomainEventDraft[] } {
   const run = sqlite
-    .prepare('SELECT model FROM message_runs WHERE turn_id = ?')
-    .get(turn.turnId) as { model: string | null } | undefined
-  if (!run || run.model) return { drafts: [] }
+    .prepare('SELECT model, model_chosen FROM message_runs WHERE turn_id = ?')
+    .get(turn.turnId) as { model: string | null; model_chosen: number } | undefined
+  if (!run || run.model || run.model_chosen) return { drafts: [] }
+  // Decided now, whatever the outcome: a retry of this turn copies the decision.
+  sqlite.prepare('UPDATE message_runs SET model_chosen = 1 WHERE turn_id = ?').run(turn.turnId)
   const chosen = chatModelOf(sqlite, turn.roomId, turn.agentId)
   if (!chosen) return { drafts: [] }
   if (!isMember(sqlite, turn.roomId, turn.agentId)) {

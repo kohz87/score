@@ -164,7 +164,7 @@ export function retryReply(
     .prepare('SELECT alternative_of FROM messages WHERE id = ?')
     .get(messageId) as { alternative_of: string | null } | undefined
   const alternativeOf = first?.alternative_of ?? messageId
-  return reserveMessageRun(
+  const retried = reserveMessageRun(
     sqlite,
     {
       parentMessageId: parsed.parent_message_id,
@@ -189,6 +189,14 @@ export function retryReply(
     },
     now,
   )
+  // Decision 182: a retry runs on what the first attempt ran on, the agent's own included, not a model chosen since.
+  sqlite
+    .prepare(
+      `UPDATE message_runs SET model_chosen = (SELECT model_chosen FROM message_runs WHERE message_id = ?)
+       WHERE message_id = ?`,
+    )
+    .run(messageId, retried)
+  return retried
 }
 
 /** A turn whose reservation was cancelled (state no longer pending) before Hermes admitted its run. */

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { acquireLock } from './locks.ts'
 import { pair } from './pair.ts'
 import { composerOf, makeRoom, openAllInfoSections } from './bold-chat-helpers.ts'
 
@@ -10,13 +11,41 @@ test.use({ reducedMotion: 'reduce' })
 const web = { 'x-score-client': 'web' }
 const headers = () => ({ ...web, 'Idempotency-Key': crypto.randomUUID() })
 
+type Alias = { name: string; model: string; provider?: string | null; editable?: boolean }
+
+// builder's model and repeating jobs are shared state: the 'roster' lock keeps the specs that read the team from seeing
+// this one's change, and builder's aliases are put back to what they were.
+let release: (() => void) | undefined
+let originalAliases: Alias[] = []
+
 test.beforeEach(async ({ page }) => {
+  release = await acquireLock('roster')
   await pair(page)
+  const read = await page.request.get('/api/agents/builder/model-settings')
+  expect(read.ok()).toBe(true)
+  originalAliases = ((await read.json()) as { aliases: Alias[] }).aliases
   const saved = await page.request.put('/api/agents/builder/model-settings', {
     headers: headers(),
     data: { aliases: [{ name: 'e2edeep', model: 'local-gpt-mini' }] },
   })
   expect(saved.ok()).toBe(true)
+})
+
+test.afterEach(async ({ page }) => {
+  try {
+    const restored = await page.request.put('/api/agents/builder/model-settings', {
+      headers: headers(),
+      data: {
+        aliases: originalAliases
+          .filter((alias) => alias.editable !== false)
+          .map(({ name, model, provider }) => ({ name, model, ...(provider ? { provider } : {}) })),
+      },
+    })
+    expect(restored.ok()).toBe(true)
+  } finally {
+    release?.()
+    release = undefined
+  }
 })
 
 async function send(page: import('@playwright/test').Page, text: string) {
@@ -115,7 +144,13 @@ test('changing the agent’s model asks about its repeating jobs; Keep the jobs 
       .getByRole('region', { name: 'Work' })
       .getByRole('button', { name: 'Manage repeating jobs' })
       .click()
-    await expect(page.getByText(/pinned/).first()).toBeVisible()
+    await expect(page.getByText('Model warning job').first()).toBeVisible()
+    // Only this test's own job is expected to be pinned: it is checked through the API, by its id.
+    const made = (await routine.json()) as { id: string }
+    const jobs = (await (await page.request.get('/api/agents/builder/routines')).json()) as {
+      items: { id: string; model?: string | null }[]
+    }
+    expect(jobs.items.find((job) => job.id === made.id)?.model).toBeTruthy()
   } finally {
     // Leave the team as other specs expect it: no repeating job of ours, the agent's own model back.
     const made = (await routine.json()) as { id: string }
