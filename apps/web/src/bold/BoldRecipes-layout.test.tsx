@@ -14,7 +14,7 @@ const { json, mount, requests, showText, withStoredLayout } = setUpRecipeTests({
 
 test('the cards read top to bottom by rank, whatever positions were saved; parallel steps sit side by side', async () => {
   withStoredLayout()
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   await screen.findByRole('button', { name: /Agent step Draft the notes/ })
   const order = [...document.querySelectorAll<HTMLElement>('.rl-card[data-node]')].map(
     (card) => card.dataset.node,
@@ -37,7 +37,7 @@ test('saving keeps the stored positions as they were', async () => {
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const name = (await screen.findByRole('textbox', { name: 'Recipe name' })) as HTMLInputElement
   fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
@@ -59,7 +59,7 @@ test('saving keeps the stored positions as they were', async () => {
 
 test('Delete on a selected card asks first; a no keeps the step, a yes removes it and its saved position', async () => {
   withStoredLayout()
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
   fireEvent.keyDown(card, { key: 'Delete' })
@@ -79,7 +79,7 @@ test('Delete on a selected card asks first; a no keeps the step, a yes removes i
 })
 
 test('the step settings sit to the right of the recipe in both Graph and As text, never below the list', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Gate Approve the draft/ })
   fireEvent.click(card)
   const beside = () => {
@@ -101,7 +101,7 @@ test('the step settings sit to the right of the recipe in both Graph and As text
 })
 
 test('a card is a button: Enter or a click selects it, and the settings open beside it', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Gate Approve the draft/ })
   expect(card.getAttribute('aria-pressed')).toBe('false')
   fireEvent.click(card)
@@ -124,7 +124,7 @@ test('on a phone the step settings are a sheet that closes with its button', asy
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   // Nothing selected: no panel, the graph has the page.
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
@@ -146,7 +146,7 @@ test('on a tablet (600 to 860px) the step settings are a bottom sheet too, in bo
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const card = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
   fireEvent.click(card)
@@ -171,7 +171,7 @@ test('on a phone the step settings are a bottom sheet in As text too, opening wh
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const steps = await showText()
   expect(screen.queryByRole('complementary', { name: 'Selected step' })).toBeNull()
   fireEvent.click(within(steps).getByRole('button', { name: /^2.*Review the draft/ }))

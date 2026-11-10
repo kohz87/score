@@ -75,13 +75,6 @@
 .bold-settings-page .bold-settings-all {
   display: none;
 }
-/* 3.29.0: the recipe editor is a page of its own at every width (mock-up 23-recipes-edit): no Settings list beside it. */
-.bold-settings-page .setgrid[data-section-page='editor'] .setnav {
-  display: none;
-}
-.bold-settings-page.page--wide {
-  max-width: none;
-}
 @media (max-width: 860px) {
   .bold-settings-page .setgrid[data-section-page] .setnav {
     display: none;

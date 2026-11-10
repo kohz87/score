@@ -147,10 +147,10 @@ function RecipeCard({
 }
 
 /**
- * 3.29.0 (decision 165, mock-up 23-recipes-library): Settings › Recipes is a library of cards, not a list with an editor
+ * 3.29.0 (decision 165, mock-up 23-recipes-library): Recipes (Tasks › Recipes since decision 183) is a library of cards, not a list with an editor
  * beside it. Landing here never opens an editor; "New recipe" and "Edit" do.
  */
-export function RecipeLibrary({ onBack }: { onBack: () => void }) {
+export function RecipeLibrary() {
   const navigate = useNavigate()
   const location = useLocation()
   // The notice is read once and the history entry's state cleared, so a reload doesn't say it again (3.29.0 review).
@@ -182,9 +182,6 @@ export function RecipeLibrary({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="bold-rp bold-rl" data-ui-page="recipes">
-      <button type="button" className="bold-settings-all" onClick={onBack}>
-        ‹ Settings
-      </button>
       <div className="bold-rl-head">
         <h2 className="bold-rp-h1">Recipes</h2>
         <label htmlFor={searchId} className="wf-visually-hidden">

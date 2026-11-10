@@ -296,7 +296,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-tasks-cards.css` — Task cards, badges, agent attribution, progress and empty states.
 - `apps/web/src/bold/bold-tasks-details.css` — Task details panel, needs/approval, steps, comments, phone tabs and sheets.
 - `apps/web/src/bold/bold-tasks-edit.css` — New task, edit, move, archive and confirm dialog surfaces.
-- `apps/web/src/bold/BoldRecipes.tsx` — recipes library route and page entry.
+- `apps/web/src/bold/BoldRecipes.tsx` — Tasks › Recipes route (decision 183): the Tasks header and tabs, the recipes list, the library or the editor, and for a saved recipe its Repeats cards.
 - `apps/web/src/bold/BoldRecipes-helpers.tsx` — shared fetch setup, mount and fixtures helpers for the Recipes test suites.
 - `apps/web/src/bold/BoldRecipeRoute.tsx` — one recipe's loading states, new/built-in choices and editor hand-off.
 - `apps/web/src/bold/BoldRecipeEditor.tsx` — recipe editor composition and export dialog.
@@ -1467,3 +1467,8 @@ likely to be the entry point for a change.
 - `e2e/locks.ts` — cross-worker test locks.
 - `e2e/global-teardown.ts` — shared fake-server teardown.
 - `e2e/now-fixture.ts` — deterministic clock fixture.
+- `apps/web/src/bold/tasks-tabs/` — the Tasks views nav (Board · Repeating · Recipes) every Tasks page renders, and its styles.
+- `apps/web/src/bold/repeating/` — a recipe's schedule (decision 183): the Repeats card and its editor, the side cards (Before each run, Last runs), the recipes list on the left, the schedule queries, the chats a run can start in, and `schedule-words.ts` (a schedule in words, the presets, the next time).
+- `apps/web/src/bold/recipe-step/` — a step's own model and effort (decision 183): the row pills, the two selects in the step settings, and the pure `setStepPin`.
+- `apps/web/src/bold/BoldRecipes-step-model.test.tsx` — a step's model and effort: pills, choices, saved into the definition, cleared.
+- `apps/web/src/bold/BoldRecipes-repeats.test.tsx` — the Repeats card (none, set, paused, missed, failed, stop asks first) and the recipes list.

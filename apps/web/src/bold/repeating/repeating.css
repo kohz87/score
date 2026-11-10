@@ -1,0 +1,166 @@
+/* Decision 183, mock-up 28-tasks-recipe: the cards beside a saved recipe, and the recipes list on the left. */
+[data-ui='bold'] .bold-rs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+[data-ui='bold'] .bold-rs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: var(--panel);
+  font-size: 0.93em;
+  min-width: 0;
+}
+[data-ui='bold'] .bold-rs h2 {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 1.33em;
+}
+[data-ui='bold'] .bold-rs p {
+  margin: 0;
+}
+[data-ui='bold'] .bold-rs-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+[data-ui='bold'] .bold-rs-head h2 {
+  flex: 1;
+}
+[data-ui='bold'] .bold-rs-state {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  font-size: 0.8em;
+  font-weight: 700;
+}
+[data-ui='bold'] .bold-rs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+[data-ui='bold'] .bold-rs-actions .btn {
+  min-height: 36px;
+}
+[data-ui='bold'] .bold-rs-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--field);
+}
+[data-ui='bold'] .bold-rs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+[data-ui='bold'] .bold-rs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+[data-ui='bold'] .bold-rs-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-rs-actions .btn,
+  [data-ui='bold'] .bold-rs-note .btn {
+    min-height: 44px;
+  }
+}
+
+/* The recipes list: a column on wide screens only; the library's cards serve a narrower page. */
+[data-ui='bold'] .bold-rn {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+[data-ui='bold'] .bold-rn ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-ui='bold'] .bold-rn-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+}
+[data-ui='bold'] .bold-rn-item span {
+  font-size: 0.87em;
+  color: var(--ink2);
+}
+[data-ui='bold'] .bold-rn-item[aria-current='page'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+[data-ui='bold'] .bold-rn-item[aria-current='page'] span {
+  color: inherit;
+}
+[data-ui='bold'] .bold-rn-new {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font: inherit;
+  font-weight: 700;
+}
+
+/* The page: title and views, then the list, the recipe and its cards. */
+[data-ui='bold'] .bold-rt-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+[data-ui='bold'] .bold-rt-head h1 {
+  margin: 0;
+  flex: 1;
+}
+[data-ui='bold'] .bold-rt-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (min-width: 1280px) {
+  [data-ui='bold'] .bold-rt-cols--recipe {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  [data-ui='bold'] .bold-rt-cols--recipe .bold-rn {
+    display: flex;
+  }
+}
+@media (min-width: 1280px) {
+  [data-ui='bold'] .bold-rt-cols--saved .bold-rs-col {
+    grid-column: 2;
+  }
+}
+@media (min-width: 1700px) {
+  [data-ui='bold'] .bold-rt-cols--saved .bold-rs-col {
+    grid-column: auto;
+  }
+  [data-ui='bold'] .bold-rt-cols--saved {
+    grid-template-columns: 260px minmax(0, 1fr) 400px;
+  }
+}

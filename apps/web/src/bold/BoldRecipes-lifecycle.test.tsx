@@ -32,7 +32,7 @@ test('a recipe with runs can be archived, and an archived one is hidden until Ar
     return undefined
   }
   try {
-    mount('/b/settings/recipes/wf-release')
+    mount('/b/tasks/recipes/wf-release')
     fireEvent.click(await screen.findByRole('button', { name: 'More' }))
     // Delete recipe is for a recipe nothing has run; this one has runs.
     expect(screen.queryByRole('button', { name: 'Delete recipe' })).toBeNull()
@@ -59,7 +59,7 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     return json({ deletedRuns: 2 })
   }
   try {
-    const router = mount('/b/settings/recipes/wf-release')
+    const router = mount('/b/tasks/recipes/wf-release')
     fireEvent.click(await screen.findByRole('button', { name: 'More' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete with runs…' }))
     const dialog = await screen.findByRole('alertdialog', { name: 'Delete recipe with its runs' })
@@ -75,7 +75,7 @@ test('Delete with runs asks for the recipe name and says it can not be undone', 
     expect(confirm.disabled).toBe(false)
     fireEvent.click(confirm)
     await waitFor(() => expect(body).toEqual({ confirm: releaseDetail.name }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes'))
     // The library says what happened.
     expect((await screen.findByText('Deleted the recipe.')).getAttribute('role')).toBe('status')
     // The history entry no longer carries it, so a reload or a later visit doesn't repeat it (3.29.0 review).
@@ -94,7 +94,7 @@ test('the delete-with-runs dialog takes focus, Escape cancels, and focus returns
     items: [{ ...releaseDetail, used: true, archivedAt: null }],
   }
   try {
-    mount('/b/settings/recipes/wf-release')
+    mount('/b/tasks/recipes/wf-release')
     const more = await screen.findByRole('button', { name: 'More' })
     fireEvent.click(more)
     fireEvent.click(screen.getByRole('button', { name: 'Delete with runs…' }))

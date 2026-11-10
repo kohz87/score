@@ -7,7 +7,7 @@ import { setUpRecipeTests } from './BoldRecipes-helpers.tsx'
 const { json, mount, requests } = setUpRecipeTests()
 
 test('Recipes is a library of cards: the built-in one first, no editor open, each card with what it does and its links', async () => {
-  const router = mount('/b/settings/recipes')
+  const router = mount('/b/tasks/recipes')
   expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeTruthy()
   // Landing never opens an editor, and never makes an "Untitled recipe".
   expect(screen.queryByRole('region', { name: 'Recipe editor' })).toBeNull()
@@ -28,7 +28,7 @@ test('Recipes is a library of cards: the built-in one first, no editor open, eac
   expect(last.getAttribute('href')).toBe('/b?run=brief-wfrun-1')
   expect(card.textContent).toContain('Last run ·')
   expect(within(card).getByRole('link', { name: /^Edit/ }).getAttribute('href')).toBe(
-    '/b/settings/recipes/wf-release',
+    '/b/tasks/recipes/wf-release',
   )
   // Run in a chat… is Start a job with this recipe chosen.
   fireEvent.click(within(card).getByRole('button', { name: /^Run in a chat…/ }))
@@ -53,7 +53,7 @@ test('a library card fetches its recipe only once it scrolls into view', async (
     }
   }
   vi.stubGlobal('IntersectionObserver', FakeObserver)
-  mount('/b/settings/recipes')
+  mount('/b/tasks/recipes')
   const card = await screen.findByRole('listitem', { name: 'Release notes' })
   const detailCalls = () => requests.filter((item) => item.url === '/api/workflows/wf-release')
   // Give the list a moment: nothing was fetched for a card nobody has seen.
@@ -66,7 +66,7 @@ test('a library card fetches its recipe only once it scrolls into view', async (
 })
 
 test('the library is searchable, New recipe opens an editor, and lead decides is a page with a way to start a job', async () => {
-  const router = mount('/b/settings/recipes')
+  const router = mount('/b/tasks/recipes')
   await screen.findByRole('listitem', { name: 'Release notes' })
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a recipe' }), {
     target: { value: 'zzz' },
@@ -79,14 +79,14 @@ test('the library is searchable, New recipe opens an editor, and lead decides is
   expect(screen.getByRole('listitem', { name: 'Release notes' })).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'New recipe' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes/new'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes/new'))
   expect(await screen.findByDisplayValue('Untitled recipe')).toBeTruthy()
   expect(screen.getByRole('link', { name: '‹ Recipes' }).getAttribute('href')).toBe(
-    '/b/settings/recipes',
+    '/b/tasks/recipes',
   )
 
   cleanup()
-  mount('/b/settings/recipes/lead-decides')
+  mount('/b/tasks/recipes/lead-decides')
   expect(await screen.findByRole('heading', { name: 'lead decides' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'Start a job' }).getAttribute('href')).toBe(
     '/b?start=job',
@@ -113,7 +113,7 @@ test('archived recipes sit behind "Archived recipes · N" and can be unarchived'
     }
     return original(input, init)
   })
-  mount('/b/settings/recipes')
+  mount('/b/tasks/recipes')
   await screen.findByRole('listitem', { name: 'Release notes' })
   expect(screen.queryByRole('listitem', { name: 'Release checks (draft)' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Archived recipes · 1' }))
@@ -126,7 +126,7 @@ test('archived recipes sit behind "Archived recipes · N" and can be unarchived'
 })
 
 test('a run that belongs to no chat opens a read-only sheet over the library, not a run page', async () => {
-  const router = mount('/b/settings/recipes?run=brief-wfrun-1')
+  const router = mount('/b/tasks/recipes?run=brief-wfrun-1')
   const sheet = await screen.findByRole('dialog', { name: /Run: Release notes: the 2.4 release/ })
   expect(within(sheet).getByText(/This run belongs to no chat/)).toBeTruthy()
   expect(within(sheet).queryByText(/Read-only/)).toBeNull()
@@ -147,7 +147,7 @@ test('a run that belongs to no chat opens a read-only sheet over the library, no
 })
 
 test('the sheet is a native modal dialog and Escape closes it', async () => {
-  const router = mount('/b/settings/recipes?run=brief-wfrun-1')
+  const router = mount('/b/tasks/recipes?run=brief-wfrun-1')
   const sheet = (await screen.findByRole('dialog', { name: /Run: / })) as HTMLDialogElement
   expect(sheet.tagName).toBe('DIALOG')
   // jsdom has no showModal; the browser's own dialog supplies the focus trap, the inert page and Escape.
@@ -171,7 +171,7 @@ test('a recipe run that has agents changed says so above the graph, protected, w
     },
   }
   try {
-    mount('/b/settings/recipes?run=brief-wfrun-1')
+    mount('/b/tasks/recipes?run=brief-wfrun-1')
     const sheet = await screen.findByRole('dialog', { name: /Run: / })
     const warning = await within(sheet).findByRole('list', { name: 'Agents that changed' })
     expect(warning.getAttribute('data-protected')).toBe('block')
@@ -184,10 +184,10 @@ test('a recipe run that has agents changed says so above the graph, protected, w
 })
 
 test('a run that is not there says so, and an empty ?run= is just the library', async () => {
-  mount('/b/settings/recipes?run=brief-gone')
+  mount('/b/tasks/recipes?run=brief-gone')
   expect(await screen.findByText('That run isn’t available.')).toBeTruthy()
   cleanup()
-  mount('/b/settings/recipes?run=')
+  mount('/b/tasks/recipes?run=')
   await screen.findByRole('listitem', { name: 'Release notes' })
   expect(screen.queryByRole('dialog')).toBeNull()
 })
