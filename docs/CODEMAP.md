@@ -1388,6 +1388,7 @@ likely to be the entry point for a change.
 ### Folders
 
 - `e2e/` — Playwright specs and shared fixtures run against the fake adapter.
+- `e2e/agent-page-fixtures.ts` — the agent page's section answers (memory, skills, plugins, channels, runs) for its screenshots.
 - `e2e/readme/` — README screenshot configuration and spec.
 
 ### Key files

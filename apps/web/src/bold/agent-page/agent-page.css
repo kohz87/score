@@ -6,6 +6,11 @@
   gap: calc(12px * var(--bold-d, 1));
 }
 
+/* The row centres its items, so the link's text is centred in its 32px touch box too, level with the "/". */
+[data-ui='bold'] .bold-agent-head > .bold-agent-back {
+  align-items: center;
+}
+
 [data-ui='bold'] .bold-agent-who {
   flex: 1 1 260px;
   min-width: 0;

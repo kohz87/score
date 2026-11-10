@@ -13,6 +13,8 @@ test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
 async function openWorkspace(page: Page, agent: string) {
   // The Workspace card is gone (decision 180); a workspace link (`#agent-workspace`) opens the Files panel.
+  // A hash-only change keeps the open panel (and its selected file); load the page fresh each time.
+  await page.goto('about:blank')
   await page.goto(`/b/agents/${agent}#agent-workspace`)
   const panel = page.locator('#agent-files')
   await expect(panel.getByRole('tree', { name: 'Files' })).toBeVisible()

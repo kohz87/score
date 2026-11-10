@@ -62,7 +62,8 @@ export function CodingSections({
         <EffortChatsCard agentId={agent.id} />
         <SubagentsCard agent={agent} />
       </div>
-      <section className="bold-agent-section" id="agent-safety" aria-label="Safety">
+      <section className="bold-agent-section" id="agent-safety" aria-labelledby="coding-safety">
+        <h2 id="coding-safety">Safety</h2>
         <div className="bold-agent-tiles">
           <section className="team-card" aria-labelledby="coding-limits" data-protected="block">
             <h2 id="coding-limits">Limits left</h2>

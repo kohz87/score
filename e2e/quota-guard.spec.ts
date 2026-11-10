@@ -172,7 +172,8 @@ async function codingAgentPage(page: Page) {
   const field = card.getByLabel(/Stop using this agent in runs when a limit is below/)
   await expect(field).toHaveValue('10')
   await field.fill('25')
-  await card.getByRole('button', { name: 'Save' }).click()
+  // The page has other Save buttons (Personality); this one belongs to the access form.
+  await field.locator('xpath=ancestor::form[1]').getByRole('button', { name: 'Save' }).click()
   await expect(meters.locator('.quota-floor').first()).toHaveAttribute('style', /left: 25%/)
   await page.reload()
   await card.getByRole('button', { name: 'Change access' }).click()
