@@ -38,7 +38,7 @@ export function RoutinesModelWarning({
       </h3>
       <p>
         {following.map((job) => `${job.title} (${job.schedule})`).join(' and ')} will run on {next}{' '}
-        from their next run.
+        from {count === 1 ? 'its' : 'their'} next run.
       </p>
       {pinned.length > 0 && (
         <ul>

@@ -66,7 +66,14 @@ export async function runModelCommand({
     label: 'Undo',
     run: () => {
       const back = change.replaced
-      void putRoomModel(roomId, agent.id, back?.model ?? null, back?.provider)
+      // An alias goes back as the alias (the server resolves it again and keeps it as the tag's label).
+      const aliased = back !== null && back.label !== back.model
+      void putRoomModel(
+        roomId,
+        agent.id,
+        back ? (aliased ? back.label : back.model) : null,
+        aliased ? undefined : back?.provider,
+      )
         .then(() => {
           void queryClient.invalidateQueries({ queryKey: agentChatModelsKey(agent.id) })
           say(

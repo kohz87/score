@@ -95,8 +95,9 @@
   gap: 10px;
   padding: 16px;
   border-radius: calc(20px * var(--bold-r, 1));
-  background: var(--panel-2, var(--panel));
-  box-shadow: inset 0 0 0 1px var(--effort-max-line);
+  /* The person decides here: the light object "for you" (mock-up 27-model-jobs), as needs-you requests are. */
+  background: var(--hi-bg);
+  color: var(--hi-ink);
 }
 
 [data-ui='bold'] .bold-model-jobs-warning h3 {
@@ -116,7 +117,6 @@
 
 [data-ui='bold'] .bold-model-jobs-warning li small {
   display: block;
-  color: var(--ink2);
 }
 
 [data-ui='bold'] .bold-model-jobs-actions {
@@ -131,8 +131,8 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
-  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--hi-sub);
+  color: var(--hi-ink);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -140,13 +140,14 @@
 }
 
 [data-ui='bold'] .bold-model-jobs-actions button.bold-model-jobs-keep {
-  background: var(--ink);
+  background: var(--hi-ink);
   box-shadow: none;
-  color: var(--ground, var(--panel));
+  color: var(--hi-bg);
 }
 
-[data-ui='bold'] .bold-model-jobs-tip {
+[data-ui='bold'] .bold-model-jobs-tip,
+[data-ui='bold'] .bold-model-jobs-warning li small {
   margin: 0;
-  color: var(--ink2);
+  color: var(--hi-sub);
   font-size: 13px;
 }
