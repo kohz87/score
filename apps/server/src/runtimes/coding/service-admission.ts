@@ -33,6 +33,7 @@ export class CodingRuntimeAdmission extends CodingRuntimeExecution {
     model?: string
     owner?: 'orchestration' | OrchestrationOwner
     jobId?: string
+    effort?: string
   }): Promise<{ runId: string }> {
     // Admission is serialised per turn (S4-C01): a second call for the same turn waits for the first and then finds its
     // accepted intent, so both return the one persisted run id and only one execution is scheduled.
@@ -57,6 +58,7 @@ export class CodingRuntimeAdmission extends CodingRuntimeExecution {
     model?: string
     owner?: 'orchestration' | OrchestrationOwner
     jobId?: string
+    effort?: string
   }): Promise<{ runId: string }> {
     const { db, ingest } = this.deps
     const owner = typeof req.owner === 'object' ? req.owner : undefined
@@ -216,6 +218,7 @@ export class CodingRuntimeAdmission extends CodingRuntimeExecution {
       turnId: req.turnId,
       ...(owner ? { owner } : {}),
       ...(req.jobId ? { jobId: req.jobId } : {}),
+      ...(req.effort ? { effort: req.effort } : {}),
       ended: new Promise<boolean>((resolve) => {
         settleEnded = () => resolve(!entry.unproven)
       }),

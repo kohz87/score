@@ -770,6 +770,7 @@ likely to be the entry point for a change.
 - `apps/server/test/workspace/workspace-fixtures.ts` — shared temp home, root policy, event log, workspace opener and error-code helpers for the workspace tests.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
+- `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -949,6 +950,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/live/subagent-policy.ts` — the per-session limits file the plugin's guard reads; whether a session is inline.
 - `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
+- `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1190,6 +1192,7 @@ likely to be the entry point for a change.
 
 ### Key files
 
+- `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
 - `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.

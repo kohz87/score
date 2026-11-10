@@ -84,6 +84,8 @@ export interface ActiveRun {
   owner?: OrchestrationOwner
   /** The job its subagents count against, when the run has none of its own (an orchestration's). */
   jobId?: string
+  /** Decision 178: this chat's effort for the agent, over its own. */
+  effort?: string
   /** Set once the process (or unit) exists. */
   process?: { stop(reason?: StopReason): void }
   /** Stop asked while the turn was still waiting for the agent's previous turn. */

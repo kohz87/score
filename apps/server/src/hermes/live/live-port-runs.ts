@@ -120,6 +120,7 @@ export const runMethods = {
     req: {
       agentId: string
       jobId?: string
+      effort?: string
       input: string
       turnId: string
       sessionId?: string
@@ -151,6 +152,7 @@ export const runMethods = {
           input: req.input,
           ...(req.model ? { model: req.model } : {}),
           ...(req.provider ? { provider: req.provider } : {}),
+          ...(req.effort ? { effort: req.effort } : {}),
           ...(req.sessionId ? { sessionId: req.sessionId } : {}),
           ...(req.images?.length ? { images: req.images } : {}),
         },

@@ -38,6 +38,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.edits ? { edits: row.edits } : {}),
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
+    ...(row.effort ? { effort: row.effort } : {}),
     ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
     ...(speedOf(row.speed) ? { speed: speedOf(row.speed) } : {}),
   })

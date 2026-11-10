@@ -146,7 +146,7 @@ export class GatewayClient {
     generation?: number,
     wireInput?: unknown,
   ) {
-    const { profile, input, sessionId, model, provider, instructions } =
+    const { profile, input, sessionId, model, provider, instructions, effort } =
       StartRunSchema.parse(request)
     const result = await this.json(
       profile,
@@ -158,6 +158,7 @@ export class GatewayClient {
         ...(sessionId === undefined ? {} : { session_id: sessionId }),
         ...(model === undefined ? {} : { model }),
         ...(provider === undefined ? {} : { provider }),
+        ...(effort === undefined ? {} : { model_options: { reasoning_effort: effort } }),
       },
       idempotencyKey,
       generation,

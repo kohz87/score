@@ -251,6 +251,7 @@ export async function startRunIntent(
       payload.input !== parsed.input ||
       payload.model !== parsed.model ||
       payload.provider !== parsed.provider ||
+      payload.effort !== parsed.effort ||
       payload.sessionId !== parsed.sessionId ||
       JSON.stringify(payload.images ?? []) !== JSON.stringify(parsed.images ?? [])
     )

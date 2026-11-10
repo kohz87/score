@@ -1,3 +1,4 @@
+import { effortForTurn } from './chat-efforts.ts'
 import { startRoomThreadCount } from './subagents.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -240,7 +241,23 @@ export class RoutingDispatcher {
             agentId: job.agent_id,
           }),
         )
+        // Decision 178: this chat's effort for the agent, recorded on the turn for its reply's label.
+        let effort: string | null = null
+        await this.ingest.submit({
+          source: 'routing',
+          identity: `effort:${job.turn_id}`,
+          apply: ({ sqlite }) => {
+            const chosen = effortForTurn(sqlite, {
+              roomId: job.room_id,
+              agentId: job.agent_id,
+              turnId: job.turn_id,
+            })
+            effort = chosen.effort
+            return chosen.drafts
+          },
+        })
         await this.port.startRun({
+          ...(effort ? { effort } : {}),
           agentId: job.agent_id,
           input: frozen.admission_input!,
           turnId: job.turn_id,
