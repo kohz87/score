@@ -1,8 +1,12 @@
-import type { RecipeSchedule } from '@score/contract'
+import { ORCH_ACKNOWLEDGEMENT_TEXT, type RecipeSchedule } from '@score/contract'
 import { useState } from 'react'
 import { ApiError } from '../../data/api.ts'
 import { RepeatsEditor } from './RepeatsEditor.tsx'
-import { useRecipeSchedule, useRecipeScheduleActions } from './recipe-schedule-queries.ts'
+import {
+  useRecipeSchedule,
+  useRecipeScheduleActions,
+  useScheduleBinding,
+} from './recipe-schedule-queries.ts'
 import { describeSchedule, whenText } from './schedule-words.ts'
 
 const said = (error: unknown) =>
@@ -46,6 +50,7 @@ function LastRun({
 export function RepeatsCard({ workflowId }: { workflowId: string }) {
   const { schedule, isPending, isError, refetch } = useRecipeSchedule(workflowId)
   const { save, runNow, stop } = useRecipeScheduleActions(workflowId)
+  const binding = useScheduleBinding(workflowId)
   const [editing, setEditing] = useState(false)
   const [stopping, setStopping] = useState(false)
   const failure = save.error ?? runNow.error ?? stop.error
@@ -124,14 +129,20 @@ export function RepeatsCard({ workflowId }: { workflowId: string }) {
               <button
                 type="button"
                 className="btn sm"
-                disabled={save.isPending}
+                disabled={save.isPending || (schedule.enabled && !binding.agentMap)}
                 onClick={() =>
-                  save.mutate({
-                    schedule: schedule.schedule,
-                    timezone: schedule.timezone,
-                    roomId: schedule.roomId,
-                    enabled: !schedule.enabled,
-                  })
+                  // Pausing keeps what the schedule is bound to; resuming goes through the editor, so the agents and
+                  // the acknowledgement are seen again before it runs (decision 183).
+                  schedule.enabled && binding.agentMap
+                    ? save.mutate({
+                        schedule: schedule.schedule,
+                        timezone: schedule.timezone,
+                        roomId: schedule.roomId,
+                        enabled: false,
+                        agentMap: binding.agentMap,
+                        acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+                      })
+                    : setEditing(true)
                 }
               >
                 {schedule.enabled ? 'Pause' : 'Resume'}

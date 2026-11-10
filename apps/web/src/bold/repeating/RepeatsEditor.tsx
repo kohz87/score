@@ -1,8 +1,8 @@
-import { ScheduleTextSchema, type RecipeSchedule } from '@score/contract'
+import { ORCH_ACKNOWLEDGEMENT_TEXT, ScheduleTextSchema, type RecipeSchedule } from '@score/contract'
 import { useId, useState } from 'react'
 import { ApiError } from '../../data/api.ts'
 import { useRecipeChats } from './use-recipe-chats.ts'
-import { useRecipeScheduleActions } from './recipe-schedule-queries.ts'
+import { useRecipeScheduleActions, useScheduleBinding } from './recipe-schedule-queries.ts'
 import {
   browserTimeZone,
   draftFromSchedule,
@@ -28,6 +28,9 @@ export function RepeatsEditor({
   const ids = useId()
   const chats = useRecipeChats()
   const { save } = useRecipeScheduleActions(workflowId)
+  // Each run is bound to the agents shown now and to the acknowledgement, as when starting a run (decision 183).
+  const binding = useScheduleBinding(workflowId)
+  const [ack, setAck] = useState(false)
   const [draft, setDraft] = useState(() => draftFromSchedule(schedule?.schedule ?? null))
   const [roomId, setRoomId] = useState(schedule?.roomId ?? '')
   const text = scheduleFromDraft(draft)
@@ -48,12 +51,16 @@ export function RepeatsEditor({
       onSubmit={(event) => {
         event.preventDefault()
         if (!valid || !roomId) return
+        if (!binding.agentMap || !ack) return
         save.mutate(
           {
             schedule: text,
             timezone: browserTimeZone(),
             roomId,
-            enabled: schedule?.enabled ?? true,
+            // Resuming from the editor turns it on again: the person saw the agents and the acknowledgement here.
+            enabled: true,
+            agentMap: binding.agentMap,
+            acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
           },
           { onSuccess: onDone },
         )
@@ -151,6 +158,15 @@ export function RepeatsEditor({
           ))}
         </select>
       </label>
+      <label className="orch-check orch-ack" data-protected="any">
+        <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
+        <span>{ORCH_ACKNOWLEDGEMENT_TEXT}</span>
+      </label>
+      {!binding.checking && !binding.agentMap && (
+        <p role="alert" className="bold-error">
+          Couldn’t check this recipe’s agents. Try again in a moment.
+        </p>
+      )}
       {problem && (
         <p role="alert" className="bold-error">
           {problem}
@@ -160,7 +176,7 @@ export function RepeatsEditor({
         <button
           type="submit"
           className="btn sm primary"
-          disabled={!valid || !roomId || save.isPending}
+          disabled={!valid || !roomId || !ack || !binding.agentMap || save.isPending}
         >
           {save.isPending ? 'Saving…' : 'Save schedule'}
         </button>

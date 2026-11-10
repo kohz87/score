@@ -1,6 +1,8 @@
 // Decision 183: a saved recipe's Repeats card (none, set, paused, missed, failed, stop asks first, editing) and the
 // recipes list beside it.
 import type { RecipeSchedule } from '@score/contract'
+import { ORCH_ACKNOWLEDGEMENT_TEXT } from '@score/contract'
+import { workflowPreflight } from './BoldStartJob-helpers.tsx'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import { setUpRecipeTests } from './BoldRecipes-helpers.tsx'
@@ -37,6 +39,8 @@ function serve(initial: RecipeSchedule | null) {
     const method = init?.method ?? 'GET'
     if (url === '/api/rooms') return json({ asOfSeq: 1, rooms: [room], directs: [], projects: [] })
     if (url === '/api/recipe-schedules') return json({ items: current ? [current] : [] })
+    // What a schedule is bound to: the agents the recipe would run with now (decision 183).
+    if (url.startsWith('/api/workflow-runs/preflight')) return json(workflowPreflight)
     if (url === '/api/workflows/wf-release/schedule' && method === 'PUT') {
       const body = JSON.parse(String(init?.body)) as Partial<RecipeSchedule>
       calls.push({ method, url, body })
@@ -81,6 +85,10 @@ test('Repeat it… sets a schedule: the preset, a time, the browser’s time zon
   fireEvent.change(within(repeats).getByLabelText('Each run starts a job in'), {
     target: { value: 'room-release' },
   })
+  // The acknowledgement is needed too, as when starting a run.
+  expect(save.disabled).toBe(true)
+  fireEvent.click(within(repeats).getByRole('checkbox', { name: ORCH_ACKNOWLEDGEMENT_TEXT }))
+  await waitFor(() => expect(save.disabled).toBe(false))
   fireEvent.click(save)
   await waitFor(() => expect(calls).toHaveLength(1))
   expect(calls[0]!.body).toEqual({
@@ -88,6 +96,8 @@ test('Repeat it… sets a schedule: the preset, a time, the browser’s time zon
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     roomId: 'room-release',
     enabled: true,
+    agentMap: [{ agentId: 'builder', incarnation: 'inc-1' }],
+    acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
   })
   expect(await within(repeats).findByText('Weekdays at 09:30')).toBeDefined()
 })
@@ -104,11 +114,14 @@ test('a schedule reads in words with its next run, the chat, and Score having to
   expect(within(repeats).getByRole('button', { name: 'Change' })).toBeDefined()
 })
 
-test('Pause keeps the schedule and turns it off; Resume turns it back on', async () => {
+test('Pause keeps the schedule and turns it off; Resume shows the agents and acknowledgement again, then turns it on', async () => {
   const calls = serve(base)
   mount()
   const repeats = await card()
-  fireEvent.click(await within(repeats).findByRole('button', { name: 'Pause' }))
+  const pause = await within(repeats).findByRole('button', { name: 'Pause' })
+  // Pausing keeps what the schedule is bound to, so it waits for the recipe's agents.
+  await waitFor(() => expect((pause as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(pause)
   await waitFor(() => expect(within(repeats).getByText('Paused')).toBeDefined())
   expect(calls[0]!.body).toMatchObject({
     schedule: '0 16 * * 5',
@@ -117,6 +130,10 @@ test('Pause keeps the schedule and turns it off; Resume turns it back on', async
   })
   expect(within(repeats).getByText(/paused/)).toBeDefined()
   fireEvent.click(within(repeats).getByRole('button', { name: 'Resume' }))
+  fireEvent.click(await within(repeats).findByRole('checkbox', { name: ORCH_ACKNOWLEDGEMENT_TEXT }))
+  const save = within(repeats).getByRole('button', { name: 'Save schedule' }) as HTMLButtonElement
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
   await waitFor(() => expect(within(repeats).getByText('On')).toBeDefined())
   expect(calls[1]!.body).toMatchObject({ enabled: true })
 })

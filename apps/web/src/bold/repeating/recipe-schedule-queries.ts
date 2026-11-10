@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
+import { useWorkflow, useWorkflowPreflight } from '../../routes/workflows/workflow-queries.ts'
 
 export const recipeSchedulesKey = ['bold', 'recipe-schedules'] as const
 
@@ -62,4 +63,21 @@ export function useRecipeScheduleActions(workflowId: string) {
     onSuccess: refresh,
   })
   return { save, runNow, stop }
+}
+
+/**
+ * What a schedule is bound to (decision 183): the agents the recipe's latest version would run with now, as the start
+ * screen shows them. Null while it loads or when the recipe can't be checked.
+ */
+export function useScheduleBinding(workflowId: string): {
+  agentMap: RecipeScheduleRequest['agentMap'] | null
+  checking: boolean
+} {
+  const recipe = useWorkflow(workflowId)
+  const preflight = useWorkflowPreflight(workflowId, recipe.data?.latestVersion)
+  return {
+    agentMap:
+      preflight.data?.mapping.map(({ agentId, incarnation }) => ({ agentId, incarnation })) ?? null,
+    checking: recipe.isPending || preflight.isPending,
+  }
 }
