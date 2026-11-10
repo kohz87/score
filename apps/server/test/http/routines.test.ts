@@ -122,7 +122,8 @@ test.each(['fake', 'live'] as const)(
       { title: 'Build check', schedule: 'every 2h', prompt: 'Check the build.' },
       'create-1',
     )
-    expect(replay.json()).toEqual(routine)
+    // The replay answers exactly as the first create did (decision 183 adds the list's fields to both).
+    expect(replay.json()).toEqual(created.json())
     const listed = (await app.inject('/api/agents/builder/routines')).json().items
     expect(listed).toHaveLength(before.length + 1)
     expect(listed.map((item: { id: string }) => item.id)).toContain(routine.id)

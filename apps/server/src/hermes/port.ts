@@ -1,5 +1,7 @@
 import {
   ApprovalChoiceSchema,
+  CreateRepeatingJobSchema,
+  PatchRepeatingJobSchema,
   ApprovalSchema,
   type AgentSummary,
   type BotInputEvent,
@@ -134,23 +136,9 @@ export const PatchTaskSchema = z
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0)
-const RoutineTextSchema = (max: number) =>
-  InputTextSchema.refine((value) => value.trim().length > 0).refine((value) => value.length <= max)
-export const CreateRoutineSchema = z
-  .object({
-    title: RoutineTextSchema(200).refine((value) => !/[\r\n]/.test(value)),
-    schedule: RoutineTextSchema(200).refine((value) => !/[\r\n]/.test(value)),
-    prompt: RoutineTextSchema(32000),
-  })
-  .strict()
-export const PatchRoutineSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    schedule: CreateRoutineSchema.shape.schedule.optional(),
-    prompt: CreateRoutineSchema.shape.prompt.optional(),
-  })
-  .strict()
-  .refine((value) => Object.keys(value).length > 0)
+/** Decision 183: the contract's shapes; `deliverTo` is Score's own and never reaches Hermes. */
+export const CreateRoutineSchema = CreateRepeatingJobSchema
+export const PatchRoutineSchema = PatchRepeatingJobSchema
 export const TaskFilterSchema = z.object({
   room: z.string().min(1).optional(),
   agent: AgentIdSchema.optional(),
@@ -253,6 +241,17 @@ export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   deleteRoutine(id: string): Promise<void>
   /** Asks Hermes to run the job on its next scheduler tick; resolves once it is queued. */
   runRoutine(id: string): Promise<void>
+  /** Decision 183: the job made again for another agent (same schedule, prompt, pinned model), then removed here;
+   * `leftBehind` when the removal failed. Outputs: the job's saved run results since a time, oldest first. */
+  moveRoutine(
+    id: string,
+    agentId: string,
+    key: string,
+  ): Promise<{ job: RoutineSummary; leftBehind: string | null }>
+  readRoutineOutputs(
+    id: string,
+    since: string,
+  ): Promise<{ file: string; at: string; text: string }[]>
   /** Decision 182: pin the agent's repeating jobs that follow its model onto the model it has now; their ids. */
   pinFollowingRoutines(agentId: string): Promise<string[]>
   /** SOUL.md / AGENTS.md of a profile. A missing file reads as empty text. */

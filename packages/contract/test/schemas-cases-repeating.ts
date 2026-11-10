@@ -1,3 +1,5 @@
+import { ORCH_ACKNOWLEDGEMENT_TEXT } from '../src/orchestration.ts'
+
 // Decision 183: Tasks › Repeating and Tasks › Recipes (contract section 22).
 const job = {
   id: 'builder:a1',
@@ -26,6 +28,7 @@ const schedule = {
 
 export const repeatingCases = [
   ['ScheduleTextSchema', 'every 2h', 'every two hours'],
+  ['RoutineScheduleSchema', '30m', ''],
   ['TimeZoneSchema', 'America/Argentina/Buenos_Aires', 'Mars/Base One'],
   ['DeliverToSchema', null, { roomId: '' }],
   [
@@ -44,7 +47,7 @@ export const repeatingCases = [
       timezone: 'UTC',
       deliverTo: 'r',
     },
-    { title: 'Morning', schedule: 'tomorrow', prompt: 'Sum up.' },
+    { title: 'Morning', schedule: 'on\ntwo lines', prompt: 'Sum up.' },
   ],
   ['PatchRepeatingJobSchema', { model: null, deliverTo: null }, { extra: 1 }],
   ['MoveRepeatingJobSchema', { agentId: 'reviewer' }, { agentId: 'reviewer', extra: 1 }],
@@ -57,8 +60,15 @@ export const repeatingCases = [
   ['RecipeSchedulesResponseSchema', { items: [schedule] }, { items: [{}] }],
   [
     'RecipeScheduleRequestSchema',
+    {
+      schedule: '0 16 * * 5',
+      timezone: 'Asia/Singapore',
+      roomId: 'r',
+      enabled: true,
+      agentMap: [{ agentId: 'builder', incarnation: 'inc-1' }],
+      acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+    },
     { schedule: '0 16 * * 5', timezone: 'Asia/Singapore', roomId: 'r', enabled: true },
-    { schedule: '0 16 * * 5', timezone: 'Asia/Singapore', roomId: 'r' },
   ],
   [
     'AgentAssignedSchema',

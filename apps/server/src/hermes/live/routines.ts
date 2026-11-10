@@ -8,6 +8,7 @@ import { HttpError } from '../../errors.ts'
 import { redactBounded } from '../../redact.ts'
 import { CreateRoutineSchema, PatchRoutineSchema } from '../port.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
+import { readRoutineOutputs } from './routine-outputs.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 
 // Hermes keeps each profile's cron jobs in <profile home>/cron/jobs.json (cron/jobs.py). The gateway's
@@ -30,6 +31,9 @@ const JobSchema = z
     last_run_at: z.string().nullish(),
     /** Decision 182: the model the job is pinned to; empty or absent follows the agent's model at fire time. */
     model: z.string().nullish(),
+    provider: z.string().nullish(),
+    timezone: z.string().nullish(),
+    next_run_at: z.string().nullish(),
   })
   .passthrough()
 const JobsFileSchema = z.union([z.object({ jobs: z.array(z.unknown()) }), z.array(z.unknown())])
@@ -99,7 +103,31 @@ function summary(profile: string, job: Job): RoutineSummary {
     lastRunAt: last && !Number.isNaN(last.getTime()) ? last.toISOString() : null,
     enabled: job.enabled !== false,
     model: job.model?.trim() ? redactBounded(job.model.trim(), 200) : null,
+    nextRunAt: isoOrNull(job.next_run_at),
+    provider:
+      job.model?.trim() && job.provider?.trim() ? redactBounded(job.provider.trim(), 100) : null,
   })
+}
+function isoOrNull(value: string | null | undefined): string | null {
+  const at = value ? new Date(value) : null
+  return at && !Number.isNaN(at.getTime()) ? at.toISOString() : null
+}
+/** The flags a create or an edit sends for decision 183's fields (before `--`). */
+function fieldArgs(req: {
+  title?: string
+  timezone?: string
+  model?: { model: string; provider: string | null } | null
+}): string[] {
+  return [
+    ...(req.title !== undefined ? [`--name=${req.title}`] : []),
+    ...(req.timezone !== undefined ? [`--timezone=${req.timezone}`] : []),
+    // A pinned model with its provider; null clears the pin, so the job follows the agent's model again.
+    ...(req.model === undefined
+      ? []
+      : req.model === null
+        ? ['--model=', '--provider=']
+        : [`--model=${req.model.model}`, `--provider=${req.model.provider ?? ''}`]),
+  ]
 }
 
 /** Used by the profile reader; never throws so a broken jobs file cannot hide the agent. */
@@ -202,7 +230,13 @@ export class LiveRoutines {
     const before = this.jobs(profile).map((job) => job.id)
     // Hermes has no idempotency key for cron create, so Score records the intent and, on a retry,
     // looks for the job the earlier attempt may already have made (same name and prompt, id not seen before).
-    const args = ['create', `--name=${req.title}`, '--', req.schedule, req.prompt]
+    const args = [
+      'create',
+      ...fieldArgs({ title: req.title, timezone: req.timezone, model: req.model ?? undefined }),
+      '--',
+      req.schedule,
+      req.prompt,
+    ]
     const requestHash = createHash('sha256')
       .update(JSON.stringify([profile, args]))
       .digest('hex')
@@ -294,9 +328,11 @@ export class LiveRoutines {
     const req = PatchRoutineSchema.parse(input)
     const { profile, job } = this.find(id)
     // Separate upstream verbs: everything is validated and looked up before the first mutation.
-    if (req.schedule !== undefined || req.prompt !== undefined)
+    const fields = fieldArgs(req)
+    if (req.schedule !== undefined || req.prompt !== undefined || fields.length)
       await this.mutate(profile, [
         'edit',
+        ...fields,
         ...(req.schedule !== undefined ? [`--schedule=${req.schedule}`] : []),
         ...(req.prompt !== undefined ? [`--prompt=${req.prompt}`] : []),
         '--',
@@ -309,6 +345,50 @@ export class LiveRoutines {
   async remove(id: string): Promise<void> {
     const { profile, job } = this.find(id)
     await this.mutate(profile, ['remove', '--', job.id])
+  }
+  /**
+   * Decision 183: the job made again for another agent from its full definition (the summary's prompt is redacted and
+   * cut), then removed here. The create is idempotent by `key`, so a retry never makes a second copy.
+   */
+  async move(
+    id: string,
+    agentId: string,
+    key: string,
+    db: ScoreDb,
+  ): Promise<{ job: RoutineSummary; leftBehind: string | null }> {
+    const { profile, job } = this.find(id)
+    const target = ProfileNameSchema.safeParse(agentId)
+    if (!target.success || !profileHome(this.hermesHome, target.data))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    if (target.data === profile) return { job: summary(profile, job), leftBehind: null }
+    const moved = await this.create(
+      target.data,
+      {
+        title: job.name?.trim() || (job.prompt ?? '').trim().slice(0, 50) || 'Routine',
+        schedule: scheduleText(job),
+        prompt: job.prompt ?? '',
+        ...(job.timezone ? { timezone: job.timezone } : {}),
+        ...(job.model?.trim()
+          ? { model: { model: job.model.trim(), provider: job.provider?.trim() || null } }
+          : {}),
+      },
+      `move:${key}`,
+      db,
+    )
+    if (job.enabled === false) await this.patch(moved.id, { enabled: false })
+    try {
+      await this.mutate(profile, ['remove', '--', job.id])
+      return {
+        job: this.list(target.data).find((one) => one.id === moved.id) ?? moved,
+        leftBehind: null,
+      }
+    } catch {
+      return { job: moved, leftBehind: id }
+    }
+  }
+  /** Decision 183: the job's saved results since a time (read-only; see routine-outputs.ts). */
+  outputs(id: string, since: string): { file: string; at: string; text: string }[] {
+    return readRoutineOutputs(this.hermesHome, id, since)
   }
   async run(id: string): Promise<void> {
     const { profile, job } = this.find(id)

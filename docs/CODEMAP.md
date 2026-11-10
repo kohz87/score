@@ -838,6 +838,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
 - `apps/server/src/http/chat-models.ts` — routes for an agent's model per chat (contract section 21).
+- `apps/server/src/http/repeating.ts` — recipe schedules, assignments, and the timer for Score's own repeating work (section 22).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -1020,6 +1021,10 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
 - `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
 - `apps/server/src/domain/chat-models.ts` — an agent's model in one chat: set, list, and the model a turn runs on.
+- `apps/server/src/domain/recipe-schedules.ts` — a recipe's schedule: set, list, due fires, missed and failed runs.
+- `apps/server/src/domain/repeating-runner.ts` — each tick: start due recipe runs, post repeating jobs' new results.
+- `apps/server/src/domain/routine-targets.ts` — where a repeating job's results go, and posting each result once.
+- `apps/server/src/domain/schedule-next.ts` — when a cron or `every` schedule fires next, in a time zone.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1263,6 +1268,8 @@ likely to be the entry point for a change.
 
 - `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
 - `packages/contract/src/chat-models.ts` — model per chat: requests, answers, the event and the routines pin (section 21).
+- `packages/contract/src/repeating.ts` — Tasks › Repeating and Recipes: jobs across agents, recipe schedules, assignments (section 22).
+- `packages/contract/src/workflow-limits.ts` — the limits a recipe definition and run keep to (section 15).
 - `packages/contract/src/routines.ts` — an agent's repeating jobs (`RoutineSummary`).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.

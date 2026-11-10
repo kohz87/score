@@ -36,6 +36,10 @@ export abstract class FakePortState {
   protected readonly turns = new Map<string, string>()
   protected agents = new Map<string, AgentSummary>()
   protected readonly routines = new Map<string, RoutineSummary>()
+  protected readonly routineOutputs = new Map<
+    string,
+    { file: string; at: string; text: string }[]
+  >()
   protected readonly routineKeys = new Map<string, string>()
   protected routineCount = 0
   protected readonly files = new Map<string, string>()
@@ -98,6 +102,7 @@ export abstract class FakePortState {
     this.turns.clear()
     this.routines.clear()
     this.routineKeys.clear()
+    this.routineOutputs.clear()
     this.models.clear()
     this.skills.clear()
     this.memory.clear()

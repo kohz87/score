@@ -10,5 +10,8 @@ export const RoutineSummarySchema = z.object({
   enabled: z.boolean(),
   /** Decision 182: the model the job is pinned to; null (or absent) follows the agent's model when it runs. */
   model: z.string().nullish(),
+  /** Decision 183: Hermes's next fire time and the pinned model's provider, when it says. */
+  nextRunAt: z.iso.datetime().nullish(),
+  provider: z.string().nullish(),
 })
 export type RoutineSummary = z.infer<typeof RoutineSummarySchema>

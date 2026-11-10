@@ -21,6 +21,7 @@ import { registerOrchestrationRoutes } from './http/orchestrations.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerWatchRoutes } from './http/watch.ts'
 import { registerWorkflowRoutes } from './http/workflows.ts'
+import { registerRepeatingRoutes } from './http/repeating.ts'
 
 export interface WorkRouteDeps {
   app: FastifyInstance
@@ -77,6 +78,9 @@ export function registerWorkRoutes({
       ...(ingest ? { ingest } : {}),
       ...(clock ? { clock } : {}),
     })
+    // Decision 183: recipe schedules Score runs, and repeating jobs' results posted into their chats.
+    if (ingest)
+      registerRepeatingRoutes(app, { orchestrator, db, ingest, port, ...(clock ? { clock } : {}) })
   }
   registerTeamPauseRoutes(app, {
     db,

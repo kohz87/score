@@ -42,6 +42,9 @@ function hermes(args: string[]): number {
       if (arg.startsWith('--prompt=')) job.prompt = arg.slice(9)
       // `--pin` locks the profile's current model onto the job (Hermes `cron edit --pin`).
       if (arg === '--pin') job.model = 'example-model'
+      if (arg.startsWith('--name=')) job.name = arg.slice(7)
+      if (arg.startsWith('--model=')) job.model = arg.slice(8) || null
+      if (arg.startsWith('--provider=')) job.provider = arg.slice(11) || null
     }
   } else if (verb === 'pause' || verb === 'resume') {
     jobs.find((candidate) => candidate.id === id)!.enabled = verb === 'resume'
@@ -215,4 +218,113 @@ test('pinning keeps the jobs that follow the agent on its current model, and lea
 test('a pin Hermes refuses stops there, and says so', async () => {
   runner.mockImplementation(async () => ({ exitCode: 1 }))
   await expect(routines.pinFollowing('builder')).rejects.toMatchObject({ status: 409 })
+})
+
+test('decision 183: create sends the model, provider and time zone; edit renames, pins and unpins', async () => {
+  const routine = await routines.create(
+    'builder',
+    {
+      title: 'Digest',
+      schedule: '0 8 * * *',
+      prompt: 'Sum up.',
+      timezone: 'Asia/Singapore',
+      model: { model: 'deep-model', provider: 'local' },
+    },
+    'k9',
+    db,
+  )
+  expect(call(0)[0]).toEqual([
+    '-p',
+    'builder',
+    'cron',
+    'create',
+    '--name=Digest',
+    '--timezone=Asia/Singapore',
+    '--model=deep-model',
+    '--provider=local',
+    '--',
+    '0 8 * * *',
+    'Sum up.',
+  ])
+  await routines.patch(routine.id, { title: 'Daily digest', model: null })
+  expect(call(1)[0]).toEqual([
+    '-p',
+    'builder',
+    'cron',
+    'edit',
+    '--name=Daily digest',
+    '--model=',
+    '--provider=',
+    '--',
+    routine.id.split(':')[1],
+  ])
+  expect(routines.list('builder').find((one) => one.id === routine.id)).toMatchObject({
+    title: 'Daily digest',
+    model: null,
+    provider: null,
+  })
+})
+
+test('decision 183: moving makes the job for the other agent from its full prompt, then removes it here', async () => {
+  fs.mkdirSync(join(home, 'profiles', 'lead', 'cron'), { recursive: true })
+  fs.writeFileSync(
+    join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+    JSON.stringify({ jobs: [] }),
+  )
+  const leadJobs = () =>
+    JSON.parse(fs.readFileSync(join(home, 'profiles', 'lead', 'cron', 'jobs.json'), 'utf8')).jobs
+  runner.mockImplementation(async (args) => {
+    if (args[1] === 'lead' && args[3] === 'create') {
+      const rest = args.slice(4)
+      const [schedule, prompt] = rest.slice(rest.indexOf('--') + 1)
+      const jobs = leadJobs()
+      jobs.push({
+        id: 'moved1',
+        name: rest.find((a) => a.startsWith('--name='))!.slice(7),
+        prompt,
+        schedule_display: schedule,
+        enabled: true,
+      })
+      fs.writeFileSync(
+        join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+        JSON.stringify({ jobs }),
+      )
+      return { exitCode: 0 }
+    }
+    return { exitCode: hermes(args) }
+  })
+  const full = readJobs()[0]!.prompt as string
+  const moved = await routines.move('builder:a1b2c3d4e5f6', 'lead', 'm1', db)
+  expect(moved).toMatchObject({
+    leftBehind: null,
+    job: { id: 'lead:moved1', title: 'Morning digest' },
+  })
+  expect(leadJobs()[0].prompt).toBe(full)
+  expect(readJobs().some((job) => job.id === 'a1b2c3d4e5f6')).toBe(false)
+})
+
+test('decision 183: a move whose removal fails leaves both and says which', async () => {
+  fs.mkdirSync(join(home, 'profiles', 'lead', 'cron'), { recursive: true })
+  fs.writeFileSync(
+    join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+    JSON.stringify({ jobs: [] }),
+  )
+  runner.mockImplementation(async (args) => {
+    if (args[1] === 'lead' && args[3] === 'create') {
+      fs.writeFileSync(
+        join(home, 'profiles', 'lead', 'cron', 'jobs.json'),
+        JSON.stringify({
+          jobs: [
+            { id: 'moved2', name: 'Morning digest', prompt: readJobs()[0]!.prompt, enabled: true },
+          ],
+        }),
+      )
+      return { exitCode: 0 }
+    }
+    if (args[3] === 'remove') return { exitCode: 1 }
+    return { exitCode: hermes(args) }
+  })
+  const moved = await routines.move('builder:a1b2c3d4e5f6', 'lead', 'm2', db)
+  expect(moved.leftBehind).toBe('builder:a1b2c3d4e5f6')
+  expect(readJobs().some((job) => job.id === 'a1b2c3d4e5f6')).toBe(true)
 })

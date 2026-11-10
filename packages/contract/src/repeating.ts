@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AgentIdSchema } from './types.ts'
+import { ORCH_ACKNOWLEDGEMENT_TEXT } from './orchestration.ts'
 import { ChatModelNameSchema } from './chat-models.ts'
 import { RoutineSummarySchema } from './routines.ts'
 
@@ -10,7 +11,14 @@ import { RoutineSummarySchema } from './routines.ts'
  * `every <n><m|h|d>`, in an IANA time zone.
  */
 
-/** A schedule as Hermes and Score's recipe scheduler take it: `0 8 * * 1-5`, or `every 2h`. */
+/** An agent's job takes whatever Hermes' scheduler takes (cron, `every 2h`, `30m`, a time), on one line. */
+export const RoutineScheduleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\r\n]+$/)
+/** A recipe's schedule, which Score runs itself: a 5-field cron expression, or `every <n><m|h|d>`. */
 export const ScheduleTextSchema = z
   .string()
   .trim()
@@ -63,8 +71,14 @@ export const CreateRepeatingJobSchema = z
       .min(1)
       .max(200)
       .regex(/^[^\r\n]+$/),
-    schedule: ScheduleTextSchema,
-    prompt: z.string().trim().min(1).max(32000),
+    schedule: RoutineScheduleSchema,
+    // An argument to the Hermes CLI: never a NUL.
+    prompt: z
+      .string()
+      .trim()
+      .min(1)
+      .max(32000)
+      .refine((value) => !value.includes('\0')),
     timezone: TimeZoneSchema.optional(),
     model: PinnedModelSchema.nullish(),
     deliverTo: z.string().min(1).nullish(),
@@ -77,13 +91,14 @@ export const PatchRepeatingJobSchema = z
   .object({
     enabled: z.boolean().optional(),
     title: CreateRepeatingJobSchema.shape.title.optional(),
-    schedule: ScheduleTextSchema.optional(),
+    schedule: RoutineScheduleSchema.optional(),
     prompt: CreateRepeatingJobSchema.shape.prompt.optional(),
     timezone: TimeZoneSchema.optional(),
     model: PinnedModelSchema.nullable().optional(),
     deliverTo: z.string().min(1).nullable().optional(),
   })
   .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Say what to change.')
 export type PatchRepeatingJob = z.infer<typeof PatchRepeatingJobSchema>
 
 /** `POST /api/routines/:id/move`: create the job for another agent, then remove it from this one. Answers with the new
@@ -130,6 +145,12 @@ export const RecipeScheduleRequestSchema = z
     timezone: TimeZoneSchema,
     roomId: z.string().min(1),
     enabled: z.boolean(),
+    /** What the person saw when setting it, as when starting a run: each run is bound to these agents (an agent
+     * changed since makes that run fail with the reason) and to this acknowledgement. */
+    agentMap: z
+      .array(z.object({ agentId: AgentIdSchema, incarnation: z.string().min(1) }).strict())
+      .max(30),
+    acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }),
   })
   .strict()
 export type RecipeScheduleRequest = z.infer<typeof RecipeScheduleRequestSchema>
