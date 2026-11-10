@@ -6,7 +6,7 @@ import { EffortWordSchema } from './coding.ts'
  * Decision 178: an agent's effort for one chat (`/effort`, the context bar, Chat info). It wins over the agent's own
  * setting in that chat only. Score offers a Hermes agent these; a coding agent the levels of its CLI (`CODING_EFFORTS`).
  */
-export const HERMES_CHAT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export const CHAT_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export const ChatEffortSchema = z.object({
   roomId: z.string().min(1),

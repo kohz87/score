@@ -117,9 +117,10 @@ export const visualFixturesCore: Record<string, unknown> = {
   ...Object.fromEntries(
     (() => {
       const read = recorded['/api/rooms'] as { rooms: { id: string }[]; directs: { id: string }[] }
-      return [...read.rooms, ...read.directs].map((room) => [
-        `/api/rooms/${room.id}/jobs?closed=include`,
-        { asOfSeq: 1, items: [] },
+      // 3.33.0: and each chat's efforts (its chat list tag); none set here.
+      return [...read.rooms, ...read.directs].flatMap((room) => [
+        [`/api/rooms/${room.id}/jobs?closed=include`, { asOfSeq: 1, items: [] }],
+        [`/api/rooms/${room.id}/efforts`, { asOfSeq: 1, items: [] }],
       ])
     })(),
   ),

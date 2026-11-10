@@ -3114,7 +3114,7 @@ An agent's reasoning effort for one chat. It wins over the agent's own setting i
 | `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | `ChatEffortChange` (`effort` null: its own). `400` for an agent not in the chat or a level it doesn't take (the message lists the levels). `404` for no such chat |
 | `GET /api/agents/:agentId/efforts` | | | `AgentEfforts`: `own` (null: the model's default), `levels` a chat can choose, and `chats` where it's set differently (`roomKind` says whether it opens as a direct chat or a group) |
 
-- Levels: a Hermes agent `HERMES_CHAT_EFFORTS`; a coding agent its CLI's (`CODING_EFFORTS`).
+- Levels: a Hermes agent `CHAT_EFFORT_LEVELS`; a coding agent its CLI's (`CODING_EFFORTS`).
 - Each turn runs at the chat's effort: Hermes gets it as the run's `model_options.reasoning_effort`, never as the agent's config; Claude Code and Codex as their effort flag for that turn.
 - `Message.effort`: the effort an agent's reply ran at, when the chat set one.
 - Event `effort.changed` `{ roomId, agentId, effort, reason }`: `reason: model` when Score put it back because the agent no longer takes that level.

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { CODING_EFFORTS, HERMES_CHAT_EFFORTS, type CodingRuntime } from '@score/contract'
+import { CODING_EFFORTS, CHAT_EFFORT_LEVELS, type CodingRuntime } from '@score/contract'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 
@@ -11,7 +11,7 @@ const RowSchema = z.object({ room_id: z.string(), agent_id: z.string(), effort: 
 export function effortLevelsOf(sqlite: DatabaseSync, agentId: string): readonly string[] {
   const coding = sqlite.prepare('SELECT runtime FROM coding_agents WHERE id = ?').get(agentId) as
     { runtime: CodingRuntime } | undefined
-  return coding ? (CODING_EFFORTS[coding.runtime] ?? []) : HERMES_CHAT_EFFORTS
+  return coding ? (CODING_EFFORTS[coding.runtime] ?? []) : CHAT_EFFORT_LEVELS
 }
 
 const changed = (
