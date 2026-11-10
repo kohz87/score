@@ -131,16 +131,6 @@
 [data-ui='bold'] .bold-rt {
   max-width: 1392px;
 }
-[data-ui='bold'] .bold-rt-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-[data-ui='bold'] .bold-rt-head h1 {
-  margin: 0;
-  flex: 1;
-}
 [data-ui='bold'] .bold-rt-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

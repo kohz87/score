@@ -38,3 +38,45 @@
     padding: 0;
   }
 }
+
+/* The one Tasks header (TasksHeader): title, action and views on one row at the same place on every Tasks page. */
+[data-ui='bold'] .bold-th {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-ui='bold'] .bold-th-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+[data-ui='bold'] .bold-th h1 {
+  margin: 0;
+  /* As tall as a page's action button: a page without one (Recipes) puts the views at the same height, wrapped or not. */
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+[data-ui='bold'] .bold-th-gap {
+  flex: 1;
+}
+[data-ui='bold'] .bold-th-sub {
+  margin: 0;
+  max-width: 640px;
+}
+/* On a phone the views take the whole second row, below the title and action. */
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-th h1 {
+    font-size: 28px;
+  }
+  [data-ui='bold'] .bold-th-sub {
+    font-size: 14px;
+  }
+  [data-ui='bold'] .bold-th .bold-tt {
+    order: 10;
+  }
+  [data-ui='bold'] .bold-th-gap {
+    display: none;
+  }
+}

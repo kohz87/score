@@ -1506,6 +1506,7 @@ likely to be the entry point for a change.
 - `e2e/global-teardown.ts` — shared fake-server teardown.
 - `e2e/now-fixture.ts` — deterministic clock fixture.
 - `apps/web/src/bold/tasks-tabs/` — the Tasks views nav (Board · Repeating · Recipes) every Tasks page renders, and its styles.
+- `apps/web/src/bold/tasks-tabs/TasksHeader.tsx` — the one header of every Tasks page: title, action and the views on one row.
 - `apps/web/src/bold/repeating/` — a recipe's schedule (decision 183): the Repeats card and its editor, the side cards (Before each run, Last runs), the recipes list on the left, the schedule queries, the chats a run can start in, and `schedule-words.ts` (a schedule in words, the presets, the next time).
 - `apps/web/src/bold/recipe-step/` — a step's own model and effort (decision 183): the row pills, the two selects in the step settings, and the pure `setStepPin`.
 - `apps/web/src/bold/BoldRecipes-step-model.test.tsx` — a step's model and effort: pills, choices, saved into the definition, cleared.

@@ -331,16 +331,6 @@
   clip-path: inset(0 0 0 -100vmax);
 }
 
-@media (max-width: 600px) {
-  [data-ui='bold'] .bold-tb-title h1 {
-    font-size: 28px;
-  }
-
-  [data-ui='bold'] .bold-tb-title p {
-    font-size: 14px;
-  }
-}
-
 /* The second action on a needs-you card sits on the card's own ink: it takes the card's colours, not the page's. */
 [data-ui='bold'] .bold-tb-need .bold-tb-need-more {
   color: inherit;

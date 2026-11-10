@@ -1,11 +1,4 @@
 /* 3.27.0: New task, edit, moves, archive. Mock-ups: docs/design/bold/mockups/20-tasks*.dc.html. */
-[data-ui='bold'] .bold-tb-h1row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
 [data-ui='bold'] .bold-tb-new {
   display: inline-flex;
   align-items: center;
