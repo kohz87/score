@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.34.0] — 2026-11-10
+
+### Changed
+- **The agent page, tidied.** One column of six sections (Personality, Model, Safety, Tools, Memory and skills, Work) with a section menu on the
+  left (a row of chips on a phone), and Remove at the bottom of the menu. No More/Less any more: everything is on the page as a short summary, and the
+  full card opens in place from it.
+- **Model** is a list of rows, each with its button: Model, **Default effort** ("Every chat uses this unless it sets its own with /effort", and the
+  chats set differently), If it's unavailable, Model aliases, Voice and Subagents. Rows open independently, so a draft in one is kept.
+- **Safety** is four tiles (where it works, asks you first, goes ahead without asking, Never rules); **Tools** is Can use with Plugins, Reachable on and
+  Score access beside it; **Work** shows the last runs, repeating jobs and the todo list.
+- Name, role and look are behind **Edit** in the header; Look at its screen and Remove are in the **⋯** menu. Coding agents get the same sections
+  (without memory and skills).
+
+### Removed
+- The agent page's Workspace card and its "Works in" line: a chat already shows its workspace. Workspace links from a chat still open the agent's Files
+  panel, and closing it clears the link, so the same link opens it again.
+
 ## [3.33.0] — 2026-11-10
 
 ### Added
