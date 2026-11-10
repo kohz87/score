@@ -31,7 +31,8 @@ const HASH_TARGETS: Record<string, { section: AgentSectionId | 'agent-overview';
     'agent-workspace': { section: 'agent-work' },
     'agent-files': { section: 'agent-work' },
     'agent-history': { section: 'agent-work', open: 'runs' },
-    'agent-routines': { section: 'agent-work', open: 'routines' },
+    // The repeating jobs card moved to Tasks (decision 183); the old link lands on Work.
+    'agent-routines': { section: 'agent-work' },
     'agent-todo': { section: 'agent-work', open: 'todo' },
     'agent-asks': { section: 'agent-safety', open: 'asks' },
     'agent-where': { section: 'agent-safety', open: 'where' },

@@ -43,7 +43,7 @@ export function boldOneToOneLink(agentId: string, search = ''): string {
   return `/b?${params.toString()}`
 }
 
-/** 11.12b search: a repeating job lives in the agent's Agents page, under More › Routines. */
+/** 11.12b search: a repeating job is listed as Assigned in the agent's Work (decision 183: it is managed in Tasks). */
 export function boldAgentRoutinesLink(agentId: string): string {
   return `/b/agents/${encodeURIComponent(agentId)}#agent-routines`
 }

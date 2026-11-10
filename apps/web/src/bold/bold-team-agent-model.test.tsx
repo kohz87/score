@@ -1,8 +1,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { open } from './bold-team-helpers.tsx'
+import { snapshot } from './assigned/assigned-test-data.ts'
 
-/** Decision 182 on the agent page: the Model row's lines, the chats list, the jobs' models, and the warning. */
+/** Decision 182 on the agent page: the Model row's lines, the chats list, and the warning (the jobs' models are on Tasks, decision 183). */
 const settings = {
   effort: null,
   fallbacks: [],
@@ -41,6 +42,22 @@ function withJobs(options: { routines?: typeof jobs; pin?: number; chats?: objec
       return Promise.resolve(Response.json(settings))
     if (path === '/api/agents/builder/routines' && method === 'GET')
       return Promise.resolve(Response.json({ items: options.routines ?? jobs }))
+    if (path === '/api/agents/builder/assigned' && method === 'GET')
+      return Promise.resolve(
+        Response.json({
+          agentId: 'builder',
+          repeating: (options.routines ?? jobs).map((item) => ({
+            ...item,
+            agentId: 'builder',
+            nextRunAt: null,
+            provider: null,
+            deliverTo: null,
+          })),
+          recipeSteps: [],
+        }),
+      )
+    if (path === '/api/tasks' && method === 'GET')
+      return Promise.resolve(Response.json(snapshot([])))
     if (path === '/api/agents/builder/routines/pin')
       return Promise.resolve(
         options.pin
@@ -91,24 +108,18 @@ test('the Model row says chats may set their own with /model, counts the jobs th
   expect(within(card).getByRole('link', { name: 'Ship it' })).toBeDefined()
 })
 
-test('repeating jobs show their model, read-only: following the agent, or pinned', async () => {
+test('the Work line names the repeating jobs and opens them in Tasks; their models are set there', async () => {
   withJobs()
   open('/b/agents/builder')
   const work = await screen.findByRole('region', { name: 'Work' })
   expect(
-    await within(work).findByText(
-      /Morning summary · every day at 08:00 · its own · demo\/next-model/,
-    ),
+    await within(work).findByText('Morning summary · Dependency check · Weekly report'),
   ).toBeDefined()
-  expect(within(work).getByText(/Weekly report · Fridays at 17:00 · deep/)).toBeDefined()
-  fireEvent.click(within(work).getByRole('button', { name: 'Manage repeating jobs' }))
-  await screen.findByText(/deep · pinned/)
-  const lines = Array.from(document.querySelectorAll('.bold-model-job')).map((el) => el.textContent)
-  expect(lines.filter((text) => /follows the agent/.test(text ?? ''))).toHaveLength(2)
-  expect(screen.getByText(/deep · pinned/)).toBeDefined()
-  expect(
-    screen.getByText(/Shown, not set here: a job follows the agent’s model unless it’s pinned/),
-  ).toBeDefined()
+  expect(within(work).getByRole('link', { name: 'Open in Tasks' }).getAttribute('href')).toBe(
+    '/b/tasks/repeating?agent=builder',
+  )
+  // The card with its per-job model lines left the agent page (decision 183): Tasks › Repeating shows them.
+  expect(within(work).queryByRole('button', { name: 'Manage repeating jobs' })).toBeNull()
 })
 
 test('changing the model with jobs following it warns first, and nothing changes until a button is pressed', async () => {

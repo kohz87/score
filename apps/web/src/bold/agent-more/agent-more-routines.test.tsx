@@ -2,7 +2,6 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import { ChannelsCard } from './ChannelsCard.tsx'
 import { PluginsCard } from './PluginsCard.tsx'
-import { RoutinesCard } from './RoutinesCard.tsx'
 import {
   agent,
   initialMemory,
@@ -27,15 +26,6 @@ const { mount, sent } = setUpAgentMoreTests({
     override = null
     memory = initialMemory()
   },
-})
-
-test('Repeating jobs run now and link to Start a job', async () => {
-  mount(<RoutinesCard agent={agent} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Run Nightly tests now' }))
-  await waitFor(() => expect(sent('POST', '/routines/r1/run')).toBeDefined())
-  expect(screen.getByRole('link', { name: 'Start a repeating job' }).getAttribute('href')).toBe(
-    '/b?start=job',
-  )
 })
 
 test('Plugins toggle, and a locked one stays on', async () => {

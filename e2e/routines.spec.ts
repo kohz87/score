@@ -12,7 +12,7 @@ type Routine = {
 // Mutations need a paired browser, so the routines endpoints are stood in for here; the server side
 // (fake and stubbed live adapters, argv, idempotency) is covered by the server tests. Creating one is the Start a job
 // flow now (bold-start-job.spec.ts: "a schedule creates a routine"), so the list starts with one routine.
-test('pause, run now and delete a routine from the agent page', async ({ page }) => {
+test('pause, run now and delete a routine from Tasks › Repeating', async ({ page }) => {
   let items: Routine[] = [
     {
       id: 'builder:fake-routine-1',
@@ -48,9 +48,15 @@ test('pause, run now and delete a routine from the agent page', async ({ page })
 
   await page.goto('/b/agents/builder#agent-routines')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
-  // The hash opens More at the repeating jobs card.
-  const card = page.locator('#agent-routines')
-  await expect(card.getByRole('link', { name: 'Start a repeating job' })).toBeVisible()
+  // Decision 183: the agent page's Work shows the job as Assigned (read-only); Open in Tasks goes to Repeating, where
+  // the job is managed. The hash lands on Work.
+  const assigned = page.locator('.bold-assigned-tile')
+  await expect(assigned).toContainText('Build check')
+  await expect(assigned.getByRole('link', { name: 'Start a repeating job' })).toBeVisible()
+  await assigned.getByRole('link', { name: 'Open in Tasks' }).click()
+  await expect(page).toHaveURL(/\/b\/tasks\/repeating\?agent=builder/)
+  // Below: the controls on Tasks › Repeating (TR.2); the list is the page.
+  const card = page
   const row = card.locator('.listrow').filter({ hasText: 'Build check' })
   await expect(row).toBeVisible()
   await expect(row).toContainText('every 2h')

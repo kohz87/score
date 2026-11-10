@@ -39,7 +39,7 @@ test('the agent page is one column of sections, with the section menu beside it 
     'Remembers',
     'Skills',
     'Can use',
-    'Repeating jobs',
+    'Assigned',
     'Plugins',
     'Reachable on',
     'Never rules',

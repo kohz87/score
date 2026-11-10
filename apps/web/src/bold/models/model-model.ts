@@ -52,7 +52,3 @@ export function routineModelText(model: string | null | undefined, agentModel: s
     ? { model, how: 'pinned' }
     : { model: `its own · ${agentModel ?? 'the agent’s model'}`, how: 'follows the agent' }
 }
-
-/** The note under the repeating jobs: what the model shown is, and why it can't be set here. */
-export const ROUTINE_MODEL_NOTE =
-  'Shown, not set here: a job follows the agent’s model unless it’s pinned. Keep them on the current model when you change the agent’s model.'
