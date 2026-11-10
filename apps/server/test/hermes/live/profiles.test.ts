@@ -78,6 +78,7 @@ test('routines come from the profile cron jobs file, redacted and skipping malfo
         "Summarise yesterday's merged pull requests for the team.\nKeep it short. Use token=[redacted] for the tracker.",
       lastRunAt: '2026-10-08T07:00:02.000Z',
       enabled: true,
+      model: null,
     },
     {
       id: 'builder:0f1e2d3c4b5a',
@@ -86,6 +87,7 @@ test('routines come from the profile cron jobs file, redacted and skipping malfo
       description: 'Check for outdated dependencies.',
       lastRunAt: null,
       enabled: false,
+      model: null,
     },
   ])
   fs.writeFileSync(join(home, 'profiles', 'builder', 'cron', 'jobs.json'), '{broken')
