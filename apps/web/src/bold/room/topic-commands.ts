@@ -361,8 +361,9 @@ function effortMenuFor(
   return effortMenuItems(efforts, agentDisplayName(agent), failed)
 }
 
-/** A room routed by @mentions that is not a team room: the older bold rooms (decision 178 keeps their `/effort`). */
-export const isOlderRoom = (room: Room) => room.role !== 'team' && room.routing === 'mentions'
+/** A group room still routed by @mentions (not a team room, not a one-to-one): the older bold rooms, which keep only `/effort`. */
+export const isOlderRoom = (room: Room) =>
+  (room.role ?? 'room') === 'room' && room.routing === 'mentions'
 
 /** The hook the room uses: the palette items and a runner bound to the open chat. */
 export function useTopicCommands(
