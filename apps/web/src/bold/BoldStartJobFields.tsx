@@ -102,10 +102,10 @@ export function StartJobRecipe({ view }: { view: StartJobView }) {
         })}
         <Link
           className="link"
-          to="/b/settings/recipes"
+          to="/b/tasks/recipes"
           onClick={() => {
             view.onClose()
-            void navigate('/b/settings/recipes')
+            void navigate('/b/tasks/recipes')
           }}
         >
           Edit recipes

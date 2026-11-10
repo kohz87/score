@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 import { uniqueRecipeName } from './recipe-run.ts'
 import {
+  chooseStep,
   createViaApi,
   inspector,
   openMore,
@@ -95,6 +96,21 @@ test('moving and removing steps re-links the saved graph', async ({ page }) => {
       expect.objectContaining({ from: 'three', port: 'ok', to: 'done' }),
     ]),
   )
+
+  // Decision 183: a step can have its own model and effort; its pills turn amber and the definition carries both.
+  await chooseStep(page, 'Two')
+  const model = inspector(page).getByRole('combobox', { name: 'Model' })
+  await expect.poll(async () => model.locator('option').count()).toBeGreaterThan(1)
+  await model.selectOption({ index: 1 })
+  await expect(page.locator('[data-recipe-step="two"] .bold-pin--set').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Save as version 4' }).click()
+  await expect(page.getByText('Saved as version 4.')).toBeVisible({ timeout: 20_000 })
+  const pinned = (await workflowDetail(page, id)).latest.definition.nodes as {
+    id: string
+    model?: { model: string }
+  }[]
+  expect(pinned.find((node) => node.id === 'two')?.model?.model).toBeTruthy()
+  expect(pinned.find((node) => node.id === 'three')?.model).toBeUndefined()
 })
 
 test('the graph editor adds, connects and removes steps, keeps keyboard use, and saves what was drawn', async ({

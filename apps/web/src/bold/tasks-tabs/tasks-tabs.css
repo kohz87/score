@@ -1,0 +1,25 @@
+/* Decision 183, mock-up 28-tasks-main: the Tasks views as pills; the open one is the light object. */
+[data-ui='bold'] .bold-tt {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.93em;
+}
+[data-ui='bold'] .bold-tt-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-weight: 600;
+  text-decoration: none;
+}
+[data-ui='bold'] .bold-tt-tab:hover {
+  color: var(--ink);
+}
+[data-ui='bold'] .bold-tt-tab[aria-current='page'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}

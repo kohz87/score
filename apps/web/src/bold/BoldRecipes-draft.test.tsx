@@ -48,11 +48,11 @@ test('a dirty draft asks before leaving for the library', async () => {
   await waitFor(() =>
     expect(confirm).toHaveBeenCalledWith('You have unsaved changes. Leave without saving?'),
   )
-  expect(router.state.location.pathname).toBe('/b/settings/recipes/wf-release')
+  expect(router.state.location.pathname).toBe('/b/tasks/recipes/wf-release')
 
   confirm.mockReturnValue(true)
   fireEvent.click(screen.getByRole('link', { name: '‹ Recipes' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/recipes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/tasks/recipes'))
 })
 
 test('a failed validation check says so and keeps Save disabled', async () => {
@@ -161,7 +161,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const name = (await screen.findByRole('textbox', { name: 'Recipe name' })) as HTMLInputElement
   fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement

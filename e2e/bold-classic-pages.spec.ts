@@ -82,7 +82,7 @@ for (const size of sizes) {
     test.use({ viewport: { width: size.width, height: size.height } })
 
     test(`a recipe card shows its last run and opens the run at ${size.name}`, async ({ page }) => {
-      await page.goto('/b/settings/recipes')
+      await page.goto('/b/tasks/recipes')
       const card = page.getByRole('listitem', { name: 'Release notes' })
       await expect(card).toBeVisible({ timeout: 20_000 })
       await expect(card).toContainText('1 run going')
@@ -95,7 +95,7 @@ for (const size of sizes) {
     })
 
     test(`the Recipes page is a library of recipe cards at ${size.name}`, async ({ page }) => {
-      await page.goto('/b/settings/recipes')
+      await page.goto('/b/tasks/recipes')
       await inFrame(page)
       const list = page.getByRole('list', { name: 'Recipes', exact: true })
       await expect(list.getByRole('listitem', { name: /lead decides/ })).toBeVisible()
@@ -109,13 +109,13 @@ for (const size of sizes) {
       })
       // Edit opens that recipe's editor.
       await list.getByRole('link', { name: /^Edit/ }).first().click()
-      await expect(page).toHaveURL(/\/b\/settings\/recipes\/wf-[a-z-]+$/)
+      await expect(page).toHaveURL(/\/b\/tasks\/recipes\/wf-[a-z-]+$/)
       await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
       await inFrame(page)
     })
 
     test(`the recipe editor opens under /b at ${size.name}`, async ({ page }) => {
-      await page.goto('/b/settings/recipes/wf-draft')
+      await page.goto('/b/tasks/recipes/wf-draft')
       await inFrame(page)
       await expect(page.locator('[data-node="build"]')).toBeVisible()
       await noSideScroll(page)
@@ -164,10 +164,10 @@ for (const size of sizes) {
 
 test('old classic paths on the new shell redirect to /b and keep the query', async ({ page }) => {
   await page.goto('/workflows')
-  await expect(page).toHaveURL(/\/b\/settings\/recipes$/)
+  await expect(page).toHaveURL(/\/b\/tasks\/recipes$/)
   await page.goto('/runs/brief-wfrun-1?x=1')
   // 3.22.0: a run opens on the Recipes page (the side panel's Runs mode is gone).
-  await expect(page).toHaveURL(/\/b\/settings\/recipes\?x=1&run=brief-wfrun-1$/)
+  await expect(page).toHaveURL(/\/b\/tasks\/recipes\?x=1&run=brief-wfrun-1$/)
   await page.goto('/watch/builder?from=3')
   await expect(page).toHaveURL(/\/b\/screen\/builder\?from=3$/)
   await page.goto('/settings/look/customize/score')
@@ -208,7 +208,7 @@ for (const size of sizes) {
 test('the Recipes page in the light look', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('score.theme', 'light'))
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/b/settings/recipes')
+  await page.goto('/b/tasks/recipes')
   await inFrame(page)
   await expect(page.locator('[data-ui="bold"]')).toHaveAttribute('data-look', 'light')
   await expect(page.getByRole('list', { name: 'Recipes', exact: true })).toBeVisible()
@@ -378,5 +378,5 @@ test.describe('the Customizer way back inside /b', () => {
 
 test('the old path keeps its #hash through the redirect', async ({ page }) => {
   await page.goto('/runs/brief-wfrun-1#step')
-  await expect(page).toHaveURL(/\/b\/settings\/recipes\?run=brief-wfrun-1#step$/)
+  await expect(page).toHaveURL(/\/b\/tasks\/recipes\?run=brief-wfrun-1#step$/)
 })

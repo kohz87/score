@@ -11,8 +11,8 @@ import {
 
 describe('toBoldPath', () => {
   it('moves the kept classic pages under /b and keeps query and hash', () => {
-    expect(toBoldPath('/workflows')).toBe('/b/settings/recipes')
-    expect(toBoldPath('/workflows/wf-1?x=1#a')).toBe('/b/settings/recipes/wf-1?x=1#a')
+    expect(toBoldPath('/workflows')).toBe('/b/tasks/recipes')
+    expect(toBoldPath('/workflows/wf-1?x=1#a')).toBe('/b/tasks/recipes/wf-1?x=1#a')
     expect(toBoldPath('/watch/lead?from=4')).toBe('/b/screen/lead?from=4')
     expect(toBoldPath('/settings/look')).toBe('/b/settings/look')
     expect(toBoldPath('/settings/look/customize/t1')).toBe('/b/settings/look/customize/t1')
@@ -44,7 +44,7 @@ describe('toBoldPath', () => {
     expect(toBoldPath('/chat/gone', rooms)).toBe('/b?room=gone')
   })
   it('leaves /b paths and pages without a /b home alone', () => {
-    expect(toBoldPath('/b/settings/recipes')).toBe('/b/settings/recipes')
+    expect(toBoldPath('/b/tasks/recipes')).toBe('/b/tasks/recipes')
     expect(toBoldPath('/terminal')).toBe('/terminal')
     expect(toBoldPath('/knowledge/a')).toBe('/knowledge/a')
     expect(toBoldPath('/workflowsx')).toBe('/workflowsx')
@@ -53,8 +53,8 @@ describe('toBoldPath', () => {
 
 describe('classicRedirectFor', () => {
   it.each([
-    ['/workflows', '?a=1', '', '/b/settings/recipes?a=1'],
-    ['/workflows/new', '', '', '/b/settings/recipes/new'],
+    ['/workflows', '?a=1', '', '/b/tasks/recipes?a=1'],
+    ['/workflows/new', '', '', '/b/tasks/recipes/new'],
     ['/watch/lead', '?from=3', '#t', '/b/screen/lead?from=3#t'],
     ['/attempts/kr_1', '?x=1', '#h', '/b/attempts/kr_1?x=1#h'],
     ['/chat', '', '', '/b'],

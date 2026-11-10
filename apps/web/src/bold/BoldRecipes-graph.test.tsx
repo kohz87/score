@@ -46,7 +46,7 @@ test('Add a step after, in the settings, connects the new step after the selecte
 })
 
 test('problems are one line under the header, with a way to the step, and every problem shows on its step', async () => {
-  mount('/b/settings/recipes/wf-draft')
+  mount('/b/tasks/recipes/wf-draft')
   const line = await waitFor(() => {
     const found = document.querySelector<HTMLElement>('.bold-rp-problem')
     if (!found) throw new Error('no problem line yet')
@@ -76,7 +76,7 @@ test('problems are one line under the header, with a way to the step, and every 
 })
 
 test('Show all lists every problem, each with its Show it; Hide folds the list', async () => {
-  mount('/b/settings/recipes/wf-draft')
+  mount('/b/tasks/recipes/wf-draft')
   const line = await waitFor(() => {
     const found = document.querySelector<HTMLElement>('.bold-rp-problem')
     if (!found) throw new Error('no problem line yet')
@@ -95,7 +95,7 @@ test('Show all lists every problem, each with its Show it; Hide folds the list',
 })
 
 test('typing {{ in an instruction offers the inputs and the earlier steps, and Enter inserts the choice', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const canvasNode = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   fireEvent.click(canvasNode)
   const field = (await screen.findByRole('combobox', {
@@ -115,7 +115,7 @@ test('typing {{ in an instruction offers the inputs and the earlier steps, and E
 })
 
 test('the outline is the graph as text, and the inspector connects with a select (the keyboard way)', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const outline = await screen.findByRole('region', { name: 'Outline' })
   expect(within(outline).getByText('when done goes to Review the draft')).toBeTruthy()
   expect(within(outline).getByText('otherwise goes to Repair the draft')).toBeTruthy()

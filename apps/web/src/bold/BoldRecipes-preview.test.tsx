@@ -6,7 +6,7 @@ import { setUpRecipeTests } from './BoldRecipes-helpers.tsx'
 const { mount, requests } = setUpRecipeTests()
 
 test('the editor draws a run of the version on screen over the cards, and links to it', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const live = await screen.findByText(/Live: run started/)
   expect(
     within(live.closest('p')!)
@@ -22,7 +22,7 @@ test('the editor draws a run of the version on screen over the cards, and links 
 })
 
 test('Preview plays the drawn workflow, says nothing runs, and Stop returns to the cards', async () => {
-  mount('/b/settings/recipes/wf-release')
+  mount('/b/tasks/recipes/wf-release')
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
   })) as HTMLButtonElement
@@ -39,7 +39,7 @@ test('Preview plays the drawn workflow, says nothing runs, and Stop returns to t
 })
 
 test('Preview is disabled while the draft has problems, and says why', async () => {
-  mount('/b/settings/recipes/wf-draft')
+  mount('/b/tasks/recipes/wf-draft')
   const preview = (await screen.findByRole('button', {
     name: 'Preview, nothing runs',
   })) as HTMLButtonElement

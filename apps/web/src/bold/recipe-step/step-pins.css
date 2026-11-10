@@ -1,0 +1,27 @@
+/* Decision 183, mock-up 28-tasks-recipe: a step's model and effort pills; amber when a step has its own. */
+[data-ui='bold'] .bold-pins {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+[data-ui='bold'] .bold-pin {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.87em;
+  font-weight: 700;
+}
+[data-ui='bold'] .bold-pin--set {
+  background: rgba(242, 179, 61, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(242, 179, 61, 0.6);
+  color: var(--warn);
+}
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-pin {
+    min-height: 44px;
+  }
+}

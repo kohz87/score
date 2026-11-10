@@ -1,26 +1,50 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { boldSettingsSectionLink } from './bold-links.ts'
+import { useParams, useSearchParams } from 'react-router'
 import { RecipeLibrary } from './BoldRecipeLibrary.tsx'
 import { BoldRecipeRoute } from './BoldRecipeRoute.tsx'
+import { RecipeSidePanels } from './repeating/RecipeSidePanels.tsx'
+import { RecipesNav } from './repeating/RecipesNav.tsx'
 import { RunSheet } from './RunSheet.tsx'
+import { TasksTabs } from './tasks-tabs/TasksTabs.tsx'
 import '../routes/orchestrations/orchestrations.css'
 import '../routes/workflows/workflows.css'
 import './bold-recipes.css'
+import './repeating/repeating.css'
+
+// A recipe that is saved can repeat; a new one and the built-in lead decides have no schedule.
+const unsaved = (workflowId: string) => workflowId === 'new' || workflowId === 'lead-decides'
 
 /**
- * The route: `/b/settings/recipes` is the library (with `?run=<brief id>` a chat-less run's read-only sheet over it),
- * `/b/settings/recipes/new`, `/b/settings/recipes/lead-decides` or `/b/settings/recipes/:workflowId` is the editor.
+ * Decision 183: Recipes are under Tasks. `/b/tasks/recipes` is the library (with `?run=<brief id>` a chat-less run's
+ * read-only sheet over it), `/b/tasks/recipes/new`, `/b/tasks/recipes/lead-decides` or `/b/tasks/recipes/:workflowId`
+ * is the editor, with the recipes on its left and, for a saved one, the Repeats card on its right.
  */
 export function BoldRecipesPage() {
   const { workflowId } = useParams()
-  const navigate = useNavigate()
   const [query, setQuery] = useSearchParams()
   const runBrief = query.get('run')
-  if (workflowId) return <BoldRecipeRoute workflowId={workflowId} />
+  const saved = workflowId !== undefined && !unsaved(workflowId)
   return (
-    <>
-      <RecipeLibrary onBack={() => void navigate(boldSettingsSectionLink('connections'))} />
-      {runBrief && <RunSheet briefId={runBrief} onClose={() => setQuery({}, { replace: true })} />}
-    </>
+    <div className="bold-page bold-rt" data-ui-page="tasks">
+      <header className="bold-rt-head">
+        <h1>Tasks</h1>
+        <TasksTabs />
+      </header>
+      <div
+        className={`bold-rt-cols${workflowId ? ' bold-rt-cols--recipe' : ''}${saved ? ' bold-rt-cols--saved' : ''}`}
+      >
+        {workflowId && <RecipesNav selected={workflowId} />}
+        {workflowId ? (
+          <BoldRecipeRoute workflowId={workflowId} />
+        ) : (
+          <div>
+            <RecipeLibrary />
+            {runBrief && (
+              <RunSheet briefId={runBrief} onClose={() => setQuery({}, { replace: true })} />
+            )}
+          </div>
+        )}
+        {saved && <RecipeSidePanels workflowId={workflowId} />}
+      </div>
+    </div>
   )
 }
