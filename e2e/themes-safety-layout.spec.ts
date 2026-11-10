@@ -121,7 +121,7 @@ test.describe('layout options never weaken a protected surface', () => {
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await assertProtectedHolds(card)
       // Needs-you stays in the dock.
-      await expect(page.locator('.bold-needs[data-protected]').first()).toBeAttached()
+      await expect(page.locator('.bold-chat-needs[data-protected]').first()).toBeAttached()
       // Settings can't be hidden, and the way back is on its page.
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       await page

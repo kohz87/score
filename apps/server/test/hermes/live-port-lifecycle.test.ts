@@ -61,9 +61,9 @@ test('health and capabilities are cached; profile readers include agents without
   const agents = await live.listAgents()
   expect(env.fake.calls).toHaveLength(before)
   expect(agents).toMatchObject([
-    { id: 'builder', served: true, style: { color: '#6B4EFF', shape: 'circle-dot' } },
-    { id: 'default', served: true, style: { color: '#19C39A', shape: 'triangle' } },
-    { id: 'reviewer', served: true, style: { color: '#FFB61E', shape: 'diamond' } },
+    { id: 'builder', served: true, style: { color: '#6B4EFF', shape: 'ball' } },
+    { id: 'default', served: true, style: { color: '#19C39A', shape: 'drop' } },
+    { id: 'reviewer', served: true, style: { color: '#FFB61E', shape: 'triangle' } },
   ])
   await expect(
     live.deliverDecision({

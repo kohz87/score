@@ -1,10 +1,11 @@
-import { ShapeSchema, type AgentStyle, type AgentSummary } from '@score/contract'
+import { OfferedShapes, type AgentStyle, type AgentSummary } from '@score/contract'
 import { useEffect, useId } from 'react'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
+import { drawnShape } from '../components/agent-shapes.ts'
 import { shapeLabel } from '../routes/team/AgentAppearanceFields.tsx'
 import { colourChoices } from './bold-add-agent.ts'
 
-/** Shape, colour and the live mark: the same 22 contract shapes, with colours already on the team faded. */
+/** Shape, colour and the live mark: the nine shapes Score offers, with colours already on the team faded. */
 export function Appearance({
   agents,
   name,
@@ -36,8 +37,8 @@ export function Appearance({
         />
       </div>
       <div className="bold-add-shapes" role="radiogroup" aria-label="Shape">
-        {ShapeSchema.options.map((shape) => {
-          const selected = value.shape === shape
+        {OfferedShapes.map((shape) => {
+          const selected = drawnShape(value.shape) === shape
           const label = shapeLabel(shape)
           return (
             <label key={shape} className={selected ? 'on' : undefined}>
@@ -82,7 +83,7 @@ export function Appearance({
           )
         })}
       </div>
-      <span className="bold-add-hint">22 shapes · Faded colours are taken</span>
+      <span className="bold-add-hint">9 shapes · Faded colours are taken</span>
     </div>
   )
 }

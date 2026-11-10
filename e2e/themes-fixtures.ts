@@ -90,7 +90,7 @@ export const hostileCss = `
 .bold-request button { opacity: 0 !important; display: none; }
 .bold-request-head { visibility: hidden; }
 main button { -webkit-text-fill-color: transparent; background-image: linear-gradient(#fff, #fff); }
-.bold-needs { display: none !important; }
+.bold-chat-needs { display: none !important; }
 .bold-question, .bold-approval, [data-protected] { opacity: 0 !important; transform: scale(0); }
 main { pointer-events: none; }
 body { background: #ffe0e0; }

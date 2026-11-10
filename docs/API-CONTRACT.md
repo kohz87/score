@@ -1223,7 +1223,8 @@ Deletion clears the agent's pause. Import still refuses a retired name.
 - `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape? }` → `AgentSummary` (Hermes profiles and
   coding agents alike; ids are unique across both). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`,
   `star`, `pill`, `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`,
-  `bubble`, `gem`, `ball`, `flower` (2.2.0). `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
+  `bubble`, `gem`, `ball`, `flower` (2.2.0). `OfferedShapes` (decision 184) lists the nine Score offers and draws: `ball`, `drop`, `triangle`, `cloud`, `pill`,
+  `cross`, `flower`, `square`, `blob`; every other name stays valid and is drawn as the nearest of the nine. `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
   decision 118). The cut-out and ring looks and pet packs of PLAN 10.2 are gone, with `PUT|DELETE
 /api/agents/:agentId/pack` and `GET /api/agents/:agentId/pack/:activity`. A body or stored style that still carries
   `look` or `pack` is read without them (unknown keys are dropped), and the style route ignores both keys, so an

@@ -154,7 +154,7 @@ for (const id of packagedThemeIds) {
         expect(await allow.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
           'Hanken Grotesk',
         )
-        await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
+        await expect(page.locator('.bold-chat-needs[data-protected]').first()).toBeVisible()
         await expect(page.locator('.agent-glyph').first()).toBeVisible()
         await allowIt(card)
       })
@@ -168,7 +168,7 @@ for (const id of packagedThemeIds) {
         content: `
           .bold-request, .bold-request * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; }
           .bold-request { display: none !important; }
-          .bold-needs { display: none !important; }
+          .bold-chat-needs { display: none !important; }
           .agent-glyph { display: none !important; }
         `,
       })
@@ -177,7 +177,7 @@ for (const id of packagedThemeIds) {
         expect(await part.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
         expect(await isOnTop(part)).toBe(true)
       }
-      await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
+      await expect(page.locator('.bold-chat-needs[data-protected]').first()).toBeVisible()
       await allowIt(card)
     })
 

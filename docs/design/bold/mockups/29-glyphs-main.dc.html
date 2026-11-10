@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chats with shape tiles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600"><a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Chats</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Agents</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Tasks</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a></nav>
+    <span style="flex:1"></span>
+    <span style="height:40px;padding:0 14px;border-radius:999px;background:#1A1C23;color:#A6A8B4;font-size:14px;display:flex;align-items:center">Search ⌘K</span>
+    <span style="width:40px;height:40px;border-radius:50%;background:#ECECF1;color:#12131A;font-weight:700;display:flex;align-items:center;justify-content:center">Y</span>
+  </header>
+  <div style="flex:1;display:flex;min-height:0">
+    <aside aria-label="Chats" style="width:300px;flex:none;box-sizing:border-box;padding:14px 12px;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:2px;overflow:hidden">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:4px 10px">GROUPS</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <span aria-hidden="true" style="width:56px;height:56px;border-radius:16px;background:#8FD6E0;color:#12131A;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;flex:none">T</span>
+        <span style="flex:1"><b style="display:block;font-size:15px">Team room</b><span style="font-size:13px;color:#A6A8B4">11 members</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">4 Nov</span>
+      </a>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:12px 10px 4px">DIRECT</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#8E7CFF"><circle cx="10" cy="10" r="8"/></g><path d="M11.62 5.98 Q10.23 7.40 9.49 9.16 A0.95 0.95 0 0 0 11.18 10.02 Q11.71 8.16 12.51 6.43 A0.50 0.50 0 0 0 11.62 5.98 Z" fill="#FFFFFF"/><path d="M14.91 5.59 Q13.68 6.79 12.97 8.28 A0.70 0.70 0 0 0 14.18 8.98 Q14.74 7.39 15.54 5.95 A0.36 0.36 0 0 0 14.91 5.59 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">lead</b><span style="font-size:13px;color:#A6A8B4">Leads the team</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">17:08</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;background:#22242C;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#4FD1A5"><path d="M12.59 5.85 L16.92 13.29 A2.60 2.60 0 0 1 14.68 17.20 L5.32 17.20 A2.60 2.60 0 0 1 3.08 13.29 L7.41 5.85 A3.00 3.00 0 0 1 12.59 5.85 Z"/></g><path d="M7.88 11.40 Q7.75 12.40 7.82 13.40 A0.68 0.68 0 0 0 9.18 13.40 Q9.25 12.40 9.12 11.40 A0.62 0.62 0 0 0 7.88 11.40 Z" fill="#FFFFFF"/><path d="M10.88 11.40 Q10.75 12.40 10.82 13.40 A0.68 0.68 0 0 0 12.18 13.40 Q12.25 12.40 12.12 11.40 A0.62 0.62 0 0 0 10.88 11.40 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">builder</b><span style="font-size:13px;color:#A6A8B4">working</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">Mon</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#F2B33D"><path d="M12.40 4.00 L16.00 7.60 A3.40 3.40 0 0 1 16.00 12.40 L12.40 16.00 A3.40 3.40 0 0 1 7.60 16.00 L4.00 12.40 A3.40 3.40 0 0 1 4.00 7.60 L7.60 4.00 A3.40 3.40 0 0 1 12.40 4.00 Z"/></g><path d="M7.77 8.84 Q7.64 10.05 7.71 11.25 A0.78 0.78 0 0 0 9.26 11.14 Q9.16 9.95 8.86 8.76 A0.55 0.55 0 0 0 7.77 8.84 Z" fill="#FFFFFF"/><path d="M11.14 8.76 Q10.84 9.95 10.74 11.14 A0.78 0.78 0 0 0 12.29 11.25 Q12.36 10.05 12.23 8.84 A0.55 0.55 0 0 0 11.14 8.76 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">reviewer</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">2 Nov</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#FF7A9A"><rect x="1.8" y="4.2" width="16.4" height="11.6" rx="5.4"/></g><path d="M5.70 7.05 Q5.70 6.60 6.15 6.60 H7.85 Q8.30 6.60 8.30 7.05 V9.20 A1.30 1.30 0 0 1 5.70 9.20 Z" fill="#FFFFFF"/><path d="M11.70 7.05 Q11.70 6.60 12.15 6.60 H13.85 Q14.30 6.60 14.30 7.05 V9.20 A1.30 1.30 0 0 1 11.70 9.20 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">designer</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">28 Oct</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g transform="rotate(-6 10 10)"><g fill="#9BD45F"><circle cx="6.2" cy="11.4" r="4.0"/><circle cx="10.6" cy="8.0" r="4.7"/><circle cx="14.9" cy="10.6" r="3.8"/><circle cx="12.6" cy="14.4" r="3.6"/><circle cx="7.8" cy="14.6" r="3.3"/></g><path d="M6.28 9.71 Q7.18 10.15 8.13 10.46 A0.52 0.52 0 0 0 8.52 9.49 Q7.62 9.05 6.67 8.74 A0.52 0.52 0 0 0 6.28 9.71 Z" fill="#FFFFFF"/><path d="M10.19 11.17 Q11.09 11.62 12.05 11.92 A0.52 0.52 0 0 0 12.44 10.95 Q11.54 10.51 10.58 10.20 A0.52 0.52 0 0 0 10.19 11.17 Z" fill="#FFFFFF"/></g></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">reader</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">28 Oct</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g transform="rotate(8 10 10)"><g fill="#E36BD8"><path d="M11.30 2.15 L16.15 4.95 A2.60 2.60 0 0 1 17.45 7.20 L17.45 12.80 A2.60 2.60 0 0 1 16.15 15.05 L11.30 17.85 A2.60 2.60 0 0 1 8.70 17.85 L3.85 15.05 A2.60 2.60 0 0 1 2.55 12.80 L2.55 7.20 A2.60 2.60 0 0 1 3.85 4.95 L8.70 2.15 A2.60 2.60 0 0 1 11.30 2.15 Z"/></g><path d="M9.02 7.63 Q8.32 9.01 8.06 10.49 A0.85 0.85 0 0 0 9.72 10.84 Q9.84 9.34 10.00 7.84 A0.50 0.50 0 0 0 9.02 7.63 Z" fill="#FFFFFF"/><path d="M12.54 7.29 Q11.87 8.52 11.59 9.84 A0.70 0.70 0 0 0 12.95 10.18 Q13.10 8.82 13.31 7.49 A0.40 0.40 0 0 0 12.54 7.29 Z" fill="#FFFFFF"/></g></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">swarm-1</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">28 Oct</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#3ED6C4"><path d="M11.27 3.56 L4.65 9.71 A1.21 1.21 0 0 0 5.47 11.80 L7.40 11.80 A1.00 1.00 0 0 1 8.35 13.12 L7.55 15.44 A0.87 0.87 0 0 0 8.98 16.36 L15.57 10.11 A1.22 1.22 0 0 0 14.73 8.00 L12.81 8.00 A1.00 1.00 0 0 1 11.87 6.67 L12.65 4.46 A0.85 0.85 0 0 0 11.27 3.56 Z"/></g><path d="M8.16 8.87 Q7.66 9.74 7.32 10.68 A0.65 0.65 0 0 0 8.53 11.17 Q8.94 10.26 9.18 9.28 A0.55 0.55 0 0 0 8.16 8.87 Z" fill="#FFFFFF"/><path d="M11.36 8.77 Q10.86 9.64 10.52 10.58 A0.65 0.65 0 0 0 11.73 11.07 Q12.14 10.16 12.38 9.18 A0.55 0.55 0 0 0 11.36 8.77 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">voter</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">28 Oct</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#FF8A4C"><rect x="1.8" y="3.2" width="16.4" height="11.8" rx="5.2"/><path d="M5.69 12.77 L8.82 13.52 A0.60 0.60 0 0 1 9.06 14.57 L6.57 16.59 A1.10 1.10 0 0 1 4.78 15.66 L4.95 13.31 A0.60 0.60 0 0 1 5.69 12.77 Z"/></g><path d="M6.10 6.65 Q6.10 6.20 6.55 6.20 H8.05 Q8.50 6.20 8.50 6.65 V8.60 A1.20 1.20 0 0 1 6.10 8.60 Z" fill="#FFFFFF"/><path d="M11.50 6.65 Q11.50 6.20 11.95 6.20 H13.45 Q13.90 6.20 13.90 6.65 V8.60 A1.20 1.20 0 0 1 11.50 8.60 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">planner</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">27 Oct</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:18px;text-decoration:none">
+        <svg width="56" height="56" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#5B8CFF"><path d="M10.71 2.04 L15.62 3.72 A2.60 2.60 0 0 1 17.36 6.48 L16.99 9.71 A5.00 5.00 0 0 1 15.61 12.62 L12.01 16.33 A2.80 2.80 0 0 1 7.99 16.33 L4.39 12.62 A5.00 5.00 0 0 1 3.01 9.71 L2.64 6.48 A2.60 2.60 0 0 1 4.38 3.72 L9.29 2.04 A2.20 2.20 0 0 1 10.71 2.04 Z"/></g><path d="M7.45 7.16 Q7.44 8.67 7.44 10.18 A0.82 0.82 0 0 0 9.07 10.01 Q8.95 8.51 8.44 7.06 A0.50 0.50 0 0 0 7.45 7.16 Z" fill="#FFFFFF"/><path d="M11.56 7.06 Q11.05 8.51 10.93 10.01 A0.82 0.82 0 0 0 12.56 10.18 Q12.56 8.67 12.55 7.16 A0.50 0.50 0 0 0 11.56 7.06 Z" fill="#FFFFFF"/></svg>
+        <span style="flex:1;min-width:0"><b style="display:block;font-size:15px">auditor</b><span style="font-size:13px;color:#A6A8B4">free</span></span>
+        <span style="font-size:12px;color:#A6A8B4;align-self:flex-start;margin-top:6px">27 Oct</span>
+      </a>
+    </aside>
+    <main style="flex:1;padding:18px 28px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:14px"><svg width="72" height="72" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#4FD1A5"><path d="M12.59 5.85 L16.92 13.29 A2.60 2.60 0 0 1 14.68 17.20 L5.32 17.20 A2.60 2.60 0 0 1 3.08 13.29 L7.41 5.85 A3.00 3.00 0 0 1 12.59 5.85 Z"/></g><path d="M7.88 11.40 Q7.75 12.40 7.82 13.40 A0.68 0.68 0 0 0 9.18 13.40 Q9.25 12.40 9.12 11.40 A0.62 0.62 0 0 0 7.88 11.40 Z" fill="#FFFFFF"/><path d="M10.88 11.40 Q10.75 12.40 10.82 13.40 A0.68 0.68 0 0 0 12.18 13.40 Q12.25 12.40 12.12 11.40 A0.62 0.62 0 0 0 10.88 11.40 Z" fill="#FFFFFF"/></svg><div><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:700;color:#7FE3C1">builder</div><div style="font-size:13px;color:#A6A8B4">Direct · working · Only you and builder see this</div></div></div>
+      <div style="align-self:flex-end;padding:10px 16px;border-radius:18px;background:#ECECF1;color:#12131A;font-size:15px">Why websockets and not server-sent events?</div>
+      <div style="display:flex;gap:10px;align-items:flex-start"><svg width="40" height="40" viewBox="1 1 18 18" aria-hidden="true" style="flex:none"><g fill="#4FD1A5"><path d="M12.59 5.85 L16.92 13.29 A2.60 2.60 0 0 1 14.68 17.20 L5.32 17.20 A2.60 2.60 0 0 1 3.08 13.29 L7.41 5.85 A3.00 3.00 0 0 1 12.59 5.85 Z"/></g><path d="M7.88 11.40 Q7.75 12.40 7.82 13.40 A0.68 0.68 0 0 0 9.18 13.40 Q9.25 12.40 9.12 11.40 A0.62 0.62 0 0 0 7.88 11.40 Z" fill="#FFFFFF"/><path d="M10.88 11.40 Q10.75 12.40 10.82 13.40 A0.68 0.68 0 0 0 12.18 13.40 Q12.25 12.40 12.12 11.40 A0.62 0.62 0 0 0 10.88 11.40 Z" fill="#FFFFFF"/></svg><div style="padding:10px 16px;border-radius:18px;background:#22242C;font-size:15px;max-width:640px">Server-sent events only go one way. A socket does both over one connection.</div></div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

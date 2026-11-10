@@ -1,17 +1,15 @@
-import { ShapeSchema, type Shape } from '@score/contract'
+import { OfferedShapes, ShapeSchema } from '@score/contract'
 import { expect, test } from 'vitest'
 import { faceGeometry, faceHash, faceLayouts, faceTiming, type FaceMood } from './agent-face.ts'
-import { agentShapes } from './agent-shapes.ts'
+import { shapeEyes } from './agent-eyes.ts'
+import { agentShapes, type OfferedShape } from './agent-shapes.ts'
 import { painted } from './shape-raster.ts'
 
 const moods: FaceMood[] = ['idle', 'resting', 'thinking', 'working', 'needs', 'done']
-const HOLE = 5.3 // circle-dot: the eyes sit inside the ring, which has this inner radius
 const GAP = 0.12 // every sampled point must have paint this far around it
 const MARGIN = 0.3 // and the whole face stays this far inside the silhouette's box
 
-function box(shape: Shape) {
-  if (shape === 'circle-dot')
-    return { x0: 10 - 6.5 - 1.2, x1: 10 + 6.5 + 1.2, y0: 10 - 7.7, y1: 10 + 7.7 }
+function box(shape: OfferedShape) {
   const inside = painted(agentShapes[shape])
   let x0 = 20
   let x1 = 0
@@ -30,7 +28,7 @@ function box(shape: Shape) {
 }
 
 /** Every point the face can occupy in this mood: the eyes (tilted, placed) at the extremes of the gaze. */
-function facePoints(shape: Shape, mood: FaceMood) {
+function facePoints(shape: OfferedShape, mood: FaceMood) {
   const g = faceGeometry(shape, mood)
   const out: [number, number][] = []
   const shifts =
@@ -63,45 +61,40 @@ function facePoints(shape: Shape, mood: FaceMood) {
   return out
 }
 
-test('every one of the 22 shapes has a face layout', () => {
-  expect(Object.keys(faceLayouts).sort()).toEqual([...ShapeSchema.options].sort())
-  expect(ShapeSchema.options).toHaveLength(22)
+test('every one of the nine drawn shapes has a face layout, and the 22 names all have a face', () => {
+  expect(Object.keys(faceLayouts).sort()).toEqual([...OfferedShapes].sort())
+  for (const shape of ShapeSchema.options) {
+    expect(faceGeometry(shape, 'idle').eyes, shape).toHaveLength(2)
+  }
 })
 
-test.each(ShapeSchema.options)(
-  '%s: the face stays inside the silhouette in every mood',
-  (shape) => {
-    const b = box(shape)
-    const inside = painted(agentShapes[shape])
-    for (const mood of moods) {
-      const points = facePoints(shape, mood)
-      expect(points.length, `${shape} ${mood}`).toBeGreaterThan(0)
-      for (const [x, y] of points) {
-        const where = `${shape}/${mood} at ${x.toFixed(2)},${y.toFixed(2)}`
-        expect(x, where).toBeGreaterThanOrEqual(b.x0 + MARGIN)
-        expect(x, where).toBeLessThanOrEqual(b.x1 - MARGIN)
-        expect(y, where).toBeGreaterThanOrEqual(b.y0 + MARGIN)
-        expect(y, where).toBeLessThanOrEqual(b.y1 - MARGIN)
-        if (shape === 'circle-dot') {
-          expect(Math.hypot(x - 10, y - 10), where).toBeLessThanOrEqual(HOLE - GAP)
-          continue
-        }
-        for (const [ox, oy] of [
-          [0, 0],
-          [GAP, 0],
-          [-GAP, 0],
-          [0, GAP],
-          [0, -GAP],
-        ]) {
-          expect(inside(x + ox!, y + oy!), where).toBe(true)
-        }
+test.each(OfferedShapes)('%s: the face stays inside the silhouette in every mood', (shape) => {
+  const b = box(shape)
+  const inside = painted(agentShapes[shape])
+  for (const mood of moods) {
+    const points = facePoints(shape, mood)
+    expect(points.length, `${shape} ${mood}`).toBeGreaterThan(0)
+    for (const [x, y] of points) {
+      const where = `${shape}/${mood} at ${x.toFixed(2)},${y.toFixed(2)}`
+      expect(x, where).toBeGreaterThanOrEqual(b.x0 + MARGIN)
+      expect(x, where).toBeLessThanOrEqual(b.x1 - MARGIN)
+      expect(y, where).toBeGreaterThanOrEqual(b.y0 + MARGIN)
+      expect(y, where).toBeLessThanOrEqual(b.y1 - MARGIN)
+      for (const [ox, oy] of [
+        [0, 0],
+        [GAP, 0],
+        [-GAP, 0],
+        [0, GAP],
+        [0, -GAP],
+      ]) {
+        expect(inside(x + ox!, y + oy!), where).toBe(true)
       }
     }
-  },
-)
+  }
+})
 
 test('the two eyes never touch, in any mood or gaze', () => {
-  for (const shape of ShapeSchema.options) {
+  for (const shape of OfferedShapes) {
     for (const mood of moods) {
       const g = faceGeometry(shape, mood)
       const [left, right] = g.eyes as [(typeof g.eyes)[0], (typeof g.eyes)[0]]
@@ -120,7 +113,7 @@ test('the two eyes never touch, in any mood or gaze', () => {
 })
 
 test('each shape thinks with flat level eyes, and needs-you eyes are round', () => {
-  for (const shape of ShapeSchema.options) {
+  for (const shape of OfferedShapes) {
     const flat = faceGeometry(shape, 'thinking')
     for (const eye of flat.eyes) {
       expect(eye.tilt).toBeCloseTo(0)
@@ -136,8 +129,33 @@ test('each shape thinks with flat level eyes, and needs-you eyes are round', () 
   }
 })
 
+test('working and resting cut each eye flat across at 48% of its height, thinking draws a line', () => {
+  for (const shape of OfferedShapes) {
+    const idle = faceGeometry(shape, 'idle').eyes
+    const height = (eye: (typeof idle)[number]) => {
+      const ys = eye.points.map(([, y]) => y)
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    for (const mood of ['working', 'resting'] as const) {
+      faceGeometry(shape, mood).eyes.forEach((eye, index) => {
+        expect(height(eye) / height(idle[index]!), `${shape}/${mood}`).toBeCloseTo(0.52, 1)
+        expect(eye.x).toBe(idle[index]!.x)
+        expect(eye.tilt).toBe(idle[index]!.tilt)
+      })
+    }
+  }
+})
+
+test('the nine shapes have their own eyes: dots, bars, squares, triangles, half-moons, capsules', () => {
+  const kinds = OfferedShapes.map((shape) => shapeEyes[shape][0].kind)
+  expect(new Set(kinds)).toEqual(new Set(['dot', 'capsule', 'rect', 'triangle', 'half-moon']))
+  expect(faceGeometry('circle-dot', 'idle').eyes[0]!.d).toBe(
+    faceGeometry('ball', 'idle').eyes[0]!.d,
+  )
+})
+
 test('happy arcs stay apart', () => {
-  for (const shape of ShapeSchema.options) {
+  for (const shape of OfferedShapes) {
     const [a, b] = faceGeometry(shape, 'done').arcPoints as [[number, number][], [number, number][]]
     const aMax = Math.max(...a.map(([x]) => x))
     const bMin = Math.min(...b.map(([x]) => x))

@@ -1,4 +1,5 @@
 export * from './types.ts'
+export * from './offered-shapes.ts'
 export * from './stream.ts'
 export * from './bridge.ts'
 export * from './http.ts'

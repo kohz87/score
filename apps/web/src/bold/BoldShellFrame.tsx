@@ -12,16 +12,13 @@ import { BoldFrameContext } from '../shell/framed-paths.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
-import { agentsQuery, approvalsQuery, roomsQuery } from '../routes/chat/queries.ts'
-import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
-import { approvalNeedsYou } from './room/room-model.ts'
+import { agentsQuery, roomsQuery } from '../routes/chat/queries.ts'
+import { useNeedsElsewhere } from './use-needs-elsewhere.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
 import { NotificationBridge } from '../notifications/NotificationBridge.tsx'
 import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
-import { dockProgress, onTeam } from './bold-agents.ts'
-import { boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { BookIcon, GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
 import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
@@ -31,21 +28,11 @@ import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext, type StartJobOptions } from './BoldStartJob.tsx'
 import { DeleteToast } from '../routes/chat/DeleteToast.tsx'
 import { JobUndoToast } from './room/JobUndoToast.tsx'
-import { DockRing, dockOverflow } from './BoldShellDock.tsx'
 import { HermesCheckNotice, ShellFenceNotice } from './BoldShellNotices.tsx'
 import { PHONE, viewOf, type View } from './bold-shell-model.ts'
 
 export function BoldShellFrame() {
   const agents = useStreamQuery(agentsQuery).data ?? []
-  // An agent needs you while a decision of yours is open for it (as the classic Needs-you dot), not only while a run
-  // says it waits.
-  const approvals = useStreamQuery(approvalsQuery).data ?? []
-  // A question an agent asked is a decision of yours too (decision 128).
-  const questions = useStreamQuery(questionsQuery).data ?? []
-  const waitingOn = new Set([
-    ...approvals.filter(approvalNeedsYou).map((item) => item.agentId),
-    ...questions.filter(questionNeedsYou).map((item) => item.agentId),
-  ])
   const navigate = useNavigate()
   const location = useLocation()
   const view = viewOf(location.pathname)
@@ -54,8 +41,11 @@ export function BoldShellFrame() {
   // room's jobs are unknown, and counting All would briefly inflate the badge and then change it.
   const roomJob = new URLSearchParams(location.search).get('job') ?? 'all'
   const roomNeeds = useRoomNeedsYouState({ roomId: null, jobs: [], selectedJob: roomJob })
+  // Decision 184: with the dock gone the Chats button is where every page says something waits, so it also counts the
+  // approvals and questions in other chats; the team room counts its own items.
+  const elsewhere = useNeedsElsewhere()
   // What has loaded counts at once; a failed read shows the count as "at least" (N+, or ! when nothing loaded).
-  const roomNeedsYou = roomNeeds.total
+  const roomNeedsYou = roomNeeds.total + elsewhere
   const roomNeedsShort = roomNeeds.incomplete
   const roomBadge =
     roomNeedsYou > 0
@@ -63,6 +53,13 @@ export function BoldShellFrame() {
       : roomNeedsShort
         ? '!'
         : null
+  // The count says what it means, on a desktop too (the phone tab always did).
+  const chatsLabel =
+    roomNeedsYou > 0
+      ? `Chats, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
+      : roomNeedsShort
+        ? 'Chats, couldn’t check everything that needs you'
+        : 'Chats'
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const look = useLook()
   const preview = usePreview()
@@ -115,13 +112,6 @@ export function BoldShellFrame() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
   const searchTrigger = useRef<HTMLButtonElement>(null)
-  // Many agents would crowd the top bar: the first few rings (anyone who needs you first), then a "+N" ring.
-  const dockRings = dockOverflow(
-    agents.filter(onTeam),
-    (agent) => agent.status === 'waiting' || waitingOn.has(agent.id),
-  )
-  const dockHasProgress = agents.some(() => dockProgress() !== null)
-
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
   // the room: Agents, Knowledge and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
   // The player screen is an ordinary page, even though it belongs to Room in the navigation.
@@ -188,10 +178,11 @@ export function BoldShellFrame() {
       type="button"
       className={view === target ? 'on' : undefined}
       aria-current={view === target ? 'page' : undefined}
+      aria-label={target === 'room' ? chatsLabel : undefined}
       onClick={go(to)}
     >
       {label}
-      {/* 3.19.1: where the team rings make room (≤ 1100px) the Room button carries the needs-you count instead. */}
+      {/* The Chats button carries the needs-you count on every width (decision 184: no team rings any more). */}
       {target === 'room' && roomBadge && (
         <span className="bold-nav-count" data-protected="inline-flex">
           {roomBadge}
@@ -227,36 +218,6 @@ export function BoldShellFrame() {
                 {navButton('tasks', 'Tasks', '/b/tasks')}
                 {navButton('screens', 'Screens', '/b/screens')}
               </nav>
-            )}
-            {!phone && (
-              <div
-                className="dock"
-                role="group"
-                aria-label="Your team. Click someone to talk one to one."
-              >
-                {dockRings.shown.map((agent) => (
-                  <DockRing
-                    key={agent.id}
-                    agent={agent}
-                    needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
-                    onOpen={() => void navigate(boldOneToOneLink(agent.id, location.search))}
-                  />
-                ))}
-                {dockRings.hidden > 0 && (
-                  <button
-                    type="button"
-                    className="ring ring-more"
-                    aria-label={`${dockRings.hidden} more on the team. Open Agents.`}
-                    title={`${dockRings.hidden} more`}
-                    onClick={go('/b/agents')}
-                  >
-                    <span className="dock-ring-inner">+{dockRings.hidden}</span>
-                  </button>
-                )}
-                {dockHasProgress && (
-                  <span className="small muted dock-note">Rings show progress</span>
-                )}
-              </div>
             )}
             {phone && (
               <span className="bold-top-links">
@@ -328,13 +289,7 @@ export function BoldShellFrame() {
                 type="button"
                 className={view === 'room' ? 'on' : undefined}
                 aria-current={view === 'room' ? 'page' : undefined}
-                aria-label={
-                  roomNeedsYou > 0
-                    ? `Chats, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
-                    : roomNeedsShort
-                      ? 'Chats, couldn’t check everything that needs you'
-                      : 'Chats'
-                }
+                aria-label={chatsLabel}
                 onClick={go('/b')}
               >
                 <RoomIcon />

@@ -4,14 +4,14 @@ import { expect, test, vi } from 'vitest'
 import { builder } from './bold-team-fixtures.ts'
 import { open, teamState } from './bold-team-helpers.tsx'
 
-test('?add=agent opens the Add an agent dialog with all 22 shapes and taken colours disabled', async () => {
+test('?add=agent opens the Add an agent dialog with the nine offered shapes and taken colours disabled', async () => {
   open('/b/agents?add=agent')
   const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
 
   const shapes = within(dialog).getByRole('radiogroup', { name: 'Shape' })
-  expect(within(shapes).getAllByRole('radio')).toHaveLength(22)
-  fireEvent.click(within(shapes).getByRole('radio', { name: 'circle dot' }))
-  expect(within(dialog).getByRole('img', { name: 'New agent, circle-dot' })).toBeDefined()
+  expect(within(shapes).getAllByRole('radio')).toHaveLength(9)
+  fireEvent.click(within(shapes).getByRole('radio', { name: 'ball' }))
+  expect(within(dialog).getByRole('img', { name: 'New agent, ball' })).toBeDefined()
 
   const colours = within(dialog).getByRole('radiogroup', { name: 'Colour' })
   const taken = within(colours).getByRole('radio', {

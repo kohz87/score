@@ -24,9 +24,11 @@ test('?ui=bold opens the frame at 1440×900 and 390×844', async ({ page }) => {
   await expect(topNav.getByRole('button', { name: 'Chats' })).toBeVisible()
   await expect(topNav.getByRole('button', { name: 'Agents' })).toBeVisible()
   await expect(topNav.getByRole('button', { name: 'Knowledge' })).toBeVisible()
-  const dock = page.getByRole('group', { name: /Your team/ })
-  await expect(dock.getByRole('button', { name: /One to one with lead/ })).toBeVisible()
-  await expect(dock.getByRole('button', { name: /One to one with builder/ })).toBeVisible()
+  // Decision 184: no agent row in the top bar; the chat list's Direct rows open each agent.
+  await expect(page.getByRole('group', { name: /Your team/ })).toHaveCount(0)
+  const chats = page.getByRole('complementary', { name: 'Chats' })
+  await expect(chats.getByRole('link', { name: /^lead/ })).toBeVisible()
+  await expect(chats.getByRole('link', { name: /^builder/ })).toBeVisible()
   await expect(page.getByRole('complementary', { name: 'Side panel' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible()
 
@@ -66,7 +68,7 @@ test.describe('reduced motion', () => {
   test('no element in the frame keeps a running animation', async ({ page }) => {
     await pair(page)
     await page.goto('/?ui=bold')
-    await expect(page.getByRole('group', { name: /Your team/ })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
     const probe = await addLivedotProbe(page)
     expect(await probe.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
     const running = await page.locator('[data-ui="bold"]').evaluate((root) =>
@@ -85,7 +87,7 @@ test.describe('normal motion', () => {
   test('the livedot animation runs without a reduced-motion preference', async ({ page }) => {
     await pair(page)
     await page.goto('/?ui=bold')
-    await expect(page.getByRole('group', { name: /Your team/ })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
     const probe = await addLivedotProbe(page)
     expect(await probe.evaluate((element) => getComputedStyle(element).animationName)).not.toBe(
       'none',

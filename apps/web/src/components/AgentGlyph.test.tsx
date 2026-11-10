@@ -3,6 +3,7 @@ import { ShapeSchema, type Shape } from '@score/contract'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
 import { AgentGlyph, agentTint } from './AgentGlyph.tsx'
+import { agentShapes, shapeName } from './agent-shapes.ts'
 
 const shapes = ShapeSchema.options
 const sizes = ['xs', 'sm', 'md', 'lg'] as const
@@ -58,7 +59,7 @@ test.each([false, true])('decorative mode hides the glyph (bare=%s)', (bare) => 
 
 test.each(shapes)('%s is described only when requested', (shape) => {
   const { rerender } = render(<AgentGlyph agent={agent(shape)} describeShape />)
-  expect(screen.getByRole('img', { name: `lead, ${shape}` })).toBeDefined()
+  expect(screen.getByRole('img', { name: `lead, ${shapeName(shape)}` })).toBeDefined()
   rerender(<AgentGlyph agent={agent(shape)} />)
   expect(screen.getByRole('img', { name: 'lead' })).toBeDefined()
 })
@@ -72,23 +73,31 @@ test('uses the supplied agent name and updates identity and tint on rerender', (
   )
   const glyph = screen.getByRole('img', { name: 'builder' })
   expect(glyph.style.getPropertyValue('--glyph-tint')).toBe('#DDF6EE')
-  expect(glyph.querySelector('path')?.getAttribute('d')).toBe('M10 3 L17.5 16 H2.5 Z')
+  expect(glyph.querySelector('path')?.getAttribute('d')).toBe(agentShapes.triangle[0].d)
 })
 
-test('preserves the four design geometries exactly at list size', () => {
-  const { rerender } = render(<AgentGlyph agent={agent()} size="xs" />)
+test('preserves the nine drawn geometries exactly at list size, and draws a retired name as its nearest', () => {
+  const { rerender } = render(<AgentGlyph agent={agent('ball')} size="xs" />)
   const svg = () => screen.getByRole('img').querySelector('svg')!
   expect(svg().innerHTML).toBe(
-    '<circle cx="10" cy="10" r="6.5" stroke-width="2.4" class="agent-glyph__ring"></circle><circle cx="10" cy="10" r="2.4" class="agent-glyph__solid"></circle>',
+    '<circle cx="10" cy="10" r="7.07" class="agent-glyph__solid"></circle>',
+  )
+  rerender(<AgentGlyph agent={agent('circle-dot')} size="xs" />)
+  expect(svg().innerHTML).toBe(
+    '<circle cx="10" cy="10" r="7.07" class="agent-glyph__solid"></circle>',
   )
   rerender(<AgentGlyph agent={agent('triangle')} size="xs" />)
-  expect(svg().querySelector('path')?.getAttribute('d')).toBe('M10 3 L17.5 16 H2.5 Z')
+  expect(svg().querySelector('path')?.getAttribute('d')).toBe(agentShapes.triangle[0].d)
   rerender(<AgentGlyph agent={agent('diamond')} size="xs" />)
-  expect(svg().querySelector('path')?.getAttribute('d')).toBe('M10 2.5 L17.5 10 L10 17.5 L2.5 10 Z')
+  expect(svg().querySelector('path')?.getAttribute('d')).toBe(agentShapes.triangle[0].d)
   rerender(<AgentGlyph agent={agent('square')} size="xs" />)
   expect(svg().innerHTML).toBe(
-    '<rect x="4" y="4" width="12" height="12" rx="4" class="agent-glyph__solid"></rect>',
+    '<rect x="2" y="2.19" width="16" height="15.62" rx="3.91" class="agent-glyph__solid"></rect>',
   )
+  rerender(<AgentGlyph agent={agent('cloud')} size="xs" />)
+  // A joined body draws its outline in one pass under the fills.
+  expect(svg().querySelectorAll('.agent-glyph__edge')).toHaveLength(5)
+  expect(svg().querySelectorAll('.agent-glyph__solid--part')).toHaveLength(5)
 })
 
 test.each([
@@ -125,7 +134,7 @@ test.each(['red', '#fff', '#12345Z', '#12345678', ''])(
 )
 
 test.each([false, true])(
-  'explicit high contrast reaches both solid and ring shapes (bare=%s)',
+  'explicit high contrast reaches both single and joined shapes (bare=%s)',
   (bare) => {
     const { rerender } = render(<AgentGlyph agent={agent()} bare={bare} contrast="high" />)
     expect(screen.getByRole('img').classList.contains('agent-glyph--high')).toBe(true)
@@ -137,10 +146,8 @@ test.each([false, true])(
     )?.[1]
     expect(highRule?.replace(/\s+/g, ' ').trim()).toBe(autoRule?.replace(/\s+/g, ' ').trim())
     expect(highRule).toContain('--glyph-shape-stroke: var(--glyph-outline)')
-    expect(highRule).toContain('--glyph-ring-stroke: var(--glyph-outline)')
     expect(highRule).toContain('--glyph-border: 1.5px solid #12131a')
     expect(stylesheet).toContain('stroke: var(--glyph-shape-stroke, none)')
-    expect(stylesheet).toContain('stroke: var(--glyph-ring-stroke, var(--glyph-color))')
     expect(stylesheet).toContain('border: var(--glyph-border, 0 solid transparent)')
   },
 )
@@ -181,7 +188,7 @@ test.each(shapes)('%s is the plain shape: no eyes, no mask, no portrait, at any 
   for (const size of sizes) {
     const { container, unmount } = render(<AgentGlyph agent={agent(shape)} size={size} />)
     expect(container.querySelector('mask, image, img, .agent-glyph__eyes')).toBeNull()
-    expect(container.querySelector('.agent-glyph__solid, .agent-glyph__ring')).not.toBeNull()
+    expect(container.querySelector('.agent-glyph__solid')).not.toBeNull()
     unmount()
   }
 })

@@ -25,7 +25,7 @@ test.describe('a hostile theme', () => {
       'fixed',
       'important',
       'bold-request',
-      'bold-needs',
+      'bold-chat-needs',
       'data-protected',
       'pointer-events',
     ])
@@ -56,10 +56,11 @@ test.describe('a hostile theme', () => {
     await expect(page.locator('.look-banner')).toHaveCount(0)
 
     // The Needs-you ring on an agent in the dock is still shown.
-    const ring = page.locator('.bold-needs[data-protected]').first()
+    const ring = page.locator('.bold-chat-needs[data-protected]').first()
     await expect(ring).toBeVisible()
     expect(await ring.evaluate((el) => getComputedStyle(el).display)).not.toBe('none')
-    await expect(ring).toHaveAccessibleName(/needs you/)
+    // The pill is a span: what it says is its text, which no theme may relabel.
+    await expect(ring).toHaveText(/needs you/)
 
     await allowIt(card)
   })
@@ -82,7 +83,7 @@ test.describe('a hostile theme', () => {
         .bold-request::after { content: "Allow"; position: fixed; inset: 0; z-index: 9999; background: red !important; }
         .bold-request, .bold-request * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; filter: blur(9px) !important; clip-path: inset(100%) !important; }
         .bold-request { display: none !important; }
-        .bold-needs { display: none !important; opacity: 0 !important; }
+        .bold-chat-needs { display: none !important; opacity: 0 !important; }
         .top { position: absolute !important; inset: 0 !important; z-index: 90 !important; background: red !important; }
         .agent-glyph { display: none !important; }
       `,
@@ -100,7 +101,7 @@ test.describe('a hostile theme', () => {
     expect(await allow.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
       'Hanken Grotesk',
     )
-    await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
+    await expect(page.locator('.bold-chat-needs[data-protected]').first()).toBeVisible()
     await allowIt(card)
   })
 

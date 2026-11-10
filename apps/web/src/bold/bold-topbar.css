@@ -60,53 +60,8 @@
   color: var(--hi-ink);
 }
 
-[data-ui='bold'] .dock {
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--bold-d, 1));
-  background: var(--panel);
-  border-radius: 999px;
-  padding: calc(5px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1)) calc(5px * var(--bold-d, 1))
-    calc(5px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .dock-note {
-  margin-left: 6px;
-}
-
-[data-ui='bold'] .ring {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 0;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  /* Named here: the shell's `button { color: inherit }` is unlayered and beats the contrast fallback's layered
-     `color: var(--ink)`, so a ring would keep the failing theme's ink against its own Score fill. */
-  color: var(--ink);
-}
-
-[data-ui='bold'] .ring > span {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  background: var(--panel);
-  display: grid;
-  place-items: center;
-}
-
-[data-ui='bold'] .ring.needs {
-  box-shadow: 0 0 0 2px var(--hi-bg);
-}
-
-[data-ui='bold'] .dock-ring-inner .agent-glyph {
-  width: 22px;
-  height: 22px;
-}
-
 [data-ui='bold'] .searchbtn {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: calc(10px * var(--bold-d, 1));

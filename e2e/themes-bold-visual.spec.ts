@@ -132,11 +132,7 @@ for (const id of boldThemeIds) {
             fullPage: true,
             animations: 'disabled',
             maxDiffPixelRatio: 0.005,
-            mask: [
-              page.locator('.dock'),
-              page.locator('.bold-agentcard-state'),
-              page.locator('.bold-glimpse'),
-            ],
+            mask: [page.locator('.bold-agentcard-state'), page.locator('.bold-glimpse')],
           })
         })
       })
@@ -152,7 +148,6 @@ for (const id of boldThemeIds) {
           fullPage: true,
           animations: 'disabled',
           maxDiffPixelRatio: 0.005,
-          mask: [page.locator('.dock')],
         })
       })
     })

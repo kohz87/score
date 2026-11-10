@@ -1,9 +1,10 @@
 import type { AgentStyle } from '@score/contract'
 import { useContext, useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { AgentFace } from './AgentFace.tsx'
-import { faceHidesCentreDot, moodWords, type FaceMood } from './agent-face.ts'
+import { moodWords, type FaceMood } from './agent-face.ts'
 import { AgentFacesContext } from './agent-faces-context.ts'
-import { agentShapes, type AgentShapeElement } from './agent-shapes.ts'
+import { agentShapes, drawnShape, shapeName, type AgentShapeElement } from './agent-shapes.ts'
+import { contrast as colourContrast } from '../styles/contrast-pairs.ts'
 import './agent-glyph.css'
 
 export type AgentGlyphProps = {
@@ -46,10 +47,9 @@ export function agentTint(color: string): string {
     .toUpperCase()}`
 }
 
-function ShapeElement({ element, className }: { element: AgentShapeElement; className?: string }) {
+function ShapeElement({ element, className }: { element: AgentShapeElement; className: string }) {
   const { tag, ...attributes } = element
-  const outlined = tag === 'circle' && element.strokeWidth !== undefined
-  const cls = className ?? (outlined ? 'agent-glyph__ring' : 'agent-glyph__solid')
+  const cls = className
   switch (tag) {
     case 'circle':
       return <circle {...attributes} className={cls} />
@@ -60,16 +60,25 @@ function ShapeElement({ element, className }: { element: AgentShapeElement; clas
   }
 }
 
-function Shape({
-  elements,
-  className,
-}: {
-  elements: readonly AgentShapeElement[]
-  className?: string
-}) {
-  return elements.map((element, index) => (
-    <ShapeElement key={index} element={element} className={className} />
-  ))
+// A body of several overlapping parts (cloud, clover, flower) draws its outline in one pass under all the fills, so a
+// high-contrast edge runs round the union and not across it.
+function Shape({ elements }: { elements: readonly AgentShapeElement[] }) {
+  const joined = elements.length > 1
+  return (
+    <>
+      {joined &&
+        elements.map((element, index) => (
+          <ShapeElement key={`edge${index}`} element={element} className="agent-glyph__edge" />
+        ))}
+      {elements.map((element, index) => (
+        <ShapeElement
+          key={index}
+          element={element}
+          className={joined ? 'agent-glyph__solid agent-glyph__solid--part' : 'agent-glyph__solid'}
+        />
+      ))}
+    </>
+  )
 }
 
 export function AgentGlyph({
@@ -102,6 +111,12 @@ export function AgentGlyph({
   ]
     .filter(Boolean)
     .join(' ')
+  // Decision 184: the new shell draws the body with no tile behind it, so a colour too close to Score's own ground (under
+  // 3:1, the bar for graphics) gets a thin edge in its own shade on that look (bold-glyph.css).
+  const lowContrast = {
+    'data-low-dark': colourContrast(agent.style.color, '#12131A') < 3 ? '' : undefined,
+    'data-low-light': colourContrast(agent.style.color, '#FFFFFF') < 3 ? '' : undefined,
+  }
   const style = {
     '--glyph-color': agent.style.color,
     '--glyph-tint': agentTint(agent.style.color),
@@ -111,14 +126,11 @@ export function AgentGlyph({
     ? { 'aria-hidden': true as const }
     : {
         role: 'img',
-        'aria-label': [agent.name, describeShape ? agent.style.shape : null, word]
+        'aria-label': [agent.name, describeShape ? shapeName(agent.style.shape) : null, word]
           .filter(Boolean)
           .join(', '),
       }
-  const body =
-    faces && faceHidesCentreDot(agent.style.shape)
-      ? agentShapes[agent.style.shape].slice(0, 1)
-      : agentShapes[agent.style.shape]
+  const body = agentShapes[drawnShape(agent.style.shape)]
   const art = faces ? (
     <g className="agent-glyph__body">
       <Shape elements={body} />
@@ -153,6 +165,7 @@ export function AgentGlyph({
       <svg
         {...accessibility}
         {...face}
+        {...lowContrast}
         data-protected="inline-flex"
         className={className}
         style={style}
@@ -169,6 +182,7 @@ export function AgentGlyph({
     <span
       {...accessibility}
       {...face}
+      {...lowContrast}
       data-protected="inline-flex"
       className={className}
       style={style}

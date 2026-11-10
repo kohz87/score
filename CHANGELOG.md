@@ -3,6 +3,22 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.37.0] — 2026-11-10
+
+### Changed
+- **Agents get new faces (decision 184).** Nine soft, flat-colour shapes, each with its own eyes: ball (dots), drop (bars),
+  peak (squares), cloud (triangles), pill (half-moons), clover (capsules), flower (dots), pebble (dots) and bean
+  (half-moons). Moods, blinking and looking around work on every one. The shape pickers offer these nine; an agent on one
+  of the earlier shapes is drawn as the nearest of them, and its saved look doesn't change.
+- **Bigger, with nothing behind them.** In the new shell an agent is just its shape: 56px in the chat list, 72px in a
+  direct chat's header, 40px next to messages, 64px on the Agents page. A colour too close to Score's background gets a
+  thin edge in its own shade on that look only.
+- **No agent row in the top bar.** The Chats button carries the needs-you count on every width and page, including
+  questions and approvals waiting in other chats, and says so to a screen reader ("Chats, 2 need you").
+- **Themes keep agents visible.** Under an imported or packaged theme an agent sits on a small plate of Score's own,
+  and the chat list's "needs you" pill keeps Score's two-tone edge, so no theme can hide either.
+- New agents start with one of the nine shapes, the first no other agent is drawn as.
+
 ## [3.36.1] — 2026-11-10
 
 ### Fixed
