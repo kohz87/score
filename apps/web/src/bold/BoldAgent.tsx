@@ -1,140 +1,36 @@
-import type { AgentDetail, AgentSummary } from '@score/contract'
+import type { AgentDetail } from '@score/contract'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { runtimeLabel } from '../components/runtime-label.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
-import { usePermissionAction } from '../routes/settings/rules-queries.ts'
 import { useAgentDetail } from '../routes/team/team-queries.ts'
-import { AgentFiles } from '../routes/team/AgentFiles.tsx'
-import { CodingOverview } from '../routes/team/CodingAgent.tsx'
-import { ModelTab } from '../routes/team/ModelTab.tsx'
-import { boldAgentScreenLink } from './bold-links.ts'
 import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
-import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
-import { agentDisplayName, agentMood, agentStateLabel, canTalkTo } from './bold-agents.ts'
+import { agentDisplayName } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
 import { BoldAgentStatus } from './BoldAgentOperation.tsx'
-import { BoldAgentMore } from './BoldAgentMore.tsx'
 import { BoldRemoveAgent } from './BoldRemoveAgent.tsx'
-import { RunsOnCard } from './BoldRunsOn.tsx'
-import { EffortChatsCard } from './efforts/EffortChatsCard.tsx'
+import { AgentEditPanel } from './agent-page/AgentEditPanel.tsx'
+import { AgentHeader } from './agent-page/AgentHeader.tsx'
+import { AgentSectionMenu } from './agent-page/AgentSectionMenu.tsx'
+import { hashTarget, scrollToTarget } from './agent-page/agent-sections.ts'
+import { CodingSections } from './agent-page/CodingSections.tsx'
+import { MemorySection } from './agent-page/MemorySection.tsx'
+import { ModelSection } from './agent-page/ModelSection.tsx'
+import { PersonalitySection } from './agent-page/PersonalitySection.tsx'
+import { SafetySection } from './agent-page/SafetySection.tsx'
+import { ToolsSection } from './agent-page/ToolsSection.tsx'
+import { useAgentFiles } from './agent-page/use-agent-files.ts'
+import { WorkSection } from './agent-page/WorkSection.tsx'
 import './bold-team.css'
+import './agent-more/agent-more.css'
+import './agent-page/agent-page.css'
 
-/** "Change permissions" on the Asks card goes to the Never rules card under More. */
-const permissionsSection = 'agent-permissions'
-
-/** The four cards the prototype puts first: how it works, what runs it, where, and what it asks first. */
-function HermesUpFront({
-  agent,
-  file,
-  onFile,
-  openSection,
-}: {
-  agent: AgentDetail
-  file: AgentFileName
-  onFile: (file: AgentFileName) => void
-  openSection: (id: string) => void
-}) {
-  const engine = runtimeLabel(agent.runtime) ?? 'Hermes'
-  const change = usePermissionAction(agent.id)
-  const asks = agent.permissions.filter((permission) => permission.level === 'asks')
-  return (
-    <div className="grid2 bold-upfront">
-      <section className="card bold-up-card" id="agent-personality" aria-label="How it works">
-        <span className="lab">How {agentDisplayName(agent)} works</span>
-        <AgentFiles agent={agent} file={file} onFile={onFile} />
-      </section>
-
-      <section className="card bold-up-card" id="agent-model" aria-labelledby="agent-model-title">
-        <span className="lab" id="agent-model-title">
-          Runs on
-        </span>
-        <span className="row wrap">
-          <span className="chip on">{engine}</span>
-          <span className="small muted">Engine is set when the agent is added.</span>
-        </span>
-        <ModelTab agent={agent} />
-        <EffortChatsCard agentId={agent.id} />
-      </section>
-
-      <RunsOnCard agent={agent} />
-
-      <section
-        className="card bold-up-card"
-        id="agent-asks"
-        aria-labelledby="agent-asks-title"
-        data-protected="block"
-      >
-        <span className="lab" id="agent-asks-title">
-          Asks you first before
-        </span>
-        {asks.length ? (
-          <ul className="bold-asks">
-            {asks.map((permission) => (
-              <li key={permission.id} style={{ listStyle: 'none' }}>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked
-                    disabled={change.isPending}
-                    onChange={(event) =>
-                      change.mutate({
-                        id: permission.id,
-                        level: event.target.checked ? 'asks' : 'allowed',
-                      })
-                    }
-                  />
-                  <span className="grow">{permission.label}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="small muted">Nothing asks you first right now.</p>
-        )}
-        {change.isError && <p role="alert">Couldn’t change the permission. Try again.</p>}
-        <p className="small muted">
-          Stricter than the team rules is fine; looser isn’t.{' '}
-          <button type="button" className="link" onClick={() => openSection(permissionsSection)}>
-            Change permissions
-          </button>
-        </p>
-      </section>
-    </div>
-  )
-}
-
-/** The two overview facts the prototype puts in a quiet row under the agent's state. */
-function OverviewFacts({ agent, agents }: { agent: AgentDetail; agents: AgentSummary[] }) {
-  const manager = agents.find((item) => item.id === agent.reportsTo)
-  return (
-    <dl className="bold-agent-facts" aria-label="Overview facts">
-      <div>
-        <dt>Reports to</dt>
-        <dd>
-          {manager ? (
-            <Link to={`/b/agents/${encodeURIComponent(manager.id)}`}>{manager.name}</Link>
-          ) : (
-            (agent.reportsTo ?? 'No one')
-          )}
-        </dd>
-      </div>
-      <div>
-        <dt>Works in</dt>
-        <dd>{agent.worksIn ? <code>{agent.worksIn}</code> : 'Not set'}</dd>
-      </div>
-    </dl>
-  )
-}
-
-/** PLAN 11.8b: one agent on the bold shell. The four cards come first; every classic tab lives under More. */
+/** One agent on the bold shell (mock-up 26): the header, a section menu, and one column of sections. */
 export function BoldAgentPage() {
   const { agentId = '' } = useParams()
   return <AgentProfile key={agentId} agentId={agentId} />
@@ -149,12 +45,20 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const [search] = useSearchParams()
   // 3.11.0: "Open live session" exists only when the server offers a terminal.
   const terminalOffered = useTerminalAvailable()
-  const [file, setFile] = useState<AgentFileName>('SOUL.md')
-  const [more, setMore] = useState(() => location.hash.startsWith('#agent-') || search.has('path'))
   const client = useQueryClient()
   const pause = useAgentPause(agentId)
   const [removing, setRemoving] = useState(false)
+  const [editing, setEditing] = useState(false)
+  // A workspace link opens the Files panel: on one file with `?path=`, at the root without it.
+  const wantsFiles = ['#agent-workspace', '#agent-files'].includes(location.hash)
+  const { files, close: dropFiles } = useAgentFiles(search.get('path') ?? (wantsFiles ? '' : null))
   const navigate = useNavigate()
+  // Closing also clears the link from the address, so following the same link again reopens the panel.
+  const closeFiles = () => {
+    dropFiles()
+    if (search.has('path') || wantsFiles)
+      void navigate({ pathname: location.pathname, search: '', hash: '' }, { replace: true })
+  }
   // A removal can show as `removed` in the list before the operation card reads `completed`: leave either way.
   const lifeState = (agents.data?.find((agent) => agent.id === agentId) ?? detail.data)?.lifecycle
     ?.state
@@ -169,6 +73,14 @@ function AgentProfile({ agentId }: { agentId: string }) {
     )
       void navigate('/b/agents')
   }, [lifeState, navigate, removing])
+  // A link to a card (`#agent-where`, `#agent-workspace`) scrolls once the sections are on the page.
+  const ready = Boolean(detail.data)
+  const target = hashTarget(location.hash)
+  useEffect(() => {
+    if (!ready || !target) return
+    const timer = window.setTimeout(() => scrollToTarget(target.id), 0)
+    return () => window.clearTimeout(timer)
+  }, [ready, target?.id]) // eslint-disable-line react-hooks/exhaustive-deps -- the id is all that matters
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -206,18 +118,17 @@ function AgentProfile({ agentId }: { agentId: string }) {
     agent.lifecycle?.state === 'needs_attention' ||
     agent.lifecycle?.state === 'deleting'
   const waiting = needsYou || agent.status === 'waiting'
-
-  function reveal(id: string) {
-    setMore(true)
-    window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ block: 'start' })
-    }, 0)
-  }
+  const canRemove =
+    agent.lifecycle?.state !== 'removed' &&
+    agent.lifecycle?.state !== 'setting_up' &&
+    agent.lifecycle?.state !== 'deleting' &&
+    agent.id !== 'default'
+  const editable = !agent.lifecycle || agent.lifecycle.state === 'ready'
 
   function openRemove() {
     setRemoving(true)
     window.setTimeout(
-      () => document.querySelector('.bold-remove-agent')?.scrollIntoView({ block: 'center' }),
+      () => document.querySelector('.bold-remove-agent')?.scrollIntoView?.({ block: 'center' }),
       0,
     )
   }
@@ -233,73 +144,25 @@ function AgentProfile({ agentId }: { agentId: string }) {
 
   return (
     <section className="page bold-agent" aria-labelledby="agent-title">
-      <div className="pagehead" id="agent-overview">
-        <Link className="link" to="/b/agents">
-          Agents
-        </Link>
-        <span className="muted" aria-hidden>
-          /
-        </span>
-        <AgentGlyph agent={agent} size="md" decorative lively mood={agentMood(agent)} />
-        <h1 className="big" id="agent-title">
-          {agentDisplayName(agent)}
-        </h1>
-        <span className="muted bold-agent-role">{agent.role}</span>
-        <span className="row wrap bold-agent-actions">
-          {canTalkTo(agent) && (
-            <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
-              Message
-            </Link>
-          )}
-          {/* 3.11.0 (owner): the agent's own CLI in Score's Terminal (same password/passkey lock). */}
-          {terminalOffered && canTalkTo(agent) && (
-            <Link
-              className="btn ghost"
-              to={`/b/terminal?agent=${encodeURIComponent(agent.id)}`}
-              state={{ terminalFrom: `${location.pathname}${location.search}` }}
-            >
-              Open live session
-            </Link>
-          )}
-          {!inFlight && agent.lifecycle?.state !== 'removed' && (
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={pause.isPending}
-              onClick={togglePause}
-            >
-              {failed
-                ? `${failed === 'pause' ? 'Pause' : 'Resume'} again`
-                : paused
-                  ? 'Resume'
-                  : 'Pause'}{' '}
-              {agentDisplayName(agent)}
-            </button>
-          )}
-          {agent.lifecycle?.state !== 'removed' &&
-            agent.lifecycle?.state !== 'setting_up' &&
-            agent.lifecycle?.state !== 'deleting' &&
-            agent.id !== 'default' && (
-              <button
-                type="button"
-                className="link bold-agent-remove"
-                id="agent-remove-open"
-                aria-expanded={removing}
-                onClick={() => setRemoving(true)}
-              >
-                Remove agent…
-              </button>
-            )}
-          {/* 3.12.1: a Hermes agent's Bot Desktop; coding agents have no screen to show. */}
-          {agent.served && (!agent.runtime || agent.runtime === 'hermes') && (
-            <>
-              <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
-                Look at its screen
-              </Link>
-            </>
-          )}
-        </span>
-      </div>
+      <AgentHeader
+        agent={agent}
+        agents={agents.data ?? []}
+        summary={summary}
+        waiting={waiting}
+        editing={editing}
+        canEdit
+        inFlight={inFlight}
+        failed={failed}
+        pausePending={pause.isPending}
+        terminalOffered={terminalOffered}
+        canRemove={canRemove}
+        onEdit={() => setEditing((open) => !open)}
+        onPause={togglePause}
+        onRemove={openRemove}
+      />
+      {editing && (
+        <AgentEditPanel agent={agent} editable={editable} onClose={() => setEditing(false)} />
+      )}
       {inFlight && agent.lifecycle && (
         <BoldAgentStatus name={agentDisplayName(agent)} lifecycle={agent.lifecycle} />
       )}
@@ -315,24 +178,6 @@ function AgentProfile({ agentId }: { agentId: string }) {
           }}
         />
       )}
-      <div className="row wrap bold-agent-now">
-        <span className="bold-agent-state" aria-live="polite">
-          {waiting ? (
-            <Link className="link" to="/b">
-              {agentStateLabel({ ...agent, status: 'waiting' })}
-              {agent.activity ? ` · ${agent.activity}` : ''}
-            </Link>
-          ) : (
-            <>
-              {agentStateLabel(agent)}
-              {agent.activity && agent.status === 'working' ? ` · ${agent.activity}` : ''}
-            </>
-          )}
-        </span>
-        {summary?.runtimeNote && <span className="small muted">{summary.runtimeNote}</span>}
-        {/* On the same row as the state (the prototype's agent page), so "needs you" is never alone on a line. */}
-        {!coding && <OverviewFacts agent={agent} agents={agents.data ?? []} />}
-      </div>
       {pause.error && (
         <p role="alert" className="bold-team-error">
           {pairingProblem(pause.error) ??
@@ -348,44 +193,40 @@ function AgentProfile({ agentId }: { agentId: string }) {
         </p>
       )}
 
-      {coding ? (
-        <div className="bold-coding">
-          <CodingOverview
-            agent={agent}
-            teamPath="/b/agents"
-            modelFooter={<EffortChatsCard agentId={agent.id} />}
-          />
+      <div className="bold-agent-body">
+        <AgentSectionMenu
+          coding={coding}
+          name={agentDisplayName(agent)}
+          canRemove={canRemove}
+          removing={removing}
+          onRemove={openRemove}
+        />
+        <div className="bold-agent-sections">
+          {coding ? (
+            <CodingSections
+              agent={agent}
+              files={files}
+              onCloseFiles={closeFiles}
+              initialOpen={target?.open}
+            />
+          ) : (
+            <>
+              <PersonalitySection agent={agent} />
+              <ModelSection agent={agent} initialOpen={target?.open} />
+              <SafetySection agent={agent} initialOpen={target?.open} />
+              <ToolsSection agent={agent} coding={false} initialOpen={target?.open} />
+              <MemorySection agent={agent} initialOpen={target?.open} />
+              <WorkSection
+                agent={agent}
+                coding={false}
+                files={files}
+                onCloseFiles={closeFiles}
+                initialOpen={target?.open}
+              />
+            </>
+          )}
         </div>
-      ) : (
-        <HermesUpFront agent={agent} file={file} onFile={setFile} openSection={reveal} />
-      )}
-
-      <button
-        type="button"
-        className="btn ghost bold-more-toggle"
-        aria-expanded={more}
-        aria-controls="agent-more"
-        onClick={() => setMore((open) => !open)}
-      >
-        {more
-          ? 'Less'
-          : `More: ${
-              coding
-                ? 'tools, workspace, delete'
-                : 'memory, skills, tools, workspace, repeating jobs, delete'
-            }`}
-      </button>
-
-      {more && (
-        <div className="bold-more" id="agent-more">
-          <BoldAgentMore
-            agent={agent}
-            coding={coding}
-            initialPath={search.get('path')}
-            onDelete={openRemove}
-          />
-        </div>
-      )}
+      </div>
     </section>
   )
 }

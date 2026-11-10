@@ -1,4 +1,4 @@
-/* Agent page */
+/* Agent page (header, sections and rows: agent-page/agent-page.css) */
 [data-ui='bold'] .bold-agent,
 [data-ui='bold'] .bold-team {
   /* The page header sits where Tasks' and Knowledge's do (the shell's `.bold-page` top spacing), not against the bar. */
@@ -46,48 +46,10 @@
   margin-left: auto;
 }
 
-[data-ui='bold'] .bold-agent-now {
-  min-height: 24px;
-  gap: calc(12px * var(--bold-d, 1));
-  margin-top: -10px;
-}
-
 [data-ui='bold'] .bold-agent-state {
   font-size: 0.93em;
   font-weight: 600;
   color: var(--ink2);
-}
-
-[data-ui='bold'] .bold-agent-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: calc(4px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
-  margin: -4px 0 0;
-  font-size: 0.87em;
-}
-
-[data-ui='bold'] .bold-agent-now .bold-agent-facts {
-  margin: 0;
-}
-
-[data-ui='bold'] .bold-agent-facts > div {
-  display: flex;
-  align-items: baseline;
-  gap: calc(7px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .bold-agent-facts dt {
-  color: var(--muted);
-}
-
-[data-ui='bold'] .bold-agent-facts dd {
-  margin: 0;
-  font-weight: 600;
-}
-
-[data-ui='bold'] .bold-agent-facts a {
-  color: inherit;
 }
 
 [data-ui='bold'] .bold-agent-actions .bold-agent-watch,
@@ -102,15 +64,8 @@
   scroll-margin-top: 16px;
 }
 
-/* Editors mounted inside an up-front card are the card; no second panel. */
-[data-ui='bold'] .bold-up-card > .team-card {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  border-radius: 0;
-}
-
-[data-ui='bold'] .bold-up-card .team-file-text {
+/* The Personality editor (SOUL.md / AGENTS.md) sits in its section, not in a card. */
+[data-ui='bold'] .bold-agent-files .team-file-text {
   min-height: 150px;
 }
 
@@ -124,20 +79,6 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-}
-
-[data-ui='bold'] .bold-more-toggle {
-  align-self: flex-start;
-  max-width: 100%;
-  white-space: normal;
-  text-align: left;
-  border-radius: calc(24px * var(--bold-r, 1));
-}
-
-[data-ui='bold'] .bold-more {
-  display: flex;
-  flex-direction: column;
-  gap: calc(16px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-agent .team-card {

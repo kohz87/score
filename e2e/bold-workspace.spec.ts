@@ -5,16 +5,17 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { composerOf, makeRoom, openBoldRoomById, streamOf } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
-// 3.0.0: the classic workspace spec on the new shell's agent page (More › Workspace › Browse all files). The fake adapter
+// 3.0.0: the classic workspace spec on the new shell's agent page (the Files panel a workspace link opens under Work). The fake adapter
 // gives each agent a small temp-dir workspace. `lead`'s folder is pinned for the screenshot (Settings › Workspaces moves it); `reviewer` is edited; `designer` has a remote
 // terminal backend.
 test.describe.configure({ mode: 'serial' })
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
 async function openWorkspace(page: Page, agent: string) {
-  await page.goto(`/b/agents/${agent}`)
-  await page.getByRole('button', { name: /^More:/ }).click()
-  await page.getByRole('button', { name: 'Browse all files' }).click()
+  // The Workspace card is gone (decision 180); a workspace link (`#agent-workspace`) opens the Files panel.
+  // A hash-only change keeps the open panel (and its selected file); load the page fresh each time.
+  await page.goto('about:blank')
+  await page.goto(`/b/agents/${agent}#agent-workspace`)
   const panel = page.locator('#agent-files')
   await expect(panel.getByRole('tree', { name: 'Files' })).toBeVisible()
   return panel
@@ -184,15 +185,20 @@ test('create a file and a folder, then delete both (a folder with files needs it
   await expect(panel.getByRole('treeitem', { name: /scratch/ })).toHaveCount(0)
 })
 
+test('closing the Files panel clears the link from the address', async ({ page }) => {
+  const panel = await openWorkspace(page, 'lead')
+  await panel.getByRole('button', { name: 'Close files' }).click()
+  await expect(page.locator('#agent-files')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/b\/agents\/lead$/)
+})
+
 test('a remote terminal backend makes the workspace unavailable, with the reason', async ({
   page,
 }) => {
-  await page.goto('/b/agents/designer')
-  await page.getByRole('button', { name: /^More:/ }).click()
-  await expect(page.locator('#agent-workspace').getByRole('status')).toContainText(
+  await page.goto('/b/agents/designer#agent-workspace')
+  await expect(page.locator('#agent-files').getByRole('status')).toContainText(
     'remote terminal (docker)',
   )
-  await expect(page.getByRole('button', { name: 'Browse all files' })).toHaveCount(0)
 })
 
 test('looks right at desktop and phone width', async ({ page }) => {
@@ -299,8 +305,8 @@ test('the file list can be resized by keyboard and by dragging, and the width is
 })
 
 test("the agent page shows the agent's To do card", async ({ page }) => {
-  await page.goto('/b/agents/reviewer')
-  await page.getByRole('button', { name: /^More:/ }).click()
+  // The Todo summary opens its card in place from the link.
+  await page.goto('/b/agents/reviewer#agent-todo')
   const card = page.locator('#agent-todo')
   await expect(card).toBeVisible({ timeout: 15_000 })
   await expect(card.getByText('Pick the accent colours')).toBeVisible()

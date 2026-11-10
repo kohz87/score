@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
-// Owner, 2026-10-26: on the agent page "Team" sat higher than the "/" beside it, and "Look at its screen" higher than
-// "Remove agent…". Text links keep a 32px touch box; their text must line up with their neighbours' text.
+// Owner, 2026-10-26: on the agent page "Team" sat higher than the "/" beside it, and the header's actions did not line
+// up. Text links keep a 32px touch box; their text must line up with their neighbours' text. (Decision 180: "Look at its
+// screen" and Remove moved into the ⋯ menu, so Message and Pause are the pills to line up.)
 
 /** The vertical middle of an element's own text (not its box). */
 async function textMiddle(page: Page, selector: string, text: string): Promise<number> {
@@ -35,11 +36,12 @@ for (const size of [
     const slash = await textMiddle(page, `${head} > span.muted`, '/')
     expect(Math.abs(team - slash)).toBeLessThanOrEqual(2)
     if (size.name === 'desktop') {
-      const remove = await textMiddle(page, '.bold-agent-remove', 'Remove agent')
-      const watch = await textMiddle(page, '.bold-agent-watch', 'Look at its screen')
       const message = await textMiddle(page, '.bold-agent-actions .btn', 'Message')
-      expect(Math.abs(remove - watch)).toBeLessThanOrEqual(1)
-      expect(Math.abs(watch - message)).toBeLessThanOrEqual(2)
+      const pause = await textMiddle(page, '.bold-agent-actions .btn', 'Pause')
+      const edit = await textMiddle(page, '.bold-agent-edit-btn', 'Edit')
+      const name = await textMiddle(page, '.bold-agent-namerow .big', 'builder')
+      expect(Math.abs(message - pause)).toBeLessThanOrEqual(1)
+      expect(Math.abs(edit - name)).toBeLessThanOrEqual(12)
     }
   })
 }

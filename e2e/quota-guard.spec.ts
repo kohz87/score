@@ -172,7 +172,8 @@ async function codingAgentPage(page: Page) {
   const field = card.getByLabel(/Stop using this agent in runs when a limit is below/)
   await expect(field).toHaveValue('10')
   await field.fill('25')
-  await card.getByRole('button', { name: 'Save' }).click()
+  // The page has other Save buttons (Personality); this one belongs to the access form.
+  await field.locator('xpath=ancestor::form[1]').getByRole('button', { name: 'Save' }).click()
   await expect(meters.locator('.quota-floor').first()).toHaveAttribute('style', /left: 25%/)
   await page.reload()
   await card.getByRole('button', { name: 'Change access' }).click()
@@ -183,7 +184,10 @@ async function codingAgentPage(page: Page) {
   await shot(page, 'agent', '.bold-coding')
 
   // Clean up so other specs see the usual team.
-  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: `Remove ${id}` })
+    .click()
   await page
     .getByRole('group', { name: `Remove ${id}` })
     .getByRole('button', { name: 'Remove', exact: true })

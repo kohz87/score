@@ -56,7 +56,10 @@ test('a long agent description stays on one line in the @mention menu', async ({
   } finally {
     // Other specs count the team's agents: never leave this one behind.
     await page.goto(`/b/agents/${encodeURIComponent(id)}`)
-    await page.getByRole('button', { name: 'Remove agent…' }).click()
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: `Remove ${id}` })
+      .click()
     await page
       .getByRole('group', { name: `Remove ${id}` })
       .getByRole('button', { name: 'Remove', exact: true })

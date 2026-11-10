@@ -1,0 +1,440 @@
+/* The agent page (mock-up 26, decision 180): header, section menu, one column of sections. Values from the mock-up;
+   tokens only from the bold ground. */
+[data-ui='bold'] .bold-agent-head {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+/* The row centres its items, so the link's text is centred in its 32px touch box too, level with the "/". */
+[data-ui='bold'] .bold-agent-head > .bold-agent-back {
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-agent-who {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-agent-namerow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-line {
+  margin-top: calc(6px * var(--bold-d, 1));
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-line a {
+  color: inherit;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-agent-edit-btn {
+  min-height: 32px;
+  align-self: center;
+}
+
+[data-ui='bold'] .bold-agent-more {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-agent-more-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-agent-more-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-agent-more-list > a,
+[data-ui='bold'] .bold-agent-more-list > button {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-agent-more-list > button.bold-agent-remove {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-agent-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(12px * var(--bold-d, 1));
+  margin-bottom: calc(16px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+  width: 100%;
+}
+
+/* Menu and sections */
+[data-ui='bold'] .bold-agent-body {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(28px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-menu {
+  width: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  /* Sticky in the page's flow, never viewport-tall: it stays beside the sections while they scroll. */
+  position: sticky;
+  top: 16px;
+}
+
+[data-ui='bold'] .bold-agent-menu a,
+[data-ui='bold'] .bold-agent-menu-remove {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-agent-menu a[aria-current='true'] {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent-menu-rule {
+  height: 1px;
+  margin: 10px 0;
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-agent-menu-remove {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-agent-sections {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-section {
+  min-width: 0;
+  scroll-margin-top: 16px;
+}
+
+[data-ui='bold'] .bold-agent-section > h2 {
+  margin: 0 0 calc(14px * var(--bold-d, 1));
+  font-family: var(--font-d);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-agent-sections > section.bold-agent-section:not(.card),
+[data-ui='bold'] .bold-coding > .bold-agent-section:not(.card) {
+  padding: calc(20px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
+  border-radius: calc(28px * var(--bold-r, 1));
+  background: var(--panel);
+}
+
+/* Cards inside a section are tiles on the panel, not panels on a panel. */
+[data-ui='bold'] .bold-agent-section .card,
+[data-ui='bold'] .bold-agent-section .team-card {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-agent-section > .card,
+[data-ui='bold'] .bold-agent-section.card {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-agent-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-agent-tiles-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+[data-ui='bold'] .bold-agent-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(20px * var(--bold-d, 1));
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-agent-summary,
+[data-ui='bold'] .bold-open-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(8px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-agent-summary h3 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-agent-summary-text {
+  font-size: 14px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+/* Tools (mock-up 26): Can use on the left; Plugins, Reachable on and Score access as one line each on the right. */
+[data-ui='bold'] .bold-agent-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-agent-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+/* A safety or work tile: a title, one line of state, one action. An open card spans the row. */
+[data-ui='bold'] .bold-agent-tile {
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-open-card {
+  grid-column: 1 / -1;
+}
+
+[data-ui='bold'] .bold-agent-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  font-size: 14px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+/* Personality: the heading and the two file toggles on one row. */
+[data-ui='bold'] .bold-agent-files-head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  min-width: 0;
+  margin-bottom: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-files-head h2 {
+  margin: 0;
+  flex: none;
+  font-family: var(--font-d);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-agent-files-toggles {
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+[data-ui='bold'] .bold-agent-files-toggles button {
+  flex: none;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+/* Model rows */
+[data-ui='bold'] .bold-model-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-model-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  min-height: 52px;
+  padding: calc(8px * var(--bold-d, 1)) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-model-rows > :last-child {
+  border-bottom: 0;
+}
+
+[data-ui='bold'] .bold-model-label {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-model-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-model-note {
+  display: block;
+}
+
+[data-ui='bold'] .bold-model-btn {
+  min-height: 40px;
+}
+
+[data-ui='bold'] .bold-model-form {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-agent-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(12px * var(--bold-d, 1));
+  }
+
+  /* A row of chips that scrolls sideways inside itself; the page never scrolls sideways. */
+  [data-ui='bold'] .bold-agent-menu {
+    position: static;
+    width: auto;
+    max-width: 100%;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    font-size: 14px;
+    scrollbar-width: none;
+  }
+
+  [data-ui='bold'] .bold-agent-menu a,
+  [data-ui='bold'] .bold-agent-menu-remove {
+    flex: none;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: var(--panel);
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-agent-menu a[aria-current='true'] {
+    background: var(--hi-bg);
+    color: var(--hi-ink);
+  }
+
+  [data-ui='bold'] .bold-agent-menu-rule {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-agent-tiles,
+  [data-ui='bold'] .bold-agent-tiles-3,
+  [data-ui='bold'] .bold-agent-pair,
+  [data-ui='bold'] .bold-agent-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-agent-sections > section.bold-agent-section:not(.card),
+  [data-ui='bold'] .bold-coding > .bold-agent-section:not(.card) {
+    padding: calc(16px * var(--bold-d, 1));
+    border-radius: calc(24px * var(--bold-r, 1));
+  }
+
+  [data-ui='bold'] .bold-agent-tools,
+  [data-ui='bold'] .bold-agent-stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-agent-files-toggles button {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-model-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 52px;
+  }
+
+  [data-ui='bold'] .bold-model-label {
+    grid-column: 1;
+    font-size: 13px;
+  }
+
+  [data-ui='bold'] .bold-model-value {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  [data-ui='bold'] .bold-model-btn {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-agent-more-btn,
+  [data-ui='bold'] .bold-agent-edit-btn,
+  [data-ui='bold'] .bold-agent-sections .btn.sm,
+  [data-ui='bold'] .bold-agent-edit .btn.sm,
+  [data-ui='bold'] .bold-agent-sections .link {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-agent-sections .link {
+    display: inline-flex;
+    align-items: center;
+  }
+}

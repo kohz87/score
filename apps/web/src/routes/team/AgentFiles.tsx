@@ -13,10 +13,11 @@ import {
 } from './file-queries.ts'
 import { newId } from '../../data/ids.ts'
 
+// The page's Personality section (mock-up 26): one heading, and the two files as toggles on the same row.
 const labels = {
-  'SOUL.md': { title: 'Personality', blurb: 'Who this agent is and how it talks.' },
-  'AGENTS.md': { title: 'Operating rules', blurb: 'Standing rules this agent follows.' },
-} satisfies Record<AgentFileName, { title: string; blurb: string }>
+  'SOUL.md': { toggle: 'Who it is' },
+  'AGENTS.md': { toggle: 'Operating rules' },
+} satisfies Record<AgentFileName, { toggle: string }>
 
 function DiffView({ diff, label }: { diff: string; label: string }) {
   if (!diff) return <p className="team-muted-strong">No changes.</p>
@@ -66,10 +67,14 @@ export function AgentFiles({
     return draft !== undefined && draft.text !== draft.base.content
   }
   return (
-    <section className="team-card" aria-labelledby="team-files-heading">
-      <div className="team-card-heading">
-        <h2 id="team-files-heading">{labels[file].title}</h2>
-        <div className="team-segment" role="group" aria-label="File to edit">
+    <div className="bold-agent-files">
+      <div className="bold-agent-files-head">
+        <h2 id="team-files-heading">Personality</h2>
+        <div
+          className="team-segment bold-agent-files-toggles"
+          role="group"
+          aria-label="File to edit"
+        >
           {(['SOUL.md', 'AGENTS.md'] as const).map((name) => (
             <button
               key={name}
@@ -77,13 +82,12 @@ export function AgentFiles({
               aria-pressed={file === name}
               onClick={() => onFile(name)}
             >
-              {labels[name].title} · {name}
+              {labels[name].toggle} · {name}
               {dirty(name) && ' (unsaved)'}
             </button>
           ))}
         </div>
       </div>
-      <p className="team-muted-strong">{labels[file].blurb}</p>
       <FileEditor
         key={file}
         agentId={agent.id}
@@ -110,7 +114,7 @@ export function AgentFiles({
           })
         }
       />
-    </section>
+    </div>
   )
 }
 

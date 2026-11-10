@@ -54,15 +54,11 @@ for (const viewport of [
       viewport.width,
     )
 
-    // The agent page shows the folder but no longer changes it.
+    // The agent page no longer shows or changes the folder (the chat shows it; decision 180).
     await open(page, '/b/agents/lead')
-    await page
-      .getByRole('button', {
-        name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
-      })
-      .click()
-    await expect(page.getByRole('link', { name: /Workspaces are set in Settings/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'lead', level: 1 })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Set folder' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Workspace', level: 3 })).toHaveCount(0)
 
     // A room picks it from its menu.
     await open(page, '/b?open=1')

@@ -11,6 +11,11 @@ const SEPARATED: Record<RunsOn['separated'], string> = {
   unknown: 'Not known',
 }
 
+/** The one-line state for the Safety tile: where it runs, and whether that is separated from this machine. */
+export function runsOnLine(runsOn: RunsOn): string {
+  return `${where(runsOn)} · ${SEPARATED[runsOn.separated]}`
+}
+
 function where(runsOn: RunsOn): string {
   if (runsOn.backend === 'local') return 'This machine, as you'
   if (runsOn.backend === 'docker')

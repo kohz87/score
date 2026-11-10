@@ -167,12 +167,6 @@ const agentParts = [
     app: '.pagehead .big',
   },
   {
-    name: 'Up-front grid',
-    props: ['gridTemplateColumns', 'gap'],
-    prototype: '.page > .grid2',
-    app: '.bold-upfront',
-  },
-  {
     name: 'Up-front card',
     props: ['backgroundColor', 'borderRadius', 'padding', 'gap'],
     prototype: '.page > .grid2 > .card',
@@ -183,12 +177,6 @@ const agentParts = [
     props: ['fontSize', 'fontWeight', 'color'],
     prototype: '.page > .grid2 > .card .lab',
     app: '.bold-up-card .lab',
-  },
-  {
-    name: 'More button',
-    props: ['height', 'borderRadius', 'padding', 'fontSize', 'fontWeight'],
-    prototype: '.page > .btn.ghost',
-    app: '.bold-more-toggle',
   },
 ]
 

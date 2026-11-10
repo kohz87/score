@@ -16,6 +16,8 @@ test('Channels shows the connect form and Recent runs lists runs with a Watch re
   await form.getByRole('button', { name: 'Save' }).click()
   await expect(channels.getByText(/Saved\. The gateway picks up/)).toBeVisible()
 
+  // The Recent runs line opens its full card in place from the link.
+  await page.goto('/b/agents/builder#agent-history')
   const history = page.locator('#agent-history')
   await expect(history.getByRole('heading', { name: 'Recent runs', level: 3 })).toBeVisible()
   // The card lists the newest few runs; other specs share this server and start builder runs of their own, so the

@@ -8,7 +8,7 @@ test('edit SOUL.md: preview the diff, hit a conflict, see the diff and overwrite
   page,
 }) => {
   await page.goto('/b/agents/builder')
-  // The personality file is the editor the page opens with ("How builder works").
+  // The personality file is the editor the page opens with (the Personality section).
   const box = page.getByRole('textbox', { name: 'SOUL.md contents' })
   await expect(box).toHaveValue(/I am builder/)
   const original = await box.inputValue()

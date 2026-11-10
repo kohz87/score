@@ -9,6 +9,8 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   await page.goto('/b/agents/designer')
   const panel = page.locator('#agent-model')
 
+  // Each row's button opens that row's form in place, one at a time.
+  await panel.getByRole('button', { name: 'Add fallback' }).click()
   const chain = panel.getByRole('group', { name: 'Fallback models' })
   await expect(chain.getByText('No fallback configured.')).toBeVisible()
   const add = chain.getByRole('combobox', { name: 'Add a fallback model' })
@@ -17,8 +19,9 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   await chain.getByRole('button', { name: 'Add to chain' }).click()
   await chain.getByRole('button', { name: 'Save fallbacks' }).click()
   await expect(chain.getByText('1. upstage/solar-mini4:free')).toBeVisible()
-  await expect(panel.getByText('Falls back to upstage/solar-mini4:free if it')).toBeVisible()
+  await expect(panel.getByText('Falls back to upstage/solar-mini4:free')).toBeVisible()
 
+  await panel.getByRole('button', { name: 'Edit model aliases' }).click()
   const aliases = panel.getByRole('group', { name: 'Aliases' })
   const form = aliases.getByRole('form', { name: 'Add alias' })
   await form.getByLabel('Alias name').fill('quick')
@@ -28,16 +31,21 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   await form.getByRole('button', { name: 'Add alias' }).click()
   await expect(aliases.getByRole('list', { name: 'Aliases' }).getByText('quick')).toBeVisible()
   // The picker finds the alias by its name.
+  await panel.getByRole('button', { name: 'Change the model' }).click()
   const main = panel.getByRole('combobox', { name: 'Model', exact: true })
   await main.fill('quick')
   await expect(panel.getByRole('option', { name: /quick → local-gpt-mini/ })).toBeVisible()
 
+  await panel.getByRole('button', { name: 'Edit voice' }).click()
   const speech = panel.getByRole('form', { name: 'Speech models' })
   await speech.locator('select').nth(1).selectOption('openai')
   await speech.getByLabel('Voice').fill('nova')
   await speech.getByRole('button', { name: 'Save speech models' }).click()
   await page.reload()
-  await expect(page.locator('#agent-model').getByLabel('Voice')).toHaveValue('nova')
+  await page.locator('#agent-model').getByRole('button', { name: 'Edit voice' }).click()
+  await expect(page.locator('#agent-model').getByLabel('Voice', { exact: true })).toHaveValue(
+    'nova',
+  )
 
   // The list is server-wide: hold the lock from narrowing to clearing so no picker-reading spec sees it narrowed.
   await withLock('model-lists', async () => {
@@ -50,6 +58,7 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
       await chosen.getByRole('button', { name: 'Save chosen models' }).click()
       await expect(chosen.getByText('1 chosen. Pickers list only these.')).toBeVisible()
       await page.goto('/b/agents/designer')
+      await page.locator('#agent-model').getByRole('button', { name: 'Change the model' }).click()
       const picker = page
         .locator('#agent-model')
         .getByRole('combobox', { name: 'Model', exact: true })
@@ -78,8 +87,10 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   })
   await page.goto('/b/agents/designer')
   const undo = page.locator('#agent-model')
+  await undo.getByRole('button', { name: 'Edit model aliases' }).click()
   await undo.getByRole('button', { name: 'Remove alias quick' }).click()
   await expect(undo.getByText('No aliases yet.')).toBeVisible()
+  await undo.getByRole('button', { name: 'Edit fallback models' }).click()
   await undo.getByRole('button', { name: 'Remove upstage/solar-mini4:free' }).click()
   await undo.getByRole('button', { name: 'Save fallbacks' }).click()
   await expect(undo.getByText('No fallback configured.').first()).toBeVisible()

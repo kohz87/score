@@ -85,10 +85,8 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
       },
     })
   })
-  await page.goto('/b/agents/builder')
-  await page
-    .getByRole('button', { name: 'More: memory, skills, tools, workspace, repeating jobs, delete' })
-    .click()
+  // The Never rules tile's link opens its card in place.
+  await page.goto('/b/agents/builder#agent-permissions')
   const panel = page.locator('#agent-permissions')
   await expect(panel.getByText(/looser isn’t/)).toBeVisible()
   await expect(panel.getByRole('button', { name: /^remove/i })).toHaveCount(0)

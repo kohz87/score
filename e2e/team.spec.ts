@@ -15,14 +15,12 @@ test('team list opens an agent profile with its cards and a style popover', asyn
   await page.getByRole('link', { name: 'builder', exact: true }).first().click()
   await expect(page).toHaveURL('/b/agents/builder')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
-  // The personality file and the skills sit on the page (Skills under More).
-  await expect(page.getByText('How builder works')).toBeVisible()
+  // The personality file and the skills sit on the page (Skills open from Memory and skills).
+  await expect(page.getByRole('heading', { name: 'Personality', level: 2 })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'SOUL.md contents' })).toBeVisible()
-  await page
-    .getByRole('button', { name: 'More: memory, skills, tools, workspace, repeating jobs, delete' })
-    .click()
+  await page.getByRole('button', { name: 'Manage skills' }).click()
   await expect(
-    page.locator('#agent-more').getByRole('heading', { name: 'Skills', level: 3 }),
+    page.locator('#agent-memory-skills').getByRole('heading', { name: 'Skills', level: 3 }),
   ).toBeVisible()
 
   // Saving needs a paired browser, so the request is stubbed; the UI contract is what is checked.
@@ -33,6 +31,7 @@ test('team list opens an agent profile with its cards and a style popover', asyn
     const builder = agents.items.find((item: { id: string }) => item.id === 'builder')
     await route.fulfill({ json: { ...builder, style: body } })
   })
+  await page.getByRole('button', { name: 'Change name, role and look' }).click()
   await page.getByRole('button', { name: /Change .* colour and shape/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Agent appearance' })
   await dialog.getByRole('radio', { name: 'star' }).check()

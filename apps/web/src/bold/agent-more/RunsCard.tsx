@@ -7,7 +7,7 @@ import { formatMoney, useDisplayCurrency } from '../../data/currency.ts'
 import { useHistory } from '../../routes/team/agent-tab-queries.ts'
 import { Fail, Loading, MoreCard } from './MoreCard.tsx'
 
-const outcomeLabels: Record<HistoryOutcome, string> = {
+export const outcomeLabels: Record<HistoryOutcome, string> = {
   completed: 'Completed',
   failed: 'Failed',
   stopped: 'Stopped',

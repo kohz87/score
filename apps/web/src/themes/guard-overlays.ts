@@ -32,6 +32,7 @@ export const KNOWN_OVERLAYS = [
   '.bold-viewer-sheet',
   '.bold-knowledge-menu',
   '.bold-knowledge-scrim',
+  '.bold-agent-menu',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =

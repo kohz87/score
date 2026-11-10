@@ -91,16 +91,14 @@ test('Model, Skills, Memory and Tools cards read and edit', async ({ page }) => 
   await page.goto('/b/agents/reviewer')
   await expect(page.getByRole('heading', { name: 'reviewer', level: 1 })).toBeVisible()
 
-  // Model: the "Runs on" card
+  // Model: the Model section's row
   const runsOn = page.locator('#agent-model')
+  await runsOn.getByRole('button', { name: 'Change the model' }).click()
   const modelForm = runsOn.getByRole('form', { name: 'Change model' })
   await modelForm.getByLabel('Model', { exact: true }).fill('demo/next-model')
   await modelForm.getByRole('button', { name: 'Change model' }).click()
   await expect(runsOn.getByText('Saved: demo/next-model')).toBeVisible()
-
-  await page
-    .getByRole('button', { name: 'More: memory, skills, tools, workspace, repeating jobs, delete' })
-    .click()
+  await page.getByRole('button', { name: 'Manage skills' }).click()
 
   // Skills: turn one off, then find and add one from the (fake) hub
   const skills = page.locator('#agent-skills')
@@ -116,6 +114,7 @@ test('Model, Skills, Memory and Tools cards read and edit', async ({ page }) => 
   await expect(skills.getByRole('button', { name: 'Turn off changelog-writer' })).toBeVisible()
 
   // Memory: add, then forget
+  await page.getByRole('button', { name: 'Open memory' }).click()
   const memory = page.locator('#agent-memory')
   await expect(memory.getByText('Releases go out on Fridays.')).toBeVisible()
   await memory.getByLabel('New memory').fill('The demo is on Monday.')

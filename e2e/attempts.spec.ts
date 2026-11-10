@@ -36,6 +36,11 @@ async function openRunLink(page: Page) {
   const history = page.locator('#agent-history')
   const open = history.getByRole('link', { name: 'Open run' }).first()
   await expect(async () => {
+    // The Recent runs line shows the last two runs; its All runs opens the full card in place.
+    const line = page
+      .getByRole('region', { name: 'Recent runs' })
+      .getByRole('button', { name: 'All runs' })
+    if (await line.isVisible()) await line.click()
     const all = history.getByRole('button', { name: 'All runs' })
     if (await all.isVisible()) await all.click()
     await expect(open).toBeVisible({ timeout: 1_000 })
@@ -45,7 +50,6 @@ async function openRunLink(page: Page) {
 
 test('a run opens from the agent page inside the new shell, and Back returns to it', async () => {
   await page.goto('/b/agents/designer')
-  await page.getByRole('button', { name: /^More/ }).click()
   // The runs load after the agent page under a busy server.
   const open = await openRunLink(page)
   await open.click()
@@ -58,7 +62,6 @@ test('a run opens from the agent page inside the new shell, and Back returns to 
 
 test('the old /attempts address redirects into the frame and keeps the query', async () => {
   await page.goto('/b/agents/designer')
-  await page.getByRole('button', { name: /^More/ }).click()
   const href = await (await openRunLink(page)).getAttribute('href')
   const id = href!.split('/').pop()!
   await page.goto(`/attempts/${id}?x=1`)

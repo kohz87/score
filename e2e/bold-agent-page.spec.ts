@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { AgentDetailSchema, AgentsSnapshotSchema } from '../packages/contract/src/index.ts'
 import { fixtureNow } from './now-fixture.ts'
+import { builderSectionFixtures } from './agent-page-fixtures.ts'
 import { teamRoomFixtures } from './team-room-fixture.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
@@ -121,6 +122,7 @@ const agents = AgentsSnapshotSchema.parse({
 const fixtures: Record<string, unknown> = {
   ...visualFixtures,
   ...teamRoomFixtures,
+  ...builderSectionFixtures,
   '/api/questions?status=all': { asOfSeq: 1, items: [], nextCursor: null },
   '/api/tasks?needsYou=true': { asOfSeq: 1, items: [], nextCursor: null },
   '/api/agents/builder/files/SOUL.md': { content: 'I build small changes.', etag: 'a'.repeat(64) },
@@ -149,6 +151,17 @@ const fixtures: Record<string, unknown> = {
   '/api/agents/builder': hermes,
   '/api/agents/coder': codingDetail,
   '/api/agents/coder/todos': null,
+  // The coding page shows these on its face now (decision 180), so the shot has them loaded.
+  '/api/agents/coder/subagents': {
+    agentId: 'coder',
+    control: 'on_off',
+    enabled: false,
+    maxConcurrent: 1,
+    model: null,
+    maxIterations: null,
+    timeoutSeconds: null,
+  },
+  '/api/agents/coder/history': { items: [], nextCursor: null },
   '/api/coding-agents': { items: [codingAgent] },
   '/api/coding-agents/runtimes': {
     items: [
@@ -242,7 +255,7 @@ async function open(page: Page, path: string, width: number) {
 }
 
 const kinds = [
-  { name: 'hermes', path: '/b/agents/builder', ready: 'Runs on' },
+  { name: 'hermes', path: '/b/agents/builder', ready: 'Model' },
   { name: 'coding', path: '/b/agents/coder', ready: 'Access' },
 ]
 for (const kind of kinds) {
@@ -280,13 +293,14 @@ test('a coding agent’s Model and Access cards edit in place', async ({ page })
   await answer(page, posts)
   await open(page, '/b/agents/coder', 1440)
   await expect(page.getByRole('link', { name: 'Message', exact: true })).toBeVisible()
-  const model = page.locator('section', { has: page.getByRole('heading', { name: 'Model' }) })
+  // The Model card itself: the page's Model section also holds the Subagents form, with its own Save.
+  const model = page.locator('section[aria-labelledby="coding-model"]')
   await model.getByRole('button', { name: 'Change model' }).click()
   await model.getByRole('combobox', { name: 'Model' }).selectOption('opus')
   await model.getByRole('button', { name: 'Save' }).click()
   await expect.poll(() => posts.at(-1)?.body).toEqual({ model: 'opus' })
 
-  const access = page.locator('section', { has: page.getByRole('heading', { name: 'Access' }) })
+  const access = page.locator('section[aria-labelledby="coding-access"]')
   await access.getByRole('button', { name: 'Change access' }).click()
   await access.getByRole('radio', { name: /Read only/ }).check()
   const floor = access.getByLabel(/Stop using this agent in runs when a limit is below/)

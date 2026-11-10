@@ -16,14 +16,10 @@ function failure(error: unknown, action: string): string {
   return tabFailure(error, action)
 }
 
-/** The Never rules of this agent: stricter than the team, never looser. A decision surface, so it is protected. */
-export function NeverCard({ agent }: { agent: AgentDetail }) {
+/** The add-a-rule line: one input and Add. The Safety tile shows it inline; the full card shows it under the list. */
+export function NeverAddForm({ agent }: { agent: AgentDetail }) {
   const change = usePermissionAction(agent.id)
-  const back = useUseTeamRule(agent.id)
   const [glob, setGlob] = useState('')
-  const never = agent.permissions.filter((row) => row.level === 'never')
-  const list = useFoldedList(`never:${agent.id}`, never)
-  const busy = change.isPending || back.isPending
 
   function add(event: FormEvent) {
     event.preventDefault()
@@ -32,6 +28,35 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
     change.mutate({ id: `never:${value}`, level: 'never' }, { onSuccess: () => setGlob('') })
   }
   return (
+    <>
+      <form className="row bold-never-add" onSubmit={add} aria-label="Add a Never rule">
+        <label htmlFor={`never-${agent.id}`} className="sr">
+          Never allow commands that match
+        </label>
+        <input
+          id={`never-${agent.id}`}
+          className="field"
+          maxLength={200}
+          placeholder="git push --force"
+          value={glob}
+          onChange={(event) => setGlob(event.target.value)}
+        />
+        <button type="submit" className="btn sm" disabled={change.isPending || !glob.trim()}>
+          Add
+        </button>
+      </form>
+      {change.isError && <Fail>{failure(change.error, 'change the permission')}</Fail>}
+    </>
+  )
+}
+
+/** The Never rules of this agent: stricter than the team, never looser. A decision surface, so it is protected. */
+export function NeverCard({ agent }: { agent: AgentDetail }) {
+  const back = useUseTeamRule(agent.id)
+  const never = agent.permissions.filter((row) => row.level === 'never')
+  const list = useFoldedList(`never:${agent.id}`, never)
+
+  return (
     <MoreCard id="agent-permissions" title="Never rules" count={never.length} protectedKind="block">
       <span className="small muted">
         Commands that match are refused. Stricter than the team rules is fine; looser isn’t.{' '}
@@ -39,7 +64,6 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
           Team rules
         </Link>
       </span>
-      {change.isError && <Fail>{failure(change.error, 'change the permission')}</Fail>}
       {back.isError && <Fail>{failure(back.error, 'use the team rule')}</Fail>}
       {!never.length && <p className="small muted">No Never rules yet.</p>}
       <div id={list.id} className="bold-fold-list">
@@ -52,7 +76,7 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
                 type="button"
                 className="act"
                 aria-label={`Use team rule instead of: ${row.label}`}
-                disabled={busy}
+                disabled={back.isPending}
                 onClick={() => back.mutate(row.id)}
               >
                 <CloseIcon size={12} />
@@ -62,22 +86,7 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
         ))}
       </div>
       {list.toggle}
-      <form className="row" onSubmit={add} aria-label="Add a Never rule">
-        <label htmlFor={`never-${agent.id}`} className="sr">
-          Never allow commands that match
-        </label>
-        <input
-          id={`never-${agent.id}`}
-          className="field"
-          maxLength={200}
-          placeholder="*git* push* --force*"
-          value={glob}
-          onChange={(event) => setGlob(event.target.value)}
-        />
-        <button type="submit" className="btn sm" disabled={busy || !glob.trim()}>
-          Add
-        </button>
-      </form>
+      <NeverAddForm agent={agent} />
       <span className="small muted">
         Guardrails, not a security boundary: they match the command text.
       </span>
