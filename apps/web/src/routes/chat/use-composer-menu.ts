@@ -52,10 +52,12 @@ export function useComposerMenu({
   })
   const slash = slashQuery(text)
   // `@agent /eff…` opens the effort choices for that agent (mock-up 25-effort-group); its `/effort` keeps the prefix on a pick.
+  // Only where that menu has items: elsewhere `@agent /eff` is ordinary text, and mentions still complete.
   const addressed = slash === null ? addressedEffortQuery(text) : null
-  const addressedAgent = addressed?.agentId ?? null
-  const addressedQuery = addressed?.query ?? ''
-  const mention = slash === null && addressed === null ? mentionAt(text, caret) : null
+  const effortMenu = addressed ? (topicCommands?.menuFor?.(addressed.agentId) ?? []) : []
+  const addressedAgent = effortMenu.length ? addressed!.agentId : null
+  const addressedQuery = addressedAgent === null ? '' : addressed!.query
+  const mention = slash === null && addressedAgent === null ? mentionAt(text, caret) : null
   const slashItems: SlashCommand[] = useMemo(() => {
     if (addressedAgent !== null)
       return (topicCommands?.menuFor?.(addressedAgent) ?? []).filter((item) =>

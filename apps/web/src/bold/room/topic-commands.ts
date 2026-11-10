@@ -357,8 +357,12 @@ function effortMenuFor(
   const agent = ctx.agents.find((item) => item.id === addressee)
   if (!addressee || !agent) return []
   const efforts = queryClient.getQueryData<AgentEfforts>(agentEffortsKey(addressee))
-  return effortMenuItems(efforts, agentDisplayName(agent))
+  const failed = queryClient.getQueryState(agentEffortsKey(addressee))?.status === 'error'
+  return effortMenuItems(efforts, agentDisplayName(agent), failed)
 }
+
+/** A room routed by @mentions that is not a team room: the older bold rooms (decision 178 keeps their `/effort`). */
+export const isOlderRoom = (room: Room) => room.role !== 'team' && room.routing === 'mentions'
 
 /** The hook the room uses: the palette items and a runner bound to the open chat. */
 export function useTopicCommands(
@@ -369,16 +373,21 @@ export function useTopicCommands(
   const startJob = useStartJob()
   // The efforts of every member are read ahead, so the `/effort` palette has its levels when the person types.
   useQueries({ queries: ctx.room.members.map((id) => agentEffortsQuery(id)) })
+  // An older room offers `/effort` only (both forms, typed and in the palette); its other words are sent as before.
+  const effortOnly = isOlderRoom(ctx.room)
   return {
-    items: TOPIC_COMMANDS,
-    typedOnly: TYPED_ONLY_COMMANDS,
+    items: effortOnly ? [] : TOPIC_COMMANDS,
+    typedOnly: effortOnly ? ['effort'] : TYPED_ONLY_COMMANDS,
     menuFor: (addressee: string | null) => effortMenuFor(queryClient, ctx, addressee),
+    effortOnly,
     run: (name: string, args: string, target?: string) =>
-      runTopicCommand(
-        name,
-        args,
-        { ...ctx, workspaces, queryClient, startRun: startJob?.openStartJob },
-        target,
-      ),
+      effortOnly && name !== 'effort'
+        ? Promise.resolve()
+        : runTopicCommand(
+            name,
+            args,
+            { ...ctx, workspaces, queryClient, startRun: startJob?.openStartJob },
+            target,
+          ),
   }
 }

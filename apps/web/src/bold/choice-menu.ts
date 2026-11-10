@@ -31,11 +31,14 @@ export function useChoiceMenu({
   setOpen,
   button,
   menu,
+  ready = true,
 }: {
   open: boolean
   setOpen: (value: boolean) => void
   button: RefObject<HTMLButtonElement | null>
   menu: RefObject<HTMLDivElement | null>
+  /** False while the menu's data is still on its way: focus moves once the menu has rendered. */
+  ready?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -58,8 +61,11 @@ export function useChoiceMenu({
   }, [open, setOpen, button])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !ready) return
+    // Focus moves only from the trigger (or nowhere): a person who has already gone elsewhere keeps their place.
+    const active = document.activeElement
+    if (active && active !== document.body && active !== button.current) return
     const items = choiceItems(menu.current)
     ;(items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus()
-  }, [open, menu])
+  }, [open, ready, menu, button])
 }

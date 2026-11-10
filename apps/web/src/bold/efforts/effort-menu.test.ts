@@ -34,3 +34,12 @@ test('every item carries the note under the palette, and the own level reads as 
   expect(items.every((item) => item.note?.includes('Other chats keep its own setting.'))).toBe(true)
   expect(items.at(-1)!.description).toBe('Back to reviewer’s own (the model’s default)')
 })
+
+test('when the levels can’t be read, the palette offers only Back to its own, and says so; while loading it is empty', () => {
+  const items = effortMenuItems(undefined, 'reviewer', true)
+  expect(items).toHaveLength(1)
+  expect(items[0]!.usage).toBe('/effort default')
+  expect(items[0]!.header).toBe('Effort for reviewer in this chat · its own setting is unknown')
+  expect(items[0]!.note).toContain('Can’t list the levels reviewer’s model takes right now.')
+  expect(effortMenuItems(undefined, 'reviewer')).toEqual([])
+})

@@ -126,6 +126,7 @@ export class CodingRuntimeAdmission extends CodingRuntimeExecution {
       input: req.input,
       sessionId: req.sessionId ?? null,
       model: req.model ?? agent.model,
+      effort: req.effort ?? null,
     })
     let intentId: string
     if (existing !== undefined) {

@@ -32,3 +32,12 @@ test('a reply with no chat effort shows no effort label', () => {
   )
   expect(screen.queryByText(/· effort/)).toBeNull()
 })
+
+test('the classic view shows no chat effort on a reply, even one that carries it', () => {
+  render(
+    <MemoryRouter>
+      <MessageItem message={reply('high')} agents={agents} />
+    </MemoryRouter>,
+  )
+  expect(screen.queryByText(/· effort/)).toBeNull()
+})

@@ -52,12 +52,12 @@ export const AgentEffortsSchema = z.object({
 })
 export type AgentEfforts = z.infer<typeof AgentEffortsSchema>
 
-/** `effort.changed`: an agent's effort in a chat changed; null is back to its own. `reason: model`: Score put it back
- * because the agent's levels no longer include it. */
+/** `effort.changed`: an agent's effort in a chat changed; null is back to its own. Score put it back itself for `model`
+ * (the agent's levels no longer include it) and `member` (the agent was taken out of the chat). */
 export const EffortChangedSchema = z.object({
   roomId: z.string().min(1),
   agentId: AgentIdSchema,
   effort: EffortWordSchema.nullable(),
-  reason: z.enum(['person', 'model']),
+  reason: z.enum(['person', 'model', 'member']),
 })
 export type EffortChanged = z.infer<typeof EffortChangedSchema>

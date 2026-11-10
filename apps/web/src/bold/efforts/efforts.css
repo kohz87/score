@@ -57,6 +57,19 @@
   width: min(296px, calc(100vw - 48px));
 }
 
+/* A tag at the right of a panel (Members) opens its choices leftward, so they stay inside the panel. */
+[data-ui='bold'] .bold-effort-choice--end .bold-effort-menu {
+  left: auto;
+  right: 0;
+}
+
+/* Every effort button is at least 44px on a phone (the context bar's and Chat info's were 32px). */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-effort-button {
+    min-height: 44px;
+  }
+}
+
 [data-ui='bold'] .bold-effort-menu-head,
 [data-ui='bold'] .bold-effort-menu-note {
   padding: 6px 12px 4px;
@@ -250,6 +263,7 @@
 
 /* The chat list's level tag sits beside a one-to-one's name. */
 [data-ui='bold'] .bold-chat-effort {
+  flex: none;
   margin-left: 6px;
   vertical-align: middle;
 }

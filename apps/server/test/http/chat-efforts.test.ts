@@ -101,3 +101,12 @@ test('changing an effort needs a paired browser', async () => {
   })
   expect(response.statusCode).toBe(401)
 })
+
+test('going back to its own is allowed for an agent no longer in the chat', async () => {
+  expect((await put('builder', 'high')).statusCode).toBe(200)
+  db.tx((sqlite) =>
+    sqlite.prepare(`UPDATE rooms SET members = '["lead"]' WHERE id = ?`).run(roomId),
+  )
+  expect((await put('builder', null)).statusCode).toBe(200)
+  expect((await put('builder', 'low')).statusCode).toBe(400)
+})

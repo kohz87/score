@@ -3111,11 +3111,13 @@ An agent's reasoning effort for one chat. It wins over the agent's own setting i
 | Endpoint | Needs | Body | Answer |
 | --- | --- | --- | --- |
 | `GET /api/rooms/:roomId/efforts` | | | `ChatEffortsResponse` (`asOfSeq`, `items`): the agents set differently here; an agent not listed uses its own |
-| `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | `ChatEffortChange` (`effort` null: its own). `400` for an agent not in the chat or a level it doesn't take (the message lists the levels). `404` for no such chat |
+| `PUT /api/rooms/:roomId/efforts/:agentId` | paired browser, Idempotency-Key | `{ effort: string \| null }` (null: back to its own) | `ChatEffortChange` (`effort` null: its own). `400` for setting a level for an agent not in the chat (going back to its own is always allowed) or a level it doesn't take (the message lists the levels). `404` for no such chat |
 | `GET /api/agents/:agentId/efforts` | | | `AgentEfforts`: `own` (null: the model's default), `levels` a chat can choose, and `chats` where it's set differently (`roomKind` says whether it opens as a direct chat or a group) |
 
 - Levels: a Hermes agent `CHAT_EFFORT_LEVELS`; a coding agent its CLI's (`CODING_EFFORTS`).
 - Each turn runs at the chat's effort: Hermes gets it as the run's `model_options.reasoning_effort`, never as the agent's config; Claude Code and Codex as their effort flag for that turn.
-- `Message.effort`: the effort an agent's reply ran at, when the chat set one.
-- Event `effort.changed` `{ roomId, agentId, effort, reason }`: `reason: model` when Score put it back because the agent no longer takes that level.
+- `Message.effort`: the effort the chat asked for on that reply's turn. A model may run at the nearest level it supports.
+- Event `effort.changed` `{ roomId, agentId, effort, reason }`: `reason: model` when Score put it back because the agent no longer takes that level, `member` when the agent was taken out of the chat.
+- `GET /api/agents/:agentId/efforts` answers `503` when Hermes can't say the agent's own effort (null `own` always means the model's default).
+- A Hermes chat that continues a session started outside Score may run at the agent's own effort: Hermes routes such a turn without per-run options.
 - The composer handles `/effort` itself, as it does `/subagents`: `/effort`, `/effort <level>`, `/effort default`; in a group `@agent /effort <level>` or the agent the message is addressed to.

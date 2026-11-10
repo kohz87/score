@@ -350,7 +350,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
 
       {coding ? (
         <div className="bold-coding">
-          <CodingOverview agent={agent} teamPath="/b/agents" />
+          <CodingOverview
+            agent={agent}
+            teamPath="/b/agents"
+            modelFooter={<EffortChatsCard agentId={agent.id} />}
+          />
         </div>
       ) : (
         <HermesUpFront agent={agent} file={file} onFile={setFile} openSection={reveal} />

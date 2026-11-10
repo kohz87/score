@@ -43,11 +43,12 @@ export async function runEffortCommand({
   say: EffortSay
 }): Promise<void> {
   const name = agentDisplayName(agent)
-  const efforts = await queryClient.fetchQuery(agentEffortsQuery(agent.id))
-  const { levels, own } = efforts
+  // A failed read (the server's 503) leaves the levels unknown: `own` and `back to its own` still work, a level does not.
+  const efforts = await queryClient.fetchQuery(agentEffortsQuery(agent.id)).catch(() => null)
+  const levels = efforts?.levels ?? null
+  const ownText = ownEffortLabel(efforts ? efforts.own : undefined)
   const current = chatEffortOf((await fetchRoomEfforts(roomId)).items, agent.id)
   const request = parseEffortArgs(args)
-  const ownText = ownEffortLabel(own)
 
   if (request.kind === 'show') {
     say(
@@ -58,9 +59,13 @@ export async function runEffortCommand({
     return
   }
 
-  if (request.kind === 'set' && !levels.includes(request.level)) {
+  if (request.kind === 'set' && levels === null) {
+    say(`Score can’t list the levels ${name} takes right now. Nothing was sent.`)
+    return
+  }
+  if (request.kind === 'set' && !levels?.includes(request.level)) {
     say(
-      levels.length
+      levels?.length
         ? `${name} takes ${levels.join(', ')}. Nothing was sent.`
         : `${name} has no effort Score can set. Nothing was sent.`,
     )

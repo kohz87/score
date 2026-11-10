@@ -14,11 +14,17 @@ export function effortLevelsOf(sqlite: DatabaseSync, agentId: string): readonly 
   return coding ? (CODING_EFFORTS[coding.runtime] ?? []) : CHAT_EFFORT_LEVELS
 }
 
+export function isMember(sqlite: DatabaseSync, roomId: string, agentId: string): boolean {
+  const room = sqlite.prepare('SELECT members FROM rooms WHERE id = ?').get(roomId) as
+    { members: string } | undefined
+  return room !== undefined && z.array(z.string()).parse(JSON.parse(room.members)).includes(agentId)
+}
+
 const changed = (
   roomId: string,
   agentId: string,
   effort: string | null,
-  reason: 'person' | 'model',
+  reason: 'person' | 'model' | 'member',
 ): DomainEventDraft => ({ type: 'effort.changed', data: { roomId, agentId, effort, reason } })
 
 export function setChatEffort(
@@ -105,6 +111,13 @@ export function effortForTurn(
     .prepare('SELECT effort FROM chat_efforts WHERE room_id = ? AND agent_id = ?')
     .get(turn.roomId, turn.agentId) as { effort: string } | undefined
   if (!row) return { effort: null, drafts: [] }
+  // An agent taken out of the chat and asked by name again starts from its own.
+  if (!isMember(sqlite, turn.roomId, turn.agentId)) {
+    sqlite
+      .prepare('DELETE FROM chat_efforts WHERE room_id = ? AND agent_id = ?')
+      .run(turn.roomId, turn.agentId)
+    return { effort: null, drafts: [changed(turn.roomId, turn.agentId, null, 'member')] }
+  }
   if (!effortLevelsOf(sqlite, turn.agentId).includes(row.effort)) {
     sqlite
       .prepare('DELETE FROM chat_efforts WHERE room_id = ? AND agent_id = ?')

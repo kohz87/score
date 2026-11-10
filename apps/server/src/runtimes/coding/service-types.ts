@@ -110,6 +110,8 @@ export const IntentPayload = z.object({
   input: z.string(),
   sessionId: z.string().nullable(),
   model: z.string().nullable(),
+  /** Decision 178: the chat's effort, kept with the intent so a restart sends the same turn the same way. */
+  effort: z.string().nullable().default(null),
 })
 export const ProcessRow = z.object({
   run_id: z.string(),

@@ -182,7 +182,7 @@ export function useComposerSend({
         LOCAL_COMMAND_MENU.some((item) => item.name === word) ||
         (orchestrate && word === 'orchestrate')
       // Only once the server's list is here: before that an unknown word may just be one it has not told us about.
-      if (!known && commands) {
+      if (!known && commands && !topicCommands.effortOnly) {
         setNotice({
           kind: 'error',
           text: `I don’t know /${word}. Type / to see the commands.`,

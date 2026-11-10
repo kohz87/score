@@ -12,6 +12,7 @@ import {
   chatEffortsOfAgent,
   chatEffortsOfRoom,
   effortLevelsOf,
+  isMember,
   setChatEffort,
 } from '../domain/chat-efforts.ts'
 import { HttpError } from '../errors.ts'
@@ -44,13 +45,10 @@ export function registerChatEffortRoutes(
   app.put('/api/rooms/:roomId/efforts/:agentId', mutation, async (request) => {
     const { roomId, agentId } = MemberParams.parse(request.params)
     const { effort } = ChatEffortRequestSchema.parse(request.body)
-    const members = db.read(
-      (sqlite) =>
-        sqlite.prepare('SELECT members FROM rooms WHERE id = ?').get(roomId) as
-          { members: string } | undefined,
-    )
-    if (!members) throw new HttpError(404, 'not_found', 'Couldn’t find that chat.')
-    if (!z.array(z.string()).parse(JSON.parse(members.members)).includes(agentId))
+    const room = db.read((sqlite) => sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(roomId))
+    if (!room) throw new HttpError(404, 'not_found', 'Couldn’t find that chat.')
+    // Going back to its own is always allowed, so a member taken out can still be cleared.
+    if (effort !== null && !db.read((sqlite) => isMember(sqlite, roomId, agentId)))
       throw new HttpError(400, 'bad_request', `${agentId} isn’t in this chat.`)
     const levels = db.read((sqlite) => effortLevelsOf(sqlite, agentId))
     if (effort !== null && !levels.includes(effort))
@@ -78,13 +76,16 @@ export function registerChatEffortRoutes(
         sqlite.prepare('SELECT effort FROM coding_agents WHERE id = ?').get(agentId) as
           { effort: string | null } | undefined,
     )
-    // A Hermes agent's own effort comes from its config; one Hermes can't read now is shown as its default.
+    // A Hermes agent's own effort comes from its config. Null means the model's default, so a read that fails says so
+    // rather than claiming it.
     const own = coding
       ? coding.effort
       : await port
           .readModelSettings(agentId)
           .then((settings) => settings.effort)
-          .catch(() => null)
+          .catch(() => {
+            throw new HttpError(503, 'hermes_unavailable', `Couldn’t read ${agentId}’s own effort.`)
+          })
     return AgentEffortsSchema.parse({
       agentId,
       own,

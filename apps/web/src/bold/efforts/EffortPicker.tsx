@@ -1,10 +1,11 @@
 import type { RefObject } from 'react'
 import { onChoiceMenuKeyDown } from '../choice-menu.ts'
-import { EFFORT_HINTS, ownEffortLabel } from './effort-model.ts'
+import { EFFORT_HINTS, ownEffortLabel, unlistedLevelsNote } from './effort-model.ts'
 
 /**
  * The choices for one agent's effort in one chat (mock-up 25-effort-group): its levels, then "Back to its own". The menu
- * is a `role="menu"` of radio items, so the keyboard works as it does for `/subagents`.
+ * is a `role="menu"` of radio items, so the keyboard works as it does for `/subagents`. `levels` is null when the read
+ * failed: then only "Back to its own" is offered, and the note says the levels can't be listed.
  */
 export function EffortPicker({
   id,
@@ -19,8 +20,9 @@ export function EffortPicker({
   /** The menu's element, for the focus that opens it on the checked choice. */
   menuRef: RefObject<HTMLDivElement | null>
   name: string
-  levels: readonly string[]
-  own: string | null
+  levels: readonly string[] | null
+  /** undefined when the agent's own setting could not be read ("unknown"). */
+  own: string | null | undefined
   current: string | null
   /** A level, or null for back to the agent's own. */
   onChoose: (level: string | null) => void
@@ -37,7 +39,7 @@ export function EffortPicker({
       <div className="bold-effort-menu-head">
         Effort for <b>{name}</b> in this chat · its own setting is <b>{ownEffortLabel(own)}</b>
       </div>
-      {levels.map((level) => (
+      {levels?.map((level) => (
         <button
           key={level}
           type="button"
@@ -61,7 +63,11 @@ export function EffortPicker({
         </small>
       </button>
       <div className="bold-effort-menu-note">
-        Only the levels {name}’s model accepts are listed. Other chats keep its own setting.
+        {levels ? (
+          <>Only the levels {name}’s model accepts are listed. Other chats keep its own setting.</>
+        ) : (
+          unlistedLevelsNote(name)
+        )}
       </div>
     </div>
   )

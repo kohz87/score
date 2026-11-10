@@ -1,5 +1,6 @@
 import type { AgentDetail } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { CodingPersonality } from './CodingPersonality.tsx'
 import { AgentQuota } from './QuotaMeters.tsx'
@@ -17,10 +18,13 @@ export { useCodingAgentDraft } from './useCodingAgentDraft.ts'
 export function CodingOverview({
   agent,
   teamPath = '/team',
+  modelFooter,
 }: {
   agent: AgentDetail
   /** Where to go after removal; the bold shell passes its own Team route. */
   teamPath?: string
+  /** Shown under the Model card (the bold shell's "Set differently in N chats"); nothing for the classic team page. */
+  modelFooter?: ReactNode
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -62,6 +66,7 @@ export function CodingOverview({
           coding={coding}
           onChanged={changed}
         />
+        {modelFooter}
         <CodingAccessCard
           key={`access:${coding.permission}:${coding.quotaFloorPercent}`}
           coding={coding}

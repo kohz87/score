@@ -99,7 +99,7 @@ export function MessageItem({
             })}
           </time>
           {speed && <span className="chat-speed">{speed}</span>}
-          {message.effort && author.kind === 'agent' && (
+          {bold && message.effort && author.kind === 'agent' && (
             <span className="bold-reply-effort">· effort {message.effort}</span>
           )}
           {message.editedBy && <span className="chat-edited">edited</span>}

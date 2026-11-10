@@ -24,6 +24,7 @@ export function EffortChoice({
   children,
   showWhenOwn = false,
   placement = 'up',
+  align = 'start',
 }: {
   agent: AgentSummary
   current: string | null
@@ -35,6 +36,8 @@ export function EffortChoice({
   showWhenOwn?: boolean
   /** Where the choices open: up over the context bar, down in the narrow Chat info panels. */
   placement?: 'up' | 'down'
+  /** Which edge of the button the choices line up with: a tag at the right of a panel opens leftward. */
+  align?: 'start' | 'end'
 }) {
   const [open, setOpen] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -42,8 +45,11 @@ export function EffortChoice({
   const button = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const menuId = useId()
-  const efforts = useAgentEfforts(agent.id).data
-  useChoiceMenu({ open, setOpen, button, menu })
+  const levels = useAgentEfforts(agent.id)
+  const efforts = levels.data
+  // The choices are ready once the agent's efforts have answered, or the read failed (the menu then says so).
+  const ready = Boolean(efforts) || levels.isError
+  useChoiceMenu({ open, setOpen, button, menu, ready })
   if (current === null && !showWhenOwn) return null
 
   function choose(level: string | null) {
@@ -59,7 +65,7 @@ export function EffortChoice({
   const name = agentDisplayName(agent)
   return (
     <span
-      className={`bold-effort-choice${placement === 'down' ? ' bold-effort-choice--down' : ''}`}
+      className={`bold-effort-choice${placement === 'down' ? ' bold-effort-choice--down' : ''}${align === 'end' ? ' bold-effort-choice--end' : ''}`}
     >
       <button
         ref={button}
@@ -76,13 +82,13 @@ export function EffortChoice({
       >
         {children}
       </button>
-      {open && efforts && (
+      {open && ready && (
         <EffortPicker
           id={menuId}
           menuRef={menu}
           name={name}
-          levels={efforts.levels}
-          own={efforts.own}
+          levels={efforts?.levels ?? null}
+          own={efforts ? efforts.own : undefined}
           current={current}
           onChoose={choose}
         />
@@ -139,6 +145,7 @@ export function EffortTag({
       runEffort={runEffort}
       className="bold-effort-tag"
       placement="down"
+      align="end"
       label={`${name}’s effort in this chat: ${current}. Change`}
     >
       {effortButtonLabel(current)}

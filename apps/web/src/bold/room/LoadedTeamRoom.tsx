@@ -27,7 +27,7 @@ import {
 import { BusyDialog, type BusyStart } from './BusyDialog.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { ContextBar } from './ContextBar.tsx'
-import { useTopicCommands } from './topic-commands.ts'
+import { isOlderRoom, useTopicCommands } from './topic-commands.ts'
 import { chatSay } from '../efforts/chat-notes.ts'
 import { useEffortChat } from '../efforts/use-effort-chat.ts'
 import type { SystemLine } from './topic-divider.tsx'
@@ -201,7 +201,7 @@ export function LoadedTeamRoom({
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   // Removed agents stay in `agents` for the history's names; @ and To offer only agents that can take a message (3.7.10).
   const talkable = useMemo(() => agents.filter(canTalkTo), [agents])
-  const olderRoom = room.role !== 'team' && room.routing === 'mentions'
+  const olderRoom = isOlderRoom(room)
   const toLabel = lead ? `To: ${agentDisplayName(lead)}` : 'No lead yet — use @name'
 
   // The job's ⋯ menu: on the dividers of an older chat that holds several jobs, and on the job bar otherwise.
@@ -370,7 +370,7 @@ export function LoadedTeamRoom({
                 ? 'Message this room'
                 : 'Message the chat · @ someone · / for commands'
           }
-          topicCommands={olderRoom ? undefined : topicCommands}
+          topicCommands={topicCommands}
           footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
               runEffort={runEffort}

@@ -112,13 +112,21 @@ export function storeMessage(
     )
   if (!result.changes) return []
   // Without a job the insert trigger placed it in the room's default job: the event says which.
-  const stored = sqlite.prepare('SELECT job_id FROM messages WHERE id = ?').get(message.id) as {
+  // An agent's reply also takes its turn's effort from the insert trigger (decision 178).
+  const stored = sqlite
+    .prepare('SELECT job_id, effort FROM messages WHERE id = ?')
+    .get(message.id) as {
     job_id: string | null
+    effort: string | null
   }
   return [
     {
       type: 'message.created',
-      data: { ...message, ...(stored.job_id ? { jobId: stored.job_id } : {}) },
+      data: {
+        ...message,
+        ...(stored.job_id ? { jobId: stored.job_id } : {}),
+        ...(stored.effort ? { effort: stored.effort } : {}),
+      },
     },
     ...roomChanged(sqlite, message.roomId, now, before),
     // Its job's count, unread and last activity changed (PLAN 11.2).

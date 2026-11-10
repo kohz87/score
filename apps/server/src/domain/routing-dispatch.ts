@@ -256,6 +256,15 @@ export class RoutingDispatcher {
             return chosen.drafts
           },
         })
+        // A turn sent again (a retry, a restart) finds its observation already applied: its effort is the recorded one.
+        effort ??= this.db.read(
+          (sqlite) =>
+            (
+              sqlite
+                .prepare('SELECT effort FROM message_runs WHERE turn_id = ?')
+                .get(job.turn_id) as { effort: string | null } | undefined
+            )?.effort ?? null,
+        )
         await this.port.startRun({
           ...(effort ? { effort } : {}),
           agentId: job.agent_id,

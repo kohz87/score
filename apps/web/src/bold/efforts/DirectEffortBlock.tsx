@@ -15,7 +15,8 @@ import './efforts.css'
  */
 export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; roomId: string }) {
   const current = chatEffortOf(useRoomEfforts(roomId).items, agent.id)
-  const own = useAgentEfforts(agent.id).data?.own ?? null
+  // Undefined until the read answers, and when it fails: its own then reads "unknown", never the model's default.
+  const own = useAgentEfforts(agent.id).data?.own
   const runEffort = useRunEffort(roomId, 'direct')
   const model = useAgentModel(agent.id)
   const name = agentDisplayName(agent)

@@ -11,6 +11,7 @@ import {
   effortLevelsOf,
   setChatEffort,
 } from '../../src/domain/chat-efforts.ts'
+import { storeMessage } from '../../src/domain/rooms.ts'
 
 let dir: string
 let db: ScoreDb
@@ -24,13 +25,13 @@ beforeEach(() => {
     sqlite
       .prepare(
         `INSERT INTO rooms (id, name, kind, members, created_at, updated_at, role, routing)
-         VALUES ('room-1', 'Team room', 'room', '["builder","reviewer"]', 'now', 'now', 'room', 'exchanges')`,
+         VALUES ('room-1', 'Team room', 'room', '["builder","reviewer"]', '2026-11-10T00:00:00.000Z', '2026-11-10T00:00:00.000Z', 'room', 'exchanges')`,
       )
       .run()
     sqlite
       .prepare(
         `INSERT INTO jobs (id, room_id, title, session_scheme, exchange_budget, job_turn_limit, created_at, updated_at)
-         VALUES ('job-1', 'room-1', 'Release notes 2.4', 'job', 8, 40, 'now', 'now')`,
+         VALUES ('job-1', 'room-1', 'Release notes 2.4', 'job', 8, 40, '2026-11-10T00:00:00.000Z', '2026-11-10T00:00:00.000Z')`,
       )
       .run()
   })
@@ -132,4 +133,64 @@ test('a level the agent no longer takes goes back to its own, and says why', () 
     ],
   })
   expect(chatEffortsOfRoom(db.sqlite, 'room-1')).toEqual([])
+})
+
+test('an agent taken out of the chat goes back to its own, and the chat is told', () => {
+  db.tx((sqlite) => {
+    setChatEffort(sqlite, 'room-1', 'reviewer', 'max', NOW)
+    sqlite.prepare(`UPDATE rooms SET members = '["builder"]' WHERE id = 'room-1'`).run()
+  })
+  expect(
+    db.tx((sqlite) =>
+      effortForTurn(sqlite, { roomId: 'room-1', agentId: 'reviewer', turnId: 't-3' }),
+    ),
+  ).toEqual({
+    effort: null,
+    drafts: [
+      {
+        type: 'effort.changed',
+        data: { roomId: 'room-1', agentId: 'reviewer', effort: null, reason: 'member' },
+      },
+    ],
+  })
+  expect(chatEffortsOfRoom(db.sqlite, 'room-1')).toEqual([])
+})
+
+test('a reply’s created event carries the effort the trigger gave it', () => {
+  db.tx((sqlite) => {
+    setChatEffort(sqlite, 'room-1', 'builder', 'high', NOW)
+    sqlite
+      .prepare(
+        `INSERT INTO messages (id, room_id, author_kind, "to", parts, refs, created_at, updated_at, streaming)
+         VALUES ('m-2', 'room-1', 'you', '[]', '[]', '[]', '2026-11-10T00:00:00.000Z', '2026-11-10T00:00:00.000Z', 0)`,
+      )
+      .run()
+    sqlite
+      .prepare(
+        `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at)
+         VALUES ('reply:t-4', 'room-1', 'builder', 'm-2', 0, 't-4', 'm-2', 'Fix it', '[]', 'now')`,
+      )
+      .run()
+    effortForTurn(sqlite, { roomId: 'room-1', agentId: 'builder', turnId: 't-4' })
+  })
+  const drafts = db.tx((sqlite) =>
+    storeMessage(
+      sqlite,
+      {
+        id: 'reply:t-4',
+        roomId: 'room-1',
+        author: { kind: 'agent', agentId: 'builder' },
+        to: [],
+        parts: [],
+        createdAt: NOW,
+        streaming: true,
+        refs: [],
+      },
+      NOW,
+    ),
+  )
+  const created = drafts.find((draft) => draft.type === 'message.created') as {
+    data: { effort?: string }
+  }
+  expect(created.data.effort).toBe('high')
 })
