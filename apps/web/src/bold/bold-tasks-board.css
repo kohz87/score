@@ -6,33 +6,6 @@
   gap: calc(18px * var(--bold-d, 1));
 }
 
-[data-ui='bold'] .bold-tb-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-[data-ui='bold'] .bold-tb-side {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-[data-ui='bold'] .bold-tb-title {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  max-width: 640px;
-}
-
-[data-ui='bold'] .bold-tb-title h1 {
-  margin: 0;
-}
-
 [data-ui='bold'] .bold-tb-pill {
   display: inline-flex;
   align-items: center;

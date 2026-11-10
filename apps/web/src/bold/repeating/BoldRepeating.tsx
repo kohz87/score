@@ -10,7 +10,7 @@ import { Sheet } from '../BoldTasksSheet.tsx'
 import { isCodingAgent } from '../models/model-model.ts'
 import { RepeatingCards, RepeatingTable } from './RepeatingList.tsx'
 import { RepeatingPanel } from './RepeatingPanel.tsx'
-import { TasksTabs } from '../tasks-tabs/TasksTabs.tsx'
+import { TasksHeader } from '../tasks-tabs/TasksHeader.tsx'
 import {
   RECIPES_FILTER,
   agentCounts,
@@ -136,30 +136,25 @@ export function BoldRepeatingPage() {
 
   return (
     <div className="bold-page bold-tb bold-rj" data-ui-page="tasks">
-      <header className="bold-tb-head">
-        <div className="bold-tb-title">
-          <div className="bold-tb-h1row">
-            <h1>Tasks</h1>
-            <button
-              type="button"
-              className="bold-rj-new"
-              aria-label="New repeating job"
-              disabled={hermes.length === 0}
-              onClick={() => {
-                setWantsNew(false)
-                setOpen({ job: null })
-              }}
-            >
-              {phone ? '+' : '+ New repeating job'}
-            </button>
-          </div>
-          <p>
-            Work that runs on a schedule, across the team. Assign it to an agent, or to a recipe
-            (Tasks › Recipes) when several agents take part.
-          </p>
-        </div>
-        <TasksTabs />
-      </header>
+      <TasksHeader
+        action={
+          <button
+            type="button"
+            className="bold-rj-new"
+            aria-label="New repeating job"
+            disabled={hermes.length === 0}
+            onClick={() => {
+              setWantsNew(false)
+              setOpen({ job: null })
+            }}
+          >
+            {phone ? '+' : '+ New repeating job'}
+          </button>
+        }
+      >
+        Work that runs on a schedule, across the team. Assign it to an agent, or to a recipe (Tasks
+        › Recipes) when several agents take part.
+      </TasksHeader>
       {loading && <p role="status">Reading repeating jobs…</p>}
       {failed && <p role="alert">Couldn’t read the repeating jobs. Try again in a moment.</p>}
       {unreadable.length > 0 && (

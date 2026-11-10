@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.36.1] — 2026-11-10
+
+### Fixed
+- **The Tasks views stay put.** Board, Repeating and Recipes sit at the same place on every Tasks page (one header for all three), on a desktop and a
+  phone, so switching between them no longer moves the buttons.
+
 ## [3.36.0] — 2026-11-10
 
 ### Added

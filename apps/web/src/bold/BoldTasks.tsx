@@ -18,7 +18,7 @@ import { Chips } from './BoldTasksFilters.tsx'
 import { PhoneNeedsCard } from './BoldTasksNeeds.tsx'
 import { TaskPanel } from './BoldTasksPanel.tsx'
 import { Sheet } from './BoldTasksSheet.tsx'
-import { TasksTabs } from './tasks-tabs/TasksTabs.tsx'
+import { TasksHeader } from './tasks-tabs/TasksHeader.tsx'
 import { roomName, type Lookup } from './bold-tasks-page-model.ts'
 import './bold-tasks.css'
 
@@ -91,39 +91,33 @@ export function BoldTasksPage() {
 
   return (
     <div className="bold-page bold-tb" data-ui-page="tasks">
-      <header className="bold-tb-head">
-        <div className="bold-tb-title">
-          <div className="bold-tb-h1row">
-            <h1>Tasks</h1>
-            <button type="button" className="bold-tb-new" onClick={() => setMaking(true)}>
-              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                <path
-                  d="M6 1.5v9M1.5 6h9"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span>New task</span>
-            </button>
-          </div>
-          <p>
-            Every Hermes task across your chats. Agents move their own; you can add, change, move or
-            archive any of them.
-          </p>
-        </div>
-        {/* Decision 183: the Tasks views end the header on every Tasks page; what needs you sits before them. */}
-        <div className="bold-tb-side">
-          {needsCount > 0 ? (
+      <TasksHeader
+        action={
+          <button type="button" className="bold-tb-new" onClick={() => setMaking(true)}>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M6 1.5v9M1.5 6h9"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span>New task</span>
+          </button>
+        }
+        aside={
+          needsCount > 0 ? (
             <span className="bold-tb-pill" data-protected="inline-flex">
               {needsCount} need you
             </span>
           ) : (
             <span className="bold-tb-quiet">Nothing needs you</span>
-          )}
-          <TasksTabs />
-        </div>
-      </header>
+          )
+        }
+      >
+        Every Hermes task across your chats. Agents move their own; you can add, change, move or
+        archive any of them.
+      </TasksHeader>
 
       {making && (
         <NewTaskDialog

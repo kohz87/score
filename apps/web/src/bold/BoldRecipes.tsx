@@ -4,7 +4,7 @@ import { BoldRecipeRoute } from './BoldRecipeRoute.tsx'
 import { RecipeSidePanels } from './repeating/RecipeSidePanels.tsx'
 import { RecipesNav } from './repeating/RecipesNav.tsx'
 import { RunSheet } from './RunSheet.tsx'
-import { TasksTabs } from './tasks-tabs/TasksTabs.tsx'
+import { TasksHeader } from './tasks-tabs/TasksHeader.tsx'
 import '../routes/orchestrations/orchestrations.css'
 import '../routes/workflows/workflows.css'
 import './bold-recipes.css'
@@ -25,10 +25,7 @@ export function BoldRecipesPage() {
   const saved = workflowId !== undefined && !unsaved(workflowId)
   return (
     <div className="bold-page bold-rt" data-ui-page="tasks">
-      <header className="bold-rt-head">
-        <h1>Tasks</h1>
-        <TasksTabs />
-      </header>
+      <TasksHeader />
       <div
         className={`bold-rt-cols${workflowId ? ' bold-rt-cols--recipe' : ''}${saved ? ' bold-rt-cols--saved' : ''}`}
       >
