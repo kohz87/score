@@ -64,15 +64,8 @@
   scroll-margin-top: 16px;
 }
 
-/* Editors mounted inside an up-front card are the card; no second panel. */
-[data-ui='bold'] .bold-up-card > .team-card {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  border-radius: 0;
-}
-
-[data-ui='bold'] .bold-up-card .team-file-text {
+/* The Personality editor (SOUL.md / AGENTS.md) sits in its section, not in a card. */
+[data-ui='bold'] .bold-agent-files .team-file-text {
   min-height: 150px;
 }
 

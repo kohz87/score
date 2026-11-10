@@ -296,7 +296,8 @@ test('the file list can be resized by keyboard and by dragging, and the width is
 })
 
 test("the agent page shows the agent's To do card", async ({ page }) => {
-  await page.goto('/b/agents/reviewer')
+  // The Todo summary opens its card in place from the link.
+  await page.goto('/b/agents/reviewer#agent-todo')
   const card = page.locator('#agent-todo')
   await expect(card).toBeVisible({ timeout: 15_000 })
   await expect(card.getByText('Pick the accent colours')).toBeVisible()

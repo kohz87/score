@@ -227,6 +227,75 @@
   overflow-wrap: anywhere;
 }
 
+/* Tools (mock-up 26): Can use on the left; Plugins, Reachable on and Score access as one line each on the right. */
+[data-ui='bold'] .bold-agent-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14px * var(--bold-d, 1));
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-agent-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+}
+
+/* A safety or work tile: a title, one line of state, one action. An open card spans the row. */
+[data-ui='bold'] .bold-agent-tile {
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-open-card {
+  grid-column: 1 / -1;
+}
+
+[data-ui='bold'] .bold-agent-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--bold-d, 1));
+  font-size: 14px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+/* Personality: the heading and the two file toggles on one row. */
+[data-ui='bold'] .bold-agent-files-head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+  min-width: 0;
+  margin-bottom: calc(14px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-agent-files-head h2 {
+  margin: 0;
+  flex: none;
+  font-family: var(--font-d);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-agent-files-toggles {
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+[data-ui='bold'] .bold-agent-files-toggles button {
+  flex: none;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
 /* Model rows */
 [data-ui='bold'] .bold-model-rows {
   display: flex;
@@ -319,6 +388,15 @@
   [data-ui='bold'] .bold-coding > .bold-agent-section:not(.card) {
     padding: calc(16px * var(--bold-d, 1));
     border-radius: calc(24px * var(--bold-r, 1));
+  }
+
+  [data-ui='bold'] .bold-agent-tools,
+  [data-ui='bold'] .bold-agent-stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-agent-files-toggles button {
+    min-height: 44px;
   }
 
   [data-ui='bold'] .bold-model-row {

@@ -1,9 +1,8 @@
-import { useState } from 'react'
 import type { AgentDetail } from '@score/contract'
 import { useMemory, useSkills } from '../../routes/team/agent-tab-queries.ts'
 import { RemembersCard } from '../agent-more/RemembersCard.tsx'
 import { SkillsCard } from '../agent-more/SkillsCard.tsx'
-import { OpenCard } from './OpenCard.tsx'
+import { OpenCard, useOpenState } from './OpenCard.tsx'
 
 /** Memory and skills (mock-up 26): two summaries; Open memory and Manage skills open today's full cards in place. */
 export function MemorySection({
@@ -13,8 +12,8 @@ export function MemorySection({
   agent: AgentDetail
   initialOpen?: string
 }) {
-  const [memoryOpen, setMemoryOpen] = useState(initialOpen === 'memory')
-  const [skillsOpen, setSkillsOpen] = useState(initialOpen === 'skills')
+  const [memoryOpen, setMemoryOpen] = useOpenState(initialOpen === 'memory')
+  const [skillsOpen, setSkillsOpen] = useOpenState(initialOpen === 'skills')
   const memory = useMemory(agent.id, '')
   const skills = useSkills(agent.id)
   const notes = memory.data?.pages.flatMap((page) => page.items) ?? []

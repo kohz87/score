@@ -20,10 +20,12 @@ export function CodingSections({
   agent,
   files,
   onCloseFiles,
+  initialOpen,
 }: {
   agent: AgentDetail
   files: { path: string | null } | null
   onCloseFiles: () => void
+  initialOpen?: string
 }) {
   const queryClient = useQueryClient()
   const list = useQuery(codingAgentsQuery)
@@ -78,7 +80,13 @@ export function CodingSections({
         </div>
       </section>
       <ToolsSection agent={agent} coding />
-      <WorkSection agent={agent} coding files={files} onCloseFiles={onCloseFiles} />
+      <WorkSection
+        agent={agent}
+        coding
+        files={files}
+        onCloseFiles={onCloseFiles}
+        initialOpen={initialOpen}
+      />
     </div>
   )
 }

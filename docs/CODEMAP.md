@@ -64,21 +64,29 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/agent-page/AgentEditPanel.tsx` — the header's Edit: Name and role plus Looks, side by side.
 - `apps/web/src/bold/agent-page/AgentSectionMenu.tsx` — the sticky section menu (a chip row on a phone) and "Remove {agent}".
 - `apps/web/src/bold/agent-page/agent-sections.ts` — the section list, the old `#agent-…` hash targets and the scroll helpers.
-- `apps/web/src/bold/agent-page/PersonalitySection.tsx` — SOUL.md / AGENTS.md editor.
+- `apps/web/src/bold/agent-page/PersonalitySection.tsx` — Personality: one section, the heading and the SOUL.md / AGENTS.md toggles on one row.
 - `apps/web/src/bold/agent-page/ModelSection.tsx` — Model summary rows; each button opens that row's form in place, one at a time.
 - `apps/web/src/bold/agent-page/ModelRow.tsx` — one Model row: label, value, button, the form under it.
 - `apps/web/src/bold/agent-page/ModelChangeForm.tsx` — the Model row's picker form (moved from the Team Model tab).
 - `apps/web/src/bold/agent-page/model-summaries.ts` — the one-line summaries for fallback, aliases, voice and subagents.
-- `apps/web/src/bold/agent-page/SafetySection.tsx` — four tiles: where it runs, asks first, goes ahead, never rules.
+- `apps/web/src/bold/agent-page/SafetySection.tsx` — the Safety section: four tiles (where it runs, asks first, goes ahead, never rules).
+- `apps/web/src/bold/agent-page/SafetyTiles.tsx` — the four Safety tiles: one line of state, one action that opens the full card in place (Never rules adds inline).
 - `apps/web/src/bold/agent-page/AsksCard.tsx` — "Asks you first before" (protected).
-- `apps/web/src/bold/agent-page/ToolsSection.tsx` — Can use, Plugins summary, Channels, Score access.
+- `apps/web/src/bold/agent-page/ToolsSection.tsx` — Tools: Can use on the left; Plugins, Reachable on and Score access as one line each on the right.
+- `apps/web/src/bold/agent-page/ChannelsLine.tsx` — Reachable on: one line of channels; Manage channels opens the Channels card in place.
+- `apps/web/src/bold/agent-page/ScoreAccessLine.tsx` — Score access: one line (Off, Read only, Read and write); Turn on or Manage opens the card (protected).
+- `apps/web/src/bold/agent-page/tool-lines.ts` — the one-line texts for channels and Score access, and the "A, B and C" join.
+- `apps/web/src/bold/agent-page/NameList.tsx` — rule and plugin names on one line, each its own span.
 - `apps/web/src/bold/agent-page/MemorySection.tsx` — Remembers and Skills summaries that open the full cards.
-- `apps/web/src/bold/agent-page/OpenCard.tsx` — a summary that opens today's full card in place.
-- `apps/web/src/bold/agent-page/WorkSection.tsx` — Recent runs, Repeating jobs, Todo and the Files panel (opened by a `?path=` link).
+- `apps/web/src/bold/agent-page/OpenCard.tsx` — a summary (a region named by its title) that opens today's full card in place; `useOpenState` opens it from a link.
+- `apps/web/src/bold/agent-page/WorkSection.tsx` — Work: Recent runs, Repeating jobs and Todo as summaries, and the Files panel (opened by a `?path=` link).
+- `apps/web/src/bold/agent-page/RunsTile.tsx` — Recent runs: the last two runs, one line each; All runs opens the full card.
+- `apps/web/src/bold/agent-page/WorkTiles.tsx` — Repeating jobs and Todo: one line each and the action that opens the full card.
 - `apps/web/src/bold/agent-page/use-agent-files.ts` — whether the Files panel is open, from the `?path=` link.
 - `apps/web/src/bold/agent-page/CodingSections.tsx` — a coding agent's sections: Personality, Model, Safety, Tools, Work.
 - `apps/web/src/bold/agent-page/agent-page.css` — header, section menu (sticky; chips on a phone), sections, tiles and Model rows.
 - `apps/web/src/bold/bold-team-agent-sections.test.tsx` — the section menu, Model rows, summaries that open cards, Remove, the coding page and the phone chips.
+- `apps/web/src/bold/bold-team-agent-tiles.test.tsx` — the tidied page's Tools lines, Safety tiles, Recent runs summary, Personality row and the phone toggles.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal, with feature-split tests.
 - `apps/web/src/bold/agent-more/SubagentsCard.tsx` — the agent's subagent ceiling: Allow, At once, Model, Steps, Time (Hermes), on/off (Claude Code) or not supported (Codex).
 - `apps/web/src/bold/agent-more/agent-more-helpers.tsx` — shared agent-detail test agent, fetch stub, mount and lifecycle state for the split card suites.

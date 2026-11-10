@@ -12,7 +12,8 @@ test.describe('X1: MCP read and write access is one decision', () => {
       sent.push(route.request().url())
       await route.abort()
     })
-    await page.goto('/b/agents/lead')
+    // The Score access line opens its card in place from the link.
+    await page.goto('/b/agents/lead#agent-score-access')
     const section = page.locator('#agent-score-access')
     await expect(section).toBeVisible()
     await expect(section).toHaveAttribute('data-protected', 'flex')

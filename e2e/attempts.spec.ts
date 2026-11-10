@@ -36,6 +36,11 @@ async function openRunLink(page: Page) {
   const history = page.locator('#agent-history')
   const open = history.getByRole('link', { name: 'Open run' }).first()
   await expect(async () => {
+    // The Recent runs line shows the last two runs; its All runs opens the full card in place.
+    const line = page
+      .getByRole('region', { name: 'Recent runs' })
+      .getByRole('button', { name: 'All runs' })
+    if (await line.isVisible()) await line.click()
     const all = history.getByRole('button', { name: 'All runs' })
     if (await all.isVisible()) await all.click()
     await expect(open).toBeVisible({ timeout: 1_000 })

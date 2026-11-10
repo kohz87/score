@@ -61,10 +61,10 @@ for (const viewport of sizes) {
     await open.click()
     await expect(page).toHaveURL('/b/agents/builder')
     await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
-    await expect(page.getByText('How builder works')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Personality', level: 2 })).toBeVisible()
+    // The Safety tile states where it runs in one line; its full card opens in place.
     const where = page.getByRole('region', { name: 'Where it works' })
-    await expect(where.getByText('This machine, as you')).toBeVisible()
-    await expect(where.getByText('Not separated')).toBeVisible()
+    await expect(where.getByText(/This machine, as you · Not separated/)).toBeVisible()
     await expect(page.getByRole('link', { name: 'Message', exact: true })).toHaveAttribute(
       'href',
       '/b?with=builder',
@@ -88,7 +88,7 @@ for (const viewport of sizes) {
       'Can use',
       'Repeating jobs',
       'Plugins',
-      'Channels',
+      'Reachable on',
       'Never rules',
       'Recent runs',
       'Todo',
@@ -235,16 +235,19 @@ test('Where it works: Docker is partly separated and lists what stays on this ma
 }) => {
   await pair(page)
   await page.goto('/b/agents/designer')
+  const tile = page.getByRole('region', { name: 'Where it works' })
+  // The fake designer runs in Docker: the tile says so in one line, and its action opens the full card in place.
+  await expect(tile.getByText(/Partly separated/)).toBeVisible()
+  await expect(tile).toHaveAttribute('data-protected', 'block')
+  await tile.getByRole('button', { name: 'Change where it works' }).click()
   const where = page.getByRole('region', { name: 'Where it works' })
-  // The fake designer runs in Docker.
-  await expect(where.getByText('Partly separated')).toBeVisible()
   await expect(where.getByText(/Still on this machine as you:.*MCP servers/u)).toBeVisible()
   await expect(where).toHaveAttribute('data-protected', 'block')
   await where.getByRole('button', { name: 'Change where it works' }).click()
   await where.getByRole('radio', { name: 'This machine' }).click()
   await where.getByRole('button', { name: 'Save' }).click()
-  await expect(where.getByText('Not separated')).toBeVisible()
-  await expect(where.getByText('This machine, as you')).toBeVisible()
+  await expect(where.getByText('Not separated', { exact: true })).toBeVisible()
+  await expect(where.getByText('This machine, as you', { exact: true })).toBeVisible()
   // Put it back for other specs sharing the fake server.
   await where.getByRole('button', { name: 'Change where it works' }).click()
   await where.getByRole('radio', { name: 'Docker' }).click()

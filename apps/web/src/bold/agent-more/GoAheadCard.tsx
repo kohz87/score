@@ -8,6 +8,17 @@ import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { Fail, MoreCard, problem, useFoldedList } from './MoreCard.tsx'
 
 /**
+ * Team go-aheads this agent no longer has: its own "ask first" choice (or a profile that drifted). Shared with the
+ * Safety tile, so the tile offers the same "Use team rule" the full card does.
+ */
+export function takenBackRules<R extends { id: string; readOnly: boolean }>(
+  teamRules: R[],
+  goAhead: { id: string }[],
+): R[] {
+  return teamRules.filter((rule) => !rule.readOnly && !goAhead.some((row) => row.id === rule.id))
+}
+
+/**
  * What the agent may do without asking, so a standing go-ahead can be taken back here. "Ask first" changes only this
  * agent; "Use team rule" drops this agent's own choice. A decision surface, so it is protected.
  */
@@ -16,10 +27,7 @@ export function GoAheadCard({ agent }: { agent: AgentDetail }) {
   const back = useUseTeamRule(agent.id)
   const rules = useRules()
   const goAhead = agent.permissions.filter((row) => row.level === 'allowed')
-  // Team go-aheads this agent no longer has: its own "ask first" choice (or a profile that drifted).
-  const takenBack = (rules.data?.goAhead ?? []).filter(
-    (rule) => !rule.readOnly && !goAhead.some((row) => row.id === rule.id),
-  )
+  const takenBack = takenBackRules(rules.data?.goAhead ?? [], goAhead)
   const list = useFoldedList(`goahead:${agent.id}`, goAhead)
   const back2 = useFoldedList(`goahead-back:${agent.id}`, takenBack)
   const busy = change.isPending || back.isPending

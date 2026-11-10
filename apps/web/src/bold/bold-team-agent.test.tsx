@@ -5,13 +5,12 @@ import { open, teamState } from './bold-team-helpers.tsx'
 test('the agent page is one column of sections, with the section menu beside it and no More toggle', async () => {
   open('/b/agents/builder')
   expect(await screen.findByRole('heading', { name: 'builder', level: 1 })).toBeDefined()
-  expect(screen.getByText('How builder works')).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Personality', level: 2 })).toBeDefined()
   expect(await screen.findByRole('textbox', { name: 'SOUL.md contents' })).toBeDefined()
   expect(screen.getByText('Hermes')).toBeDefined()
   expect(screen.getByText('Next model')).toBeDefined()
   expect(screen.getByText(/Falls back to demo\/safe/)).toBeDefined()
-  expect(await screen.findByText('This machine, as you')).toBeDefined()
-  expect(screen.getByText('Not separated')).toBeDefined()
+  expect(await screen.findByText(/This machine, as you · Not separated/)).toBeDefined()
   expect(screen.getByText('Asks you first before')).toBeDefined()
   expect(screen.getByText('Installing packages')).toBeDefined()
   expect(screen.getByText('Pushing code')).toBeDefined()
@@ -42,7 +41,7 @@ test('the agent page is one column of sections, with the section menu beside it 
     'Can use',
     'Repeating jobs',
     'Plugins',
-    'Channels',
+    'Reachable on',
     'Never rules',
     'Recent runs',
     'Todo',
@@ -61,6 +60,10 @@ test('the agent page is one column of sections, with the section menu beside it 
 
 test('Asks you first checkboxes update the permission through the classic mutation', async () => {
   open('/b/agents/builder')
+  // The tile lists what it asks about; its action opens the checkboxes in place.
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Change what it asks you first about' }),
+  )
   const asks = await screen.findByRole('region', { name: 'Asks you first before' })
   const install = within(asks).getByRole('checkbox', { name: 'Installing packages' })
   expect((install as HTMLInputElement).checked).toBe(true)
@@ -141,8 +144,12 @@ test('a coding agent gets access, quota, password and the protected Codex note o
 
 test('Where it works says exactly what Docker separates and changes through the API', async () => {
   open('/b/agents/builder')
+  const tile = await screen.findByRole('region', { name: 'Where it works' })
+  expect(await within(tile).findByText(/Not separated/)).toBeDefined()
+  expect(tile.getAttribute('data-protected')).toBe('block')
+  // The tile's action opens the full card in place; its own button starts the change.
+  fireEvent.click(within(tile).getByRole('button', { name: 'Change where it works' }))
   const card = await screen.findByRole('region', { name: 'Where it works' })
-  expect(await within(card).findByText('Not separated')).toBeDefined()
   expect(card.getAttribute('data-protected')).toBe('block')
   fireEvent.click(within(card).getByRole('button', { name: 'Change where it works' }))
   fireEvent.click(within(card).getByRole('radio', { name: 'Docker' }))

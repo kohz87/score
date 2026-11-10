@@ -16,7 +16,7 @@ test('team list opens an agent profile with its cards and a style popover', asyn
   await expect(page).toHaveURL('/b/agents/builder')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
   // The personality file and the skills sit on the page (Skills open from Memory and skills).
-  await expect(page.getByText('How builder works')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Personality', level: 2 })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'SOUL.md contents' })).toBeVisible()
   await page.getByRole('button', { name: 'Manage skills' }).click()
   await expect(

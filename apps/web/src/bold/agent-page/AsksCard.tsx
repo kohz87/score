@@ -1,6 +1,5 @@
 import type { AgentDetail } from '@score/contract'
 import { usePermissionAction } from '../../routes/settings/rules-queries.ts'
-import { scrollToId } from './agent-sections.ts'
 
 /** "Asks you first before": the rules set to Asks, each a checkbox that can only loosen it back to Allowed. */
 export function AsksCard({ agent }: { agent: AgentDetail }) {
@@ -41,12 +40,7 @@ export function AsksCard({ agent }: { agent: AgentDetail }) {
         <p className="small muted">Nothing asks you first right now.</p>
       )}
       {change.isError && <p role="alert">Couldn’t change the permission. Try again.</p>}
-      <p className="small muted">
-        Stricter than the team rules is fine; looser isn’t.{' '}
-        <button type="button" className="link" onClick={() => scrollToId('agent-permissions')}>
-          Change permissions
-        </button>
-      </p>
+      <p className="small muted">Stricter than the team rules is fine; looser isn’t.</p>
     </section>
   )
 }

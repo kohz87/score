@@ -197,15 +197,26 @@ function AgentProfile({ agentId }: { agentId: string }) {
         />
         <div className="bold-agent-sections">
           {coding ? (
-            <CodingSections agent={agent} files={files} onCloseFiles={closeFiles} />
+            <CodingSections
+              agent={agent}
+              files={files}
+              onCloseFiles={closeFiles}
+              initialOpen={target?.open}
+            />
           ) : (
             <>
               <PersonalitySection agent={agent} />
               <ModelSection agent={agent} initialOpen={target?.open} />
-              <SafetySection agent={agent} />
+              <SafetySection agent={agent} initialOpen={target?.open} />
               <ToolsSection agent={agent} coding={false} initialOpen={target?.open} />
               <MemorySection agent={agent} initialOpen={target?.open} />
-              <WorkSection agent={agent} coding={false} files={files} onCloseFiles={closeFiles} />
+              <WorkSection
+                agent={agent}
+                coding={false}
+                files={files}
+                onCloseFiles={closeFiles}
+                initialOpen={target?.open}
+              />
             </>
           )}
         </div>

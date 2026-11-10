@@ -1,28 +1,29 @@
 import type { AgentDetail } from '@score/contract'
-import { RoutinesCard } from '../agent-more/RoutinesCard.tsx'
-import { RunsCard } from '../agent-more/RunsCard.tsx'
-import { TodoCard } from '../agent-more/TodoCard.tsx'
 import { WorkspaceTab } from '../../routes/team/WorkspaceTab.tsx'
+import { RoutinesTile, TodoTile } from './WorkTiles.tsx'
+import { RunsTile } from './RunsTile.tsx'
 
-/** Work (mock-up 26): Recent runs, Repeating jobs and Todo, with the Files panel when a workspace link opened it. */
+/** Work (mock-up 26): Recent runs, Repeating jobs and Todo as one-line summaries, with the Files panel when a workspace link opened it. */
 export function WorkSection({
   agent,
   coding,
   files,
   onCloseFiles,
+  initialOpen,
 }: {
   agent: AgentDetail
   coding: boolean
   files: { path: string | null } | null
   onCloseFiles: () => void
+  initialOpen?: string
 }) {
   return (
     <section className="bold-agent-section" id="agent-work" aria-labelledby="agent-work-title">
       <h2 id="agent-work-title">Work</h2>
       <div className={`bold-agent-tiles${coding ? '' : ' bold-agent-tiles-3'}`}>
-        <RunsCard agent={agent} />
-        {!coding && <RoutinesCard agent={agent} />}
-        {!coding && <TodoCard agent={agent} />}
+        <RunsTile agent={agent} initialOpen={initialOpen === 'runs'} />
+        {!coding && <RoutinesTile agent={agent} initialOpen={initialOpen === 'routines'} />}
+        {!coding && <TodoTile agent={agent} initialOpen={initialOpen === 'todo'} />}
       </div>
       {files && (
         <section
