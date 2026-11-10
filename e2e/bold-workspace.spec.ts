@@ -186,6 +186,8 @@ test('create a file and a folder, then delete both (a folder with files needs it
 })
 
 test('closing the Files panel clears the link from the address', async ({ page }) => {
+  // Other specs can move lead's workspace in a full run; read the fixed fake one, as the screenshot test does.
+  await pinLeadWorkspace(page)
   const panel = await openWorkspace(page, 'lead')
   await panel.getByRole('button', { name: 'Close files' }).click()
   await expect(page.locator('#agent-files')).toHaveCount(0)

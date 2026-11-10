@@ -33,6 +33,10 @@
 6. **No pre-fix checks or reviews** (owner, 2026-11-07, repeating 2026-10-24; reviews 2026-11-09): coders run lint and typecheck only, never
    tests; before the fix work the lead runs only static proofs (line comparison, compiled-CSS comparison, structure check). The order is: build, full
    check, fixes, then the one Codex review; its findings are fixed and the tests they touch re-run. The full check gates the push.
+7. **Full or targeted check** (owner, 2026-11-10, decision 181). The full check (all e2e + `pnpm check`) gates feature releases and anything
+   touching the server, contract, plugin, migrations or shared components. A small patch (CSS or wording, a few lines, nothing server-side) is
+   gated by a targeted check instead: a search proving the changed classes/selectors are used nowhere else, `pnpm check`, the e2e specs of the
+   changed screen, and the theme screenshot specs. The next feature release's full check catches the rest.
 
 ## Roles (decided by the owner, 2026-10-06)
 - **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,

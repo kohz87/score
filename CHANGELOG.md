@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.34.1] — 2026-11-10
+
+### Fixed
+- **The agent page's header lines up.** Edit sits on the name's line, with the role, as in the mock-up, and the ⋯ menu's items (Look at its screen,
+  Open live session, Remove) all start at the same edge: an old header rule still centred two of them.
+
 ## [3.34.0] — 2026-11-10
 
 ### Changed
