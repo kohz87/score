@@ -146,11 +146,13 @@ export const RecipeScheduleRequestSchema = z
     roomId: z.string().min(1),
     enabled: z.boolean(),
     /** What the person saw when setting it, as when starting a run: each run is bound to these agents (an agent
-     * changed since makes that run fail with the reason) and to this acknowledgement. */
+     * changed since makes that run fail with the reason) and to this acknowledgement. Required to set or turn on a
+     * schedule; pausing (`enabled: false` on an existing one, nothing else changed) keeps what it was bound to. */
     agentMap: z
       .array(z.object({ agentId: AgentIdSchema, incarnation: z.string().min(1) }).strict())
-      .max(30),
-    acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }),
+      .max(30)
+      .optional(),
+    acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }).optional(),
   })
   .strict()
 export type RecipeScheduleRequest = z.infer<typeof RecipeScheduleRequestSchema>
