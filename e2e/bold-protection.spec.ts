@@ -9,8 +9,8 @@ import {
 import { pair } from './pair.ts'
 import { makeRoom, say } from './rooms.ts'
 
-// PLAN 11.3: the theme protection of PLAN 9 holds on the new shell. A hostile theme can't hide or fade the dock's
-// "needs you" ring or the agents' glyphs (colour + shape); later decision surfaces join the same list (AGENTS.md).
+// PLAN 11.3: the theme protection of PLAN 9 holds on the new shell. A hostile theme can't hide or fade the chat list's
+// "needs you" pill or the agents' glyphs (colour + shape); later decision surfaces join the same list (AGENTS.md).
 
 const hostile: MockTheme = {
   id: 'hostile',
@@ -20,7 +20,7 @@ const hostile: MockTheme = {
   css: hostileCss,
 }
 
-test('a hostile theme can’t hide the dock’s needs-you ring or the agents’ glyphs on the new shell', async ({
+test('a hostile theme can’t hide the chat list’s needs-you pill or the agents’ glyphs on the new shell', async ({
   page,
 }) => {
   const look: Look = { active: 'hostile', mode: 'light' }
@@ -31,18 +31,25 @@ test('a hostile theme can’t hide the dock’s needs-you ring or the agents’ 
   await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
   await page.goto('/b?open=1')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  const ring = page.locator('.bold-needs[data-protected]').first()
+  const ring = page.locator('.bold-chat-needs[data-protected]').first()
   await expect(ring).toBeVisible({ timeout: 20_000 })
   const style = await ring.evaluate((el) => {
     const s = getComputedStyle(el)
-    return { opacity: s.opacity, visibility: s.visibility, display: s.display, shadow: s.boxShadow }
+    return {
+      opacity: s.opacity,
+      visibility: s.visibility,
+      display: s.display,
+      bg: s.backgroundColor,
+      shadow: s.boxShadow,
+    }
   })
-  expect(style).toMatchObject({ opacity: '1', visibility: 'visible' })
+  expect(style).toMatchObject({ opacity: '1', visibility: 'visible', bg: 'rgb(236, 236, 241)' })
   expect(style.display).not.toBe('none')
+  // Score's two-tone edge, as the dock ring had, so the pill shows on any ground.
   expect(style.shadow).toContain('rgb(236, 236, 241)')
   expect(style.shadow).toContain('rgb(18, 19, 26)')
-  // Every dock glyph is drawn: its shape path is visible and unfaded.
-  const glyphs = page.locator('[data-ui="bold"] .dock .agent-glyph')
+  // Every chat-list glyph is drawn: its shape path is visible and unfaded.
+  const glyphs = page.locator('[data-ui="bold"] .bold-chat-avatar .agent-glyph')
   expect(await glyphs.count()).toBeGreaterThan(0)
   for (const glyph of await glyphs.all()) {
     await expect(glyph).toBeVisible()

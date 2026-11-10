@@ -121,7 +121,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px;
+  padding: 6px 10px;
   border-radius: 18px;
   color: var(--ink);
   text-decoration: none;
@@ -129,7 +129,7 @@
 }
 
 [data-ui='bold'] .bold-chat-row.direct {
-  padding: 8px 10px;
+  padding: 6px 10px;
 }
 
 [data-ui='bold'] .bold-chat-row:hover {
@@ -193,20 +193,23 @@
 
 /* A group's tile: the lead's colour lightened (the mock-up's pastel tiles) with the dark ink on it. */
 [data-ui='bold'] .bold-chat-tile {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--chat-color, #9aa0ad) 55%, #ffffff);
   color: #12131a;
   font-family: var(--font-d);
   font-weight: 700;
 }
 
+/* Decision 184: the agent's body is the icon, 56px, with no circle behind it. */
 [data-ui='bold'] .bold-chat-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--field);
+  width: 56px;
+  height: 56px;
+}
+
+[data-ui='bold'] .bold-chat-avatar .agent-glyph {
+  --glyph-svg-size: 100%;
 }
 
 [data-ui='bold'] .bold-chat-tile.is-rail {

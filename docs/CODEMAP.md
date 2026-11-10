@@ -223,7 +223,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-library-model.ts` — Library types, layout constants, collapsed-state storage and grouping helpers.
 - `apps/web/src/bold/BoldShell.tsx` — bold shell entry: glyph context, frame styles and the route outlet.
 - `apps/web/src/bold/BoldShellFrame.tsx` — bold frame state and chrome: top bar, phone tab bar, search, start-job and terminal controls.
-- `apps/web/src/bold/BoldShellDock.tsx` — team dock rings and the rule for which agents stay visible.
+- `apps/web/src/bold/use-needs-elsewhere.ts` — approvals and questions waiting in chats other than the team room (the Chats badge adds them).
 - `apps/web/src/bold/BoldShellNotices.tsx` — global fence and Hermes-version notices shown outside Settings.
 - `apps/web/src/bold/bold-shell-model.ts` — bold shell view types and path-to-view helper.
 - `apps/web/src/bold/BoldTaskEdit.tsx` — New task dialog and the compatibility exports for task edit, moves and archive.
@@ -312,11 +312,12 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/BoldSearchResults.tsx` — grouped search results with match highlights.
 - `apps/web/src/bold/bold.css` — bold shell style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-base.css` — scoped resets, shared utilities and the button and icon controls.
-- `apps/web/src/bold/bold-topbar.css` — top bar, section links, wordmark, navigation, dock, search and avatar.
+- `apps/web/src/bold/bold-topbar.css` — top bar, section links, wordmark, navigation, search and avatar (no agent row, decision 184).
 - `apps/web/src/bold/bold-room-layout.css` — room grid, header, stream, page frame and the info side panel.
 - `apps/web/src/bold/bold-menus.css` — floating menu primitives and room-picker preview rows.
 - `apps/web/src/bold/bold-fit.css` — full-window room layout under `body.fit`.
 - `apps/web/src/bold/bold-motion.css` — live and pulse animations with the reduced-motion reset.
+- `apps/web/src/bold/bold-glyph.css` — the new shell's borderless agent glyphs (no tile; the body fills the box) and the Tasks filter glyphs.
 - `apps/web/src/bold/bold-responsive.css` — laptop, phone and tablet shell, room layout and touch targets.
 - `apps/web/src/bold/bold-notices.css` — fence and update notices, project and archive surfaces, and the classic primary-button fix.
 - `apps/web/src/bold/bold-screen.css` — Agent screen style entry; imports the area stylesheets in cascade order.
@@ -748,7 +749,10 @@ likely to be the entry point for a change.
 - `apps/web/src/themes/guard-watch.ts` — watchers for protected-surface damage and click/submit refusal while a theme is worn.
 - `apps/web/src/styles/protected-setup.css` — the subagent setup card's protected colours.
 - `apps/web/src/styles/protected.css` — surfaces that themes may never hide or fake.
-- `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity.
+- `apps/web/src/components/AgentGlyph.tsx` — agent colour-and-shape identity: one of nine drawn bodies, with eyes in the new shell.
+- `apps/web/src/components/agent-shapes.ts` — the nine drawn bodies, `drawnShape` (the other 13 names map to one of them) and `shapeName`.
+- `apps/web/src/components/agent-eyes.ts` — each shape's own eyes (dot, rect, capsule, half-moon, triangle), their outlines, the lid cut.
+- `apps/web/src/components/agent-face.ts` — the moods on every shape: idle, thinking, working/resting (lid), needs, done; gaze limits.
 
 ## apps/server/src
 
@@ -1317,6 +1321,7 @@ likely to be the entry point for a change.
 - `packages/contract/src/stream.ts` — stream event types and envelopes.
 - `packages/contract/src/bridge.ts` — Python bridge payloads.
 - `packages/contract/src/types.ts` — shared domain types.
+- `packages/contract/src/offered-shapes.ts` — the nine agent shapes Score offers and draws (decision 184).
 - `packages/contract/src/orchestration.ts` — orchestration schemas and types.
 - `packages/contract/src/workflows.ts` — workflow schemas and types.
 - `packages/contract/src/themes.ts` — theme schemas and types.

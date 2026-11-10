@@ -18,7 +18,7 @@ test('add an agent, observe setup and readiness, then export and delete with its
   await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
   await dialog
     .getByRole('radiogroup', { name: 'Shape' })
-    .getByRole('radio', { name: 'hexagon' })
+    .getByRole('radio', { name: 'pebble' })
     .click()
   await dialog.getByRole('button', { name: 'Preview changes' }).click()
   await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()

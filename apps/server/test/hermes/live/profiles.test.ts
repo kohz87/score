@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AgentSummarySchema } from '@score/contract'
 import { AgentDetailSchema } from '@score/contract'
+import { OfferedShapes } from '@score/contract'
 import { defaultAgentStyle } from '../../../src/domain/agents.ts'
 import { ProfilesReader } from '../../../src/hermes/live/profiles.ts'
 import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
@@ -187,11 +188,17 @@ test('missing files and unavailable directories remain readable; invalid names a
     reader.read('../outside', 0, false, { status: 'offline', activity: null }),
   ).rejects.toThrow()
 })
-test('palette uses all eight shapes and four token colors', () => {
+// Decision 184: defaults come from the nine shapes Score offers and draws.
+test('palette uses all nine offered shapes and four token colors', () => {
+  const shapes = Array.from({ length: 9 }, (_, index) => defaultAgentStyle(index).shape)
+  expect(new Set(shapes).size).toBe(9)
+  expect(shapes).toEqual([...OfferedShapes])
   expect(
-    new Set(Array.from({ length: 8 }, (_, index) => defaultAgentStyle(index).shape)).size,
-  ).toBe(8)
-  expect(defaultAgentStyle(8)).toEqual(defaultAgentStyle(0))
+    new Set(Array.from({ length: 4 }, (_, index) => defaultAgentStyle(index).color)).size,
+  ).toBe(4)
+  // Shapes repeat every nine agents and colours every four, so the whole look repeats after 36.
+  expect(defaultAgentStyle(36)).toEqual(defaultAgentStyle(0))
+  expect(defaultAgentStyle(9).shape).toBe(defaultAgentStyle(0).shape)
 })
 
 test('excerpt bounds preserve Unicode and skip headings without requiring a blank line', async () => {

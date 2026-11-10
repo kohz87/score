@@ -72,24 +72,30 @@ svg.agent-glyph {
 .agent-glyph__solid {
   fill: var(--glyph-color);
   stroke: var(--glyph-shape-stroke, none);
-  stroke-width: 1.5;
+  stroke-width: var(--glyph-stroke-width, 1.5);
   stroke-linejoin: round;
 }
 
-.agent-glyph__ring {
-  stroke: var(--glyph-ring-stroke, var(--glyph-color));
+/* A joined body's parts carry no stroke of their own (that would cross the union); the edge pass under them does. */
+.agent-glyph__solid--part {
+  stroke: none;
+}
+
+.agent-glyph__edge {
+  fill: var(--glyph-shape-stroke, none);
+  stroke: var(--glyph-shape-stroke, none);
+  stroke-width: calc(var(--glyph-stroke-width, 1.5) * 2);
+  stroke-linejoin: round;
 }
 
 .agent-glyph--high {
   --glyph-shape-stroke: var(--glyph-outline);
-  --glyph-ring-stroke: var(--glyph-outline);
   --glyph-border: 1.5px solid #12131a;
 }
 
 @media (prefers-contrast: more) {
   .agent-glyph {
     --glyph-shape-stroke: var(--glyph-outline);
-    --glyph-ring-stroke: var(--glyph-outline);
     --glyph-border: 1.5px solid #12131a;
   }
 }

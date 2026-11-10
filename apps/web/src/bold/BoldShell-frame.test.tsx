@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test, vi } from 'vitest'
 import { agents, open, shellState } from './BoldShell-helpers.tsx'
 
-test('/b draws the frame and the dock', async () => {
+test('/b draws the frame, and the top bar has no agent row', async () => {
   open('/b')
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('main')).toBeDefined()
@@ -14,31 +14,16 @@ test('/b draws the frame and the dock', async () => {
   expect(screen.getByRole('heading', { name: 'Team room' })).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Team room' })).toBeNull()
 
-  const dock = screen.getByRole('group', { name: /Your team/ })
-  expect(within(dock).queryByText('Rings show progress')).toBeNull()
-  await within(dock).findByRole('button', { name: 'One to one with builder, working' })
-  const rings = within(dock).getAllByRole('button')
-  expect(rings).toHaveLength(agents.length)
-  for (const agent of agents) {
-    const ring = within(dock).getByRole('button', {
-      name: new RegExp(`^One to one with ${agent.id}, `),
-    })
-    expect(ring.querySelector('.agent-glyph')).not.toBeNull()
-    // The frame's glyph is the shape without eyes, as the prototype draws it.
-    expect(ring.querySelector('.agent-glyph__eyes')).toBeNull()
-  }
-
-  const builder = within(dock).getByRole('button', { name: 'One to one with builder, working' })
-  expect(builder.hasAttribute('data-progress')).toBe(false)
-  expect(builder.getAttribute('style')).toContain('var(--line)')
-  expect(builder.getAttribute('style')).not.toContain('conic-gradient')
-  const idle = within(dock).getByRole('button', { name: 'One to one with lead, free' })
-  expect(idle.hasAttribute('data-progress')).toBe(false)
-  expect(idle.getAttribute('style')).not.toContain('conic-gradient')
-  const needs = within(dock).getByRole('button', {
-    name: 'One to one with reviewer, needs you',
-  })
-  expect(needs.className).toContain('needs')
+  // Decision 184: the top bar has no agent row; who needs you is the count on Chats and the chat rows.
+  expect(screen.queryByRole('group', { name: /Your team/ })).toBeNull()
+  expect(screen.queryByText('Rings show progress')).toBeNull()
+  expect(document.querySelector('.dock, .ring')).toBeNull()
+  const nav = screen.getByRole('navigation', { name: 'Main' })
+  expect(
+    within(nav)
+      .getAllByRole('button')
+      .map((button) => button.textContent?.replace(/\d+$/, '')),
+  ).toEqual(expect.arrayContaining(['Chats', 'Agents']))
 })
 
 test('a phone keeps the wordmark and avatar, shows the tab bar and opens the side panel as a sheet', async () => {
@@ -129,8 +114,8 @@ test('the shell mounts the notification bridge and the update banner', async () 
   expect(screen.getByTestId('update-banner')).toBeDefined()
 })
 
-// was: 'a removed agent leaves the dock and the side panel’s one-to-ones; one setting up stays in the dock only'
-test('a removed agent leaves the dock and the Direct list; one setting up stays in the dock only', async () => {
+// was: 'a removed agent leaves the dock and the Direct list; one setting up stays in the dock only' (the dock is gone, 184)
+test('a removed agent, and one still setting up, are not in the Direct list', async () => {
   const base = agents[1]!
   shellState.extraAgents = [
     {
@@ -155,9 +140,6 @@ test('a removed agent leaves the dock and the Direct list; one setting up stays 
     },
   ]
   open('/b')
-  const dock = screen.getByRole('group', { name: /Your team/ })
-  await within(dock).findByRole('button', { name: /^One to one with fresh, / })
-  expect(within(dock).queryByRole('button', { name: /^One to one with gone, / })).toBeNull()
   const chats = await screen.findByRole('complementary', { name: 'Chats' })
   const direct = within(within(chats).getByRole('heading', { name: 'Direct' }).parentElement!)
   await direct.findByRole('link', { name: /builder/ })

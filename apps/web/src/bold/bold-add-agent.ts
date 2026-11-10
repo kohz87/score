@@ -1,4 +1,12 @@
-import { RunsOnSchema, type AgentStyle, type AgentSummary, type RunsOn } from '@score/contract'
+import {
+  OfferedShapes,
+  RunsOnSchema,
+  type AgentStyle,
+  type AgentSummary,
+  type RunsOn,
+  type Shape,
+} from '@score/contract'
+import { drawnShape } from '../components/agent-shapes.ts'
 import { apiFetch } from '../data/api.ts'
 
 /** The prototype's four open colours; the colours already on the team are listed after them and faded. */
@@ -62,10 +70,17 @@ export function colourChoices(agents: AgentSummary[]): ColourChoice[] {
 /** A first mark that does not collide with a visible agent; the person can still choose any free colour. */
 export function availableStyle(agents: AgentSummary[]): AgentStyle {
   const choices = colourChoices(agents)
+  const shape = freeShape(agents)
   const firstFree = choices.find((choice) => choice.takenBy === null)
-  if (firstFree) return { color: firstFree.colour, shape: 'hexagon' }
+  if (firstFree) return { color: firstFree.colour, shape }
   const taken = new Set(choices.map((choice) => choice.colour))
-  return { color: generatedColours(taken, 1)[0] ?? addAgentPalette[0], shape: 'hexagon' }
+  return { color: generatedColours(taken, 1)[0] ?? addAgentPalette[0], shape }
+}
+
+/** Decision 184: one of the nine shapes Score draws, the first no visible agent is drawn as (pebble when all are). */
+function freeShape(agents: AgentSummary[]): Shape {
+  const drawn = new Set(agents.map((agent) => drawnShape(agent.style.shape)))
+  return OfferedShapes.find((shape) => !drawn.has(shape)) ?? 'square'
 }
 
 export type WorksOnChoice =

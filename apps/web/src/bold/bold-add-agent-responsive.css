@@ -6,7 +6,7 @@
   }
 
   [data-ui='bold'] .bold-add-shapes {
-    grid-template-columns: repeat(4, 44px);
+    grid-template-columns: repeat(3, 44px);
   }
 
   [data-ui='bold'] .bold-add-shapes label {

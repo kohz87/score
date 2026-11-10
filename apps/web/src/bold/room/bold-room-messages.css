@@ -34,7 +34,7 @@
 }
 
 [data-ui='bold'] .bold-message .chat-message > .agent-glyph {
-  --glyph-tile-size: 26px;
+  --glyph-tile-size: 40px;
   --glyph-radius: 9px;
   flex: none;
 }

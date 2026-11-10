@@ -232,37 +232,55 @@ async function painted(page: Page, box: Locator, { middle = 1, pad = 0 } = {}) {
 test('third gate 3: a background in the agent’s own colour doesn’t erase a bare glyph', async ({
   page,
 }) => {
-  // The dock draws each agent as a bare glyph; lead's colour is #6B4EFF.
+  // The chat list draws each agent as a bare glyph; lead's colour is #6B4EFF.
   await wear(page, {
-    css: '.bold-shell .bold-frame .dock-ring-inner { background-color: #6b4eff; }',
+    css: '.bold-shell .bold-frame .bold-chat-avatar { background-color: #6b4eff; }',
   })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const glyph = page
-    .locator('.dock-ring-inner svg.agent-glyph[style*="--glyph-color: #6B4EFF"]')
+    .locator('.bold-chat-avatar svg.agent-glyph[style*="--glyph-color: #6B4EFF"]')
     .first()
   await expect(glyph).toBeVisible({ timeout: 20_000 })
   // The accepted rule is really painting the agent's colour behind it.
   expect(await glyph.evaluate((svg) => getComputedStyle(svg.parentElement!).backgroundColor)).toBe(
     'rgb(107, 78, 255)',
   )
+  // The list orders chats by activity: the lead's row may sit below the fold.
+  await glyph.scrollIntoViewIfNeeded()
   const result = await painted(page, glyph, { middle: 0.6 })
   expect(result.ratio).toBeGreaterThanOrEqual(3)
+  // The white eyes alone could pass the ratio: the body must sit on Score's plate, not on the theme's colour.
+  const transparent = 'rgba(0, 0, 0, 0)'
+  const plate = await glyph.evaluate((svg) => getComputedStyle(svg).backgroundColor)
+  expect(plate).not.toBe(transparent)
+  expect(plate).not.toBe('rgb(107, 78, 255)')
+  // Decision 184: a tile glyph has no tint of its own in the new shell any more, so it wears the same plate.
+  const tile = page.locator('[data-ui="bold"] span.agent-glyph--tile').first()
+  if (await tile.count()) {
+    const tilePlate = await tile.evaluate((el) => getComputedStyle(el).backgroundColor)
+    expect(tilePlate).not.toBe(transparent)
+  }
   // The theme was not switched off for it: the plate is Score's own.
   await page.waitForTimeout(1200)
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
 })
 
-test('third gate 3: a Needs-you ring stays distinguishable on a background of its own colour', async ({
+test('third gate 3: a Needs-you pill stays distinguishable on a background of its own colour', async ({
   page,
 }) => {
-  // The ring that marks an agent waiting on the person is edged in Score's own two tones, so any ground shows it.
+  // The pill that marks a chat waiting on the person is a light object of Score's own, so any ground shows it.
   await wear(page, {
-    css: '.bold-shell .bold-frame .dock, .bold-shell .bold-frame .top, .bold-shell .bold-frame .ring { background-color: #ff6b8a; }',
+    // The protected pill is not named: the sanitiser drops a whole rule that names it, ground included.
+    css: '.bold-shell .bold-frame .bold-chat-row, .bold-shell .bold-frame .top { background-color: #ff6b8a; }',
   })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  const ring = page.locator('.bold-needs[data-protected]').first()
+  const ring = page.locator('.bold-chat-needs[data-protected]').first()
   await expect(ring).toBeAttached({ timeout: 20_000 })
   await expect(ring).toBeVisible()
+  // The hostile ground really is under it.
+  expect(
+    await ring.evaluate((el) => getComputedStyle(el.closest('.bold-chat-row')!).backgroundColor),
+  ).toBe('rgb(255, 107, 138)')
   const result = await painted(page, ring, { pad: 6 })
   expect(result.ratio).toBeGreaterThanOrEqual(3)
 })

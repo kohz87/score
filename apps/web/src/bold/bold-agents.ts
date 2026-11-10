@@ -37,14 +37,6 @@ export function agentNameColor(agent: AgentSummary): string {
 }
 
 /**
- * The contract has an agent's status, not a run percentage yet (PLAN 11.2 adds one). Until then no ring draws an arc:
- * a made-up share would look like real progress.
- */
-export function dockProgress(): number | null {
-  return null
-}
-
-/**
  * The eyes' mood for an agent's status (decision 127): working -> working, waiting -> needs you, paused / offline ->
  * resting (half-lidded, slow blink, no looking about), the rest idle. Thinking and done are momentary and are passed
  * where a call site knows them.

@@ -93,7 +93,7 @@ test('the header’s Edit offers name, role and the appearance editor', async ()
     }),
   )
   expect(await screen.findByRole('dialog', { name: 'Agent appearance' })).toBeDefined()
-  expect(screen.getByRole('radio', { name: 'star' })).toBeDefined()
+  expect(screen.getByRole('radio', { name: 'flower' })).toBeDefined()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
   expect(screen.queryByRole('dialog', { name: 'Agent appearance' })).toBeNull()
 })

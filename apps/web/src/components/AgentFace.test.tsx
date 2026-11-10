@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { AgentGlyph } from './AgentGlyph.tsx'
 import { AgentFacesContext } from './agent-faces-context.ts'
 import type { FaceMood } from './agent-face.ts'
+import { agentShapes } from './agent-shapes.ts'
 
 const css = readFileSync('src/components/agent-face.css', 'utf8')
 const agent = (shape = 'triangle' as (typeof ShapeSchema.options)[number], id = 'builder') => ({
@@ -39,20 +40,20 @@ test.each(ShapeSchema.options)(
       ).toHaveLength(0)
       expect(container.querySelector('.agent-face')?.getAttribute('aria-hidden')).toBe('true')
       // The silhouette is still there, with its own geometry.
-      expect(container.querySelector('.agent-glyph__solid, .agent-glyph__ring')).not.toBeNull()
+      expect(container.querySelector('.agent-glyph__solid')).not.toBeNull()
       unmount()
     }
   },
 )
 
-test('the circle-dot ring loses its centre dot to the eyes, other shapes keep their geometry', () => {
+test('a retired name is drawn as its nearest of the nine, other shapes keep their geometry', () => {
   const ring = render(withFaces(<AgentGlyph agent={agent('circle-dot')} />))
-  expect(ring.container.querySelectorAll('.agent-glyph__solid')).toHaveLength(0)
-  expect(ring.container.querySelectorAll('.agent-glyph__ring')).toHaveLength(1)
+  expect(ring.container.querySelectorAll('.agent-glyph__solid')).toHaveLength(1)
+  expect(ring.container.querySelector('circle.agent-glyph__solid')?.getAttribute('r')).toBe('7.07')
   cleanup()
   const tri = render(withFaces(<AgentGlyph agent={agent('triangle')} />))
   expect(tri.container.querySelector('path.agent-glyph__solid')?.getAttribute('d')).toBe(
-    'M10 3 L17.5 16 H2.5 Z',
+    agentShapes.triangle[0].d,
   )
 })
 
@@ -125,7 +126,7 @@ test('the accessible name gains the mood only when asked, and only in the new sh
   expect(said.container.firstElementChild?.getAttribute('aria-label')).toBe('builder, needs you')
   cleanup()
   const idle = render(withFaces(<AgentGlyph agent={agent()} describeMood describeShape />))
-  expect(idle.container.firstElementChild?.getAttribute('aria-label')).toBe('builder, triangle')
+  expect(idle.container.firstElementChild?.getAttribute('aria-label')).toBe('builder, peak')
   cleanup()
   const classic = render(<AgentGlyph agent={agent()} mood="needs" describeMood />)
   expect(classic.container.firstElementChild?.getAttribute('aria-label')).toBe('builder')

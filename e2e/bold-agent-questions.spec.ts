@@ -116,6 +116,21 @@ for (const { name, viewport } of sizes) {
       const team = (await (await page.request.get('/api/team-room')).json()) as {
         room: { id: string }
       }
+      // The Chats button's count says how many things wait on the person (a phone's tab carries the same name).
+      const chats = page
+        .getByRole('navigation', { name: 'Main' })
+        .getByRole('button', { name: /^Chats/ })
+      const waitingCount = async () =>
+        Number((await chats.getAttribute('aria-label'))?.match(/(\d+) need you/)?.[1] ?? 0)
+      await expect(chats).toBeVisible()
+      // The count settles once every read has answered: take it when two reads a second apart agree.
+      let before = await waitingCount()
+      for (let settled = false; !settled;) {
+        await page.waitForTimeout(1000)
+        const now = await waitingCount()
+        settled = now === before
+        before = now
+      }
       const sent = await page.request.post(`/api/rooms/${team.room.id}/messages`, {
         headers: { ...web, 'Idempotency-Key': tag('ask') },
         data: { text: '@reviewer ask me to pick' },
@@ -124,13 +139,13 @@ for (const { name, viewport } of sizes) {
       // 3.24.0: the question card sits in the conversation (no Needs you strip above it).
       const card = page.locator('#bold-room-stream').getByRole('region', { name: 'reviewer asks' })
       await expect(card).toBeVisible({ timeout: 30_000 })
-      // The dock ring says the agent needs you while the question waits (a phone has no dock).
-      const ring = page.getByRole('button', { name: /^One to one with reviewer,/ })
-      if (viewport.width > 860) await expect(ring).toHaveAccessibleName(/needs you/)
+      // The reviewer's question adds exactly one to the count while it waits...
+      await expect.poll(waitingCount, { timeout: 30_000 }).toBe(before + 1)
       await card.getByRole('button', { name: 'develop' }).click()
       await expect(card).toHaveCount(0, { timeout: 30_000 })
+      // ...and answering it takes that one away again (the dock ring's "clears" check).
+      await expect.poll(waitingCount, { timeout: 30_000 }).toBe(before)
       if (viewport.width > 860) {
-        await expect(ring).not.toHaveAccessibleName(/needs you/, { timeout: 30_000 })
         await expect(page.locator('.bold-question-note').last()).toContainText(
           'you answered: develop',
         )

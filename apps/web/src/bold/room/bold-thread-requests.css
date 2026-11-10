@@ -99,7 +99,7 @@
 }
 
 [data-ui='bold'] .bold-thread-message .chat-message > .agent-glyph {
-  --glyph-tile-size: 22px;
+  --glyph-tile-size: 32px;
   --glyph-radius: 8px;
 }
 

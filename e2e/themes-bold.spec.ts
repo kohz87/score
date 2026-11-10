@@ -130,7 +130,11 @@ test('a failing theme on a dark device, with Look on system, keeps the bold ligh
   await expect(request).toHaveCSS('background-color', 'rgb(18, 19, 26)')
   await expectReadable(request, ['rgb(255, 255, 255)', 'rgb(18, 19, 26)'])
   // Open the one-to-one through the shell: a page load would drop the visit-only light override.
-  await page.getByRole('button', { name: /^One to one with builder,/ }).click()
+  await page
+    .locator('.bold-chat-list .bold-chat-row.direct')
+    .filter({ hasText: 'builder' })
+    .first()
+    .click()
   await expect(shell).toHaveAttribute('data-look', 'light')
   const privacy = page.locator('.bold-dm-privacy[data-protected]')
   await expect(privacy).toBeVisible()

@@ -97,22 +97,16 @@ for (const { name, viewport } of sizes) {
       await pair(page)
     })
 
-    test('opens from the dock, lands in the latest chat and always shows the privacy label', async ({
+    test('opens from the chat list, lands in the latest chat and always shows the privacy label', async ({
       page,
     }) => {
       // `?open=1` opens the team room's chat; a phone's `/b` is its chat list.
       await page.goto(phone ? '/b' : '/b?open=1')
-      if (phone) {
-        // A phone has no dock (board 19); its chat list has a Direct group with every agent.
-        await page
-          .getByRole('complementary', { name: 'Chats', exact: true })
-          .getByRole('link', { name: /^builder/ })
-          .click()
-      } else {
-        const ring = page.getByRole('button', { name: /^One to one with builder,/ })
-        await expect(ring).toBeVisible()
-        await ring.click()
-      }
+      // The top bar has no agent row (decision 184); the chat list's Direct group has every agent.
+      await page
+        .getByRole('complementary', { name: 'Chats', exact: true })
+        .getByRole('link', { name: /^builder/ })
+        .click()
       await expect(page).toHaveURL(/[?&]with=builder/)
       await expectPrivacy(page, 'builder')
       await expect(stream(page)).toBeVisible()

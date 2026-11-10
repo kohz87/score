@@ -22,15 +22,15 @@
 
 [data-ui='bold'] .bold-add-shapes {
   display: grid;
-  grid-template-columns: repeat(4, 36px);
+  grid-template-columns: repeat(3, 44px);
   gap: calc(4px * var(--bold-d, 1));
   justify-content: center;
 }
 
 [data-ui='bold'] .bold-add-shapes label {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 999px;
   background: var(--field);
@@ -44,7 +44,7 @@
 }
 
 [data-ui='bold'] .bold-add-shapes .agent-glyph {
-  --glyph-svg-size: 18px;
+  --glyph-svg-size: 34px;
 }
 
 [data-ui='bold'] .bold-add-colours {

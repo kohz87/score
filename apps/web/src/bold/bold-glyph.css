@@ -1,0 +1,54 @@
+/* Decision 184: in the new shell an agent is its body, drawn bigger, with no tinted tile or circle behind it (the classic
+   shell keeps its tile). The tile box still sets the size and the layout; the svg fills it. Bare glyphs already have no
+   tile; the places that show them larger say so next to their own layout. */
+[data-ui='bold'] .agent-glyph--tile {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+[data-ui='bold'] .agent-glyph--tile > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Inline mentions stay small and flat. */
+[data-ui='bold'] .agent-glyph--xs.agent-glyph--tile > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tasks agent filters: the glyph a touch larger on a 44px chip. */
+[data-ui='bold'] .bold-tb-chips button .agent-glyph {
+  --glyph-svg-size: 24px;
+}
+
+[data-ui='bold'] .bold-tb-chips button:has(.agent-glyph) {
+  min-height: 44px;
+}
+
+/* A direct chat's header leads with the agent, large (mock-up 29-glyphs-main). The phone header shows no glyph. */
+[data-ui='bold'] .bold-dm-bar .bold-chat-bar-name > .agent-glyph {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+
+/* The Agents page cards: the agent is the card's picture. */
+[data-ui='bold'] .bold-agentcard-top > .agent-glyph,
+[data-ui='bold'] .bold-agentcard-glow > .agent-glyph {
+  width: 64px;
+  height: 64px;
+}
+
+/* A colour too close to the ground (AgentGlyph marks it, under 3:1) gets a thin edge in its own shade on that look only,
+   so the body keeps its shape without a tile; every other agent stays edge-free. */
+[data-ui='bold']:not([data-look='light']) .agent-glyph[data-low-dark] {
+  --glyph-shape-stroke: color-mix(in srgb, var(--glyph-color) 40%, #ececf1);
+  --glyph-stroke-width: 0.9;
+}
+
+[data-ui='bold'][data-look='light'] .agent-glyph[data-low-light] {
+  --glyph-shape-stroke: color-mix(in srgb, var(--glyph-color) 55%, #12131a);
+  --glyph-stroke-width: 0.9;
+}

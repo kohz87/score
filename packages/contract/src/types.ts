@@ -34,23 +34,6 @@ export const ShapeSchema = z.enum([
 ])
 export type Shape = z.infer<typeof ShapeSchema>
 
-/**
- * Decision 184 (owner, 2026-11-10): the nine shapes Score offers and draws, each with its own eyes. Every name in
- * ShapeSchema stays valid (stored styles and API bodies are unchanged); a name outside this list is drawn as the
- * nearest of these nine.
- */
-export const OfferedShapes = [
-  'ball',
-  'drop',
-  'triangle',
-  'cloud',
-  'pill',
-  'cross',
-  'flower',
-  'square',
-  'blob',
-] as const satisfies readonly Shape[]
-
 export const AgentStyleSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,

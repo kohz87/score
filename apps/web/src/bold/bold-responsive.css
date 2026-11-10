@@ -10,35 +10,26 @@
   }
 }
 
+/* Decision 184: the top bar has no agent row, so who needs you is the count on the Chats button (decision markers are
+   never hidden) and the chat rows. */
 [data-ui='bold'] .nav .bold-nav-count {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 11px;
+  font-weight: 700;
 }
 
-@media (max-width: 1100px) {
-  [data-ui='bold'] .top .dock {
-    display: none;
-  }
-
-  /* The needs-you count the rings carried moves onto the Room button (decision markers are never hidden). */
-  [data-ui='bold'] .nav .bold-nav-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    margin-left: 6px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--hi-bg);
-    color: var(--hi-ink);
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  [data-ui='bold'] .nav button.on .bold-nav-count {
-    background: var(--panel);
-    color: var(--ink);
-  }
+[data-ui='bold'] .nav button.on .bold-nav-count {
+  background: var(--panel);
+  color: var(--ink);
 }
 
 @media (max-width: 860px) {
@@ -55,7 +46,6 @@
   }
 
   [data-ui='bold'] .top .nav,
-  [data-ui='bold'] .top .dock,
   [data-ui='bold'] .top .searchbtn,
   [data-ui='bold'] .top .gear {
     display: none;

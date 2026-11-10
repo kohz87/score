@@ -82,12 +82,21 @@
     background-color: var(--glyph-plate) !important;
     border-radius: 3px !important;
   }
+  /* Decision 184: in the new shell a tile glyph has no tint of its own any more (the body is the icon), so under a theme it
+     wears the same plate, rounded to its box. */
+  html[data-look='custom'] [data-ui='bold'] .agent-glyph--tile[data-protected] {
+    background-color: var(--glyph-plate) !important;
+    border-radius: 28% !important;
+  }
   html[data-look='custom'] .needs-you-dot[data-protected] {
     box-sizing: content-box !important;
     border: 1.5px solid #12131a !important;
   }
-  /* The bold shell's dock ring of an agent that needs you (PLAN 11.3): a two-tone outline that shows on any ground. */
-  html[data-look='custom'] .bold-needs[data-protected] {
+  /* Decision 184: with the dock gone, the chat list's "needs you" pill is where a desktop shows who is waiting on the
+     person: Score's light pill in its own two-tone edge, as the dock ring had, so no ground or fill of a theme hides it. */
+  html[data-look='custom'] .bold-chat-needs[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
     box-shadow:
       0 0 0 2px #ececf1,
       0 0 0 4px #12131a !important;

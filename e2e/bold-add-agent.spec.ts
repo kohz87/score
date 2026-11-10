@@ -62,7 +62,7 @@ for (const viewport of sizes) {
     let created = false
     try {
       const shapeGroup = dialog.getByRole('radiogroup', { name: 'Shape' })
-      await expect(shapeGroup.getByRole('radio')).toHaveCount(22)
+      await expect(shapeGroup.getByRole('radio')).toHaveCount(9)
       const colourGroup = dialog.getByRole('radiogroup', { name: 'Colour' })
       const taken = colourGroup.locator('input[type=radio]:disabled')
       await expect(taken.first()).toBeVisible()
@@ -72,12 +72,12 @@ for (const viewport of sizes) {
       await dialog.getByLabel('Name').fill(id)
       await dialog.getByLabel('What does it do?').fill('Finds sources and writes a short summary.')
       await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
-      await shapeGroup.getByRole('radio', { name: 'star' }).click()
+      await shapeGroup.getByRole('radio', { name: 'flower' }).click()
       const free = colourGroup.locator('input[type=radio]:not(:disabled)').first()
       const chosen = await free.getAttribute('data-colour')
       await free.check()
 
-      const preview = dialog.getByRole('img', { name: `${id}, star` })
+      const preview = dialog.getByRole('img', { name: `${id}, flower` })
       await expect(preview).toBeVisible()
       expect(
         await preview.evaluate((element) =>

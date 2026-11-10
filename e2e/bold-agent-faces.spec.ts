@@ -23,12 +23,15 @@ test('every glyph on the bold Team page has two blank eyes', async ({ page }) =>
   await expect(page.locator('.bold-agentcard .agent-face circle')).toHaveCount(0)
 })
 
-test('the bold Room dock shows eyes too', async ({ page }) => {
+test('the chat list shows each agent as its own body with eyes, and no top-bar agent row', async ({
+  page,
+}) => {
   await pair(page)
   await page.goto('/b?open=1')
-  const dock = page.locator('[data-ui="bold"] .dock .agent-glyph')
-  await expect(dock.first()).toBeVisible()
-  await expect(dock.first().locator('.agent-face__socket')).toHaveCount(2)
+  const avatar = page.locator('[data-ui="bold"] .bold-chat-avatar .agent-glyph')
+  await expect(avatar.first()).toBeVisible()
+  await expect(avatar.first().locator('.agent-face__socket')).toHaveCount(2)
+  await expect(page.locator('[data-ui="bold"] .top .dock')).toHaveCount(0)
 })
 
 test.describe('reduced motion', () => {
