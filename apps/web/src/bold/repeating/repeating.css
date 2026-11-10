@@ -127,6 +127,10 @@
 }
 
 /* The page: title and views, then the list, the recipe and its cards. */
+/* The same width as the other Tasks pages, so the views don't move when switching between them. */
+[data-ui='bold'] .bold-rt {
+  max-width: 1392px;
+}
 [data-ui='bold'] .bold-rt-head {
   display: flex;
   align-items: center;

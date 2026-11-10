@@ -14,6 +14,13 @@
   flex-wrap: wrap;
 }
 
+[data-ui='bold'] .bold-tb-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 [data-ui='bold'] .bold-tb-title {
   display: flex;
   flex-direction: column;

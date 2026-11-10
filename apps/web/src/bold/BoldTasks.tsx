@@ -112,14 +112,17 @@ export function BoldTasksPage() {
             archive any of them.
           </p>
         </div>
-        <TasksTabs />
-        {needsCount > 0 ? (
-          <span className="bold-tb-pill" data-protected="inline-flex">
-            {needsCount} need you
-          </span>
-        ) : (
-          <span className="bold-tb-quiet">Nothing needs you</span>
-        )}
+        {/* Decision 183: the Tasks views end the header on every Tasks page; what needs you sits before them. */}
+        <div className="bold-tb-side">
+          {needsCount > 0 ? (
+            <span className="bold-tb-pill" data-protected="inline-flex">
+              {needsCount} need you
+            </span>
+          ) : (
+            <span className="bold-tb-quiet">Nothing needs you</span>
+          )}
+          <TasksTabs />
+        </div>
       </header>
 
       {making && (

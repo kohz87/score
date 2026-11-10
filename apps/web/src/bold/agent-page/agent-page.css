@@ -438,3 +438,10 @@
     align-items: center;
   }
 }
+
+/* Decision 183: the Assigned tile's two links, apart (they ran together). */
+[data-ui='bold'] .bold-assigned-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
