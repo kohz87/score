@@ -3,6 +3,24 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.36.0] — 2026-11-10
+
+### Added
+- **Tasks › Repeating.** One list of every repeating job across your agents: when it runs and next runs, who it's assigned to, its model ("its own"
+  or pinned), where its results go, and whether it's on. New, edit, move to another agent, pause, run now and delete all happen here. Moving a job
+  makes it for the other agent with everything it does, then removes it from the first; if Hermes doesn't remove it, you're told and can remove it.
+- **Results in a chat.** A repeating job can post each run's answer into a chat (the agent's direct chat, a group, or nowhere). Score reads the result
+  Hermes saved, posts the answer once, and never the prompt; a run that didn't answer says so in plain words.
+- **Tasks › Recipes.** Recipes move here from Settings (old links still work). Each step can have its own model and effort. A recipe can repeat on a
+  schedule Score runs, starting one job per run in the chat you pick; setting or resuming it shows the agents and the acknowledgement, as starting a
+  run does. Score has to be running at that time: runs it missed are counted and shown with Run now, never started late on their own. A recipe that
+  asks for inputs or has coding steps can't repeat yet.
+- **What's assigned.** The agent page's Work has a read-only Assigned line, and a direct chat's Info lists the agent's repeating jobs, its steps in
+  recipes that repeat, and its tasks, each linking to Tasks.
+
+### Changed
+- The agent page no longer holds the repeating-jobs card; jobs are set in Tasks › Repeating.
+
 ## [3.35.0] — 2026-11-10
 
 ### Added

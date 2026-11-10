@@ -187,7 +187,12 @@ test('pausing keeps the agents it was bound to; setting or resuming needs them s
   const id = recipe()
   const first = request()
   h.db.tx((sqlite) => setRecipeSchedule(sqlite, id, first, now()))
-  const bare = { schedule: first.schedule, timezone: first.timezone, roomId: first.roomId, enabled: true }
+  const bare = {
+    schedule: first.schedule,
+    timezone: first.timezone,
+    roomId: first.roomId,
+    enabled: true,
+  }
   h.db.tx((sqlite) => setRecipeSchedule(sqlite, id, { ...bare, enabled: false }, now()))
   const stored = h.db.sqlite
     .prepare('SELECT agent_map FROM recipe_schedules WHERE workflow_id = ?')
