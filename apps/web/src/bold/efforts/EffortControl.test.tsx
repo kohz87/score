@@ -7,6 +7,8 @@ import { EffortChatsCard } from './EffortChatsCard.tsx'
 import { EffortControl, EffortTag } from './EffortControl.tsx'
 import { chatEffortOf, useRoomEfforts } from './effort-queries.ts'
 import { useRunEffort } from './use-run-effort.ts'
+import { useRunModel } from '../models/use-run-model.ts'
+import { chatModelOf, useRoomModels } from '../models/model-queries.ts'
 
 /** Decision 178, parts 3 to 5 and 8: the context bar's Effort button, Chat info's tags and This chat, the agent's list. */
 afterEach(() => {
@@ -45,6 +47,7 @@ function stub(chat: ChatEffortsResponse['items'], agentEfforts: AgentEfforts = e
         return jsonResponse({ roomId: 'room-1', agentId: builder.id, effort: body.effort })
       }
       if (path.endsWith('/rooms/room-1/efforts')) return jsonResponse({ asOfSeq: 0, items: chat })
+      if (path.endsWith('/rooms/room-1/models')) return jsonResponse({ asOfSeq: 0, items: [] })
       if (path.endsWith('/agents/builder/subagents'))
         return jsonResponse({
           agentId: 'builder',
@@ -65,15 +68,24 @@ function stub(chat: ChatEffortsResponse['items'], agentEfforts: AgentEfforts = e
 /** The context bar's control as the bar renders it: this chat's effort, changed through the real `/effort` command. */
 function ContextBarProbe() {
   const current = chatEffortOf(useRoomEfforts('room-1').items, builder.id)
+  const model = chatModelOf(useRoomModels('room-1').items, builder.id)
   return (
-    <EffortControl agent={builder} current={current} runEffort={useRunEffort('room-1', 'group')} />
+    <EffortControl
+      agent={builder}
+      model={model}
+      current={current}
+      runEffort={useRunEffort('room-1', 'group')}
+      runModel={useRunModel('room-1', 'group')}
+    />
   )
 }
 
-test('the context bar shows Effort only when this chat sets one; max uses the amber style', async () => {
+test('the context bar shows the model · effort tag only when this chat sets one; max uses the amber style', async () => {
   stub([{ roomId: 'room-1', agentId: builder.id, effort: 'max' }])
   renderInRoom(<ContextBarProbe />)
-  const button = await screen.findByRole('button', { name: /Effort in this chat: max/ })
+  const button = await screen.findByRole('button', {
+    name: /in this chat: model its own, effort max\. Change/,
+  })
   expect(button.className).toContain('bold-effort--max')
 })
 
@@ -81,10 +93,18 @@ test('nothing is shown for an agent on its own in this chat', async () => {
   stub([])
   renderInRoom(<ContextBarProbe />)
   await waitFor(() =>
-    expect(screen.queryByRole('button', { name: /Effort in this chat/ })).toBeNull(),
+    expect(screen.queryByRole('button', { name: /in this chat: model/ })).toBeNull(),
   )
-  renderInRoom(<EffortTag agent={builder} current={null} runEffort={async () => undefined} />)
-  expect(screen.queryByRole('button', { name: /effort in this chat/i })).toBeNull()
+  renderInRoom(
+    <EffortTag
+      agent={builder}
+      model={null}
+      current={null}
+      runEffort={async () => undefined}
+      runModel={async () => undefined}
+    />,
+  )
+  expect(screen.queryByRole('button', { name: /in this chat/i })).toBeNull()
 })
 
 test('a level is set for this chat only; the menu offers only the levels the agent takes', async () => {
@@ -93,7 +113,11 @@ test('a level is set for this chat only; the menu offers only the levels the age
     efforts({ levels: ['low', 'high'] }),
   )
   renderInRoom(<ContextBarProbe />)
-  fireEvent.click(await screen.findByRole('button', { name: /Effort in this chat: high/ }))
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort high\. Change/,
+    }),
+  )
   const menu = await screen.findByRole('menu', { name: `Effort for ${builder.name}` })
   expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3) // low, high, default
   expect(within(menu).queryByText('/effort max')).toBeNull()
@@ -108,8 +132,12 @@ test('a level is set for this chat only; the menu offers only the levels the age
 test('Back to its own sends null', async () => {
   const calls = stub([{ roomId: 'room-1', agentId: builder.id, effort: 'high' }])
   renderInRoom(<ContextBarProbe />)
-  fireEvent.click(await screen.findByRole('button', { name: /Effort in this chat: high/ }))
-  const menu = await screen.findByRole('menu')
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort high\. Change/,
+    }),
+  )
+  const menu = await screen.findByRole('menu', { name: `Effort for ${builder.name}` })
   fireEvent.click(within(menu).getByRole('menuitemradio', { name: /\/effort default/ }))
   await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
   expect(calls.find((call) => call.method === 'PUT')!.body).toEqual({ effort: null })
@@ -118,27 +146,46 @@ test('Back to its own sends null', async () => {
 test('the menu takes the keyboard: focus starts on the checked choice, arrows and End move, Escape closes and returns focus', async () => {
   stub([{ roomId: 'room-1', agentId: builder.id, effort: 'medium' }])
   renderInRoom(<ContextBarProbe />)
-  const button = await screen.findByRole('button', { name: /Effort in this chat: medium/ })
+  const button = await screen.findByRole('button', {
+    name: /in this chat: model its own, effort medium\. Change/,
+  })
   fireEvent.click(button)
-  const menu = await screen.findByRole('menu')
+  const menu = await screen.findByRole('menu', { name: `Effort for ${builder.name}` })
   const items = within(menu).getAllByRole('menuitemradio')
   const checked = items.findIndex((item) => item.getAttribute('aria-checked') === 'true')
-  await waitFor(() => expect(document.activeElement).toBe(items[checked]))
+  // Focus opens on the first checked choice of the whole menu: the Model part's "Back to its own" (the chat sets no model).
+  const modelMenu = screen.getByRole('menu', { name: `Model for ${builder.name}` })
+  const modelOwn = within(modelMenu).getByRole('menuitemradio', { name: /\/model default/ })
+  await waitFor(() => expect(document.activeElement).toBe(modelOwn))
+  items[checked]!.focus()
   fireEvent.keyDown(menu, { key: 'ArrowDown' })
   expect(document.activeElement).toBe(items[checked + 1])
   fireEvent.keyDown(menu, { key: 'End' })
   expect(document.activeElement).toBe(items[items.length - 1])
   fireEvent.keyDown(menu, { key: 'Escape' })
-  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  await waitFor(() => expect(screen.queryByRole('menu', { name: /Effort for/ })).toBeNull())
   // Focus goes back to the button a frame later (the subagents control does the same).
   await waitFor(() => expect(document.activeElement).toBe(button))
 })
 
 test('a Members tag opens the choices for that agent', async () => {
   stub([{ roomId: 'room-1', agentId: builder.id, effort: 'high' }])
-  renderInRoom(<EffortTag agent={builder} current="high" runEffort={async () => undefined} />)
-  fireEvent.click(await screen.findByRole('button', { name: /effort in this chat: high/ }))
-  expect(await screen.findByRole('menu')).toBeTruthy()
+  renderInRoom(
+    <EffortTag
+      agent={builder}
+      model={null}
+      current="high"
+      runEffort={async () => undefined}
+      runModel={async () => undefined}
+    />,
+  )
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort high\. Change/,
+    }),
+  )
+  expect(await screen.findByRole('menu', { name: `Effort for ${builder.name}` })).toBeTruthy()
+  expect(screen.getByRole('menu', { name: `Model for ${builder.name}` })).toBeTruthy()
 })
 
 test('the agent settings list is absent when no chat sets a different effort', async () => {
@@ -187,7 +234,7 @@ test('This chat (one-to-one) offers Change effort, and Back to its own only when
 test('This chat says Its own when the chat sets nothing', async () => {
   stub([])
   renderInRoom(<DirectEffortBlock agent={builder} roomId="room-1" />)
-  expect(await screen.findByText('Its own')).toBeTruthy()
+  expect((await screen.findAllByText('Its own')).length).toBe(2) // the model's row and the effort's
   expect(screen.queryByRole('button', { name: /Back to its own/ })).toBeNull()
   expect(await screen.findByText('up to 3')).toBeTruthy()
 })

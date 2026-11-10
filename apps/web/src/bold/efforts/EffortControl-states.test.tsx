@@ -8,6 +8,10 @@ import { agents, disposeRoomTest, jsonResponse, renderInRoom } from '../room/roo
 import { DirectEffortBlock } from './DirectEffortBlock.tsx'
 import { EffortControl, EffortTag } from './EffortControl.tsx'
 import { runEffortCommand } from './effort-command.ts'
+const noModel = {
+  model: null,
+  runModel: async () => undefined,
+}
 
 /** Effort per chat, the states that come from a failed or late read: "unknown", the menu's note, focus, and the layout rules. */
 afterEach(() => {
@@ -39,6 +43,7 @@ function stub(
         return jsonResponse({ roomId: 'room-1', agentId: builder.id, effort: body.effort })
       }
       if (path.endsWith('/rooms/room-1/efforts')) return jsonResponse({ asOfSeq: 0, items: chat })
+      if (path.endsWith('/rooms/room-1/models')) return jsonResponse({ asOfSeq: 0, items: [] })
       if (path.endsWith(`/agents/${builder.id}/efforts`)) {
         await options.gate
         if (options.agentStatus)
@@ -132,12 +137,20 @@ test('a menu opened before its data arrives takes focus on the checked choice on
     release = resolve
   })
   stub(high, { gate })
-  renderInRoom(<EffortControl agent={builder} current="high" runEffort={async () => undefined} />)
-  fireEvent.click(await screen.findByRole('button', { name: /Effort in this chat: high/ }))
+  renderInRoom(
+    <EffortControl agent={builder} current="high" runEffort={async () => undefined} {...noModel} />,
+  )
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort high\. Change/,
+    }),
+  )
   expect(screen.queryByRole('menu')).toBeNull()
   release()
-  const menu = await screen.findByRole('menu', { name: `Effort for ${builder.name}` })
-  const checked = within(menu)
+  await screen.findByRole('menu', { name: `Effort for ${builder.name}` })
+  // Focus starts on the first checked choice of the whole menu: the Model part's "Back to its own" (no model is set here).
+  const modelMenu = screen.getByRole('menu', { name: `Model for ${builder.name}` })
+  const checked = within(modelMenu)
     .getAllByRole('menuitemradio')
     .find((item) => item.getAttribute('aria-checked') === 'true')!
   await waitFor(() => expect(document.activeElement).toBe(checked))
@@ -145,7 +158,9 @@ test('a menu opened before its data arrives takes focus on the checked choice on
 
 test('a Members tag opens its choices from its right edge, so they stay inside the panel', async () => {
   stub(high)
-  renderInRoom(<EffortTag agent={builder} current="high" runEffort={async () => undefined} />)
+  renderInRoom(
+    <EffortTag agent={builder} current="high" runEffort={async () => undefined} {...noModel} />,
+  )
   const choice = document.querySelector('.bold-effort-choice')
   expect(choice?.classList.contains('bold-effort-choice--end')).toBe(true)
 })

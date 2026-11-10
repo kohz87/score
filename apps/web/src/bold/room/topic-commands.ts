@@ -21,6 +21,8 @@ import { agentSubagentsQuery, putJobSubagents } from '../subagents/subagent-quer
 import { agentEffortsKey, agentEffortsQuery } from '../efforts/effort-queries.ts'
 import { runEffortCommand } from '../efforts/effort-command.ts'
 import { effortMenuItems } from '../efforts/effort-menu.ts'
+import { runModelCommand } from '../models/model-command.ts'
+import { useModelPalette } from '../models/use-model-palette.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
 export const TOPIC_COMMANDS: SlashCommand[] = [
@@ -76,7 +78,7 @@ export const DIRECT_NEW_COMMAND: SlashCommand = {
 }
 
 /** Typed but not offered in the palette: a chat does one job at a time, so `/new` has nothing to start (3.28.0). */
-export const TYPED_ONLY_COMMANDS = ['new', 'effort']
+export const TYPED_ONLY_COMMANDS = ['new', 'effort', 'model']
 
 const post = (path: string, body: object = {}) =>
   apiFetch(path, {
@@ -285,11 +287,13 @@ export async function runTopicCommand(
       })
       changeCachedJob(ctx.queryClient, updated, 'upsert')
       say(`Subagents set to at most ${count} for this job.`, change)
-    } else if (name === 'effort') {
+    } else if (name === 'effort' || name === 'model') {
       // The agent the command acts on: the one named before it, else the addressee (a one-to-one has only one).
       const word = target ?? (room.kind === 'direct' ? room.members[0] : undefined)
       if (!word) {
-        say('Say who: @agent /effort <level>, or address one agent first.')
+        say(
+          `Say who: @agent /${name} <${name === 'model' ? 'name' : 'level'}>, or address one agent first.`,
+        )
         return
       }
       const agent = findAgent(agents, word, false)
@@ -297,7 +301,7 @@ export async function runTopicCommand(
         say(`${agentDisplayName(agent)} isn’t in this chat.`)
         return
       }
-      await runEffortCommand({
+      await (name === 'model' ? runModelCommand : runEffortCommand)({
         roomId: room.id,
         roomKind: room.kind === 'direct' ? 'direct' : 'group',
         agent,
@@ -358,10 +362,20 @@ function effortMenuFor(
   if (!addressee || !agent) return []
   const efforts = queryClient.getQueryData<AgentEfforts>(agentEffortsKey(addressee))
   const failed = queryClient.getQueryState(agentEffortsKey(addressee))?.status === 'error'
-  return effortMenuItems(efforts, agentDisplayName(agent), failed)
+  const items = effortMenuItems(efforts, agentDisplayName(agent), failed)
+  return items.length ? [...items, MODEL_STUB] : items
 }
 
-/** A group room still routed by @mentions (not a team room, not a one-to-one): the older bold rooms, which keep only `/effort`. */
+/** On a bare `/` the palette says `/model` exists; typing it swaps this row for the real choices. */
+const MODEL_STUB: SlashCommand = {
+  name: 'model',
+  usage: '/model <name>',
+  insert: '/model',
+  key: 'model-stub',
+  description: 'Set the model for this chat',
+}
+
+/** A group room still routed by @mentions (not a team room, not a one-to-one): the older bold rooms, which keep only `/effort` and `/model`. */
 export const isOlderRoom = (room: Room) =>
   (room.role ?? 'room') === 'room' && room.routing === 'mentions'
 
@@ -378,11 +392,14 @@ export function useTopicCommands(
   const effortOnly = isOlderRoom(ctx.room)
   return {
     items: effortOnly ? [] : TOPIC_COMMANDS,
-    typedOnly: effortOnly ? ['effort'] : TYPED_ONLY_COMMANDS,
+    typedOnly: effortOnly ? ['effort', 'model'] : TYPED_ONLY_COMMANDS,
     menuFor: (addressee: string | null) => effortMenuFor(queryClient, ctx, addressee),
+    // The `/model` choices (decision 182); a hook the composer calls, since they come from reads.
+    useModelMenu: (agentId: string | null, query: string | null) =>
+      useModelPalette(ctx.agents, agentId, query),
     effortOnly,
     run: (name: string, args: string, target?: string) =>
-      effortOnly && name !== 'effort'
+      effortOnly && name !== 'effort' && name !== 'model'
         ? Promise.resolve()
         : runTopicCommand(
             name,

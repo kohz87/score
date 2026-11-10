@@ -3,16 +3,20 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { MemberEffortTag } from '../efforts/MemberEffortTag.tsx'
 import { chatEffortOf, useRoomEfforts } from '../efforts/effort-queries.ts'
+import { chatModelOf, useRoomModels } from '../models/model-queries.ts'
 import { InfoSection } from './InfoSection.tsx'
 
 /**
- * Chat info › Members. When an agent here runs at another effort than its own, the section starts open and its folded
+ * Chat info › Members. When an agent here runs another model or effort than its own, the section starts open and its folded
  * header says how many (the tags are the only sign of it; a person must not miss them). Otherwise it folds as before.
  */
 export function MembersInfo({ room, agents }: { room: Room; agents: AgentSummary[] }) {
   const items = useRoomEfforts(room.id).items
+  const models = useRoomModels(room.id).items
   const differing = room.members.filter(
-    (id) => agents.some((agent) => agent.id === id) && chatEffortOf(items, id) !== null,
+    (id) =>
+      agents.some((agent) => agent.id === id) &&
+      (chatEffortOf(items, id) !== null || chatModelOf(models, id) !== null),
   ).length
   return (
     <InfoSection
@@ -21,7 +25,7 @@ export function MembersInfo({ room, agents }: { room: Room; agents: AgentSummary
       title="Members"
       summary={
         differing > 0
-          ? `${room.members.length} · ${differing} at a different effort here`
+          ? `${room.members.length} · ${differing} set differently here`
           : String(room.members.length)
       }
       opensWhen={differing > 0}
@@ -43,8 +47,8 @@ export function MembersInfo({ room, agents }: { room: Room; agents: AgentSummary
       </ul>
       {!room.leadAgentId && <p className="bold-chat-note">No owner yet.</p>}
       <p className="bold-chat-note">
-        A tag means this chat runs that agent at another effort than its own. No tag: its own
-        setting.
+        A tag reads model · effort, for an agent this chat runs differently; the part that is its
+        own says “its own”. No tag: its own model and effort. Click a tag to change or clear either.
       </p>
     </InfoSection>
   )

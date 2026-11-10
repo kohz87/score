@@ -6,6 +6,7 @@ import {
   addressedEffortQuery,
   insertMention,
   mentionAt,
+  modelPaletteQuery,
   parseCommands,
   slashQuery,
   type SlashCommand,
@@ -18,6 +19,9 @@ const ORCHESTRATE_MENU_ITEM: SlashCommand = {
   usage: '/orchestrate <goal>',
   description: 'Start an orchestration for a goal.',
 }
+
+/** The model palette of a composer with no model command: nothing. A stand-in so the hook below is always called. */
+const noModelMenu = (): SlashCommand[] => []
 
 export function useComposerMenu({
   text,
@@ -55,15 +59,28 @@ export function useComposerMenu({
   // Only where that menu has items: elsewhere `@agent /eff` is ordinary text, and mentions still complete.
   const addressed = slash === null ? addressedEffortQuery(text) : null
   const effortMenu = addressed ? (topicCommands?.menuFor?.(addressed.agentId) ?? []) : []
-  const addressedAgent = effortMenu.length ? addressed!.agentId : null
-  const addressedQuery = addressedAgent === null ? '' : addressed!.query
+  // `/model` (decision 182): what follows it narrows the models, for the addressed agent or the composer's addressee.
+  const useModelMenu = topicCommands?.useModelMenu ?? noModelMenu
+  const modelAsk = modelPaletteQuery(text)
+  const modelRows = useModelMenu(
+    modelAsk ? (modelAsk.agentId ?? addressee) : null,
+    modelAsk?.query ?? null,
+  )
+  const modelOpen = modelAsk !== null && modelRows.length > 0
+  const addressedAgent = effortMenu.length
+    ? addressed!.agentId
+    : modelOpen && modelAsk?.agentId
+      ? modelAsk.agentId
+      : null
+  const addressedQuery = addressedAgent === null || modelOpen ? '' : addressed!.query
   const mention = slash === null && addressedAgent === null ? mentionAt(text, caret) : null
   const slashItems: SlashCommand[] = useMemo(() => {
+    if (modelOpen && modelAsk?.agentId) return modelRows
     if (addressedAgent !== null)
       return (topicCommands?.menuFor?.(addressedAgent) ?? []).filter((item) =>
         item.name.startsWith(addressedQuery),
       )
-    if (slash === null) return []
+    if (slash === null) return modelOpen ? modelRows : []
     return [
       ...(commands.data ?? []),
       ...LOCAL_COMMAND_MENU.filter(
@@ -72,10 +89,25 @@ export function useComposerMenu({
       ...(topicCommands?.items ?? []).filter(
         (extra) => !commands.data?.some((item) => item.name === extra.name),
       ),
-      ...(topicCommands?.menuFor?.(addressee) ?? []),
+      // The rows that say "set a model" give way to the real ones once they are here.
+      ...(topicCommands?.menuFor?.(addressee) ?? []).filter(
+        (item) => !(modelOpen && item.key === 'model-stub'),
+      ),
+      ...(modelOpen ? modelRows : []),
       ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
     ].filter((item) => item.name.startsWith(slash))
-  }, [slash, addressedAgent, addressedQuery, commands.data, orchestrate, topicCommands, addressee])
+  }, [
+    slash,
+    addressedAgent,
+    addressedQuery,
+    commands.data,
+    orchestrate,
+    topicCommands,
+    addressee,
+    modelOpen,
+    modelAsk?.agentId,
+    modelRows,
+  ])
   const mentionItems = useMemo(() => {
     if (!mention) return []
     const query = mention.query.toLowerCase()

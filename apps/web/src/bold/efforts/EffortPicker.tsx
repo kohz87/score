@@ -1,4 +1,3 @@
-import type { RefObject } from 'react'
 import { onChoiceMenuKeyDown } from '../choice-menu.ts'
 import { EFFORT_HINTS, ownEffortLabel, unlistedLevelsNote } from './effort-model.ts'
 
@@ -8,17 +7,12 @@ import { EFFORT_HINTS, ownEffortLabel, unlistedLevelsNote } from './effort-model
  * failed: then only "Back to its own" is offered, and the note says the levels can't be listed.
  */
 export function EffortPicker({
-  id,
-  menuRef,
   name,
   levels,
   own,
   current,
   onChoose,
 }: {
-  id: string
-  /** The menu's element, for the focus that opens it on the checked choice. */
-  menuRef: RefObject<HTMLDivElement | null>
   name: string
   levels: readonly string[] | null
   /** undefined when the agent's own setting could not be read ("unknown"). */
@@ -29,9 +23,7 @@ export function EffortPicker({
 }) {
   return (
     <div
-      ref={menuRef}
       className="bold-effort-menu"
-      id={id}
       role="menu"
       aria-label={`Effort for ${name}`}
       onKeyDown={(event) => onChoiceMenuKeyDown(event, event.currentTarget)}

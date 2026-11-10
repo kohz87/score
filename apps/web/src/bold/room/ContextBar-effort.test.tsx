@@ -44,12 +44,16 @@ function bar(subjectId: string | null, to: string[] = []) {
 test('the context bar offers Effort for the agent the message goes to when this chat sets one', async () => {
   stub([{ roomId: 'room-1', agentId: 'lead', effort: 'high' }])
   renderInRoom(bar('lead'))
-  expect(await screen.findByRole('button', { name: /Effort in this chat: high/ })).toBeTruthy()
+  expect(
+    await screen.findByRole('button', {
+      name: /in this chat: model its own, effort high\. Change/,
+    }),
+  ).toBeTruthy()
 })
 
 test('no Effort button when this chat sets nothing for that agent', async () => {
   stub([])
   renderInRoom(bar('lead', ['lead']))
   await new Promise((resolve) => setTimeout(resolve, 50))
-  expect(screen.queryByRole('button', { name: /Effort in this chat/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /in this chat: model/ })).toBeNull()
 })

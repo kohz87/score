@@ -7,17 +7,22 @@ import { EffortChoice } from './EffortControl.tsx'
 import { isAmberEffort, ownEffortLabel } from './effort-model.ts'
 import { chatEffortOf, useAgentEfforts, useRoomEfforts } from './effort-queries.ts'
 import { useRunEffort } from './use-run-effort.ts'
+import { chosenLabel } from '../models/model-model.ts'
+import { chatModelOf, useRoomModels } from '../models/model-queries.ts'
+import { useRunModel } from '../models/use-run-model.ts'
 import './efforts.css'
 
 /**
- * Chat info › "This chat" for a one-to-one: its model and effort here, with Change effort and Back to its own (mock-up
- * 25-effort-direct), and its subagents.
+ * Chat info › "This chat" for a one-to-one: its model and effort here, with Change model, Change effort and Back to its own
+ * (mock-up 25-effort-direct, 27-model-direct), and its subagents.
  */
 export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; roomId: string }) {
   const current = chatEffortOf(useRoomEfforts(roomId).items, agent.id)
   // Undefined until the read answers, and when it fails: its own then reads "unknown", never the model's default.
   const own = useAgentEfforts(agent.id).data?.own
   const runEffort = useRunEffort(roomId, 'direct')
+  const runModel = useRunModel(roomId, 'direct')
+  const chatModel = chatModelOf(useRoomModels(roomId).items, agent.id)
   const model = useAgentModel(agent.id)
   const name = agentDisplayName(agent)
   const ceiling = useAgentSubagents(agent.id).data
@@ -35,7 +40,14 @@ export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; room
       <div className="bold-effort-this-title">THIS CHAT</div>
       <div className="bold-effort-row">
         <span>Model</span>
-        <code>{model ?? '—'}</code>
+        <span className="bold-effort-row-value">
+          {chatModel ? (
+            <span className="bold-effort-level bold-effort--max">{chosenLabel(chatModel)}</span>
+          ) : (
+            <span>Its own</span>
+          )}
+          <small>its own: {model ?? '—'}</small>
+        </span>
       </div>
       <div className="bold-effort-row">
         <span>Effort</span>
@@ -59,8 +71,23 @@ export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; room
       <div className="bold-effort-actions">
         <EffortChoice
           agent={agent}
+          model={chatModel}
           current={current}
           runEffort={runEffort}
+          runModel={runModel}
+          showWhenOwn
+          placement="down"
+          className="bold-effort-button"
+          label={`Change model or effort for ${name} in this chat`}
+        >
+          Change model
+        </EffortChoice>
+        <EffortChoice
+          agent={agent}
+          model={chatModel}
+          current={current}
+          runEffort={runEffort}
+          runModel={runModel}
           showWhenOwn
           placement="down"
           className="bold-effort-button"
@@ -68,22 +95,23 @@ export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; room
         >
           Change effort
         </EffortChoice>
-        {current && (
+        {(current || chatModel) && (
           <button
             type="button"
             className="bold-effort-back"
-            onClick={() =>
-              runEffort(agent, 'default').catch(() =>
-                sayInChat(roomId, 'That didn’t work. Try again.'),
-              )
-            }
+            onClick={() => {
+              const failed = () => sayInChat(roomId, 'That didn’t work. Try again.')
+              if (chatModel) void runModel(agent, 'default').catch(failed)
+              if (current) void runEffort(agent, 'default').catch(failed)
+            }}
           >
             Back to its own
           </button>
         )}
       </div>
       <p className="bold-effort-this-note">
-        Only this chat. {name}’s other chats, and its group chats, keep its own setting.
+        Only this chat. {name}’s other chats, and its group chats, keep its own model and effort.
+        Back to its own clears both; each tag clears one.
       </p>
     </section>
   )

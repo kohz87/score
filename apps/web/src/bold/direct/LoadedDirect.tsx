@@ -285,6 +285,7 @@ export function LoadedDirect({
           footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
               runEffort={runEffort}
+              roomKind="direct"
               finishedReplies={finishedReplies}
               compactSignal={compactSignal}
               compactSubject={compactSubject}

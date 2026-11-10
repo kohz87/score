@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { AgentDetail } from '@score/contract'
 import { Link } from 'react-router'
 import { useRoutineActions, useRoutines } from '../../routes/team/routine-queries.ts'
+import { ROUTINE_MODEL_NOTE, routineModelText } from '../models/model-model.ts'
 import { boldStartJobLink } from '../bold-links.ts'
 import { RemoveConfirm } from '../RemoveConfirm.tsx'
 import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
@@ -35,6 +36,11 @@ export function RoutinesCard({ agent }: { agent: AgentDetail }) {
           <span className="grow small">
             {routine.title} · {routine.schedule}
             {!routine.enabled && ' · Paused'}
+            <span className="bold-model-job">
+              {' '}
+              · {routineModelText(routine.model, agent.model?.id).model} ·{' '}
+              {routineModelText(routine.model, agent.model?.id).how}
+            </span>
           </span>
           <button
             type="button"
@@ -93,6 +99,7 @@ export function RoutinesCard({ agent }: { agent: AgentDetail }) {
           )}
         </div>
       ))}
+      {items.length > 0 && <p className="small muted">{ROUTINE_MODEL_NOTE}</p>}
       <p className="small muted" role="status">
         {notice}
       </p>

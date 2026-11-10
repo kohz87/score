@@ -146,14 +146,17 @@ export function useComposerSend({
     }
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
-    // `@agent /effort <level>` (decision 178) names the agent in front of the command; it is never posted as a message.
+    // `@agent /effort <level>` (decision 178) and `@agent /model <name>` (182) name the agent in front of the command; it is
+    // never posted as a message.
     const addressed =
-      !editing && topicCommands ? /^@([\w-]+)\s+\/effort(?:\s+([\s\S]*))?$/i.exec(body) : null
+      !editing && topicCommands
+        ? /^@([\w-]+)\s+\/(effort|model)(?:\s+([\s\S]*))?$/i.exec(body)
+        : null
     const typed =
       !editing && topicCommands && !addressed ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
     if ((addressed || typed) && topicCommands) {
-      const word = addressed ? 'effort' : typed![1]!.toLowerCase()
-      const args = (addressed ? addressed[2] : typed![2]) ?? ''
+      const word = addressed ? addressed[2]!.toLowerCase() : typed![1]!.toLowerCase()
+      const args = (addressed ? addressed[3] : typed![2]) ?? ''
       // A bare command acts on the addressee (see Composer): the one To chip, else the agent the footer names.
       const target = addressed ? addressed[1] : (addressee ?? undefined)
       if (

@@ -7,6 +7,8 @@ import { fetchSessionContext, roomSessionId } from '../../routes/chat/room-actio
 import { SubagentControl } from '../subagents/SubagentControl.tsx'
 import { EffortControl, type RunEffort } from '../efforts/EffortControl.tsx'
 import { chatEffortOf, useRoomEfforts } from '../efforts/effort-queries.ts'
+import { chatModelOf, useRoomModels } from '../models/model-queries.ts'
+import { useRunModel } from '../models/use-run-model.ts'
 
 /** The session the next message goes to: the room's own for the general conversation, else the topic's own. */
 export function topicSessionId(
@@ -21,7 +23,7 @@ export function topicSessionId(
 
 /**
  * Under the composer (mock-up board 18): who the message goes to and in which topic, the context meter of that agent,
- * its model and the /compress hint. Everything comes from reads that exist (the session's `…/context`, the agent's model); a missing figure is
+ * its model, what this chat sets for it (the "model · effort" tag) and the /compress hint. Everything comes from reads that exist (the session's `…/context`, the agent's model); a missing figure is
  * left out rather than invented.
  */
 export function ContextBar({
@@ -37,6 +39,7 @@ export function ContextBar({
   compactSignal,
   compactSubject = null,
   runEffort,
+  roomKind = 'group',
 }: {
   roomId: string
   to: string[]
@@ -54,9 +57,13 @@ export function ContextBar({
   compactSubject?: string | null
   /** Runs `/effort` for an agent in this chat; without it the Effort control is not offered. */
   runEffort?: RunEffort
+  /** Which kind of chat this is: the note `/model` says differs for a one-to-one. */
+  roomKind?: 'direct' | 'group'
 }) {
   const subject = agents.find((agent) => agent.id === subjectId)
   const chatEffort = chatEffortOf(useRoomEfforts(roomId).items, subjectId ?? '')
+  const chatModel = chatModelOf(useRoomModels(roomId).items, subjectId ?? '')
+  const runModel = useRunModel(roomId, roomKind)
   // The meter reads the session this message lands in (3.22.0 review): the agent's last session may be another chat's.
   const sessionId = subjectId ? topicSessionId(roomId, topic, subjectId) : null
   const session = useQuery({
@@ -71,7 +78,7 @@ export function ContextBar({
   const names = to
     .map((id) => agents.find((agent) => agent.id === id))
     .filter((agent): agent is AgentSummary => Boolean(agent))
-  const model = session?.model ?? agentModel ?? null
+  const model = chatModel?.model ?? session?.model ?? agentModel ?? null
   const where = showTopic && topic && !topic.isDefault ? topic.title : null
   // The control belongs to the job the message goes to; a message to the general conversation uses the room's own job.
   const controlJob = topic && !topic.isDefault ? topic : subagentJob
@@ -121,8 +128,14 @@ export function ContextBar({
           Model <code>{model}</code>
         </span>
       )}
-      {subject && chatEffort && runEffort && (
-        <EffortControl agent={subject} current={chatEffort} runEffort={runEffort} />
+      {subject && (chatEffort || chatModel) && runEffort && (
+        <EffortControl
+          agent={subject}
+          model={chatModel}
+          current={chatEffort}
+          runEffort={runEffort}
+          runModel={runModel}
+        />
       )}
       {controlJob?.subagents && (
         <SubagentControl
