@@ -6,9 +6,10 @@
 1. **Code is written by DeepSeek v4.1 Flash through NanoGPT**: new files, edits and file splits, via
    `CODEX_PROFILE=deepseek scripts/codex-task.sh start|fix …` (`~/.codex/deepseek.config.toml`,
    `deepseek/deepseek-v4.1-flash-1017:thinking`). **Never the OpenRouter profile `ordeepseek`** (owner, 2026-11-09). NanoGPT limit
-   (exit 75) → Haiku with a Sonnet advisor, same brief and worktree:
-   `claude -p --model claude-haiku-5-5 --advisor claude-sonnet-5-5 --allowedTools "Read" "Grep" "Glob" "Edit" "Write" "Bash" < brief.md`,
-   prompt on stdin; back to DeepSeek when NanoGPT recovers. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
+   (exit 75, or 402 when the balance is out) → Haiku with a Sonnet advisor, or Sonnet with an Opus advisor for harder work (owner, 2026-11-10:
+   "if deepseek runs out, use haiku or sonnet to follow up"), same brief and worktree:
+   `claude -p --model claude-haiku-5-5 --advisor claude-sonnet-5-5 --allowedTools "Read" "Grep" "Glob" "Edit" "Write" "Bash" < brief.md`
+   (Sonnet: `--model claude-sonnet-5-5 --advisor claude-opus-5-5`), prompt on stdin; back to DeepSeek when NanoGPT recovers. The lead still writes the core itself: contract changes, the Hermes boundary, security, migrations,
    release gates, and fixes found in review that are a few lines.
 2. **Reviews are Codex on `gpt-6.1-terra` at `max`, once, after the fixes** (owner, 2026-11-09, decision 177; replaces Sonnet with an
    Opus advisor). No review before fixes, and no review of each task or fix round: a batch gets one review when its fix work is done.
