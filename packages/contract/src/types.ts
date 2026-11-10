@@ -1,5 +1,6 @@
 import { CostKindSchema, RuntimeSchema } from './run-kinds.ts'
 import { z } from 'zod'
+import { RoutineSummarySchema } from './routines.ts'
 import { AutoSummarySchema, RoomImportSchema } from './conversations.ts'
 
 export const AgentIdSchema = z.string().min(1)
@@ -80,18 +81,6 @@ export const AgentSummarySchema = z.object({
     .optional(),
 })
 export type AgentSummary = z.infer<typeof AgentSummarySchema>
-
-export const RoutineSummarySchema = z.object({
-  id: z.string().min(1),
-  title: z.string(),
-  schedule: z.string(),
-  description: z.string(),
-  lastRunAt: z.iso.datetime().nullable(),
-  enabled: z.boolean(),
-  /** Decision 182: the model the job is pinned to; null (or absent) follows the agent's model when it runs. */
-  model: z.string().nullish(),
-})
-export type RoutineSummary = z.infer<typeof RoutineSummarySchema>
 
 export const AgentDetailSchema = AgentSummarySchema.extend({
   tagline: z.string(),

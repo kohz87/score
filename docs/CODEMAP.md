@@ -819,6 +819,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hub/ingest.ts` — the single ordered event ingest path.
 - `apps/server/src/hub/sse.ts` — browser SSE endpoint and fan-out.
 - `apps/server/src/http/chat-efforts.ts` — routes for an agent's effort per chat (contract section 20).
+- `apps/server/src/http/chat-models.ts` — routes for an agent's model per chat (contract section 21).
 - `apps/server/src/http/subagent-setup.ts` — subagent setup and an agent's ceiling (contract section 19); keeps the policy files in step.
 - `apps/server/src/http/rooms.ts` — room route registration, shared setup and the commands catalogue.
 - `apps/server/src/http/rooms/context.ts` — shared dependencies passed to the room route groups.
@@ -989,6 +990,7 @@ likely to be the entry point for a change.
 - `apps/server/src/domain/workflows/views-events.ts` — workflow event derivation from history rows.
 - `apps/server/src/hermes/index.ts` — the only server entry into Hermes code.
 - `apps/server/src/hermes/port.ts` — Hermes adapter interface.
+- `apps/server/src/hermes/dispatch-marks.ts` — marks a refusal raised before anything reached Hermes (`notDispatched`).
 - `apps/server/src/hermes/live/live-port.ts` — live Hermes adapter: state, construction and the method install (methods in the files below).
 - `apps/server/src/hermes/live/live-port-types.ts` — live adapter options, state schema and constants.
 - `apps/server/src/hermes/live/live-port-runtime.ts` — the live adapter's shared runtime type and its method installer.
@@ -999,6 +1001,7 @@ likely to be the entry point for a change.
 - `apps/server/src/hermes/start-run-request.ts` — what a run needs to start, for the port.
 - `apps/server/src/hermes/bridge/translate-subagents.ts` — `subagent_start`/`stop` become the job's count and rows.
 - `apps/server/src/domain/chat-efforts.ts` — an agent's effort in one chat: levels, set, list, and the effort a turn runs at.
+- `apps/server/src/domain/chat-models.ts` — an agent's model in one chat: set, list, and the model a turn runs on.
 - `apps/server/src/domain/subagents.ts` — subagents' limits and count: an agent's ceiling, a job's limits, the narrowest of them.
 - `apps/server/src/domain/subagent-rows.ts` — one row per subagent, for the chat's card and the job map.
 - `apps/server/src/domain/orchestration/subagent-scope.ts` — a run's subagent limits come from its room's job.
@@ -1241,6 +1244,8 @@ likely to be the entry point for a change.
 ### Key files
 
 - `packages/contract/src/efforts.ts` — effort per chat: requests, answers and the event (section 20).
+- `packages/contract/src/chat-models.ts` — model per chat: requests, answers, the event and the routines pin (section 21).
+- `packages/contract/src/routines.ts` — an agent's repeating jobs (`RoutineSummary`).
 - `packages/contract/src/subagents.ts` — subagents: setup, limits, rows and events (section 19).
 - `packages/contract/src/orchestration-limits.ts` — the decision that changes a run's limits.
 - `packages/contract/src/run-kinds.ts` — a run's runtime and cost kind.

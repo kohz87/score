@@ -46,7 +46,6 @@ import type {
   SessionContextReading,
   SessionSize,
 } from '@score/contract'
-import { HttpError } from '../errors.ts'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
@@ -476,20 +475,7 @@ export class ApprovalDeliveryError extends Error {
   }
 }
 
-/** Marks a refusal raised before anything was sent to Hermes (callers may conclude nothing was dispatched). */
-export function notDispatched(error: unknown): unknown {
-  return error instanceof HttpError
-    ? new HttpError(error.status, error.code, error.message, { notDispatched: true })
-    : error
-}
-export function isNotDispatched(error: unknown): boolean {
-  return (
-    error instanceof HttpError &&
-    typeof error.details === 'object' &&
-    error.details !== null &&
-    (error.details as { notDispatched?: unknown }).notDispatched === true
-  )
-}
+export { isNotDispatched, notDispatched } from './dispatch-marks.ts'
 
 /** What a Stop request found: delivered to a live run, nothing to stop, or not proven ended yet. */
 export type StopOutcome = 'stopped' | 'not_running' | 'unconfirmed'
