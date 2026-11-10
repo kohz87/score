@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tasks, Repeating</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600"><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Chats</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Agents</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a><a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Tasks</a><a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a></nav>
+  </header>
+  <main style="flex:1;min-height:0;padding:28px 40px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:12px"><h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:44px;font-weight:700;letter-spacing:-0.03em">Tasks</h1><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">+ New repeating job</button></div>
+        <p style="margin:6px 0 0;font-size:15px;color:#C4C6D0">Work that runs on a schedule, across the team. Assign it to an agent, or to a recipe (Tasks › Recipes) when several agents take part.</p>
+      </div>
+      <nav aria-label="Tasks views" style="display:flex;gap:6px;font-size:14px"><a href="#" style="padding:10px 16px;border-radius:999px;background:#1A1C23;color:#C4C6D0;text-decoration:none;font-weight:600">Board</a><a href="#" aria-current="page" style="padding:10px 16px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none;font-weight:600">Repeating</a><a href="#" style="padding:10px 16px;border-radius:999px;background:#1A1C23;color:#C4C6D0;text-decoration:none;font-weight:600">Recipes</a></nav>
+    </div>
+    <div role="group" aria-label="Assigned to" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" aria-pressed="true" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:13px;font-weight:600">Everyone · 5</button><button type="button" aria-pressed="false" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">lead · 1</button><button type="button" aria-pressed="false" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">builder · 2</button><button type="button" aria-pressed="false" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">designer · 1</button><button type="button" aria-pressed="false" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#1A1C23;color:#C4C6D0;font:inherit;font-size:13px;font-weight:600">Recipes · 1</button></div>
+    <div style="padding:6px 12px;border-radius:28px;background:#1A1C23">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:12px;letter-spacing:1px;color:#A6A8B4;text-align:left">
+          <th style="padding:12px 10px;font-weight:700">JOB</th><th style="padding:12px 10px;font-weight:700">WHEN</th><th style="padding:12px 10px;font-weight:700">ASSIGNED TO</th><th style="padding:12px 10px;font-weight:700">MODEL</th><th style="padding:12px 10px;font-weight:700">RESULTS GO TO</th><th style="padding:12px 10px;font-weight:700">STATE</th><th><span style="position:absolute;left:-9999px">Actions</span></th>
+        </tr></thead>
+        <tbody>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:14px 10px"><a href="#" style="font-weight:700;text-decoration:none">Morning summary</a><span style="display:block;font-size:13px;color:#A6A8B4">Summarise yesterday’s chats and tasks</span></td>
+          <td style="padding:14px 10px;font-size:14px">Every day, 08:00<span style="display:block;font-size:12px;color:#A6A8B4">next in 14 h</span></td>
+          <td style="padding:14px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none;display:inline-block"></span>builder</span></td>
+          <td style="padding:14px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700;white-space:nowrap">its own · demo-model</span></td>
+          <td style="padding:14px 10px;font-size:14px">Team room</td>
+          <td style="padding:14px 10px;font-size:14px;color:#7FE3C1;font-weight:600">On</td>
+          <td style="padding:14px 10px;text-align:right;white-space:nowrap"><button type="button" aria-label="Run Morning summary now" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button> <button type="button" aria-label="Edit Morning summary" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:14px 10px"><a href="#" style="font-weight:700;text-decoration:none">Dependency check</a><span style="display:block;font-size:13px;color:#A6A8B4">Look for outdated packages; open a task if any</span></td>
+          <td style="padding:14px 10px;font-size:14px">Mondays, 09:00<span style="display:block;font-size:12px;color:#A6A8B4">next Mon 09:00</span></td>
+          <td style="padding:14px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none;display:inline-block"></span>builder</span></td>
+          <td style="padding:14px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700;white-space:nowrap">its own · demo-model</span></td>
+          <td style="padding:14px 10px;font-size:14px">builder (direct)</td>
+          <td style="padding:14px 10px;font-size:14px;color:#7FE3C1;font-weight:600">On</td>
+          <td style="padding:14px 10px;text-align:right;white-space:nowrap"><button type="button" aria-label="Run Dependency check now" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button> <button type="button" aria-label="Edit Dependency check" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:14px 10px"><a href="#" style="font-weight:700;text-decoration:none">Weekly report</a><span style="display:block;font-size:13px;color:#A6A8B4">Write the week’s report</span></td>
+          <td style="padding:14px 10px;font-size:14px">Fridays, 17:00<span style="display:block;font-size:12px;color:#A6A8B4">next Fri 17:00</span></td>
+          <td style="padding:14px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none;display:inline-block"></span>lead</span></td>
+          <td style="padding:14px 10px"><span style="padding:3px 10px;border-radius:999px;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font-size:12px;font-weight:700;white-space:nowrap">deep · pinned</span></td>
+          <td style="padding:14px 10px;font-size:14px">Team room</td>
+          <td style="padding:14px 10px;font-size:14px;color:#7FE3C1;font-weight:600">On</td>
+          <td style="padding:14px 10px;text-align:right;white-space:nowrap"><button type="button" aria-label="Run Weekly report now" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button> <button type="button" aria-label="Edit Weekly report" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:14px 10px"><a href="Recipe.dc.html" style="font-weight:700;text-decoration:none">Release notes</a><span style="display:block;font-size:13px;color:#A6A8B4">builder drafts → reviewer checks</span></td>
+          <td style="padding:14px 10px;font-size:14px">Fridays, 16:00<span style="display:block;font-size:12px;color:#A6A8B4">next Fri 16:00</span></td>
+          <td style="padding:14px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px #C4C6D0;flex:none;display:inline-block"></span>Recipe · Release notes</span></td>
+          <td style="padding:14px 10px"><span style="padding:3px 10px;border-radius:999px;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18);color:#C4C6D0;font-size:12px;font-weight:700;white-space:nowrap">per step</span></td>
+          <td style="padding:14px 10px;font-size:14px">#release</td>
+          <td style="padding:14px 10px;font-size:14px;color:#7FE3C1;font-weight:600">On</td>
+          <td style="padding:14px 10px;text-align:right;white-space:nowrap"><button type="button" aria-label="Run Release notes now" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button> <button type="button" aria-label="Edit Release notes" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></td>
+        </tr>
+        <tr style="border-top:1px solid rgba(255,255,255,0.06)">
+          <td style="padding:14px 10px"><a href="#" style="font-weight:700;text-decoration:none">Design review</a><span style="display:block;font-size:13px;color:#A6A8B4">Collect open design questions</span></td>
+          <td style="padding:14px 10px;font-size:14px">1st of the month<span style="display:block;font-size:12px;color:#A6A8B4">next Dec 1</span></td>
+          <td style="padding:14px 10px;font-size:14px"><span style="display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px #FF7A9A;flex:none;display:inline-block"></span>designer</span></td>
+          <td style="padding:14px 10px"><span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700;white-space:nowrap">its own · demo-model</span></td>
+          <td style="padding:14px 10px;font-size:14px">designer (direct)</td>
+          <td style="padding:14px 10px;font-size:14px;color:#A6A8B4;font-weight:600">Paused</td>
+          <td style="padding:14px 10px;text-align:right;white-space:nowrap"><button type="button" aria-label="Run Design review now" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Run now</button> <button type="button" aria-label="Edit Design review" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700;white-space:nowrap">Edit</button></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin:0;font-size:13px;color:#A6A8B4">An agent&#39;s job runs in Hermes even when Score is closed. A recipe&#39;s runs are started by Score, so Score has to be running at that time; a run it missed shows here as missed, with Run now.</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

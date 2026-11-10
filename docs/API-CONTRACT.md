@@ -3157,3 +3157,34 @@ says what it ran on.
 - `RoutineSummary.model`: the model a repeating job is pinned to; null or absent follows the agent's model when it runs.
 - The composer handles `/model` itself (bold shell), as it does `/effort`: `/model`, `/model <name or alias>`, `/model default`;
   in a group `@agent /model <name>` or the agent the message is addressed to. The classic shell keeps its `/model`.
+
+## 22. Tasks › Repeating and Tasks › Recipes (decision 183; schemas in `packages/contract/src/repeating.ts`; design docs/briefs/TR-tasks.md)
+
+Repeating jobs are standalone, like workspaces: one list across agents, each assigned to an agent (a Hermes cron job in that
+agent's profile) or to a recipe (a schedule Score runs). A schedule is a 5-field cron expression or `every <n><m|h|d>`
+(`ScheduleText`), in an IANA time zone.
+
+| Endpoint | Needs | Body | Answer |
+| --- | --- | --- | --- |
+| `GET /api/routines` | | | `RepeatingJobsResponse` `{ items: RepeatingJob[], unreadable: AgentId[] }`: every agent's repeating jobs |
+| `POST /api/agents/:agentId/routines` | paired browser, Idempotency-Key | `CreateRepeatingJob` `{ title, schedule, prompt, timezone?, model?, deliverTo? }` | `RepeatingJob` |
+| `PATCH /api/routines/:id` | paired browser | `PatchRepeatingJob` (any of `enabled, title, schedule, prompt, timezone, model, deliverTo`; `model: null` unpins, `deliverTo: null` sends nowhere) | `RepeatingJob` |
+| `POST /api/routines/:id/move` | paired browser, Idempotency-Key | `{ agentId }` | `MovedRepeatingJob` `{ job, leftBehind }`: created for the other agent, then removed from this one; `leftBehind` is the old id when its removal failed (both exist) |
+| `GET /api/recipe-schedules` | | | `RecipeSchedulesResponse` |
+| `PUT /api/workflows/:workflowId/schedule` | paired browser | `RecipeScheduleRequest` `{ schedule, timezone, roomId, enabled }` | `RecipeSchedule` |
+| `DELETE /api/workflows/:workflowId/schedule` | paired browser | | `{ workflowId }` |
+| `POST /api/workflows/:workflowId/schedule/run` | paired browser, Idempotency-Key | `{}` | `RecipeSchedule` (Run now: starts one run in the schedule's chat) |
+| `GET /api/agents/:agentId/assigned` | | | `AgentAssigned` `{ repeating, recipeSteps }` (read-only; tasks come from the Tasks board's query) |
+
+- `RepeatingJob` is `RoutineSummary` plus `agentId`, `nextRunAt`, `provider` (of a pinned model) and `deliverTo`.
+- Results: a job with `deliverTo` has each new run's output (Hermes saves it under the profile's `cron/output/<job>/`) posted into
+  that chat as the agent's message, redacted, once. A job without it keeps its output in the agent's runs.
+- Moving a job: Score creates it for the other agent (same title, schedule, prompt, pinned model, results), then removes the old
+  one; past runs stay with the first agent.
+- A recipe's schedule is Score's: one run per fire, started as a job in its chat (`roomId`). Score has to be running at that
+  time; a fire it missed is recorded as `missed` and never run late on its own (Run now starts it). A fire Score can't start
+  (the recipe was archived, the chat is gone, work is paused) is `failed` with a reason.
+- Recipe steps (`AgentNode`) may carry `model` (`PinnedModel`) and `effort`; a step's model wins for that step, and a step
+  without one runs on the agent's own (never the chat's `/model`).
+- Recipes move from Settings to Tasks: `/b/tasks/recipes` and `/b/tasks/recipes/:workflowId`; `/b/settings/recipes…` addresses
+  forward there.
