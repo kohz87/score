@@ -1,7 +1,7 @@
 import {
   AgentStyleSchema,
   AgentSummarySchema,
-  ShapeSchema,
+  OfferedShapes,
   type AgentStyle,
   type AgentSummary,
 } from '@score/contract'
@@ -14,8 +14,8 @@ import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
 import { getCodingAgent, isCodingAgent } from '../runtimes/coding/store.ts'
 
-// Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
-const defaultShapes = ShapeSchema.options.slice(0, 8)
+// Decision 184: an agent without a chosen look gets one of the nine shapes Score offers.
+const defaultShapes = OfferedShapes
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
   return {
