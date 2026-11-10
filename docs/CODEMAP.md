@@ -44,7 +44,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/bold-team.css` — Team and one-agent style entry; imports the area stylesheets in cascade order.
 - `apps/web/src/bold/bold-team-page.css` — page frame, grids, cards, buttons, fields and compact controls.
 - `apps/web/src/bold/bold-team-cards.css` — Team agent-card grid, identity, actions, screen previews and subagent setup.
-- `apps/web/src/bold/bold-team-agent.css` — one-agent header, facts, More cards and classic editor recolours.
+- `apps/web/src/bold/bold-team-agent.css` — one-agent page frame, Personality/Asks cards and classic editor recolours (header, menu and sections: `agent-page/agent-page.css`).
 - `apps/web/src/bold/bold-team-responsive.css` — narrow and portrait-tablet layouts for Team pages and cards.
 - `apps/web/src/bold/bold-team-status.css` — where-it-works badges, removal panel and setup/removal status cards.
 - `apps/web/src/bold/bold-workbench.css` — Workbench style entry; imports the area stylesheets in cascade order.
@@ -57,7 +57,28 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/` — the new dark shell: screens, navigation, room, look, settings section styles, feature-split Task and recipe test suites and other bold-only styles.
 - `apps/web/src/bold/BoldTasks-helpers.tsx` — shared Task test state, fixtures, fetch stub, render setup and query helpers.
 - `apps/web/src/bold/recipe-model-helpers.ts` — shared recipe fixtures and graph-versus-validator comparison helpers.
-- `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal.
+- `apps/web/src/bold/BoldAgent.tsx` — one agent's page (decision 180): data, pause, Remove, hash links; composes the header, section menu and sections.
+- `apps/web/src/bold/agent-page/` — the tidied agent page (mock-up 26): header and ⋯ menu, section menu, one component per section, the coding agent's sections.
+- `apps/web/src/bold/agent-page/AgentHeader.tsx` — look, name, role, Edit, one status line, Message, Pause and the ⋯ menu.
+- `apps/web/src/bold/agent-page/AgentMoreMenu.tsx` — the ⋯ menu: opens on click, closes on Escape or a click outside.
+- `apps/web/src/bold/agent-page/AgentEditPanel.tsx` — the header's Edit: Name and role plus Looks, side by side.
+- `apps/web/src/bold/agent-page/AgentSectionMenu.tsx` — the sticky section menu (a chip row on a phone) and "Remove {agent}".
+- `apps/web/src/bold/agent-page/agent-sections.ts` — the section list, the old `#agent-…` hash targets and the scroll helpers.
+- `apps/web/src/bold/agent-page/PersonalitySection.tsx` — SOUL.md / AGENTS.md editor.
+- `apps/web/src/bold/agent-page/ModelSection.tsx` — Model summary rows; each button opens that row's form in place, one at a time.
+- `apps/web/src/bold/agent-page/ModelRow.tsx` — one Model row: label, value, button, the form under it.
+- `apps/web/src/bold/agent-page/ModelChangeForm.tsx` — the Model row's picker form (moved from the Team Model tab).
+- `apps/web/src/bold/agent-page/model-summaries.ts` — the one-line summaries for fallback, aliases, voice and subagents.
+- `apps/web/src/bold/agent-page/SafetySection.tsx` — four tiles: where it runs, asks first, goes ahead, never rules.
+- `apps/web/src/bold/agent-page/AsksCard.tsx` — "Asks you first before" (protected).
+- `apps/web/src/bold/agent-page/ToolsSection.tsx` — Can use, Plugins summary, Channels, Score access.
+- `apps/web/src/bold/agent-page/MemorySection.tsx` — Remembers and Skills summaries that open the full cards.
+- `apps/web/src/bold/agent-page/OpenCard.tsx` — a summary that opens today's full card in place.
+- `apps/web/src/bold/agent-page/WorkSection.tsx` — Recent runs, Repeating jobs, Todo and the Files panel (opened by a `?path=` link).
+- `apps/web/src/bold/agent-page/use-agent-files.ts` — whether the Files panel is open, from the `?path=` link.
+- `apps/web/src/bold/agent-page/CodingSections.tsx` — a coding agent's sections: Personality, Model, Safety, Tools, Work.
+- `apps/web/src/bold/agent-page/agent-page.css` — header, section menu (sticky; chips on a phone), sections, tiles and Model rows.
+- `apps/web/src/bold/bold-team-agent-sections.test.tsx` — the section menu, Model rows, summaries that open cards, Remove, the coding page and the phone chips.
 - `apps/web/src/bold/agent-more/` — per-agent detail cards for settings, access, routines and removal, with feature-split tests.
 - `apps/web/src/bold/agent-more/SubagentsCard.tsx` — the agent's subagent ceiling: Allow, At once, Model, Steps, Time (Hermes), on/off (Claude Code) or not supported (Codex).
 - `apps/web/src/bold/agent-more/agent-more-helpers.tsx` — shared agent-detail test agent, fetch stub, mount and lifecycle state for the split card suites.
@@ -145,7 +166,7 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/reports/` — reports pages and journey chart.
 - `apps/web/src/routes/runs/` — helpers for opening a brief as a run.
 - `apps/web/src/routes/settings/` — settings sections for providers, logs, backup and notifications, and their split area stylesheets.
-- `apps/web/src/routes/team/` — team and agent pages, coding agent, model and workspace tabs, and ordered stylesheets.
+- `apps/web/src/routes/team/` — team and agent pages, coding agent cards, workspace tab, and ordered stylesheets.
 - `apps/web/src/routes/terminal/` — browser terminal page and key handling.
 - `apps/web/src/routes/watch/` — watch replay timeline, stage, panes, approval and ordered stylesheets.
 - `apps/web/src/routes/workflows/` — workflow editor, nodes, runs, recipes and previews.

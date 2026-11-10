@@ -29,12 +29,12 @@ test.each([
   ['deleting', false, false],
   ['needs_attention', true, false],
   ['ready', true, true],
-] as const)('a %s agent: Remove agent… shown %s, Pause shown %s', async (state, remove, pause) => {
+] as const)('a %s agent: Remove shown %s, Pause shown %s', async (state, remove, pause) => {
   withLifecycle(state)
   open('/b/agents/builder')
   await screen.findByRole('heading', { name: 'builder', level: 1 })
   if (state !== 'ready') await screen.findByLabelText('builder status')
-  expect(screen.queryByRole('button', { name: 'Remove agent…' }) !== null).toBe(remove)
+  expect(screen.queryByRole('button', { name: 'Remove builder' }) !== null).toBe(remove)
   expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u }) !== null).toBe(pause)
 })
 
@@ -50,7 +50,7 @@ test('opening a removed agent’s page directly stays on it, with its history an
   await screen.findByRole('heading', { name: 'builder', level: 1 })
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(router.state.location.pathname).toBe('/b/agents/builder')
-  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Remove builder' })).toBeNull()
   expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u })).toBeNull() // 3.5.1: no one-to-one to start with an agent that has left.
   expect(screen.queryByRole('link', { name: 'Message' })).toBeNull()
 })

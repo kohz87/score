@@ -38,11 +38,7 @@ for (const viewport of sizes) {
       await route.fulfill({ status: 204, body: '' })
     })
     await page.goto('/b/agents/builder')
-    await page
-      .getByRole('button', {
-        name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
-      })
-      .click()
+    await page.getByRole('button', { name: 'Open memory' }).click()
     const card = page.locator('#agent-memory')
     await expect(card.locator('.listrow')).toHaveCount(2)
     await card.getByRole('searchbox', { name: 'Search memory' }).fill('FRIDAY')

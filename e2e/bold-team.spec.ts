@@ -13,7 +13,7 @@ const sizes = [
 ] as const
 
 for (const viewport of sizes) {
-  test(`Team cards open the agent and More shows its compact cards at ${viewport.width}×${viewport.height}`, async ({
+  test(`Team cards open the agent and its sections show every card at ${viewport.width}×${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -69,7 +69,8 @@ for (const viewport of sizes) {
       'href',
       '/b?with=builder',
     )
-    await expect(page.getByRole('link', { name: 'Look at its screen' })).toHaveAttribute(
+    await page.getByRole('button', { name: 'More actions' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Look at its screen' })).toHaveAttribute(
       'href',
       '/b/screen/builder',
     )
@@ -77,34 +78,38 @@ for (const viewport of sizes) {
       0,
     )
 
-    const toggle = page.getByRole('button', {
-      name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
-    })
-    await toggle.click()
+    await page.keyboard.press('Escape')
     await expect(page.getByRole('navigation', { name: 'Agent settings sections' })).toHaveCount(0)
-    const more = page.locator('#agent-more')
+    await expect(page.getByRole('button', { name: /^More: / })).toHaveCount(0)
+    const more = page.locator('.bold-agent-sections')
     for (const title of [
       'Remembers',
       'Skills',
       'Can use',
-      'Workspace',
       'Repeating jobs',
-      'Delete builder',
       'Plugins',
       'Channels',
       'Never rules',
-      'Looks',
-      'Name and role',
       'Recent runs',
       'Todo',
     ]) {
       await expect(more.getByRole('heading', { name: title, level: 3 })).toBeVisible()
     }
-    // No classic Team editor is left under More.
-    await expect(more.locator('.team-card')).toHaveCount(0)
+    // The workspace is shown in the chat, not here.
+    await expect(more.getByRole('heading', { name: 'Workspace', level: 3 })).toHaveCount(0)
+    // Edit holds the name, role and look.
+    await page.getByRole('button', { name: 'Change name, role and look' }).click()
+    for (const title of ['Looks', 'Name and role'])
+      await expect(page.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    await page.getByRole('button', { name: 'Close', exact: true }).click()
+    // No classic Team editor is left in the sections below Personality.
+    await expect(
+      page.locator('#agent-section-tools, #agent-work, #agent-memory-skills').locator('.team-card'),
+    ).toHaveCount(0)
 
     // Add a memory and forget it again.
     const text = `Check the feed twice ${viewport.width}`
+    await page.getByRole('button', { name: 'Open memory' }).click()
     const remembers = more.locator('#agent-memory')
     await remembers.getByLabel('New memory').fill(text)
     await remembers.getByRole('button', { name: 'Add' }).click()
@@ -121,8 +126,11 @@ for (const viewport of sizes) {
     await tool.click()
     await expect(tool).toBeChecked({ checked: was })
 
-    // Delete opens the same Remove panel as the header button; nothing is removed.
-    await more.locator('#agent-delete').getByRole('button', { name: 'Delete agent' }).click()
+    // The menu's Remove opens the Remove panel; nothing is removed.
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: 'Remove builder' })
+      .click()
     const panel = page.getByRole('group', { name: 'Remove builder' })
     await expect(panel).toBeVisible()
     await panel.getByRole('button', { name: 'Cancel' }).click()
@@ -135,7 +143,7 @@ for (const viewport of sizes) {
     expect(overflow).toBeLessThanOrEqual(0)
     if (viewport.width < 500) {
       const columns = await more
-        .locator('.bold-more-grid')
+        .locator('#agent-safety .bold-agent-tiles')
         .evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)
       expect(columns).toBe(1)
     }
@@ -195,19 +203,21 @@ test('a coding agent keeps permission, quota floor, password and the protected C
     await expect(page.getByLabel('Security password')).toBeVisible()
     await page.getByRole('button', { name: 'Cancel' }).click()
 
-    await page.getByRole('button', { name: /^More: tools, workspace, delete/ }).click()
     await expect(page.getByRole('navigation', { name: 'Agent settings sections' })).toHaveCount(0)
-    const more = page.locator('#agent-more')
-    for (const title of [
-      'Can use',
-      'Workspace',
-      'Recent runs',
-      'Looks',
-      'Name and role',
-      `Delete ${id}`,
-    ])
+    await expect(page.getByRole('button', { name: /^More: / })).toHaveCount(0)
+    const more = page.locator('.bold-agent-sections')
+    for (const title of ['Can use', 'Recent runs'])
       await expect(more.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    await expect(more.getByRole('heading', { name: 'Workspace' })).toHaveCount(0)
     await expect(more.getByRole('heading', { name: 'Remembers' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Change name, role and look' }).click()
+    for (const title of ['Looks', 'Name and role'])
+      await expect(page.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Sections' })
+        .getByRole('button', { name: `Remove ${id}` }),
+    ).toBeVisible()
   } finally {
     if (created) {
       await page.evaluate(async (agentId) => {

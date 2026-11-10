@@ -110,8 +110,6 @@ test('voters without helpers are accepted by the server', async ({ page }) => {
 
 test('an agent has its subagent settings, and they save', async ({ page }) => {
   await page.goto('/b/agents/builder#agent-subagents')
-  const more = page.getByRole('button', { name: /More/ })
-  if (await more.count()) await more.first().click()
   const allow = page.getByRole('checkbox', { name: 'Allow subagents' })
   await expect(allow).toBeChecked()
   const card = page.locator('#agent-subagents')

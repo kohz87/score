@@ -9,7 +9,7 @@ test('Remove agent… shows the preview in place; blockers and the typed name ga
       : null,
   )
   const { router } = open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   expect(panel.getAttribute('data-protected')).toBe('block')
   expect(await within(panel).findByText(/1 active runs · 2 queued messages/)).toBeDefined()
@@ -37,7 +37,7 @@ test('typing the name enables Remove; DELETE carries the name, the preview hash 
     return Response.json(deleteOp(polls > 1 ? 'completed' : 'running'))
   })
   const { router } = open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   const input = await within(panel).findByLabelText('Type builder to confirm')
   const remove = within(panel).getByRole('button', { name: 'Remove' }) as HTMLButtonElement
@@ -64,7 +64,7 @@ test('a Hermes agent the server refuses to remove shows the server message and s
     return null
   })
   const { router } = open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
     target: { value: 'builder' },
@@ -79,21 +79,21 @@ test('a Hermes agent the server refuses to remove shows the server message and s
 test('Cancel and Escape close the panel and put focus back on Remove agent…', async () => {
   stubDelete((call) => (call.url === '/api/agents/preview' ? Response.json(deletePreview()) : null))
   open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   let panel = await screen.findByRole('group', { name: 'Remove builder' })
   const cancel = within(panel).getByRole('button', { name: 'Cancel' })
   await waitFor(() => expect(document.activeElement).toBe(cancel))
   fireEvent.click(cancel)
   expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
   await waitFor(() =>
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove agent…' })),
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove builder' })),
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Remove builder' }))
   panel = await screen.findByRole('group', { name: 'Remove builder' })
   fireEvent.keyDown(within(panel).getByRole('button', { name: 'Cancel' }), { key: 'Escape' })
   expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
   await waitFor(() =>
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove agent…' })),
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove builder' })),
   )
 })
 
@@ -102,14 +102,15 @@ test('Remove agent… on a coding agent asks in plain words, with no preview, an
     call.method === 'DELETE' ? new Response(null, { status: 204 }) : null,
   )
   const { router } = open('/b/agents/coder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove coder' }))
   const panel = await screen.findByRole('group', { name: 'Remove coder' })
   expect(panel.getAttribute('data-protected')).toBe('block')
   expect(
     within(panel).getByText('Removes coder from the team. Past work stays in rooms.'),
   ).toBeDefined()
   expect(calls.some((call) => call.url === '/api/agents/preview')).toBe(false)
-  expect(document.getElementById('agent-more')).toBeNull()
+  // One remove flow: the coding agent's old Danger zone card is gone.
+  expect(screen.queryByRole('heading', { name: 'Danger zone' })).toBeNull()
   fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/agents'))
   expect(calls.find((call) => call.method === 'DELETE')!.url).toBe('/api/coding-agents/coder')
@@ -125,7 +126,7 @@ test('a busy coding agent shows the server message and stays', async () => {
       : null,
   )
   const { router } = open('/b/agents/coder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove coder' }))
   const panel = await screen.findByRole('group', { name: 'Remove coder' })
   fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
   expect((await within(panel).findByRole('alert')).textContent).toContain(
@@ -137,7 +138,7 @@ test('a busy coding agent shows the server message and stays', async () => {
 test('the default agent has no Remove agent… action', async () => {
   open('/b/agents/default')
   expect(await screen.findByRole('heading', { level: 1 })).toBeDefined()
-  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull()
 })
 
 test('after a refused DELETE the preview reloads, the message stays, and a second attempt succeeds', async () => {
@@ -160,7 +161,7 @@ test('after a refused DELETE the preview reloads, the message stays, and a secon
     return Response.json(deleteOp('completed'))
   })
   const { router } = open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
     target: { value: 'builder' },
@@ -192,7 +193,7 @@ test('while a DELETE is pending Cancel is disabled and Escape does nothing', asy
   )
   void inner
   open('/b/agents/coder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove coder' }))
   const panel = await screen.findByRole('group', { name: 'Remove coder' })
   fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
   await waitFor(() =>
@@ -218,7 +219,7 @@ test('a coding agent removal that finishes after the panel is gone does not navi
     ),
   )
   const { router } = open('/b/agents/coder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove coder' }))
   const panel = await screen.findByRole('group', { name: 'Remove coder' })
   fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
   await router.navigate('/b/agents/builder')
@@ -239,7 +240,7 @@ test('an operation that needs attention keeps the page, shows Close, and Escape 
     })
   })
   const { router } = open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
     target: { value: 'builder' },
@@ -270,7 +271,7 @@ test('a capitalised or padded name still confirms, and DELETE carries the exact 
     return null
   })
   open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   const input = await within(panel).findByLabelText('Type builder to confirm')
   expect(input.getAttribute('autocapitalize')).toBe('none')
@@ -316,7 +317,7 @@ test('Stop its work stops a stuck agent and checks again until the work is gone 
     return null
   })
   open('/b/agents/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove builder' }))
   const panel = await screen.findByRole('group', { name: 'Remove builder' })
   fireEvent.click(await within(panel).findByRole('button', { name: 'Stop builder’s work' }))
   await waitFor(() =>

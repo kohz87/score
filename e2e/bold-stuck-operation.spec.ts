@@ -3,7 +3,7 @@ import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 
 // 2.0.6: an agent whose create stopped partway (a step failed, Retry is possible) says so on its page, with Retry
-// there; Remove agent… shows the same Retry instead of a dead button. The roster and the operation are mocked with
+// there; Remove shows the same Retry instead of a dead button. The roster and the operation are mocked with
 // page.route over the fake adapter; nothing is written.
 test.use({ reducedMotion: 'reduce' })
 holdLockPerTest('roster')
@@ -148,7 +148,7 @@ for (const viewport of sizes) {
     expect(mock.retries).toBe(1)
   })
 
-  test(`Remove agent… offers the stopped step's Retry, then Remove works at ${where}`, async ({
+  test(`Remove offers the stopped step's Retry, then Remove works at ${where}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -156,7 +156,10 @@ for (const viewport of sizes) {
     const mock = await mockStuck(page)
     await page.goto('/?ui=bold')
     await page.goto(`/b/agents/${id}`)
-    await page.getByRole('button', { name: 'Remove agent…' }).click()
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: `Remove ${id}` })
+      .click()
     const panel = page.getByRole('group', { name: `Remove ${id}` })
     await expect(panel.getByText('Finish or retry the stopped step first:')).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Remove', exact: true })).toBeHidden()

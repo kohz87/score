@@ -183,7 +183,10 @@ async function codingAgentPage(page: Page) {
   await shot(page, 'agent', '.bold-coding')
 
   // Clean up so other specs see the usual team.
-  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: `Remove ${id}` })
+    .click()
   await page
     .getByRole('group', { name: `Remove ${id}` })
     .getByRole('button', { name: 'Remove', exact: true })

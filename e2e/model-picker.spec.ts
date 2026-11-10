@@ -94,6 +94,7 @@ test('pick a model from the connected providers in Add an agent and on the agent
   // The agent's page carries the model picker in its "Runs on" card.
   const panel = page.locator('#agent-model')
   await expect(panel.getByText('Through openai-codex.')).toBeVisible()
+  await panel.getByRole('button', { name: 'Change the model' }).click()
   const tabPicker = panel.getByRole('combobox', { name: 'Model', exact: true })
   await tabPicker.fill('solar')
   // Only this picker's own list: the card also has speech settings whose dropdowns have options too.
@@ -108,7 +109,10 @@ test('pick a model from the connected providers in Add an agent and on the agent
   await expect(panel.getByText('Through nous.')).toBeVisible()
 
   // Remove it again behind its typed name (afterEach also removes it if anything above failed).
-  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: `Remove ${helper}` })
+    .click()
   const removal = page.getByRole('group', { name: `Remove ${helper}` })
   await removal.getByLabel(`Type ${helper} to confirm`).fill(helper)
   await removal.getByRole('button', { name: 'Remove', exact: true }).click()

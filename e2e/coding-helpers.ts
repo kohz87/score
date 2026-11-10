@@ -40,7 +40,7 @@ export function from(room: Locator, id: string): Locator {
   return room.getByRole('article', { name: new RegExp(`^Message from ${id}`) })
 }
 
-/** Removes a coding agent through "Remove agent…" on its page (a coding agent only asks to confirm). */
+/** Removes a coding agent through "Remove {name}" in the section menu on its page (a coding agent only asks to confirm). */
 export async function removeCodingAgent(page: Page, id: string): Promise<void> {
   // A test that failed before it made the agent has nothing to remove (and must show its own failure, not this one).
   const list = (await (await page.request.get('/api/agents')).json()) as {
@@ -48,7 +48,10 @@ export async function removeCodingAgent(page: Page, id: string): Promise<void> {
   }
   if (!list.items.some((agent) => agent.id === id && agent.lifecycle?.state !== 'removed')) return
   await page.goto(`/b/agents/${encodeURIComponent(id)}`)
-  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: `Remove ${id}` })
+    .click()
   await page
     .getByRole('group', { name: `Remove ${id}` })
     .getByRole('button', { name: 'Remove', exact: true })

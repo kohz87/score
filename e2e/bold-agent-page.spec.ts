@@ -242,7 +242,7 @@ async function open(page: Page, path: string, width: number) {
 }
 
 const kinds = [
-  { name: 'hermes', path: '/b/agents/builder', ready: 'Runs on' },
+  { name: 'hermes', path: '/b/agents/builder', ready: 'Model' },
   { name: 'coding', path: '/b/agents/coder', ready: 'Access' },
 ]
 for (const kind of kinds) {

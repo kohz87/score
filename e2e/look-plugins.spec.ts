@@ -5,16 +5,13 @@ import { pair } from './pair.ts'
 // Plugins are Hermes state of one profile (the toggle changes it), so the specs that flip one take the roster lock.
 holdLockPerTest('roster')
 
-test('Team › agent › More › Plugins: toggles per agent, the bridge is locked; Settings › Look: colours stick', async ({
+test('Team › agent › Tools › Plugins: toggles per agent, the bridge is locked; Settings › Look: colours stick', async ({
   page,
 }) => {
   await pair(page)
   const open = async (agent: string) => {
     await page.goto(`/b/agents/${agent}`)
-    const more = page.getByRole('button', {
-      name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
-    })
-    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click()
+    await page.getByRole('button', { name: 'Manage plugins' }).click()
     const card = page.locator('#agent-plugins')
     await expect(card.getByRole('heading', { name: 'Plugins' })).toBeVisible()
     return card

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 
-// 2.0.3: removing a provider, tool server or messaging connection from Settings, and "Remove agent…" on the agent
+// 2.0.3: removing a provider, tool server or messaging connection from Settings, and "Remove {name}" on the agent
 // page (2.0.5: the panel opens in place). Fake adapter only. The fake keeps its tool servers and messaging rows for the life of the server, so the
 // phone run only opens and cancels those confirms; the desktop run removes them (issue-tracker and telegram are
 // not used by other specs).
@@ -123,7 +123,7 @@ for (const viewport of sizes) {
       await expect(row.getByRole('button', { name: 'Connect Telegram', exact: true })).toBeVisible()
     })
 
-  test(`Remove agent… removes a Hermes agent in place, behind its typed name, at ${where}`, async ({
+  test(`Remove removes a Hermes agent in place, behind its typed name, at ${where}`, async ({
     page,
   }, testInfo) => {
     test.setTimeout(90_000)
@@ -169,7 +169,9 @@ for (const viewport of sizes) {
     try {
       await page.goto(`/b/agents/${id}`)
       await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
-      const open = page.getByRole('button', { name: 'Remove agent…' })
+      const open = page
+        .getByRole('navigation', { name: 'Sections' })
+        .getByRole('button', { name: `Remove ${id}` })
       const fits = () =>
         page.evaluate(
           () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -218,7 +220,7 @@ for (const viewport of sizes) {
     }
   })
 
-  test(`Remove agent… on a coding agent asks in plain words and removes it at ${where}`, async ({
+  test(`Remove on a coding agent asks in plain words and removes it at ${where}`, async ({
     page,
   }, testInfo) => {
     test.setTimeout(60_000)
@@ -244,7 +246,10 @@ for (const viewport of sizes) {
     }, id)
     await page.goto(`/b/agents/${id}`)
     await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
-    await page.getByRole('button', { name: 'Remove agent…' }).click()
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: `Remove ${id}` })
+      .click()
     const panel = page.getByRole('group', { name: `Remove ${id}` })
     await expect(panel).toHaveAttribute('data-protected', 'block')
     await expect(panel).toContainText(`Removes ${id} from the team. Past work stays in rooms.`)

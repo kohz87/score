@@ -31,8 +31,11 @@ test('add an agent, observe setup and readiness, then export and delete with its
     await dialog.getByRole('link', { name: /^Open / }).click()
     await expect(page.getByRole('heading', { name: id, level: 1, exact: true })).toBeVisible()
 
-    // Remove agent… opens the panel in place: what is going on, where the private copy goes, then the typed name.
-    await page.getByRole('button', { name: 'Remove agent…' }).click()
+    // Remove opens the panel in place: what is going on, where the private copy goes, then the typed name.
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: `Remove ${id}` })
+      .click()
     const panel = page.getByRole('group', { name: `Remove ${id}` })
     await expect(panel).toBeVisible()
     await expect(panel.getByText(/leaves out credentials and isn’t a full undo/)).toBeVisible()

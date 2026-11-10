@@ -13,11 +13,6 @@ test.describe('X1: MCP read and write access is one decision', () => {
       await route.abort()
     })
     await page.goto('/b/agents/lead')
-    await page
-      .getByRole('button', {
-        name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
-      })
-      .click()
     const section = page.locator('#agent-score-access')
     await expect(section).toBeVisible()
     await expect(section).toHaveAttribute('data-protected', 'flex')
