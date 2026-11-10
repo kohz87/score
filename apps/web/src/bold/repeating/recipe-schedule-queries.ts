@@ -39,7 +39,11 @@ export function useRecipeScheduleActions(workflowId: string) {
   const save = useMutation({
     mutationFn: async (body: RecipeScheduleRequest) =>
       RecipeScheduleSchema.parse(
-        await apiFetch(path(workflowId), { method: 'PUT', body: JSON.stringify(body) }),
+        await apiFetch(path(workflowId), {
+          method: 'PUT',
+          headers: { 'Idempotency-Key': newId() },
+          body: JSON.stringify(body),
+        }),
       ),
     onSuccess: refresh,
   })
@@ -58,7 +62,10 @@ export function useRecipeScheduleActions(workflowId: string) {
   const stop = useMutation({
     // The answer is only `{ workflowId }`; the refetch shows the recipe without a schedule.
     mutationFn: async () => {
-      await apiFetch(path(workflowId), { method: 'DELETE' })
+      await apiFetch(path(workflowId), {
+        method: 'DELETE',
+        headers: { 'Idempotency-Key': newId() },
+      })
     },
     onSuccess: refresh,
   })

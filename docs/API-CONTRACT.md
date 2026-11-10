@@ -3174,7 +3174,7 @@ agent's profile) or to a recipe (a schedule Score runs). A schedule is a 5-field
 | `PUT /api/workflows/:workflowId/schedule` | paired browser | `RecipeScheduleRequest` `{ schedule, timezone, roomId, enabled }` | `RecipeSchedule` |
 | `DELETE /api/workflows/:workflowId/schedule` | paired browser | | `{ workflowId }` |
 | `POST /api/workflows/:workflowId/schedule/run` | paired browser, Idempotency-Key | `{}` | `RecipeSchedule` (Run now: starts one run in the schedule's chat) |
-| `GET /api/agents/:agentId/assigned` | | | `AgentAssigned` `{ repeating, recipeSteps }` (read-only; tasks come from the Tasks board's query) |
+| `GET /api/agents/:agentId/assigned` | | | `AgentAssigned` `{ repeating, recipeSteps }`: its repeating jobs and its steps in recipes that repeat (read-only; tasks come from the Tasks board's query) |
 
 - `RepeatingJob` is `RoutineSummary` plus `agentId`, `nextRunAt`, `provider` (of a pinned model) and `deliverTo`.
 - Results: a job with `deliverTo` has each new run's output (Hermes saves it under the profile's `cron/output/<job>/`) posted into

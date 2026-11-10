@@ -41,7 +41,7 @@ test.afterEach(async ({ page }) => {
           .map(({ name, model, provider }) => ({ name, model, ...(provider ? { provider } : {}) })),
       },
     })
-    expect(restored.ok()).toBe(true)
+    expect(restored.ok(), await restored.text()).toBe(true)
   } finally {
     release?.()
     release = undefined
@@ -116,6 +116,8 @@ test('changing the agent’s model asks about its repeating jobs; Keep the jobs 
     },
   })
   expect(routine.ok()).toBe(true)
+  // Read now: the response is gone by the time the cleanup runs.
+  const made = (await routine.json()) as { id: string }
   try {
     await page.goto('/b/agents/builder')
     const model = page.getByRole('region', { name: 'Model' })
@@ -139,21 +141,18 @@ test('changing the agent’s model asks about its repeating jobs; Keep the jobs 
     await expect(model.getByText(/^Saved: /)).toBeVisible()
     await expect(warning).toHaveCount(0)
 
-    // The job now reads pinned on the Work section.
-    await page
-      .getByRole('region', { name: 'Work' })
-      .getByRole('button', { name: 'Manage repeating jobs' })
-      .click()
-    await expect(page.getByText('Model warning job').first()).toBeVisible()
+    // The job now reads pinned in Tasks › Repeating (decision 183 moved repeating jobs off the agent page).
+    await page.goto('/b/tasks/repeating')
+    await expect(
+      page.getByRole('row', { name: /Model warning job/ }).getByText(/· pinned/),
+    ).toBeVisible()
     // Only this test's own job is expected to be pinned: it is checked through the API, by its id.
-    const made = (await routine.json()) as { id: string }
     const jobs = (await (await page.request.get('/api/agents/builder/routines')).json()) as {
       items: { id: string; model?: string | null }[]
     }
     expect(jobs.items.find((job) => job.id === made.id)?.model).toBeTruthy()
   } finally {
     // Leave the team as other specs expect it: no repeating job of ours, the agent's own model back.
-    const made = (await routine.json()) as { id: string }
     await page.request.delete(`/api/routines/${encodeURIComponent(made.id)}`, {
       headers: headers(),
     })

@@ -165,7 +165,7 @@ export const AgentAssignedSchema = z.object({
       workflowId: z.string().min(1),
       recipeName: z.string(),
       stepLabel: z.string(),
-      /** The recipe's schedule, when it repeats. */
+      /** The recipe's schedule: only recipes that repeat assign their steps' agents work. */
       schedule: ScheduleTextSchema.nullable(),
     }),
   ),

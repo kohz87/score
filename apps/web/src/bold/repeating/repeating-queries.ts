@@ -34,7 +34,9 @@ export function useRecipeSchedules() {
 }
 
 const enc = encodeURIComponent
-const send = (method: string, body?: unknown, key = false): RequestInit => ({
+// Every change carries its own Idempotency-Key, as the agent page's routine controls always did: a retried request is
+// answered once.
+const send = (method: string, body?: unknown, key = true): RequestInit => ({
   method,
   ...(key ? { headers: { 'Idempotency-Key': newId() } } : {}),
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),

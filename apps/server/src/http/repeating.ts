@@ -103,7 +103,7 @@ export function registerRepeatingRoutes(
   return { tick }
 }
 
-/** The steps of live recipes (their latest version) that name the agent. */
+/** The steps that name the agent in recipes that repeat (their latest version): what's assigned to it on a schedule. */
 function recipeStepsOf(
   sqlite: DatabaseSync,
   agentId: string,
@@ -113,7 +113,7 @@ function recipeStepsOf(
       `SELECT d.id, d.name, v.definition, s.schedule FROM workflow_definitions d
        JOIN workflow_versions v ON v.workflow_id = d.id
          AND v.version = (SELECT MAX(version) FROM workflow_versions WHERE workflow_id = d.id)
-       LEFT JOIN recipe_schedules s ON s.workflow_id = d.id AND s.enabled = 1
+       JOIN recipe_schedules s ON s.workflow_id = d.id AND s.enabled = 1
        WHERE d.archived_at IS NULL ORDER BY d.name`,
     )
     .all() as { id: string; name: string; definition: string; schedule: string | null }[]
