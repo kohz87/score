@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent page on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="padding:14px 16px 8px;display:flex;align-items:center;gap:10px">
+    <a href="#" aria-label="Back to agents" style="width:44px;height:44px;border-radius:50%;background:#1A1C23;display:flex;align-items:center;justify-content:center;flex:none">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <span aria-hidden="true" style="width:36px;height:36px;border-radius:11px;background:#1F3B33;display:flex;align-items:center;justify-content:center;flex:none">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 15H3z" fill="#4FD1A5"></path></svg>
+    </span>
+    <div style="flex:1;min-width:0">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;line-height:1.1">builder</div>
+      <div style="font-size:13px;color:#A6A8B4">Builds features · working</div>
+    </div>
+    <button type="button" aria-label="More actions" style="width:44px;height:44px;border-radius:50%;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:18px">⋯</button>
+  </div>
+  <div style="padding:4px 16px 10px;display:flex;gap:8px">
+    <button type="button" style="flex:1;height:44px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:14px;font-weight:700">Message</button>
+    <button type="button" style="flex:1;height:44px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Pause</button>
+  </div>
+  <nav aria-label="Sections" style="padding:0 16px 12px;display:flex;gap:6px;overflow:hidden;font-size:14px;font-weight:600">
+    <a href="#" style="flex:none;padding:12px 14px;border-radius:999px;background:#1A1C23;text-decoration:none;color:#C4C6D0">Personality</a>
+    <a href="#" aria-current="true" style="flex:none;padding:12px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Model</a>
+    <a href="#" style="flex:none;padding:12px 14px;border-radius:999px;background:#1A1C23;text-decoration:none;color:#C4C6D0">Safety</a>
+    <a href="#" style="flex:none;padding:12px 14px;border-radius:999px;background:#1A1C23;text-decoration:none;color:#C4C6D0">Tools</a>
+  </nav>
+  <section aria-label="Model" style="margin:0 12px;padding:16px;border-radius:24px;background:#1A1C23;display:flex;flex-direction:column;gap:2px;font-size:15px">
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">Model</span>Demo model</span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Change</button></div>
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">Default effort</span>The model's default<span style="display:block;font-size:13px;color:#A6A8B4">Set differently in 2 chats</span></span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Change</button></div>
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">If it's unavailable</span>No fallback</span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Add</button></div>
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">Model aliases</span>fast, deep</span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Edit</button></div>
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">Voice</span>Edge · en-US-AriaNeural</span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Edit</button></div>
+    <div style="display:flex;align-items:center;gap:10px;min-height:52px"><span style="flex:1"><span style="display:block;font-size:13px;color:#A6A8B4">Subagents</span>Up to 4 at once</span><button type="button" style="height:44px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Edit</button></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
