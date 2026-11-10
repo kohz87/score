@@ -1,3 +1,4 @@
+import { DirectEffortBlock } from '../efforts/DirectEffortBlock.tsx'
 import type { AgentSummary, Job } from '@score/contract'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -38,6 +39,7 @@ export function DirectInfo({
 }) {
   const definition = useMemo(() => directChatsQuery(agent.id), [agent.id])
   const state = useStreamQuery(definition)
+  const roomId = state.data?.room?.id ?? null
   const refetch = useStreamQueryRefetch(definition)
   const navigate = useNavigate()
   const team = useBoldTeamRoom().data
@@ -73,6 +75,7 @@ export function DirectInfo({
 
   return (
     <div className="sidebody bold-chat-info bold-dm-info" aria-label={`${name}, chat info`}>
+      {roomId && <DirectEffortBlock agent={agent} roomId={roomId} />}
       <InfoSection kind="agent" headingId="dm-info-agent" title="Agent" summary={name}>
         <ul className="bold-chat-members">
           <li>

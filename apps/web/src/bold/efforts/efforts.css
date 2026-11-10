@@ -1,0 +1,254 @@
+/* Effort per chat (decision 178). Values from the approved mock-ups 25-effort-*; colours are the shell's own tokens.
+   These are settings and status, not decisions for the person, so nothing here carries data-protected. */
+[data-ui='bold'] .bold-effort-button,
+[data-ui='bold'] .bold-effort-tag {
+  min-height: calc(32px * var(--bold-d, 1));
+  padding: 0 calc(12px * var(--bold-d, 1));
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel-2, var(--panel));
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-effort-tag {
+  min-height: 44px;
+  padding: 0 calc(14px * var(--bold-d, 1));
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-effort-button.bold-effort--max,
+[data-ui='bold'] .bold-effort-tag.bold-effort--max {
+  background: var(--effort-max-bg);
+  box-shadow: inset 0 0 0 1px var(--effort-max-line);
+  color: var(--effort-max-ink);
+}
+
+[data-ui='bold'] .bold-effort-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Opens upward over the context bar; the narrow panels (Members, This chat) open downward and fit their column. */
+[data-ui='bold'] .bold-effort-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: min(520px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--field);
+  box-shadow: var(--menu-shadow);
+}
+
+[data-ui='bold'] .bold-effort-choice--down .bold-effort-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+  width: min(296px, calc(100vw - 48px));
+}
+
+[data-ui='bold'] .bold-effort-menu-head,
+[data-ui='bold'] .bold-effort-menu-note {
+  padding: 6px 12px 4px;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-effort-menu button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: calc(14px * var(--bold-r, 1));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-effort-menu button:hover,
+[data-ui='bold'] .bold-effort-menu button[aria-checked='true'] {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-effort-menu button code {
+  font-family: var(--font-m);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-ui='bold'] .bold-effort-menu button small {
+  display: block;
+  width: 100%;
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-effort-error {
+  margin-left: 8px;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* A line above the `/` palette's first item (the composer's "Effort for builder…"). */
+[data-ui='bold'] .bold-composer-menu-header {
+  padding: 6px 12px 4px;
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+/* Replies: "builder · effort high" in the name line. */
+[data-ui='bold'] .bold-reply-effort {
+  margin-left: 4px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+/* Agent settings › Model: the chats set differently (mock-up 25-effort-agent-settings). */
+[data-ui='bold'] .bold-effort-chats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  background: var(--panel-2, var(--panel));
+}
+
+[data-ui='bold'] .bold-effort-chats-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-effort-chats ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-ui='bold'] .bold-effort-chats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-effort-chats li > span:first-child {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-effort-chats-job,
+[data-ui='bold'] .bold-effort-chats-note {
+  color: var(--ink2);
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-effort-chats-note {
+  margin: 0;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-effort-level {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Chat info › This chat (one-to-one), mock-up 25-effort-direct. */
+[data-ui='bold'] .bold-effort-this-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-effort-this-title {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+[data-ui='bold'] .bold-effort-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-effort-row > span:first-child {
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-effort-row-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-effort-row-value small {
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-effort-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-effort-back {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-effort-this-note {
+  margin: 0;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Members on a phone: "Its own" is a 44px button that is not coloured (mock-up 25-effort-phone). */
+[data-ui='bold'] .bold-effort-tag--own {
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink2);
+  font-weight: 600;
+}
+
+/* The chat list's level tag sits beside a one-to-one's name. */
+[data-ui='bold'] .bold-chat-effort {
+  margin-left: 6px;
+  vertical-align: middle;
+}

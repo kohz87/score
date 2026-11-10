@@ -24,6 +24,7 @@ export function useComposerMenu({
   offered,
   orchestrate,
   topicCommands,
+  addressee,
   ids,
   textarea,
   setText,
@@ -32,6 +33,8 @@ export function useComposerMenu({
   text: string
   caret: number
   offered: AgentSummary[]
+  /** The one agent a bare command acts on (`/effort`'s levels depend on it); null when it isn't one. */
+  addressee: string | null
   orchestrate?: (goal: string) => void
   topicCommands?: TopicCommands
   ids: string
@@ -60,9 +63,10 @@ export function useComposerMenu({
             ...(topicCommands?.items ?? []).filter(
               (extra) => !commands.data?.some((item) => item.name === extra.name),
             ),
+            ...(topicCommands?.menuFor?.(addressee) ?? []),
             ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
           ].filter((item) => item.name.startsWith(slash)),
-    [slash, commands.data, orchestrate, topicCommands],
+    [slash, commands.data, orchestrate, topicCommands, addressee],
   )
   const mentionItems = useMemo(() => {
     if (!mention) return []

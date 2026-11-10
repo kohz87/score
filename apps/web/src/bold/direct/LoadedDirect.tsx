@@ -26,6 +26,7 @@ import { currentChat } from './direct-model.ts'
 import { createDirectChat } from './direct-queries.ts'
 import { ReferenceChip, ShareMenu } from './direct-parts.tsx'
 import { useDirectTopicCommands } from './use-direct-topic-commands.ts'
+import { useEffortChat } from '../efforts/use-effort-chat.ts'
 import { Welcome } from './Welcome.tsx'
 
 export function LoadedDirect({
@@ -99,8 +100,11 @@ export function LoadedDirect({
     setParams(next, { replace: true, state: location.state })
   }, [location.state, params, setParams])
 
-  const say = (text: string) =>
-    setSystemLines((lines) => [...lines, { id: newId(), at: new Date().toISOString(), text }])
+  const say = (text: string, action?: { label: string; run: () => void }) =>
+    setSystemLines((lines) => [
+      ...lines,
+      { id: newId(), at: new Date().toISOString(), text, ...(action ? { action } : {}) },
+    ])
   const topicCommands = useDirectTopicCommands({
     agent,
     room,
@@ -111,6 +115,7 @@ export function LoadedDirect({
     say,
     queryClient,
   })
+  const runEffort = useEffortChat(room.id, 'direct', agents, say)
 
   function prefill(text: string) {
     saveDraft(draftScope, text)
@@ -279,6 +284,7 @@ export function LoadedDirect({
           topicCommands={topicCommands}
           footer={({ to, subject, finishedReplies, compactSignal, compactSubject }) => (
             <ContextBar
+              runEffort={runEffort}
               finishedReplies={finishedReplies}
               compactSignal={compactSignal}
               compactSubject={compactSubject}

@@ -24,6 +24,7 @@ import { BoldAgentStatus } from './BoldAgentOperation.tsx'
 import { BoldAgentMore } from './BoldAgentMore.tsx'
 import { BoldRemoveAgent } from './BoldRemoveAgent.tsx'
 import { RunsOnCard } from './BoldRunsOn.tsx'
+import { EffortChatsCard } from './efforts/EffortChatsCard.tsx'
 import './bold-team.css'
 
 /** "Change permissions" on the Asks card goes to the Never rules card under More. */
@@ -60,6 +61,7 @@ function HermesUpFront({
           <span className="small muted">Engine is set when the agent is added.</span>
         </span>
         <ModelTab agent={agent} />
+        <EffortChatsCard agentId={agent.id} />
       </section>
 
       <RunsOnCard agent={agent} />

@@ -16,6 +16,8 @@ export type SlashCommand = {
   key?: string
   /** A note under the palette, explaining a group of choices. */
   note?: string
+  /** A line above the palette, shown with the first item of a group (`/effort`'s "Effort for builder…"). */
+  header?: string
 }
 export type SendResult = {
   message: Message

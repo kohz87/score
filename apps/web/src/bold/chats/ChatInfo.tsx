@@ -1,3 +1,4 @@
+import { MemberEffortTag } from '../efforts/MemberEffortTag.tsx'
 import type { AgentSummary, Job, Room } from '@score/contract'
 import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -124,11 +125,16 @@ export function ChatInfo({
                 )}
                 <span>{agent ? agentDisplayName(agent) : id}</span>
                 {room.leadAgentId === id && <span className="bold-chat-role">owner</span>}
+                {agent && <MemberEffortTag roomId={room.id} agent={agent} />}
               </li>
             )
           })}
         </ul>
         {!room.leadAgentId && <p className="bold-chat-note">No owner yet.</p>}
+        <p className="bold-chat-note">
+          A tag means this chat runs that agent at another effort than its own. No tag: its own
+          setting.
+        </p>
       </InfoSection>
       <InfoSection
         kind="workspace"

@@ -1,10 +1,12 @@
-import { AgentContextSchema, type AgentSummary, type Job } from '@score/contract'
+import type { AgentSummary, Job } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../../data/api.ts'
+import { useAgentModel } from './agent-model-query.ts'
 import { agentDisplayName } from '../bold-agents.ts'
 import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { fetchSessionContext, roomSessionId } from '../../routes/chat/room-actions.ts'
 import { SubagentControl } from '../subagents/SubagentControl.tsx'
+import { EffortControl, type RunEffort } from '../efforts/EffortControl.tsx'
+import { chatEffortOf, useRoomEfforts } from '../efforts/effort-queries.ts'
 
 /** The session the next message goes to: the room's own for the general conversation, else the topic's own. */
 export function topicSessionId(
@@ -34,6 +36,7 @@ export function ContextBar({
   finishedReplies = 0,
   compactSignal,
   compactSubject = null,
+  runEffort,
 }: {
   roomId: string
   to: string[]
@@ -49,8 +52,11 @@ export function ContextBar({
   /** `/compress` (from the composer): the meter opens its compaction confirmation for `compactSubject`. */
   compactSignal?: number
   compactSubject?: string | null
+  /** Runs `/effort` for an agent in this chat; without it the Effort control is not offered. */
+  runEffort?: RunEffort
 }) {
   const subject = agents.find((agent) => agent.id === subjectId)
+  const chatEffort = chatEffortOf(useRoomEfforts(roomId).items, subjectId ?? '')
   // The meter reads the session this message lands in (3.22.0 review): the agent's last session may be another chat's.
   const sessionId = subjectId ? topicSessionId(roomId, topic, subjectId) : null
   const session = useQuery({
@@ -61,15 +67,7 @@ export function ContextBar({
     queryFn: () => fetchSessionContext(subjectId!, sessionId!),
   }).data
   // The model is the agent's when this session has not run yet.
-  const agentModel = useQuery({
-    queryKey: ['chat', 'context', 'bar-model', subjectId],
-    enabled: Boolean(subjectId),
-    staleTime: 60_000,
-    queryFn: async ({ signal }) =>
-      AgentContextSchema.parse(
-        await apiFetch(`agents/${encodeURIComponent(subjectId!)}/context`, { signal }),
-      ).model,
-  }).data
+  const agentModel = useAgentModel(subjectId)
   const names = to
     .map((id) => agents.find((agent) => agent.id === id))
     .filter((agent): agent is AgentSummary => Boolean(agent))
@@ -122,6 +120,9 @@ export function ContextBar({
         <span className="bold-context-model">
           Model <code>{model}</code>
         </span>
+      )}
+      {subject && chatEffort && runEffort && (
+        <EffortControl agent={subject} current={chatEffort} runEffort={runEffort} />
       )}
       {controlJob?.subagents && (
         <SubagentControl

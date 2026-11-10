@@ -39,6 +39,8 @@ export type ComposerSendInput = {
   uploading: number
   attachments: Attachment[]
   to: string[]
+  /** The one agent a bare command acts on (see Composer): the To chip, else the agent the footer names; null when it isn't one. */
+  addressee: string | null
   planFirst: boolean
   setText: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -91,6 +93,7 @@ export function useComposerSend({
   hold,
   orchestrate,
   topicCommands,
+  addressee,
   references,
   resolveJob,
   onSent,
@@ -143,17 +146,25 @@ export function useComposerSend({
     }
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
-    const typed = !editing && topicCommands ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
-    if (typed && topicCommands) {
-      const word = typed[1]!.toLowerCase()
+    // `@agent /effort <level>` (decision 178) names the agent in front of the command; it is never posted as a message.
+    const addressed =
+      !editing && topicCommands ? /^@([\w-]+)\s+\/effort(?:\s+([\s\S]*))?$/i.exec(body) : null
+    const typed =
+      !editing && topicCommands && !addressed ? /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(body) : null
+    if ((addressed || typed) && topicCommands) {
+      const word = addressed ? 'effort' : typed![1]!.toLowerCase()
+      const args = (addressed ? addressed[2] : typed![2]) ?? ''
+      // A bare command acts on the addressee (see Composer): the one To chip, else the agent the footer names.
+      const target = addressed ? addressed[1] : (addressee ?? undefined)
       if (
+        addressed ||
         topicCommands.items.some((item) => item.name === word) ||
         topicCommands.typedOnly?.includes(word)
       ) {
         setNotice(null)
         setPending(true)
         try {
-          await topicCommands.run(word, (typed[2] ?? '').trim())
+          await topicCommands.run(word, args.trim(), target)
           setText('')
           setCaret(0)
         } catch (error) {

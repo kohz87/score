@@ -82,6 +82,24 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/subagents/SubagentsInfo.tsx` — the side panel's SUBAGENTS section.
 - `apps/web/src/bold/subagents/job-subagent-cache.ts` — applies `subagents.changed` to the cached jobs.
 - `apps/web/src/bold/subagents/subagents.css` — subagent card, control and side-panel styles.
+- `apps/web/src/bold/choice-menu.ts` — the choice-menu behaviour shared by the subagent and effort controls: arrow keys, Home/End, outside click, Escape, focus on the checked choice.
+- `apps/web/src/bold/efforts/` — effort per chat on screen (decision 178): `/effort` labels, queries, the command, the context bar and Members controls, This chat, the agent's chats list.
+- `apps/web/src/bold/room/agent-model-query.ts` — `useAgentModel`: the agent's own model, read once for the context bar and This chat.
+- `apps/web/src/bold/efforts/effort-queries.ts` — the chat's efforts kept live by `effort.changed` (with the last `reason: model` notice), the agent's efforts, and the PUT.
+- `apps/web/src/bold/efforts/effort-model.ts` — pure labels: level descriptions, the amber `max` rule, "its own" wording.
+- `apps/web/src/bold/efforts/effort-command.ts` — `/effort` parsing and the command: show, set, back to own, the wrong-level answer, Undo.
+- `apps/web/src/bold/efforts/effort-menu.ts` — the `/effort` palette for the addressed agent: its levels, then "Back to its own".
+- `apps/web/src/bold/efforts/use-effort-chat.ts` — what an open chat wires for effort: the model-change note, the chat's note listener, and the runner.
+- `apps/web/src/bold/efforts/use-effort-model-notice.ts` — says in the chat when Score put an agent back on its own effort (`reason: model`).
+- `apps/web/src/bold/efforts/use-run-effort.ts` — runs `/effort` from a control (context bar, Chat info) with the chat's note and Undo.
+- `apps/web/src/bold/efforts/chat-notes.ts` — notes a control outside the composer puts in its chat, and the chat's `say` line builder.
+- `apps/web/src/bold/efforts/EffortPicker.tsx` — the choices for one agent's effort in a chat (levels, Back to its own), as a radio menu.
+- `apps/web/src/bold/efforts/EffortControl.tsx` — the shared effort button and menu, the context bar's "Effort max", and the Members tag.
+- `apps/web/src/bold/efforts/MemberEffortTag.tsx` — Chat info › Members: one agent's tag from the chat's efforts; on a phone, the "Its own" button.
+- `apps/web/src/bold/efforts/DirectEffortBlock.tsx` — Chat info › This chat for a one-to-one: Effort, Change effort, Back to its own.
+- `apps/web/src/bold/efforts/EffortChatsCard.tsx` — agent settings › Model: "Set differently in N chats", each with its level.
+- `apps/web/src/bold/efforts/efforts.css` — effort control, menu, tag, This chat and agent list styles; the composer's palette header and the reply's effort label.
+- `apps/web/src/bold/efforts/ChatRowEffort.tsx` — the chat list's small level tag beside a one-to-one's name.
 - `apps/web/src/bold/subagents/subagent-model.test.ts` — subagent counts, cost and state text, the control label, and row grouping by job and agent.
 - `apps/web/src/bold/subagents/SubagentStatusCard.test.tsx` — the chat status card and its phone collapse, with the no-rows case.
 - `apps/web/src/bold/subagents/SubagentControl.test.tsx` — the context bar's subagent button and its choices, with Codex and Claude Code cases.

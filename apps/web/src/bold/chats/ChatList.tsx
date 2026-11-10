@@ -1,3 +1,4 @@
+import { ChatRowEffort } from '../efforts/ChatRowEffort.tsx'
 import { useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -55,6 +56,9 @@ function Row({ entry, selected, phone }: { entry: ChatEntry; selected: boolean; 
       <span className="bold-chat-copy">
         <span className="bold-chat-top">
           <b>{entry.name}</b>
+          {entry.kind === 'direct' && entry.room && entry.agent && (
+            <ChatRowEffort roomId={entry.room.id} agentId={entry.agent.id} />
+          )}
           {entry.at && <span className="bold-chat-at">{entry.at}</span>}
         </span>
         <span className="bold-chat-line">{entry.line}</span>

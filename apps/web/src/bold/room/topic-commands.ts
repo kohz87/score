@@ -1,6 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { useQueryClient } from '@tanstack/react-query'
-import { JobSchema, RoomSchema, type AgentSummary, type Job, type Room } from '@score/contract'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
+import {
+  JobSchema,
+  RoomSchema,
+  type AgentEfforts,
+  type AgentSummary,
+  type Job,
+  type Room,
+} from '@score/contract'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import type { SlashCommand } from '../../routes/chat/composer-model.ts'
@@ -11,6 +18,9 @@ import type { BusyStart } from './BusyDialog.tsx'
 import { useStartJob, type StartJobOptions } from '../BoldStartJob.tsx'
 import { setRoomWorkspace, useSharedWorkspaces } from '../workspaces-queries.ts'
 import { agentSubagentsQuery, putJobSubagents } from '../subagents/subagent-queries.ts'
+import { agentEffortsKey, agentEffortsQuery } from '../efforts/effort-queries.ts'
+import { runEffortCommand } from '../efforts/effort-command.ts'
+import { effortMenuItems } from '../efforts/effort-menu.ts'
 
 /** The chat commands (3.22.0). Each one calls a route that exists; the palette lists them with the rest. */
 export const TOPIC_COMMANDS: SlashCommand[] = [
@@ -66,7 +76,7 @@ export const DIRECT_NEW_COMMAND: SlashCommand = {
 }
 
 /** Typed but not offered in the palette: a chat does one job at a time, so `/new` has nothing to start (3.28.0). */
-export const TYPED_ONLY_COMMANDS = ['new']
+export const TYPED_ONLY_COMMANDS = ['new', 'effort']
 
 const post = (path: string, body: object = {}) =>
   apiFetch(path, {
@@ -118,6 +128,7 @@ export async function runTopicCommand(
   name: string,
   args: string,
   ctx: TopicCommandContext,
+  target?: string,
 ): Promise<void> {
   const { room, agents, jobs, current, pick, say } = ctx
   const topic = current && !current.isDefault ? current : undefined
@@ -274,6 +285,26 @@ export async function runTopicCommand(
       })
       changeCachedJob(ctx.queryClient, updated, 'upsert')
       say(`Subagents set to at most ${count} for this job.`, change)
+    } else if (name === 'effort') {
+      // The agent the command acts on: the one named before it, else the addressee (a one-to-one has only one).
+      const word = target ?? (room.kind === 'direct' ? room.members[0] : undefined)
+      if (!word) {
+        say('Say who: @agent /effort <level>, or address one agent first.')
+        return
+      }
+      const agent = findAgent(agents, word, false)
+      if (!room.members.includes(agent.id)) {
+        say(`${agentDisplayName(agent)} isn’t in this chat.`)
+        return
+      }
+      await runEffortCommand({
+        roomId: room.id,
+        roomKind: room.kind === 'direct' ? 'direct' : 'group',
+        agent,
+        args,
+        queryClient: ctx.queryClient,
+        say,
+      })
     } else if (name === 'run') {
       // A direct chat holds no run: runs belong to a group chat (a team or a chat of several agents).
       if (room.kind === 'direct') throw new Error('Runs start in a group chat.')
@@ -317,6 +348,18 @@ export async function runTopicCommand(
   }
 }
 
+/** The `/effort` palette for whoever the message goes to; nothing when that isn't one agent (or it has no efforts yet). */
+function effortMenuFor(
+  queryClient: QueryClient,
+  ctx: Pick<TopicCommandContext, 'agents'>,
+  addressee: string | null,
+) {
+  const agent = ctx.agents.find((item) => item.id === addressee)
+  if (!addressee || !agent) return []
+  const efforts = queryClient.getQueryData<AgentEfforts>(agentEffortsKey(addressee))
+  return effortMenuItems(efforts, agentDisplayName(agent))
+}
+
 /** The hook the room uses: the palette items and a runner bound to the open chat. */
 export function useTopicCommands(
   ctx: Omit<TopicCommandContext, 'workspaces' | 'queryClient' | 'startRun'>,
@@ -324,15 +367,18 @@ export function useTopicCommands(
   const workspaces = useSharedWorkspaces().data ?? []
   const queryClient = useQueryClient()
   const startJob = useStartJob()
+  // The efforts of every member are read ahead, so the `/effort` palette has its levels when the person types.
+  useQueries({ queries: ctx.room.members.map((id) => agentEffortsQuery(id)) })
   return {
     items: TOPIC_COMMANDS,
     typedOnly: TYPED_ONLY_COMMANDS,
-    run: (name: string, args: string) =>
-      runTopicCommand(name, args, {
-        ...ctx,
-        workspaces,
-        queryClient,
-        startRun: startJob?.openStartJob,
-      }),
+    menuFor: (addressee: string | null) => effortMenuFor(queryClient, ctx, addressee),
+    run: (name: string, args: string, target?: string) =>
+      runTopicCommand(
+        name,
+        args,
+        { ...ctx, workspaces, queryClient, startRun: startJob?.openStartJob },
+        target,
+      ),
   }
 }
