@@ -4,7 +4,7 @@ import { useAgentModel } from '../room/agent-model-query.ts'
 import { useAgentSubagents } from '../subagents/subagent-queries.ts'
 import { sayInChat } from './chat-notes.ts'
 import { EffortChoice } from './EffortControl.tsx'
-import { ownEffortLabel } from './effort-model.ts'
+import { isAmberEffort, ownEffortLabel } from './effort-model.ts'
 import { chatEffortOf, useAgentEfforts, useRoomEfforts } from './effort-queries.ts'
 import { useRunEffort } from './use-run-effort.ts'
 import './efforts.css'
@@ -39,7 +39,15 @@ export function DirectEffortBlock({ agent, roomId }: { agent: AgentSummary; room
       <div className="bold-effort-row">
         <span>Effort</span>
         <span className="bold-effort-row-value">
-          {current ? <span className="bold-effort-level">{current}</span> : <span>Its own</span>}
+          {current ? (
+            <span
+              className={`bold-effort-level${isAmberEffort(current) ? ' bold-effort--max' : ''}`}
+            >
+              {current}
+            </span>
+          ) : (
+            <span>Its own</span>
+          )}
           <small>its own: {ownEffortLabel(own)}</small>
         </span>
       </div>

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import {
+  addressedEffortQuery,
   insertMention,
   mentionAt,
   parseCommands,
@@ -50,24 +51,29 @@ export function useComposerMenu({
     staleTime: Infinity,
   })
   const slash = slashQuery(text)
-  const mention = slash === null ? mentionAt(text, caret) : null
-  const slashItems: SlashCommand[] = useMemo(
-    () =>
-      slash === null
-        ? []
-        : [
-            ...(commands.data ?? []),
-            ...LOCAL_COMMAND_MENU.filter(
-              (local) => !commands.data?.some((item) => item.name === local.name),
-            ),
-            ...(topicCommands?.items ?? []).filter(
-              (extra) => !commands.data?.some((item) => item.name === extra.name),
-            ),
-            ...(topicCommands?.menuFor?.(addressee) ?? []),
-            ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
-          ].filter((item) => item.name.startsWith(slash)),
-    [slash, commands.data, orchestrate, topicCommands, addressee],
-  )
+  // `@agent /eff…` opens the effort choices for that agent (mock-up 25-effort-group); its `/effort` keeps the prefix on a pick.
+  const addressed = slash === null ? addressedEffortQuery(text) : null
+  const addressedAgent = addressed?.agentId ?? null
+  const addressedQuery = addressed?.query ?? ''
+  const mention = slash === null && addressed === null ? mentionAt(text, caret) : null
+  const slashItems: SlashCommand[] = useMemo(() => {
+    if (addressedAgent !== null)
+      return (topicCommands?.menuFor?.(addressedAgent) ?? []).filter((item) =>
+        item.name.startsWith(addressedQuery),
+      )
+    if (slash === null) return []
+    return [
+      ...(commands.data ?? []),
+      ...LOCAL_COMMAND_MENU.filter(
+        (local) => !commands.data?.some((item) => item.name === local.name),
+      ),
+      ...(topicCommands?.items ?? []).filter(
+        (extra) => !commands.data?.some((item) => item.name === extra.name),
+      ),
+      ...(topicCommands?.menuFor?.(addressee) ?? []),
+      ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
+    ].filter((item) => item.name.startsWith(slash))
+  }, [slash, addressedAgent, addressedQuery, commands.data, orchestrate, topicCommands, addressee])
   const mentionItems = useMemo(() => {
     if (!mention) return []
     const query = mention.query.toLowerCase()
@@ -105,7 +111,8 @@ export function useComposerMenu({
     if (menu === 'slash') {
       const command = slashItems[position]
       if (!command) return
-      const next = `${command.insert ?? `/${command.name}`} `
+      const prefix = addressedAgent === null ? '' : `@${addressedAgent} `
+      const next = `${prefix}${command.insert ?? `/${command.name}`} `
       edit(next, next.length)
       restoreCaret(area, next, next.length)
     } else if (menu === 'mention' && mention) {

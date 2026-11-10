@@ -53,6 +53,17 @@ export function slashQuery(text: string) {
   return match ? match[1]!.toLowerCase() : null
 }
 
+/**
+ * `@agent /eff…` with `/effort` still being typed (decision 178): the palette is the effort choices for that agent, since
+ * `@agent /effort <level>` is the only command addressed this way. Null for anything else.
+ */
+export function addressedEffortQuery(text: string) {
+  const match = /^@([\w-]+)\s+\/([\w-]*)$/.exec(text)
+  const query = match?.[2]?.toLowerCase()
+  if (!match || query === undefined || !'effort'.startsWith(query)) return null
+  return { agentId: match[1]!, query }
+}
+
 const draftKey = (roomId: string) => `score.chat.draft.${roomId}`
 export function loadDraft(roomId: string): string {
   try {

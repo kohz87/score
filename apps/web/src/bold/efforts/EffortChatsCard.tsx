@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { boldOneToOneLink } from '../bold-links.ts'
-import { EFFORT_HINTS, ownEffortLabel } from './effort-model.ts'
+import { EFFORT_HINTS, isAmberEffort, ownEffortLabel } from './effort-model.ts'
 import { useAgentEfforts } from './effort-queries.ts'
 import './efforts.css'
 
@@ -32,7 +32,10 @@ export function EffortChatsCard({ agentId }: { agentId: string }) {
               </Link>
               {chat.jobTitle && <span className="bold-effort-chats-job"> · {chat.jobTitle}</span>}
             </span>
-            <span className="bold-effort-level" title={EFFORT_HINTS[chat.effort]}>
+            <span
+              className={`bold-effort-level${isAmberEffort(chat.effort) ? ' bold-effort--max' : ''}`}
+              title={EFFORT_HINTS[chat.effort]}
+            >
               {chat.effort}
             </span>
           </li>

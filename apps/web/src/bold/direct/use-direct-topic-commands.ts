@@ -30,6 +30,9 @@ export function useDirectTopicCommands({
 }) {
   const base = useTopicCommands({ room, agents, jobs: chats, current, pick, say })
   return {
+    // `/effort` is typed-only and palette-by-agent (decision 178): the base hook supplies both, so the one-to-one gets them too.
+    typedOnly: base.typedOnly,
+    menuFor: base.menuFor,
     items: [DIRECT_NEW_COMMAND, ...base.items]
       .filter((item) => DIRECT_COMMANDS.has(item.name))
       .map((item) =>
@@ -41,8 +44,8 @@ export function useDirectTopicCommands({
             }
           : item,
       ),
-    run: async (name: string, args: string) => {
-      if (name !== 'new') return base.run(name, args)
+    run: async (name: string, args: string, target?: string) => {
+      if (name !== 'new') return base.run(name, args, target)
       // A one-to-one's new chat comes from the agent route (it is called "New chat" when no title is given).
       const chat = await createDirectChat(agent.id, args.trim().slice(0, 200) || undefined)
       changeCachedJob(queryClient, chat, 'upsert')

@@ -172,7 +172,8 @@ test('the agent settings list names each chat with its level and the line under 
   renderInRoom(<EffortChatsCard agentId={builder.id} />)
   const card = await screen.findByLabelText('Chats that override effort')
   expect(within(card).getByText('Set differently in 2 chats')).toBeTruthy()
-  expect(within(card).getByText('max')).toBeTruthy()
+  expect(within(card).getByText('max').className).toContain('bold-effort--max')
+  expect(within(card).getByText('low').className).not.toContain('bold-effort--max')
   expect(within(card).getByText(/Every other chat uses medium/)).toBeTruthy()
 })
 

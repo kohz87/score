@@ -379,6 +379,7 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/chats-conversation.css` — topic divider, system line, composer palette, context bar, side tabs and top-bar links.
 - `apps/web/src/bold/chats/chats-topic.css` — This topic, context details, Graph tab, phone chat menu and phone topic targets.
 - `apps/web/src/bold/chats/chats-files.css` — Info files rows and the viewer sheet.
+- `apps/web/src/bold/chats/MembersInfo.tsx` — Chat info › Members: the member list with effort tags; opens by itself, and its header counts agents set differently here.
 - `apps/web/src/bold/jobmap/JobMap.tsx` — job-map public entry, loaded-data graph view and live-job wrapper.
 - `apps/web/src/bold/jobmap/WorkerBox.tsx` — worker layer node with its coding program, recent step chips and advisor asks.
 - `apps/web/src/bold/jobmap/Node.tsx` — selectable job-map layer node shell with pressed and pulse states.

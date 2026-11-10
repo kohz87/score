@@ -1,8 +1,5 @@
-import { MemberEffortTag } from '../efforts/MemberEffortTag.tsx'
 import type { AgentSummary, Job, Room } from '@score/contract'
 import { Link, useSearchParams } from 'react-router'
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { agentDisplayName, agentMood } from '../bold-agents.ts'
 import { jobDot } from '../room/job-dot.ts'
 import { activeJobs, holdsSeveralJobs, jobStateLabel } from '../room/room-model.ts'
 import { useStartJob } from '../BoldStartJob.tsx'
@@ -10,6 +7,7 @@ import { useSharedWorkspaces } from '../workspaces-queries.ts'
 import { currentTopic } from './chat-model.ts'
 import { TopicInfo } from './TopicInfo.tsx'
 import { InfoSection } from './InfoSection.tsx'
+import { MembersInfo } from './MembersInfo.tsx'
 import { FilesAndResults } from './FilesResults.tsx'
 import { SubagentsInfo } from '../subagents/SubagentsInfo.tsx'
 
@@ -109,33 +107,7 @@ export function ChatInfo({
   const current = currentTopic(jobs, params.get('job'))
   return (
     <div className="sidebody bold-chat-info" aria-label={`${room.name}, chat info`}>
-      <InfoSection
-        kind="members"
-        headingId="chat-info-members"
-        title="Members"
-        summary={String(room.members.length)}
-      >
-        <ul className="bold-chat-members">
-          {room.members.map((id) => {
-            const agent = agents.find((item) => item.id === id)
-            return (
-              <li key={id}>
-                {agent && (
-                  <AgentGlyph agent={agent} size="sm" bare decorative mood={agentMood(agent)} />
-                )}
-                <span>{agent ? agentDisplayName(agent) : id}</span>
-                {room.leadAgentId === id && <span className="bold-chat-role">owner</span>}
-                {agent && <MemberEffortTag roomId={room.id} agent={agent} />}
-              </li>
-            )
-          })}
-        </ul>
-        {!room.leadAgentId && <p className="bold-chat-note">No owner yet.</p>}
-        <p className="bold-chat-note">
-          A tag means this chat runs that agent at another effort than its own. No tag: its own
-          setting.
-        </p>
-      </InfoSection>
+      <MembersInfo room={room} agents={agents} />
       <InfoSection
         kind="workspace"
         headingId="chat-info-workspace"
