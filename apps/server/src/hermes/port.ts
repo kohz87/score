@@ -254,6 +254,8 @@ export interface HermesPort extends ProfileManagementPort, SubagentSetupPort {
   deleteRoutine(id: string): Promise<void>
   /** Asks Hermes to run the job on its next scheduler tick; resolves once it is queued. */
   runRoutine(id: string): Promise<void>
+  /** Decision 182: pin the agent's repeating jobs that follow its model onto the model it has now; their ids. */
+  pinFollowingRoutines(agentId: string): Promise<string[]>
   /** SOUL.md / AGENTS.md of a profile. A missing file reads as empty text. */
   readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile>
   /** Compare-and-swap write; rejects with AgentFileConflictError when `etag` is stale. */

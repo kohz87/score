@@ -342,4 +342,16 @@ export abstract class FakePortSettings extends FakePortProviders {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
   }
+  async pinFollowingRoutines(agentId: string): Promise<string[]> {
+    if (!this.agents.has(agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    const model = (this.models.get(agentId)?.model ?? this.agents.get(agentId)?.model)?.id ?? null
+    const pinned: string[] = []
+    for (const routine of this.routines.values())
+      if (routine.id.startsWith(`${agentId}:`) && !routine.model && model) {
+        routine.model = model
+        pinned.push(routine.id)
+      }
+    return pinned
+  }
 }

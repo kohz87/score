@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recipe: model per step</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1040px;height:720px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;gap:24px">
+  <section aria-label="Recipe" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:13px;color:#A6A8B4">Recipes / Release notes</div>
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:700">Release notes</div>
+    <div style="font-size:14px;color:#C4C6D0">Each step names a role. Its model and effort are set here for this step only; &#34;its own&#34; uses the agent&#39;s.</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:18px;background:#1A1C23;font-size:14px"><span style="color:#A6A8B4">Repeats</span><b style="flex:1">Fridays at 17:00</b><span style="color:#A6A8B4">next: Fri 14 Nov, 17:00</span><button type="button" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Change</button></div>
+    <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+    <li style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#1A1C23">
+      <span style="width:28px;height:28px;border-radius:50%;background:#262833;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">1</span>
+      <span aria-hidden="true" style="width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>
+      <span style="flex:1;min-width:0"><b>lead</b> <span style="color:#C4C6D0">splits the work</span></span>
+      <button type="button" aria-label="Model for step 1: its own. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">its own</button>
+      <button type="button" aria-label="Effort for step 1: its own. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">its own</button>
+    </li>
+    <li style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#1A1C23">
+      <span style="width:28px;height:28px;border-radius:50%;background:#262833;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">2</span>
+      <span aria-hidden="true" style="width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>
+      <span style="flex:1;min-width:0"><b>builder</b> <span style="color:#C4C6D0">drafts the notes</span></span>
+      <button type="button" aria-label="Model for step 2: fast. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">fast</button>
+      <button type="button" aria-label="Effort for step 2: low. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">low</button>
+    </li>
+    <li style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#1A1C23">
+      <span style="width:28px;height:28px;border-radius:50%;background:#262833;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">3</span>
+      <span aria-hidden="true" style="width:22px;height:22px;border-radius:4px;transform:rotate(45deg) scale(0.8);box-shadow:inset 0 0 0 2px #F2B33D;flex:none"></span>
+      <span style="flex:1;min-width:0"><b>reviewer</b> <span style="color:#C4C6D0">checks them carefully</span></span>
+      <button type="button" aria-label="Model for step 3: deep. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">deep</button>
+      <button type="button" aria-label="Effort for step 3: max. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">max</button>
+    </li>
+    <li style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#1A1C23">
+      <span style="width:28px;height:28px;border-radius:50%;background:#262833;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">4</span>
+      <span aria-hidden="true" style="width:22px;height:22px;border-radius:7px;box-shadow:inset 0 0 0 2px #FF7A9A;flex:none"></span>
+      <span style="flex:1;min-width:0"><b>coder</b> <span style="color:#C4C6D0">updates the changelog file</span></span>
+      <button type="button" aria-label="Model for step 4: Codex · gpt-6.1-sol. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">Codex · gpt-6.1-sol</button>
+      <button type="button" aria-label="Effort for step 4: its own. Change" style="height:36px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:700">its own</button>
+    </li>
+    </ol>
+    <div role="listbox" aria-label="Model for step 3" style="align-self:flex-end;width:440px;padding:8px;border-radius:20px;background:#262833;box-shadow:0 12px 32px rgba(0,0,0,0.45);display:flex;flex-direction:column;gap:2px">
+      <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">Model for <b style="color:#ECECF1">reviewer</b> in step 3</div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">its own</b> <span style="color:#C4C6D0">example-model</span></div>
+        <div role="option" aria-selected="true" style="padding:9px 12px;border-radius:14px;background:#343743;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">deep</b> <span style="color:#C4C6D0">example-large · alias</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">fast</b> <span style="color:#C4C6D0">example-small · alias</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:170px">free-model</b> <span style="color:#C4C6D0">Other provider · free</span></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:auto">
+      <button type="button" style="height:48px;padding:0 24px;border-radius:999px;border:0;background:#ECECF1;color:#12131A;font:inherit;font-size:15px;font-weight:700">Save recipe</button>
+      <button type="button" style="height:48px;padding:0 24px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:15px;font-weight:600">Run it</button>
+    </div>
+  </section>
+  <aside style="width:280px;flex:none;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5;color:#C4C6D0">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">WHO WINS IN A JOB</div>
+    <div>A step&#39;s model wins for that step. A step left on &#34;its own&#34; uses the job chat&#39;s /model if one is set, else the agent&#39;s.</div>
+    <div>The same list as /model: aliases, then the models the agent&#39;s providers offer; for a coding agent, its programs&#39; models.</div>
+    <div>Starting a job shows the steps with their models, so a costly one (max, opus) is seen before it runs.</div>
+    <div>A recipe can repeat on a schedule: each run is one job, builder drafts, reviewer checks, each on its step&#39;s model. That is the multi-agent repeating job; an agent&#39;s own repeating job is one agent, one prompt.</div>
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin-top:6px">LATER</div>
+    <div>Mock-up only: built after model per chat, with per-step subagent limits.</div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1040,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

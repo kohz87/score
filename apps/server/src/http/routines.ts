@@ -1,3 +1,4 @@
+import { RoutinesPinnedSchema } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -34,6 +35,11 @@ export function registerRoutineRoutes(
     const req = CreateRoutineSchema.parse(request.body)
     const key = KeySchema.parse(request.headers['idempotency-key'] ?? randomUUID())
     return port.createRoutine(agentId, req, key)
+  })
+  // Decision 182: before the agent's model changes, keep its following jobs on the model it has now.
+  app.post('/api/agents/:agentId/routines/pin', mutation, async (request) => {
+    const { agentId } = AgentParamsSchema.parse(request.params)
+    return RoutinesPinnedSchema.parse({ pinned: await port.pinFollowingRoutines(agentId) })
   })
   app.patch('/api/routines/:routineId', mutation, async (request) => {
     const { routineId } = RoutineParamsSchema.parse(request.params)

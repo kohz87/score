@@ -16,6 +16,13 @@ const eventData = {
   'room.upserted': f.room,
   'room.pins.changed': { roomId: 'room-1' },
   'effort.changed': { roomId: 'room_1', agentId: 'builder', effort: 'high', reason: 'person' },
+  'model.changed': {
+    roomId: 'room_1',
+    agentId: 'builder',
+    model: 'example-large',
+    label: 'deep',
+    reason: 'person',
+  },
   'subagents.changed': {
     jobId: 'job_1',
     roomId: 'room_1',

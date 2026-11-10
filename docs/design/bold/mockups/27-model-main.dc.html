@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Group chat with /model</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600">
+      <a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Chats</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Agents</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Knowledge</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Tasks</a>
+      <a href="#" style="padding:10px 14px;border-radius:999px;color:#A6A8B4;text-decoration:none">Screens</a>
+    </nav>
+  </header>
+  <div style="flex:1;display:flex;min-height:0">
+    <aside aria-label="Chats" style="width:260px;flex:none;box-sizing:border-box;padding:16px 14px;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:4px 6px">GROUPS</div>
+      <a href="#" style="display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:18px;background:#22242C;text-decoration:none">
+        <span style="font-weight:700;font-size:15px">Team room</span>
+        <span style="font-size:13px;color:#A6A8B4">4 members</span>
+      </a>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin:14px 6px 4px">DIRECT</div>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">lead</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">builder</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">reviewer</a>
+      <a href="#" style="padding:11px 14px;border-radius:18px;text-decoration:none;font-size:15px;font-weight:600">designer</a>
+    </aside>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+      <div style="padding:14px 24px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700">Team room</div>
+          <div style="font-size:13px;color:#A6A8B4">Owner lead · 4 members</div>
+        </div>
+      </div>
+
+      <section aria-label="Current job" style="margin:12px 24px 0;padding:12px 16px;border-radius:20px;background:#1A1C23;display:flex;align-items:center;gap:14px">
+        <span aria-hidden="true" style="width:10px;height:10px;border-radius:50%;background:#4FD1A5;flex:none"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:16px">Release notes 2.4</div>
+          <div style="font-size:13px;color:#A6A8B4">builder is working · reviewer next</div>
+        </div>
+        <button type="button" style="height:44px;padding:0 16px;border-radius:999px;border:0;background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);color:#ECECF1;font:inherit;font-size:14px;font-weight:600">Stop job</button>
+      </section>
+
+      <div style="flex:1;min-height:0;padding:14px 24px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span aria-hidden="true" style="width:28px;height:28px;border-radius:8px;background:#ECECF1;color:#12131A;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">Y</span>
+          <div style="padding:9px 14px;border-radius:18px;background:#22242C;font-size:15px">@builder draft the release notes, then @reviewer check them carefully</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">
+            <span style="font-size:13px;color:#7FE3C1;font-weight:600">builder</span>
+            <div style="padding:9px 14px;border-radius:18px;background:#22242C;font-size:15px;align-self:flex-start">First draft is in docs/release-2.4.md. Handing it to @reviewer.</div>
+          </div>
+        </div>
+        <div role="status" style="align-self:center;display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:#1A1C23;font-size:13px;color:#C4C6D0">
+          <span aria-hidden="true" style="width:14px;height:14px;border-radius:3px;transform:rotate(45deg);box-shadow:inset 0 0 0 2px #F2B33D;flex:none"></span>
+          <span>You set <b style="color:#ECECF1">reviewer</b>'s model to <b style="color:#ECECF1">deep</b> (example-large) for this chat</span>
+          <a href="#" style="font-weight:600;padding:2px 4px">Undo</a>
+        </div>
+      </div>
+
+      <div role="listbox" aria-label="Commands" style="position:absolute;left:24px;bottom:104px;width:560px;padding:8px;border-radius:20px;background:#262833;box-shadow:0 12px 32px rgba(0,0,0,0.45);display:flex;flex-direction:column;gap:2px">
+        <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">Model for <b style="color:#ECECF1">reviewer</b> in this chat · its own is <b style="color:#ECECF1">example-model</b></div>
+        <div style="padding:6px 12px 2px;font-size:11px;font-weight:700;letter-spacing:1.1px;color:#A6A8B4">ALIASES</div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">/model fast</b> <span style="color:#C4C6D0">example-small · Demo</span></div>
+        <div role="option" aria-selected="true" style="padding:9px 12px;border-radius:14px;background:#343743;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">/model deep</b> <span style="color:#C4C6D0">example-large · Demo</span></div>
+        <div style="padding:8px 12px 2px;font-size:11px;font-weight:700;letter-spacing:1.1px;color:#A6A8B4">MODELS IT CAN USE · type to search</div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">example-model</b> <span style="color:#C4C6D0">Demo · its own</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">example-large</b> <span style="color:#C4C6D0">Demo · thinks longer, costs more</span></div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">free-model</b> <span style="color:#C4C6D0">Other provider · free</span></div>
+        <div style="padding:2px 12px;font-size:13px;color:#A6A8B4">+ 14 more: keep typing to narrow</div>
+        <div role="option" aria-selected="false" style="padding:9px 12px;border-radius:14px;font-size:14px;display:flex;gap:10px"><b style="font-family:'JetBrains Mono',monospace;font-weight:500;min-width:150px">/model default</b> <span style="color:#C4C6D0">Back to reviewer's own (example-model)</span></div>
+        <div style="padding:6px 12px 4px;font-size:13px;color:#C4C6D0">Only models reviewer's providers offer are listed. Other chats keep its own model.</div>
+      </div>
+      <div style="margin:0 24px 6px;padding:13px 18px;border-radius:24px;background:#1A1C23;display:flex;align-items:center;gap:12px;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.28)">
+        <span aria-hidden="true" style="font-size:20px;color:#A6A8B4">+</span>
+        <span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px">@reviewer /model de</span>
+      </div>
+      <div style="margin:0 32px 12px;font-size:13px;color:#A6A8B4;display:flex;gap:14px;align-items:center">
+        <span>To <b style="color:#ECECF1">reviewer</b></span><span>Context 18%</span>
+        <button type="button" aria-label="reviewer in this chat: model deep, effort max. Change" style="height:32px;padding:0 12px;border-radius:999px;border:0;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font:inherit;font-size:13px;font-weight:700">deep · max</button>
+        <button type="button" style="height:32px;padding:0 12px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Subagents: up to 4</button>
+      </div>
+    </main>
+
+    <aside aria-label="Chat info" style="width:300px;flex:none;box-sizing:border-box;padding:18px;border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:12px;font-size:14px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ECECF1">MEMBERS · 4</div>
+      <ul aria-label="Members" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px">
+        <li style="display:flex;align-items:center;gap:10px;min-height:40px">
+          <span aria-hidden="true" style="width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px #8E7CFF;flex:none"></span>
+          <span style="flex:1;font-weight:600">lead <span style="color:#A6A8B4;font-weight:400">· owner</span></span>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px;min-height:40px">
+          <span aria-hidden="true" style="width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px #4FD1A5;flex:none"></span>
+          <span style="flex:1;font-weight:600">builder</span>
+          <span style="padding:3px 10px;border-radius:999px;background:#262833;color:#ECECF1;font-size:12px;font-weight:700"><span style="color:#A6A8B4;font-weight:600">its own</span> · high</span>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px;min-height:40px">
+          <span aria-hidden="true" style="width:22px;height:22px;border-radius:4px;transform:rotate(45deg) scale(0.8);box-shadow:inset 0 0 0 2px #F2B33D;flex:none"></span>
+          <span style="flex:1;font-weight:600">reviewer</span>
+          <span style="padding:3px 10px;border-radius:999px;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font-size:12px;font-weight:700">deep · max</span>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px;min-height:40px">
+          <span aria-hidden="true" style="width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 2px #FF7A9A;flex:none"></span>
+          <span style="flex:1;font-weight:600">designer</span>
+        </li>
+      </ul>
+      <div style="font-size:13px;line-height:1.45;color:#A6A8B4">A tag reads model · effort, for an agent this chat runs differently; the part that is its own says &#34;its own&#34;. No tag: its own model and effort. Click a tag to change or clear either.</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4;margin-top:6px">WORKSPACE · none</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">THIS JOB</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">PAST JOBS · 3</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

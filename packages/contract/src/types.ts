@@ -88,6 +88,8 @@ export const RoutineSummarySchema = z.object({
   description: z.string(),
   lastRunAt: z.iso.datetime().nullable(),
   enabled: z.boolean(),
+  /** Decision 182: the model the job is pinned to; null (or absent) follows the agent's model when it runs. */
+  model: z.string().nullish(),
 })
 export type RoutineSummary = z.infer<typeof RoutineSummarySchema>
 
@@ -469,6 +471,9 @@ export const MessageSchema = z.object({
    */
   alternativeOf: z.string().min(1).nullish(),
   effort: z.string().nullish(),
+  /** Decision 182, agent replies: the model the turn was asked to run on when it wasn't the agent's own (a chat's
+   * `/model`, Try another). Absent: its own. */
+  model: z.string().nullish(),
   /**
    * 3.5.0, agent replies only: `true` when it answers the person's own message (Retry and Try another apply), `false`
    * for a reply from a hand-off, a summary or an orchestration turn. Absent when Score doesn't know (older or imported

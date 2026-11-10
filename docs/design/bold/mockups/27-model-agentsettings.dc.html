@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent settings: model per chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:880px;height:600px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:32px 40px;display:flex;gap:24px">
+  <section aria-label="Model for reviewer" style="flex:1;min-width:0;padding:22px 24px;border-radius:28px;background:#1A1C23;display:flex;flex-direction:column;gap:0">
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:700;margin-bottom:10px">Model</div>
+    <div style="display:flex;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:15px">
+      <span style="width:150px;color:#A6A8B4">Model</span>
+      <span style="flex:1"><b>example-model</b> <span style="color:#A6A8B4">· Through Demo.</span><span style="display:block;font-size:13px;color:#A6A8B4">Every chat uses this unless it sets its own with /model. <a href="#" style="font-weight:600">Set differently in 2 chats</a></span></span>
+      <button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Change</button>
+    </div>
+    <section aria-label="Chats with their own model" style="margin:12px 0;padding:14px 16px;border-radius:20px;background:#22242C;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;font-size:14px">
+        <span style="flex:1"><a href="#" style="font-weight:600">Team room</a> <span style="color:#A6A8B4">· Release notes 2.4</span></span>
+        <span style="padding:3px 10px;border-radius:999px;background:#3A3220;box-shadow:inset 0 0 0 1px rgba(242,179,61,0.6);color:#FFE2A8;font-size:12px;font-weight:700">deep</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:14px">
+        <span style="flex:1"><a href="#" style="font-weight:600">reviewer</a> <span style="color:#A6A8B4">· direct chat</span></span>
+        <span style="padding:3px 10px;border-radius:999px;background:#262833;font-size:12px;font-weight:700">free-model</span>
+      </div>
+      <div style="font-size:13px;color:#A6A8B4">Those chats keep their model until it's changed there. Every other chat uses example-model.</div>
+    </section>
+    <div style="display:flex;align-items:center;gap:12px;min-height:56px;font-size:15px">
+      <span style="width:150px;color:#A6A8B4">Default effort</span>
+      <span style="flex:1">medium <span style="display:block;font-size:13px;color:#A6A8B4">Set differently in 1 chat</span></span>
+      <button type="button" style="height:36px;padding:0 14px;border-radius:999px;border:0;background:#262833;color:#ECECF1;font:inherit;font-size:13px;font-weight:600">Change</button>
+    </div>
+  </section>
+  <aside style="width:260px;flex:none;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5;color:#C4C6D0">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">WHO WINS</div>
+    <div>A chat's own model wins in that chat; everywhere else the agent's model applies. /model no longer changes the agent everywhere: that's the Change button here.</div>
+    <div>The list is the same one Change shows: the agent's aliases, then the models its providers offer. A coding agent lists its CLI's models (sonnet, opus…).</div>
+    <div>If the chat's effort doesn't fit the new model, the chat goes back to the agent's own effort and says so. Fallback models still apply if the chosen one is unavailable.</div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

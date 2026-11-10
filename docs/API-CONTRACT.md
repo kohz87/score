@@ -3121,3 +3121,33 @@ An agent's reasoning effort for one chat. It wins over the agent's own setting i
 - `GET /api/agents/:agentId/efforts` answers `503` when Hermes can't say the agent's own effort (null `own` always means the model's default).
 - A Hermes chat that continues a session started outside Score may run at the agent's own effort: Hermes routes such a turn without per-run options.
 - The composer handles `/effort` itself, as it does `/subagents`: `/effort`, `/effort <level>`, `/effort default`; in a group `@agent /effort <level>` or the agent the message is addressed to.
+
+## 21. Model per chat (decision 182; schemas in `packages/contract/src/chat-models.ts`; design docs/briefs/MD-model.md)
+
+An agent's model for one chat. It wins over the agent's own model in that chat only: the agent's config, its other chats and
+its repeating jobs are untouched. The rule everywhere: the nearest setting wins (chat, then the agent), and every reply
+says what it ran on.
+
+| Endpoint | Needs | Body | Answer |
+| --- | --- | --- | --- |
+| `GET /api/rooms/:roomId/models` | | | `ChatModelsResponse` (`asOfSeq`, `items: ChatModel[]`): the agents set to another model here; an agent not listed uses its own |
+| `PUT /api/rooms/:roomId/models/:agentId` | paired browser, Idempotency-Key | `{ model: string \| null, provider?: string \| null }` (null: back to its own) | `ChatModelChange` `{ roomId, agentId, current, replaced }`: `current` null when back to its own; `replaced` is what it had in this chat before this change, read in the same write (Undo puts that back). `400` for an agent not in the chat (going back to its own is always allowed), a name that isn't a model name, or a model Hermes lists as unknown or unavailable. `409` for an alias with its own endpoint. `404` for no such chat or agent |
+| `GET /api/agents/:agentId/chat-models` | | | `AgentChatModels`: the `chats` where it runs another model (`roomKind` says whether it opens as a direct chat or a group) |
+| `POST /api/agents/:agentId/routines/pin` | paired browser, Idempotency-Key | `{}` | `RoutinesPinned` `{ pinned: string[] }`: the repeating jobs that followed the agent's model, now locked onto the model it has (Hermes `cron edit --pin`). Used before changing the agent's own model. `409` when Hermes refuses one (those listed before it were pinned) |
+
+- `ChatModel` `{ roomId, agentId, model, provider, label }`: `model` is what runs (an alias is resolved when chosen); `label` is
+  what the person chose (`deep`), for the tag.
+- A Hermes agent: an alias of the agent is resolved to its model and provider; another name must be in Hermes's model list when
+  Hermes can list models. A coding agent: one of its own program's models (`GET /api/coding-agents/runtimes/:runtime/models`),
+  sent as its CLI's `--model` for that turn. No switching program in a chat.
+- Each turn records its model on the turn when it's dispatched (a turn that already names one, Try another, keeps it), so a
+  retry or restart sends it the same way. Hermes gets it as the run's `model`/`provider`, never as the agent's config. A
+  turn already running keeps its model; a change applies from the next one.
+- `Message.model`: on an agent reply, the model its turn was asked to run on when it wasn't the agent's own (a chat's
+  `/model`, Try another). Absent: its own.
+- Event `model.changed` `{ roomId, agentId, model, label, reason }`: `model` null is back to its own; `reason: member` when Score
+  put it back because the agent was taken out of the chat.
+- Jobs started by Score (orchestrations, recipe steps) don't take a chat's model.
+- `RoutineSummary.model`: the model a repeating job is pinned to; null or absent follows the agent's model when it runs.
+- The composer handles `/model` itself (bold shell), as it does `/effort`: `/model`, `/model <name or alias>`, `/model default`;
+  in a group `@agent /model <name>` or the agent the message is addressed to. The classic shell keeps its `/model`.
