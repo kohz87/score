@@ -11,6 +11,9 @@ test('a coding agent’s direct chat shows its quota, Chat info and /status answ
 }) => {
   test.setTimeout(120_000)
   const id = `quota-chat-${Date.now().toString(36)}`
+  // The fake turn replays a recorded rate-limit record whose windows reset on 16 and 17 Oct 2026; the page's clock is
+  // set before them so the reading counts as current (3.38.1 shows a window past its reset as "reset since it was read").
+  await page.clock.setFixedTime(new Date('2026-10-16T04:00:00.000Z'))
   await pair(page)
   await withLock('roster', async () => {
     try {
