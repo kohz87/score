@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Usage answer with quota</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+</style>
+</helmet>
+<div style="width:900px;height:620px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;padding:28px 32px;display:flex;flex-direction:column;gap:16px">
+  <div style="font-size:14px;color:#A6A8B4">You type <span style="font-family:'JetBrains Mono',monospace;color:#ECECF1">/usage</span> (or <span style="font-family:'JetBrains Mono',monospace;color:#ECECF1">/status</span>, the same answer) in Orchestrator’s chat:</div>
+  <section aria-label="Usage" style="border-radius:24px;background:#1A1C23;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="28" height="28" viewBox="0 0 20 20" aria-hidden="true" style="flex:none"><g fill="#2BB5C0"><rect x="2.0" y="2.19" width="16.0" height="15.62" rx="3.91"></rect></g><g fill="#FFFFFF"><g transform="translate(7.4 9.81)"><circle r="1.58"></circle></g><g transform="translate(12.6 9.81)"><circle r="1.58"></circle></g></g></svg>
+      <b style="font-size:16px">Orchestrator · usage</b>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:14px">
+      <div style="border-radius:18px;background:#22242C;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">THIS SESSION</span>
+        <span style="font-size:15px"><b>182k</b> tokens · context <b>42%</b> full</span>
+        <span style="font-size:13px;color:#A6A8B4">Plan usage, so no dollar cost</span>
+      </div>
+      <div style="border-radius:18px;background:#22242C;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">CLAUDE PLAN QUOTA</span>
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px"><span style="width:62px">5 hours</span><span style="flex:1;height:8px;border-radius:4px;background:#2A2C35;display:block"><span style="width:62%;height:8px;border-radius:4px;background:#4FD1A5;display:block"></span></span><b>62% left</b></div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px"><span style="width:62px">Week</span><span style="flex:1;height:8px;border-radius:4px;background:#2A2C35;display:block"><span style="width:80%;height:8px;border-radius:4px;background:#4FD1A5;display:block"></span></span><b>80% left</b></div>
+        <span style="font-size:13px;color:#A6A8B4">resets 18:40 and Mon 09:00 · read after the 14:05 turn</span>
+      </div>
+    </div>
+  </section>
+  <div style="font-size:14px;color:#A6A8B4">The same answer for the other coding agents, from each CLI’s own reading:</div>
+  <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:14px">
+    <div style="border-radius:18px;background:#1A1C23;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+      <b>Codex · ChatGPT plan</b>
+      <span>5 hours <b>41% left</b> · week <b>73% left</b></span>
+      <span style="font-size:13px;color:#A6A8B4">from the log of its last run</span>
+    </div>
+    <div style="border-radius:18px;background:#1A1C23;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+      <b>Antigravity · per model group</b>
+      <span>Gemini <b>88% left</b> · Claude <b>54% left</b></span>
+      <span style="font-size:13px;color:#A6A8B4">read live (no model turn), at most a minute old</span>
+    </div>
+  </div>
+  <div style="font-size:13px;color:#A6A8B4">A Hermes agent’s /usage stays as today: tokens and cost; it has no plan quota.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

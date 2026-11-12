@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coding agent chat with quota</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#12131A}
+a{color:#ECECF1}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#12131A;color:#ECECF1;font-family:'Hanken Grotesk',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <header style="height:72px;flex:none;box-sizing:border-box;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:24px">score</span>
+    <nav aria-label="Main" style="display:flex;gap:4px;font-size:14px;font-weight:600">
+      <a href="#" aria-current="page" style="padding:10px 14px;border-radius:999px;background:#ECECF1;color:#12131A;text-decoration:none">Chats</a>
+      <a href="#" style="padding:10px 14px;color:#A6A8B4;text-decoration:none">Agents</a>
+      <a href="#" style="padding:10px 14px;color:#A6A8B4;text-decoration:none">Knowledge</a>
+      <a href="#" style="padding:10px 14px;color:#A6A8B4;text-decoration:none">Tasks</a>
+      <a href="#" style="padding:10px 14px;color:#A6A8B4;text-decoration:none">Screens</a>
+    </nav>
+    <span style="flex:1"></span>
+    <span style="height:40px;padding:0 14px;border-radius:999px;background:#1A1C23;color:#A6A8B4;font-size:14px;display:flex;align-items:center">Search ⌘K</span>
+    <span style="width:40px;height:40px;border-radius:50%;background:#ECECF1;color:#12131A;font-weight:700;display:flex;align-items:center;justify-content:center">Y</span>
+  </header>
+  <div style="flex:1;display:flex;min-height:0">
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.08)">
+      <div style="padding:16px 24px;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <svg width="72" height="72" viewBox="0 0 20 20" aria-hidden="true" style="flex:none"><g fill="#2BB5C0"><rect x="2.0" y="2.19" width="16.0" height="15.62" rx="3.91"></rect></g><g fill="#FFFFFF"><g transform="translate(7.4 9.81)"><circle r="1.58"></circle></g><g transform="translate(12.6 9.81)"><circle r="1.58"></circle></g></g></svg>
+        <div style="flex:1">
+          <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:24px;color:#6FD6DD">Orchestrator</h1>
+          <div style="font-size:13px;color:#A6A8B4">Direct · Claude Code · free · Only you and Orchestrator see this</div>
+        </div>
+        <a href="#" style="padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);font-size:14px;font-weight:600;text-decoration:none">Chat info</a>
+      </div>
+      <div style="flex:1;padding:20px 24px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+        <div style="align-self:flex-end;padding:10px 16px;border-radius:18px;background:#ECECF1;color:#12131A;font-size:15px">Refactor the cursor code and add the missing test.</div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <svg width="40" height="40" viewBox="0 0 20 20" aria-hidden="true" style="flex:none"><g fill="#2BB5C0"><rect x="2.0" y="2.19" width="16.0" height="15.62" rx="3.91"></rect></g><g fill="#FFFFFF"><g transform="translate(7.4 9.81)"><circle r="1.58"></circle></g><g transform="translate(12.6 9.81)"><circle r="1.58"></circle></g></g></svg>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;color:#A6A8B4">Orchestrator · 14:05 · claude-sonnet-5-5</span>
+            <div style="padding:10px 16px;border-radius:18px;background:#22242C;font-size:15px;max-width:620px">Done: the cursor now orders by (created_at, id), and a test covers two events in the same millisecond. 3 files changed.</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 24px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="height:64px;border-radius:24px;background:#1A1C23;display:flex;align-items:center;padding:0 20px;color:#A6A8B4;font-size:15px">Message Orchestrator privately</div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13px;color:#A6A8B4">
+          <span>To <b style="color:#ECECF1">Orchestrator</b></span>
+          <span style="display:flex;align-items:center;gap:8px">Context <span style="width:80px;height:6px;border-radius:3px;background:#2A2C35;display:inline-block"><span style="width:42%;height:6px;border-radius:3px;background:#ECECF1;display:block"></span></span> 42%</span>
+          <span>Model <span style="font-family:'JetBrains Mono',monospace;color:#ECECF1">claude-sonnet-5-5</span></span>
+          <a href="#" title="Claude plan quota, read after the 14:05 turn" style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#1A1C23;text-decoration:none;color:#ECECF1">
+            <span style="color:#A6A8B4">Quota</span>
+            <span style="width:56px;height:6px;border-radius:3px;background:#2A2C35;display:inline-block"><span style="width:62%;height:6px;border-radius:3px;background:#4FD1A5;display:block"></span></span>
+            <b>62% left</b><span style="color:#A6A8B4">5 h</span>
+            <span style="color:#A6A8B4">·</span><b>80%</b><span style="color:#A6A8B4">week</span>
+          </a>
+        </div>
+      </div>
+    </main>
+    <aside aria-label="Chat info" style="width:300px;flex:none;box-sizing:border-box;padding:20px 18px;display:flex;flex-direction:column;gap:14px;font-size:14px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">THIS CHAT</div>
+      <div style="display:flex;justify-content:space-between"><span style="color:#A6A8B4">Model</span><span>claude-sonnet-5-5</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:#A6A8B4">Effort</span><span>its own</span></div>
+      <div style="height:1px;background:rgba(255,255,255,0.08)"></div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:#A6A8B4">QUOTA · CLAUDE PLAN</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between"><b>5 hours</b><span>62% left</span></div>
+        <span style="height:8px;border-radius:4px;background:#2A2C35;display:block"><span style="width:62%;height:8px;border-radius:4px;background:#4FD1A5;display:block"></span></span>
+        <span style="font-size:13px;color:#A6A8B4">resets 18:40</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between"><b>Week</b><span>80% left</span></div>
+        <span style="height:8px;border-radius:4px;background:#2A2C35;display:block"><span style="width:80%;height:8px;border-radius:4px;background:#4FD1A5;display:block"></span></span>
+        <span style="font-size:13px;color:#A6A8B4">resets Mon 09:00</span>
+      </div>
+      <div style="font-size:13px;color:#A6A8B4;line-height:1.45">Read after its 14:05 turn. Below 10% (its floor) Score starts no new work for it. <a href="#">Change the floor</a></div>
+      <div style="font-size:13px;color:#A6A8B4;line-height:1.45">Shared with every agent on the same Claude login.</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
