@@ -10,6 +10,7 @@ import {
   renderInRoom,
 } from './room-test-utils.tsx'
 import { ContextBar } from './ContextBar.tsx'
+import { codingQuota, codingRecord } from '../quota/quota-test-data.ts'
 
 afterEach(() => {
   disposeRoomTest()
@@ -228,6 +229,86 @@ test('with nobody to address it says so', () => {
     />,
   )
   expect(bar().textContent).toContain('To nobody yet')
+})
+
+const codingBuilder = {
+  ...agents[1]!,
+  model: { id: 'claude-sonnet-5-5', label: 'Claude Sonnet' },
+  runtime: 'claude-code' as const,
+}
+
+function stubCodingBar() {
+  const fetchMock = mockFetch((url) => {
+    const path = new URL(url, 'http://x').pathname
+    if (path === '/api/agents/builder/context')
+      return jsonResponse({ model: null, tokens: null, costUsd: null, contextLength: null })
+    if (/^\/api\/agents\/builder\/sessions\/[^/]+\/context$/.test(path))
+      return jsonResponse({ ...emptySession, window: 100_000, used: 42_000 })
+    if (path === '/api/coding-agents/builder/quota') return jsonResponse({ quota: codingQuota() })
+    if (path === '/api/coding-agents') return jsonResponse({ items: [codingRecord()] })
+    if (path.endsWith('/efforts')) return jsonResponse({ asOfSeq: 0, items: [] })
+    if (path.endsWith('/models')) return jsonResponse({ asOfSeq: 0, items: [] })
+    return jsonResponse({}, 404)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+test('a coding agent’s direct footer carries its quota pill, and the pill opens Chat info', async () => {
+  stubCodingBar()
+  const onChatInfo = vi.fn()
+  renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="builder"
+      agents={[codingBuilder]}
+      ownerId={null}
+      topic={undefined}
+      roomKind="direct"
+      onChatInfo={onChatInfo}
+    />,
+  )
+  const pill = await screen.findByRole('button', { name: /Claude plan quota/ })
+  await screen.findByRole('button', { name: /^builder context: 42 % of/ })
+  expect(bar().textContent).toContain('62% left')
+  expect(bar().textContent).toContain('5 h')
+  expect(bar().textContent).toContain('80%')
+  expect(bar().textContent).toContain('week')
+  fireEvent.click(pill)
+  expect(onChatInfo).toHaveBeenCalledOnce()
+})
+
+test('the quota pill belongs to a direct chat only, and a Hermes chat never gets one', async () => {
+  stubCodingBar()
+  const view = renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="builder"
+      agents={[codingBuilder]}
+      ownerId={null}
+      topic={undefined}
+      roomKind="group"
+    />,
+  )
+  await screen.findByRole('button', { name: /^builder context: 42 % of/ })
+  expect(screen.queryByRole('button', { name: /quota/i })).toBeNull()
+  view.unmount()
+
+  stubContext({ model: null, tokens: null, costUsd: null, contextLength: null })
+  renderInRoom(
+    <ContextBar
+      roomId="room-1"
+      to={[]}
+      subjectId="lead"
+      agents={agents}
+      ownerId="lead"
+      topic={undefined}
+      roomKind="direct"
+    />,
+  )
+  expect(screen.queryByRole('button', { name: /quota/i })).toBeNull()
 })
 
 function Harness() {

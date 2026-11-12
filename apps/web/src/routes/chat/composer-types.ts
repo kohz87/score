@@ -5,6 +5,7 @@ import type { UploadProgress } from '../../data/api.ts'
 import type { Attachment } from './attachments.ts'
 import type { CommandResult, SlashCommand } from './composer-model.ts'
 import type { MessagePageData } from './queries.ts'
+import type { UsageCardData } from './usage-card.ts'
 
 export type Notice =
   | {
@@ -15,6 +16,8 @@ export type Notice =
       retry?: { label: string; run: () => void }
     }
   | { kind: 'info'; text: string }
+  /** A coding agent's `/usage`: the card to look at, and its plain text for screen readers. */
+  | { kind: 'usage'; text: string; card: UsageCardData }
   | { kind: 'result'; command: CommandResult | null }
 
 export type Snapshot = { asOfSeq: number; data: MessagePageData }

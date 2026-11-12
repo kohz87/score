@@ -193,6 +193,18 @@
   html[data-look='custom'] .bold-run-needs[data-protected] a {
     color: #12131a !important;
   }
+  /* Decision 186: a coding agent below its plan floor is a light object of Score's own, in the direct chat's footer
+     and in Chat info. Its bar keeps the red share and its track, whatever a theme paints behind it. */
+  html[data-look='custom'] [data-ui='bold'] .bold-quota-floor[data-protected] {
+    background-color: #ececf1 !important;
+    color: #12131a !important;
+  }
+  html[data-look='custom'] [data-ui='bold'] .bold-quota-floor[data-protected] .bold-quota-track {
+    background-color: #c9cbd3 !important;
+  }
+  html[data-look='custom'] [data-ui='bold'] .bold-quota-floor[data-protected] .bold-quota-fill {
+    background-color: #b01e43 !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */

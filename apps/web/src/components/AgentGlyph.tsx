@@ -4,7 +4,7 @@ import { AgentFace } from './AgentFace.tsx'
 import { moodWords, type FaceMood } from './agent-face.ts'
 import { AgentFacesContext } from './agent-faces-context.ts'
 import { agentShapes, drawnShape, shapeName, type AgentShapeElement } from './agent-shapes.ts'
-import { contrast as colourContrast } from '../styles/contrast-pairs.ts'
+import { contrast as colourContrast } from '../styles/contrast.ts'
 import './agent-glyph.css'
 
 export type AgentGlyphProps = {

@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import type { CommandResult } from './composer-model.ts'
 import type { Notice } from './composer-types.ts'
+import { UsageCard } from './UsageCard.tsx'
 import { ReleaseHeld } from '../team/ReleaseHeld.tsx'
 
 function CommandNotice({ command }: { command: CommandResult | null }) {
@@ -19,6 +20,8 @@ export function ComposerNotice({ notice, pending }: { notice: Notice | null; pen
     >
       {notice.kind === 'result' ? (
         <CommandNotice command={notice.command} />
+      ) : notice.kind === 'usage' ? (
+        <UsageCard card={notice.card} fallback={notice.text} />
       ) : (
         <span className="chat-usage-card">
           {notice.text}

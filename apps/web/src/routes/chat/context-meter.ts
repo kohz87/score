@@ -1,5 +1,11 @@
-import { AgentContextSchema, type AgentContext } from '@score/contract'
+import {
+  AgentContextSchema,
+  type AgentContext,
+  type CodingQuota,
+  type CodingRuntime,
+} from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
+import { planLabel, quotaReadLine, quotaUsageLines } from '../team/quota-view.ts'
 
 export async function fetchAgentContext(agentId: string): Promise<AgentContext> {
   return AgentContextSchema.parse(await apiFetch(`agents/${encodeURIComponent(agentId)}/context`))
@@ -33,14 +39,40 @@ export function usageSummary(name: string, context: AgentContext): string {
   return lines.join('\n')
 }
 
+/** `/usage` and `/status` for a coding agent: the same session lines, then its plan's own windows. */
+export function codingUsageSummary(
+  name: string,
+  context: AgentContext,
+  quota: CodingQuota | null | undefined,
+  runtime: CodingRuntime,
+  now = new Date(),
+): string {
+  const lines = [usageSummary(name, context)]
+  if (context.costUsd === null) lines.push('Plan usage, so no dollar cost')
+  lines.push('', `${planLabel(runtime).toUpperCase()} QUOTA`)
+  if (quota === undefined) lines.push('Quota couldn’t be read.')
+  else if (quota === null) lines.push('Quota · shows after its first turn.')
+  else if (quota.windows.length === 0) lines.push('Quota · not reported.')
+  else {
+    lines.push(...quotaUsageLines(quota, now))
+    const read = quotaReadLine(quota, now)
+    lines.push(`${read.charAt(0).toUpperCase()}${read.slice(1)}.`)
+  }
+  return lines.join('\n')
+}
+
 export type LocalCommand =
   { kind: 'compress' } | { kind: 'usage' } | { kind: 'model'; model: string }
 
-/** Commands the web app handles itself; everything else goes to the server as before. */
-export function parseLocalCommand(text: string): LocalCommand | null {
+/**
+ * Commands the web app handles itself; everything else goes to the server as before. `/status` is a coding agent's
+ * alias for `/usage`; a Hermes agent never has it.
+ */
+export function parseLocalCommand(text: string, codingAgent = false): LocalCommand | null {
   const body = text.trim()
   if (/^\/compress$/i.test(body)) return { kind: 'compress' }
   if (/^\/usage$/i.test(body)) return { kind: 'usage' }
+  if (codingAgent && /^\/status$/i.test(body)) return { kind: 'usage' }
   const model = /^\/model\s+(\S+)$/i.exec(body)
   return model ? { kind: 'model', model: model[1]! } : null
 }
@@ -48,4 +80,14 @@ export function parseLocalCommand(text: string): LocalCommand | null {
 export const LOCAL_COMMAND_MENU = [
   { name: 'compress', usage: '/compress', description: 'Compact this agent’s session.' },
   { name: 'usage', usage: '/usage', description: 'Show tokens and cost for this agent.' },
+  { name: 'status', usage: '/status', description: 'Show tokens, context and plan quota' },
 ]
+
+/** The `/` rows for this agent: Hermes keeps `/usage`; only a coding agent is offered `/status`. */
+export function localCommandMenu(codingAgent: boolean) {
+  return LOCAL_COMMAND_MENU.filter((item) => codingAgent || item.name !== 'status').map((item) =>
+    codingAgent && (item.name === 'usage' || item.name === 'status')
+      ? { ...item, description: 'Show tokens, context and plan quota' }
+      : item,
+  )
+}

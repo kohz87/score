@@ -12,7 +12,7 @@ import {
   type SlashCommand,
 } from './composer-model.ts'
 import type { TopicCommands } from './composer-types.ts'
-import { LOCAL_COMMAND_MENU } from './context-meter.ts'
+import { localCommandMenu } from './context-meter.ts'
 
 const ORCHESTRATE_MENU_ITEM: SlashCommand = {
   name: 'orchestrate',
@@ -30,6 +30,7 @@ export function useComposerMenu({
   orchestrate,
   topicCommands,
   addressee,
+  codingAgent = false,
   ids,
   textarea,
   setText,
@@ -40,6 +41,8 @@ export function useComposerMenu({
   offered: AgentSummary[]
   /** The one agent a bare command acts on (`/effort`'s levels depend on it); null when it isn't one. */
   addressee: string | null
+  /** A coding agent's chat offers `/status`; a Hermes chat keeps only `/usage`. */
+  codingAgent?: boolean
   orchestrate?: (goal: string) => void
   topicCommands?: TopicCommands
   ids: string
@@ -85,7 +88,7 @@ export function useComposerMenu({
     const chatModel = topicCommands?.typedOnly?.includes('model') ?? false
     return [
       ...(commands.data ?? []).filter((item) => !(chatModel && item.name === 'model')),
-      ...LOCAL_COMMAND_MENU.filter(
+      ...localCommandMenu(codingAgent).filter(
         (local) => !commands.data?.some((item) => item.name === local.name),
       ),
       ...(topicCommands?.items ?? []).filter(
@@ -109,6 +112,7 @@ export function useComposerMenu({
     modelOpen,
     modelAsk?.agentId,
     modelRows,
+    codingAgent,
   ])
   const mentionItems = useMemo(() => {
     if (!mention) return []

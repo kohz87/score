@@ -7,37 +7,9 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
+import { leftPercent, resetText, seenText } from './quota-view.ts'
 
-/** Share still available, 0–100, or null when the CLI didn't say. */
-export const leftPercent = (window: CodingQuotaWindow): number | null =>
-  window.usedPercent === null
-    ? null
-    : Math.max(0, Math.min(100, Math.round(100 - window.usedPercent)))
-
-/** "1:46 pm" today, "17 Oct, 1:46 pm" otherwise, in the browser's timezone. */
-export function resetText(value: string | null, now = new Date()): string | null {
-  if (value === null) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  // ICU puts a narrow no-break space before AM/PM; "1:46 pm" is what people read.
-  const time = date
-    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    .replace(/\s/g, ' ')
-    .toLowerCase()
-  return date.toDateString() === now.toDateString()
-    ? time
-    : `${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${time}`
-}
-
-/** When a reading was taken: relative when recent (WRITING.md), absolute otherwise. */
-export function seenText(value: string, now = new Date()): string {
-  const date = new Date(value)
-  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
-  if (Number.isNaN(minutes)) return value
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} min ago`
-  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
+export { leftPercent, resetText, seenText } from './quota-view.ts'
 
 const windowLabel = (window: CodingQuotaWindow): string =>
   window.group ? `${window.group}, ${window.name}` : window.name
@@ -123,13 +95,40 @@ export function quotaLine(quota: CodingQuota): string {
     .join(' · ')
 }
 
-export function useCodingQuota(path: string, key: readonly unknown[]) {
+export const codingAgentQuotaPath = (agentId: string) =>
+  `coding-agents/${encodeURIComponent(agentId)}/quota`
+
+export async function fetchCodingAgentQuota(
+  agentId: string,
+  signal?: AbortSignal,
+): Promise<CodingQuota | null> {
+  return CodingQuotaResponseSchema.parse(
+    await apiFetch(codingAgentQuotaPath(agentId), signal ? { signal } : {}),
+  ).quota
+}
+
+/** The query the chat's footer, Info and /usage share for one agent. */
+export const codingAgentQuotaQuery = (agentId: string) => ({
+  queryKey: ['coding', 'quota', agentId] as const,
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchCodingAgentQuota(agentId, signal),
+  retry: false,
+  staleTime: 30_000,
+})
+
+export function useCodingQuota(
+  path: string,
+  key: readonly unknown[],
+  options: { refetchInterval?: number; enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: ['coding', 'quota', ...key],
     queryFn: async ({ signal }) =>
       CodingQuotaResponseSchema.parse(await apiFetch(path, { signal })).quota,
     retry: false,
     staleTime: 30_000,
+    enabled: options.enabled ?? true,
+    refetchInterval: options.refetchInterval ?? false,
+    refetchIntervalInBackground: false,
   })
 }
 

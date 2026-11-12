@@ -1,0 +1,317 @@
+/* Decision 186: a coding agent's plan quota in its direct chat. Values are the approved 30-quota mock-ups. */
+[data-ui='bold'] {
+  /* The track follows the look: a tint of the ink. Fills keep 3:1 against it in both looks (quota-contrast.test). */
+  --quota-track: color-mix(in srgb, var(--ink) 16%, transparent);
+  --quota-ok: #4fd1a5;
+  --quota-low: #f2b33d;
+  --quota-bad: #ef5b78;
+  /* The below-floor pill is a light object in both looks, so its own pair is fixed. */
+  --quota-floor-track: #c9cbd3;
+  --quota-floor-fill: #b01e43;
+  --quota-floor-bg: #ececf1;
+  --quota-floor-ink: #12131a;
+}
+
+[data-ui='bold'][data-look='light'] {
+  /* Darker than dark's: the light ground needs them to read against the tinted track. */
+  --quota-ok: var(--ok);
+  --quota-low: var(--warn);
+  --quota-bad: var(--bad);
+}
+
+[data-ui='bold'] .bold-quota-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-quota-pill:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-quota-pill:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-quota-label,
+[data-ui='bold'] .bold-quota-group,
+[data-ui='bold'] .bold-quota-window,
+[data-ui='bold'] .bold-quota-sep,
+[data-ui='bold'] .bold-quota-reset,
+[data-ui='bold'] .bold-quota-idle {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-quota-track {
+  display: inline-block;
+  flex: none;
+  width: 56px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--quota-track);
+}
+
+[data-ui='bold'] .bold-quota-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--quota-ok);
+}
+
+[data-ui='bold'] [data-tone='low'] > .bold-quota-fill,
+[data-ui='bold'] .bold-quota-info-track[data-tone='low'] > .bold-quota-fill {
+  background: var(--quota-low);
+}
+
+[data-ui='bold'] [data-tone='out'] > .bold-quota-fill,
+[data-ui='bold'] .bold-quota-info-track[data-tone='out'] > .bold-quota-fill {
+  background: var(--quota-bad);
+}
+
+[data-ui='bold'] .bold-quota-floor {
+  background: var(--quota-floor-bg);
+  color: var(--quota-floor-ink);
+}
+
+[data-ui='bold'] .bold-quota-floor:hover {
+  background: #e3e4e9;
+}
+
+[data-ui='bold'] .bold-quota-floor b {
+  color: var(--quota-floor-ink);
+}
+
+[data-ui='bold'] .bold-quota-floor .bold-quota-track {
+  background: var(--quota-floor-track);
+}
+
+[data-ui='bold'] .bold-quota-floor .bold-quota-fill {
+  background: var(--quota-floor-fill);
+}
+
+/* Chat info */
+[data-ui='bold'] .bold-quota-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-quota-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-quota-info-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-quota-info-track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--quota-track);
+}
+
+[data-ui='bold'] .bold-quota-info-row .bold-quota-reset {
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-quota-read,
+[data-ui='bold'] .bold-quota-floor-line,
+[data-ui='bold'] .bold-quota-shared,
+[data-ui='bold'] .bold-quota-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-quota-floor-line a {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-quota-floor-note {
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+[data-ui='bold'] .bold-quota-floor-note p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-quota-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+[data-ui='bold'] .bold-quota-floor-line a {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The /usage card (30-quota-usage): this session and the plan's windows. */
+[data-ui='bold'] .bold-usage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 20px;
+  border-radius: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-usage-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-usage-blocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-usage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-usage-kicker {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+[data-ui='bold'] .bold-usage-sub {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+[data-ui='bold'] .bold-usage-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-usage-name {
+  flex: none;
+  min-width: 56px;
+}
+
+[data-ui='bold'] .bold-usage-row .bold-quota-info-track,
+[data-ui='bold'] .bold-usage-gap {
+  flex: 1;
+  min-width: 24px;
+}
+
+[data-ui='bold'] .bold-usage-row .bold-quota-info-track {
+  width: auto;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-usage-blocks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 44px targets in Chat info. */
+  [data-ui='bold'] .bold-quota-link,
+  [data-ui='bold'] .bold-quota-section .bold-info-toggle {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-quota-floor-line a {
+    padding: 0 4px;
+  }
+
+  /* The phone footer keeps the words, not the two bars (30-quota-phone). */
+  [data-ui='bold'] .bold-context-bar .bold-context-track {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-context-bar .bold-quota-pill {
+    /* One line that shrinks with an ellipsis rather than widening the page. */
+    display: block;
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-height: 44px;
+    line-height: 44px;
+    padding: 0 2px;
+    border-radius: 0;
+    background: transparent;
+    font-size: 12px;
+  }
+
+  [data-ui='bold'] .bold-context-bar .bold-quota-pill > * + * {
+    margin-left: 6px;
+  }
+
+  [data-ui='bold'] .bold-context-bar .bold-quota-pill:hover {
+    background: transparent;
+  }
+
+  [data-ui='bold'] .bold-quota-pill .bold-quota-track,
+  [data-ui='bold'] .bold-quota-pill .bold-quota-left-word,
+  [data-ui='bold'] .bold-quota-pill .bold-quota-group {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-quota-pill::before {
+    content: '·';
+    margin-right: 6px;
+    color: var(--muted);
+  }
+
+  [data-ui='bold'] .bold-context-bar .bold-quota-pill.bold-quota-floor {
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--quota-floor-bg);
+  }
+
+  [data-ui='bold'] .bold-quota-floor::before {
+    content: none;
+    display: none;
+  }
+}
