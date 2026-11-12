@@ -1,7 +1,11 @@
-import { expect, test } from 'vitest'
+import type { CodingQuota } from '@score/contract'
+import { describe, expect, test } from 'vitest'
+import { buildQuotaView } from '../../bold/quota/quota-model.ts'
 import {
   antigravityGroupOf,
   footerWindows,
+  freshQuota,
+  missingText,
   leftExact,
   leftPercent,
   planLabel,
@@ -137,4 +141,51 @@ test('/usage lines keep each window name, share and reset', () => {
     `Week 80% left · resets ${WEEK_DAY}, 5:40 am`,
   ])
   expect(quotaUsageLines(codingQuota([], { seenAt: SEEN_AT }), NOW)).toEqual([])
+})
+
+// Owner's live check, 2026-11-12: a reading from Oct 28 still showed "7% left this week" weeks after both windows reset.
+describe('a window that reset since it was read', () => {
+  const read: CodingQuota = {
+    runtime: 'claude-code',
+    seenAt: '2026-10-28T10:34:45.645Z',
+    source: 'turn',
+    windows: [
+      { name: '5 hours', group: null, usedPercent: 6, resetsAt: '2026-10-28T13:10:00.000Z' },
+      { name: 'week', group: null, usedPercent: 93, resetsAt: '2026-10-31T03:00:00.000Z' },
+    ],
+  }
+  const later = new Date('2026-11-12T05:00:00.000Z')
+
+  test('loses its share and reset, and says it reset since the reading', () => {
+    const fresh = freshQuota(read, later)
+    for (const window of fresh.windows) {
+      expect(leftPercent(window)).toBeNull()
+      expect(window.resetsAt).toBeNull()
+      expect(missingText(window)).toBe('reset since it was read')
+    }
+    expect(quotaUsageLines(read, later)).toEqual([
+      '5 hours reset since it was read',
+      'Week reset since it was read',
+    ])
+  })
+
+  test('a window still before its reset keeps its share', () => {
+    const before = new Date('2026-10-28T12:00:00.000Z')
+    const fresh = freshQuota(read, before)
+    expect(fresh.windows.map((window) => leftPercent(window))).toEqual([94, 7])
+    expect(missingText(fresh.windows[0]!)).toBe('not reported')
+  })
+
+  test('the pill view shows no share and no floor warning for it', () => {
+    const view = buildQuotaView({
+      quota: read,
+      failed: false,
+      pending: false,
+      floor: { kind: 'known', percent: 10 },
+      model: null,
+      now: later,
+    })
+    expect(view.below).toBeNull()
+    expect(view.footer.every((window) => leftPercent(window) === null)).toBe(true)
+  })
 })

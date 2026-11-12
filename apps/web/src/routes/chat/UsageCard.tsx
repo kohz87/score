@@ -55,7 +55,7 @@ export function UsageCard({ card, fallback }: { card: UsageCardData; fallback: s
                     ) : (
                       <span className="bold-usage-gap" />
                     )}
-                    <b>{window.left === null ? 'not reported' : `${window.left}% left`}</b>
+                    <b>{window.left === null ? window.missing : `${window.left}% left`}</b>
                   </div>
                 ))}
                 <span className="bold-usage-sub">{[...resets, card.quota.read].join(' · ')}</span>

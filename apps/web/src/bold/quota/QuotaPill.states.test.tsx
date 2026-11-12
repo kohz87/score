@@ -68,11 +68,14 @@ test('the tone follows the unrounded share, and red needs a window below the flo
   expect(el.getAttribute('data-tone')).toBe('ok')
 
   disposeRoomTest()
-  // 7% left under a floor of 10, but the window's reset time has passed: amber at most, no warning.
+  // 7% left under a floor of 10, but the window's reset time has passed: the old share says nothing about now
+  // (3.38.1, the owner's live check), so no share, no amber and no warning: it reset since it was read.
   stubQuota({ quota: codingQuota([w('5 hours', 93, '2026-10-16T05:00:00.000Z')]) })
   render()
   const old = await pill()
-  expect(old.getAttribute('data-tone')).toBe('low')
+  expect(old.textContent).toContain('reset since it was read')
+  expect(old.textContent).not.toContain('7% left')
+  expect(old.getAttribute('data-tone')).not.toBe('low')
   expect(old.hasAttribute('data-protected')).toBe(false)
   expect(old.textContent).not.toContain('below')
 })
