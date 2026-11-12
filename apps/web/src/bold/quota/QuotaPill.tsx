@@ -8,6 +8,7 @@ import {
   quotaTone,
   resetText,
   shortWindow,
+  missingText,
 } from '../../routes/team/quota-view.ts'
 import { pillLabel, pillWindows, type AgentQuotaView } from './quota-model.ts'
 import { useAgentQuota } from './use-agent-quota.ts'
@@ -29,6 +30,9 @@ function idleText(view: AgentQuotaView, runtime: CodingRuntime): string {
   if (view.phase === 'loading') return 'reading…'
   if (view.phase === 'error') return 'couldn’t be read'
   if (view.phase === 'none' && runtime !== 'antigravity') return 'shows after its first turn'
+  // Every window it shows has reset since the reading (3.38.1): say that, not "not reported".
+  const reset = view.footer.map(missingText)
+  if (reset.length > 0 && reset.every((text) => text !== 'not reported')) return reset[0]!
   return 'not reported'
 }
 
@@ -38,7 +42,7 @@ function Share({ window }: { window: CodingQuotaWindow }) {
     return (
       <>
         <span className="bold-quota-window">{shortWindow(window)}</span>
-        <span className="bold-quota-idle">not reported</span>
+        <span className="bold-quota-idle">{missingText(window)}</span>
       </>
     )
   return (

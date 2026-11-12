@@ -7,6 +7,8 @@ import {
   quotaTone,
   resetText,
   windowTitle,
+  missingText,
+  freshQuota,
 } from '../team/quota-view.ts'
 import { compact } from './context-meter.ts'
 
@@ -14,6 +16,8 @@ export type UsageCardWindow = {
   title: string
   /** Rounded share for the words; null = the CLI didn't say (no bar). */
   left: number | null
+  /** What stands in for the share when there is none ("not reported", "reset since it was read"). */
+  missing: string
   /** Unrounded share for the bar. */
   exact: number | null
   tone: 'ok' | 'low'
@@ -45,17 +49,19 @@ export function buildUsageCard(
   now = new Date(),
 ): UsageCardData {
   const used = context.tokens ? context.tokens.input + context.tokens.output : null
+  const reading = quota ? freshQuota(quota, now) : quota
   let part: UsageCardQuota
-  if (quota === undefined) part = { kind: 'message', text: 'Quota couldn’t be read.' }
-  else if (quota === null) part = { kind: 'message', text: 'Quota · shows after its first turn.' }
-  else if (quota.windows.length === 0) part = { kind: 'message', text: 'Quota · not reported.' }
+  if (reading === undefined) part = { kind: 'message', text: 'Quota couldn’t be read.' }
+  else if (reading === null) part = { kind: 'message', text: 'Quota · shows after its first turn.' }
+  else if (reading.windows.length === 0) part = { kind: 'message', text: 'Quota · not reported.' }
   else
     part = {
       kind: 'windows',
-      read: quotaReadLine(quota, now),
-      windows: quota.windows.map((window) => ({
+      read: quotaReadLine(reading, now),
+      windows: reading.windows.map((window) => ({
         title: windowTitle(window),
         left: leftPercent(window),
+        missing: missingText(window),
         exact: leftExact(window),
         tone: quotaTone(leftExact(window)),
         resets: resetText(window.resetsAt, now),

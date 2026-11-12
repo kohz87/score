@@ -1,7 +1,9 @@
 import type { CodingQuota, CodingQuotaWindow } from '@score/contract'
 import {
   footerWindows,
+  freshQuota,
   leftExact,
+  missingText,
   leftPercent,
   primaryQuotaWindow,
   quotaBelowFloor,
@@ -40,7 +42,8 @@ export function buildQuotaView(input: {
   model: string | null
   now: Date
 }): AgentQuotaView {
-  const { quota, floor, now } = input
+  const { floor, now } = input
+  const quota = input.quota ? freshQuota(input.quota, now) : input.quota
   let phase: QuotaPhase
   if (input.failed) phase = 'error'
   else if (input.pending || quota === undefined) phase = 'loading'
@@ -83,7 +86,7 @@ export function windowToneOf(
 const spoken = (window: CodingQuotaWindow): string => {
   const left = leftPercent(window)
   const when = window.name === 'week' ? 'this week' : 'in 5 hours'
-  return left === null ? `not reported ${when}` : `${left}% left ${when}`
+  return left === null ? `${missingText(window)} ${when}` : `${left}% left ${when}`
 }
 
 /** Plain words for the pill's accessible name: the values, not just that there is a quota. */

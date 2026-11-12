@@ -1,5 +1,27 @@
 import type { CodingQuota, CodingQuotaWindow, CodingRuntime, Runtime } from '@score/contract'
 
+// A window whose reset time has passed since the reading says nothing about now (owner's live check, 2026-11-12: a
+// reading from Oct 28 still showed "7% left this week"). freshQuota drops its share and reset; missingText then says so.
+const resetSince = new WeakSet<CodingQuotaWindow>()
+
+/** The reading as of `now`: a window that has reset since it was read keeps its name but loses its share and reset. */
+export function freshQuota(quota: CodingQuota, now = new Date()): CodingQuota {
+  return {
+    ...quota,
+    windows: quota.windows.map((window) => {
+      const at = window.resetsAt === null ? Number.NaN : Date.parse(window.resetsAt)
+      if (!(at <= now.getTime())) return window
+      const reset = { ...window, usedPercent: null, resetsAt: null }
+      resetSince.add(reset)
+      return reset
+    }),
+  }
+}
+
+/** The words for a window without a share: it reset since the reading, or the CLI didn't say. */
+export const missingText = (window: CodingQuotaWindow): string =>
+  resetSince.has(window) ? 'reset since it was read' : 'not reported'
+
 /** Share still available, 0–100, or null when the CLI didn't say. */
 export const leftPercent = (window: CodingQuotaWindow): number | null =>
   window.usedPercent === null
@@ -142,10 +164,10 @@ export function quotaReadSentence(quota: CodingQuota, now = new Date()): string 
 
 /** The quota windows as lines for /usage: "5 hours 62% left · resets 18:40". */
 export function quotaUsageLines(quota: CodingQuota, now = new Date()): string[] {
-  return quota.windows.map((window) => {
+  return freshQuota(quota, now).windows.map((window) => {
     const left = leftPercent(window)
     const resets = resetText(window.resetsAt, now)
-    return `${windowTitle(window)} ${left === null ? 'not reported' : `${left}% left`}${resets ? ` · resets ${resets}` : ''}`
+    return `${windowTitle(window)} ${left === null ? missingText(window) : `${left}% left`}${resets ? ` · resets ${resets}` : ''}`
   })
 }
 
@@ -170,7 +192,7 @@ export function quotaSummary(windows: CodingQuotaWindow[], group: string | null 
     .map((window) => {
       const left = leftPercent(window)
       return left === null
-        ? `${shortWindow(window)} not reported`
+        ? `${shortWindow(window)} ${missingText(window)}`
         : `${left}% ${shortWindow(window)}`
     })
     .join(' · ')

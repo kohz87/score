@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest'
 import {
   agents,
   disposeRoomTest,
@@ -10,7 +10,7 @@ import {
   renderInRoom,
 } from './room-test-utils.tsx'
 import { ContextBar } from './ContextBar.tsx'
-import { codingQuota, codingRecord } from '../quota/quota-test-data.ts'
+import { codingQuota, codingRecord, NOW } from '../quota/quota-test-data.ts'
 
 afterEach(() => {
   disposeRoomTest()
@@ -255,6 +255,11 @@ function stubCodingBar() {
 }
 
 test('a coding agent’s direct footer carries its quota pill, and the pill opens Chat info', async () => {
+  // The fixture's windows reset on Oct 16: the clock is the fixture's, so they are still ahead (3.38.1).
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   stubCodingBar()
   const onChatInfo = vi.fn()
   renderInRoom(

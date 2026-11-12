@@ -11,6 +11,7 @@ import {
   quotaReadSentence,
   quotaSummary,
   windowTitle,
+  missingText,
 } from '../../routes/team/quota-view.ts'
 import { windowToneOf, type AgentQuotaView } from './quota-model.ts'
 import { useAgentQuota } from './use-agent-quota.ts'
@@ -29,7 +30,7 @@ function Row({ window, view }: { window: CodingQuotaWindow; view: AgentQuotaView
     <div className="bold-quota-info-row">
       <div className="bold-quota-info-head">
         <b>{windowTitle(window)}</b>
-        <span>{left === null ? 'not reported' : `${left}% left`}</span>
+        <span>{left === null ? missingText(window) : `${left}% left`}</span>
       </div>
       {/* A meter with an unknown share is not a meter: the words say it. */}
       {left !== null && exact !== null && (

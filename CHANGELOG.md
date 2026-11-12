@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.38.1] — 2026-11-12
+
+### Fixed
+- **A quota window that has reset since it was read says so** ("reset since it was read") instead of showing its old share.
+  Claude Code and Codex report quota only during a turn, so an agent that last worked weeks ago showed "7% left this
+  week" long after the week had reset (owner's live check). No share, no amber and no floor warning for such a window.
+
 ## [3.38.0] — 2026-11-12
 
 ### Added
