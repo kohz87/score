@@ -94,6 +94,13 @@ likely to be the entry point for a change.
 - `apps/web/src/bold/chats/` — bold chat list, chat information and run controls.
 - `apps/web/src/bold/connections/` — Settings › Connections cards for Hermes, model providers, channels, phone pairing and other apps.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent.
+- `apps/web/src/bold/quota/` — a coding agent's plan quota in its direct chat (decision 186), split by job:
+  - `QuotaPill.tsx` — the pill under the composer (bar, windows, below-floor warning, error/no-reading words); opens Chat info.
+  - `DirectQuotaInfo.tsx` — Chat info's "Quota · <plan>" section: a row per window, floor line, stop notice, shared-login line.
+  - `use-agent-quota.ts` — the hook both share: the cached reading, the floor, the stream refresh and the reset timer.
+  - `quota-model.ts` — pure view of a reading: phase, floor state, below-floor window, footer windows, tones, the pill's accessible name.
+  - `bold-quota.css` — pill, Chat info, `/usage` card and phone styles; quota tokens for dark and light.
+  - `quota-test-data.ts`, `quota-stub.ts` — test fixtures and the quota/coding-list fetch stub; the `*.test.ts(x)` files test each part (`quota-contrast.test.ts` checks 3:1 fills in both looks).
 - `apps/web/src/bold/hermes-updates/` — Hermes update progress, results, dialog and supporting model helpers.
 - `apps/web/src/bold/direct/` — one-to-one chat with an agent, split test suites and their shared test helpers.
 - `apps/web/src/bold/direct/DirectChat-test-helpers.tsx` — shared direct-chat fixtures, fetch stub and render setup for the split suites.
@@ -703,6 +710,11 @@ likely to be the entry point for a change.
 - `apps/web/src/routes/team/CodingPermission.tsx` — read-access warning and permission picker.
 - `apps/web/src/routes/team/coding-agent-permissions.ts` — permission labels, names and read-access helper.
 - `apps/web/src/routes/team/coding-agent-queries.ts` — coding-agent list/runtime queries and patch mutation.
+- `apps/web/src/routes/team/quota-view.ts` — pure quota helpers shared by the Team page and the chat: left %, reset and read text, plan labels, tone, below-floor rule, `/usage` lines.
+- `apps/web/src/routes/team/quota-view.test.ts` — tests for those quota helpers.
+- `apps/web/src/routes/chat/usage-card.ts` — builds the `/usage` card data of a coding agent (session tokens, context %, quota windows).
+- `apps/web/src/routes/chat/UsageCard.tsx` — the `/usage` card (mock-up 30-quota-usage) with its visually hidden plain-text twin.
+- `apps/web/src/routes/chat/usage-card.test.ts` — tests for the card data.
 - `apps/web/src/routes/team/useCodingAgentDraft.ts` — coding-agent create fields, validation, consent and mutation.
 - `apps/web/src/routes/team/WorkspaceBrowser.tsx` — workspace tree, file pane, splitter, file actions and uploads.
 - `apps/web/src/routes/team/WorkspaceTab.tsx` — workspace tab states, folder form and browser entry.
@@ -1476,6 +1488,7 @@ likely to be the entry point for a change.
 - `e2e/bold-connections-look-helpers.ts` — shared setup and journey helpers for the bold Connections, Tools and Look specs.
 - `e2e/bold-library-editor-helpers.ts` — shared library-editor navigation, note creation and zip-reading helpers.
 - `e2e/bold-library-helpers.ts` — shared bold Library navigation, note, file and zip helpers.
+- `e2e/bold-chat-quota.spec.ts` — a coding agent's direct chat: quota pill, Chat info section and `/status` (decision 186).
 - `e2e/bold-room-fixtures.ts` — rooms and agents used by bold-room specs.
 - `e2e/bold-needs-you-helpers.ts` — shared needs-you room jobs, approvals, exchanges and orchestration/workflow run fixtures.
 - `e2e/bold-recipes-helpers.ts` — shared Recipes page navigation, step selection, validation and workflow API helpers.

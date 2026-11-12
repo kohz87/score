@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.38.0] — 2026-11-12
+
+### Added
+- **Quota in a coding agent's chat (decision 186).** Next to the Context meter: "Quota 62% left 5 h · 80% week" from the
+  agent's own CLI (Claude Code and Codex after each turn, Antigravity live). Chat info gets a Quota section: each window,
+  when it resets, when it was read, and the agent's floor. Amber under 25%; under the floor a protected pill says Score
+  won't start new work until the reset, with "Change the floor" and "Use another agent".
+- **`/usage` shows plan quota too, and `/status` is the same command** in a coding agent's chat (the CLIs' own `/usage`
+  and `/status` live only in their interactive screens, which Score doesn't run).
+
 ## [3.37.0] — 2026-11-10
 
 ### Changed

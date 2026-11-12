@@ -25,7 +25,7 @@ const bold = (levels: boolean): TopicCommands => ({
   run: async () => undefined,
 })
 
-function menuFor(text: string, caret: number, topicCommands?: TopicCommands) {
+function menuFor(text: string, caret: number, topicCommands?: TopicCommands, codingAgent = false) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => jsonResponse({ items: [] })),
@@ -38,6 +38,7 @@ function menuFor(text: string, caret: number, topicCommands?: TopicCommands) {
         offered: agents,
         addressee: null,
         topicCommands,
+        codingAgent,
         ids: 'composer',
         textarea: { current: null },
         setText: () => undefined,
@@ -64,4 +65,19 @@ test('where the effort menu has items, @agent /eff offers its choices and suppre
 test('before the levels have loaded, the same line keeps mention completion', () => {
   const state = menuFor('@bui /effort', 4, bold(false))
   expect(state.menu).toBe('mention')
+})
+
+test('a Hermes chat keeps /usage and is not offered /status', () => {
+  const state = menuFor('/', 1)
+  expect(state.menu).toBe('slash')
+  expect(state.slashItems.map((item) => item.name)).toEqual(['compress', 'usage'])
+})
+
+test('a coding agent is offered /status beside /usage, and both promise the plan quota', () => {
+  const state = menuFor('/', 1, undefined, true)
+  expect(state.menu).toBe('slash')
+  expect(state.slashItems.map((item) => item.name)).toEqual(['compress', 'usage', 'status'])
+  expect(
+    state.slashItems.filter((item) => item.name !== 'compress').map((item) => item.description),
+  ).toEqual(['Show tokens, context and plan quota', 'Show tokens, context and plan quota'])
 })

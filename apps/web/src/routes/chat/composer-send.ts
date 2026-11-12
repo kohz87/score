@@ -13,7 +13,7 @@ import {
   type SlashCommand,
 } from './composer-model.ts'
 import type { LiveDraft, Notice, Snapshot, TopicCommands } from './composer-types.ts'
-import { LOCAL_COMMAND_MENU, parseLocalCommand } from './context-meter.ts'
+import { localCommandMenu, parseLocalCommand } from './context-meter.ts'
 import { stopEdit, type Editing } from './message-edit.ts'
 import type { MessagePageData } from './queries.ts'
 import { fetchRewindPlan, postRewind } from './rewind.ts'
@@ -41,6 +41,8 @@ export type ComposerSendInput = {
   to: string[]
   /** The one agent a bare command acts on (see Composer): the To chip, else the agent the footer names; null when it isn't one. */
   addressee: string | null
+  /** Whether that agent is a coding agent: only its chat handles `/status`. */
+  codingAgent: boolean
   planFirst: boolean
   setText: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -94,6 +96,7 @@ export function useComposerSend({
   orchestrate,
   topicCommands,
   addressee,
+  codingAgent,
   references,
   resolveJob,
   onSent,
@@ -144,7 +147,7 @@ export function useComposerSend({
       orchestrate((orchestration[1] ?? '').trim())
       return
     }
-    const local = editing ? null : parseLocalCommand(body)
+    const local = editing ? null : parseLocalCommand(body, codingAgent)
     // Decision 182: where the chat handles `/model` (the bold shell), it sets this chat's model, never the agent's own.
     const chatModel = local?.kind === 'model' && topicCommands?.typedOnly?.includes('model')
     if (local && !chatModel) return runLocalCommand(local)
@@ -184,7 +187,7 @@ export function useComposerSend({
       }
       const known =
         commands?.some((item) => item.name === word) ||
-        LOCAL_COMMAND_MENU.some((item) => item.name === word) ||
+        localCommandMenu(codingAgent).some((item) => item.name === word) ||
         (orchestrate && word === 'orchestrate')
       // Only once the server's list is here: before that an unknown word may just be one it has not told us about.
       if (!known && commands && !topicCommands.effortOnly) {

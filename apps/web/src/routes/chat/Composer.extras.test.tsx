@@ -7,6 +7,7 @@ import { createQueryClient } from '../../data/query-client.ts'
 import { Composer } from './Composer.tsx'
 import { messagesQuery } from './queries.ts'
 import type { Recognizer } from './voice.ts'
+import { codingQuota, NOW } from '../../bold/quota/quota-test-data.ts'
 
 // Stop, slash commands, context meter and voice input (PLAN 5.25).
 const agent = (id: string): AgentSummary => ({
@@ -20,6 +21,12 @@ const agent = (id: string): AgentSummary => ({
   served: true,
 })
 const agents = [agent('lead'), agent('builder')]
+const codingBuilder: AgentSummary = {
+  ...agent('builder'),
+  model: { id: 'claude-sonnet-5-5', label: 'Claude Sonnet' },
+  runtime: 'claude-code',
+}
+const codingAgents = [agent('lead'), codingBuilder]
 const reply = (streaming: boolean): Message => ({
   id: 'reply-1',
   roomId: 'general',
@@ -60,6 +67,20 @@ function mount(items: Message[] = []) {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <Composer roomId="general" roomName="general" agents={agents} leadAgentId="lead" />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+function mountCoding(items: Message[] = []) {
+  queryClient.setQueryData(messagesQuery('general').key, {
+    asOfSeq: 1,
+    data: { items, nextCursor: null, typing: {} },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Composer roomId="general" roomName="general" agents={codingAgents} leadAgentId="builder" />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -142,6 +163,92 @@ test('/usage shows a local card and sends nothing to the room', async () => {
   expect(await screen.findByText(/Input 90,000/)).toBeTruthy()
   expect(calls('POST')).toHaveLength(0)
   expect(box().value).toBe('')
+})
+
+test('a coding agent’s /usage adds the plan quota and says when the plan was read', async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  mountCoding([reply(false)])
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/commands') return json({ items: [] })
+    if (url === '/api/coding-agents/builder/quota') return json({ quota: codingQuota() })
+    if (url.endsWith('/context')) return json({ ...context, costUsd: null })
+    return json({})
+  })
+  type('/usage')
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  fireEvent.keyDown(box(), { key: 'Enter' })
+
+  const fallback = await screen.findByTestId('usage-fallback')
+  expect(fallback.textContent).toContain('5 hours 62% left · resets 5:40 am')
+  expect(fallback.textContent).toContain('Read after the 5:05 am turn.')
+  expect(fallback.textContent).not.toContain('$')
+  // The card the eye reads: this session, then a bar per window.
+  const card = document.querySelector('.bold-usage-card')!
+  expect(card.textContent).toContain('THIS SESSION')
+  expect(card.textContent).toContain('Plan usage, so no dollar cost')
+  expect(card.textContent).toContain('CLAUDE PLAN QUOTA')
+  expect(card.textContent).toContain('62% left')
+  expect(card.textContent).toContain('80% left')
+  expect(card.textContent).toContain('resets 5:40 am')
+  expect(card.textContent).toContain('read after the 5:05 am turn')
+  expect(card.textContent).not.toContain('$')
+  expect(card.querySelectorAll('.bold-quota-info-track')).toHaveLength(2)
+  expect(card.getAttribute('aria-hidden')).toBe('true')
+  expect(calls('POST')).toHaveLength(0)
+})
+
+test('/status is the same local answer in a coding agent’s chat', async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  mountCoding([reply(false)])
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/commands') return json({ items: [] })
+    if (url === '/api/coding-agents/builder/quota') return json({ quota: codingQuota() })
+    if (url.endsWith('/context')) return json({ ...context, costUsd: null })
+    return json({})
+  })
+  type('/status')
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  fireEvent.keyDown(box(), { key: 'Enter' })
+
+  expect((await screen.findByTestId('usage-fallback')).textContent).toContain('CLAUDE PLAN QUOTA')
+  expect(screen.getByTestId('usage-fallback').textContent).toContain('Input 90,000')
+  expect(document.querySelector('.bold-usage-card')).toBeTruthy()
+  expect(calls('POST')).toHaveLength(0)
+  expect(box().value).toBe('')
+})
+
+test('/usage reuses a reading under a minute old and fetches again only when it is older', async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  mountCoding([reply(false)])
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/commands') return json({ items: [] })
+    if (url === '/api/coding-agents/builder/quota') return json({ quota: codingQuota() })
+    if (url.endsWith('/context')) return json({ ...context, costUsd: 0.5 })
+    return json({})
+  })
+  const quotaReads = () =>
+    fetchMock.mock.calls.filter(([url]) => String(url) === '/api/coding-agents/builder/quota')
+  const run = async () => {
+    type('/usage')
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    await screen.findByTestId('usage-fallback')
+  }
+  await run()
+  expect(quotaReads()).toHaveLength(1)
+  // The context's reported dollar cost is shown.
+  expect(document.querySelector('.bold-usage-card')?.textContent).toContain('$0.5000')
+
+  vi.setSystemTime(new Date(NOW.getTime() + 30_000))
+  await run()
+  expect(quotaReads()).toHaveLength(1)
+
+  vi.setSystemTime(new Date(NOW.getTime() + 61_000))
+  await run()
+  expect(quotaReads()).toHaveLength(2)
 })
 
 test('/model <name> sets the agent model with the existing PUT', async () => {

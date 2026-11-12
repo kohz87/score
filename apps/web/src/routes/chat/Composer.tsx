@@ -19,6 +19,7 @@ import { useComposerMenu } from './use-composer-menu.ts'
 import { useComposerRoom } from './use-composer-room.ts'
 import { useComposerUploads } from './use-composer-uploads.ts'
 import { useComposerVoice } from './use-composer-voice.ts'
+import { isCodingRuntime } from '../team/quota-view.ts'
 
 export function Composer({
   roomId,
@@ -130,6 +131,7 @@ export function Composer({
   // `/effort` (decision 178) acts on one agent: the To chip, else the agent the footer names (no chip: whoever answered last,
   // else the lead). Two chips name no one, so the command says who to pick.
   const addressee = to.length === 0 ? subject : to.length === 1 ? (to[0] ?? null) : null
+  const localAgentIsCoding = isCodingRuntime(subjectAgent?.runtime)
 
   const { voice, toggleVoice } = useComposerVoice({ text, setText, setCaret, textarea })
   useEffect(() => {
@@ -155,6 +157,7 @@ export function Composer({
     orchestrate,
     topicCommands,
     addressee,
+    codingAgent: localAgentIsCoding,
     ids,
     textarea,
     setText,
@@ -198,6 +201,7 @@ export function Composer({
     attachments,
     to,
     addressee,
+    codingAgent: localAgentIsCoding,
     planFirst,
     setText,
     setCaret,

@@ -9,6 +9,8 @@ import { EffortControl, type RunEffort } from '../efforts/EffortControl.tsx'
 import { chatEffortOf, useRoomEfforts } from '../efforts/effort-queries.ts'
 import { chatModelOf, useRoomModels } from '../models/model-queries.ts'
 import { useRunModel } from '../models/use-run-model.ts'
+import { QuotaPill } from '../quota/QuotaPill.tsx'
+import { isCodingRuntime } from '../../routes/team/quota-view.ts'
 
 /** The session the next message goes to: the room's own for the general conversation, else the topic's own. */
 export function topicSessionId(
@@ -40,6 +42,7 @@ export function ContextBar({
   compactSubject = null,
   runEffort,
   roomKind = 'group',
+  onChatInfo,
 }: {
   roomId: string
   to: string[]
@@ -59,6 +62,8 @@ export function ContextBar({
   runEffort?: RunEffort
   /** Which kind of chat this is: the note `/model` says differs for a one-to-one. */
   roomKind?: 'direct' | 'group'
+  /** A coding agent's quota pill opens this chat's Info. */
+  onChatInfo?: (() => void) | undefined
 }) {
   const subject = agents.find((agent) => agent.id === subjectId)
   const chatEffort = chatEffortOf(useRoomEfforts(roomId).items, subjectId ?? '')
@@ -127,6 +132,9 @@ export function ContextBar({
         <span className="bold-context-model">
           Model <code>{model}</code>
         </span>
+      )}
+      {subject && roomKind === 'direct' && isCodingRuntime(subject.runtime) && (
+        <QuotaPill agent={subject} runtime={subject.runtime} onOpen={() => onChatInfo?.()} />
       )}
       {subject && (chatEffort || chatModel) && runEffort && (
         <EffortControl

@@ -433,3 +433,18 @@ test('a slot holding a needs-you card stays drawn under a custom look (3.24.0)',
   expect(protectedClasses).toContain('bold-needs-host')
   expect(protectedClasses).toContain('bold-needs-slot')
 })
+
+test('a coding agent below its quota floor keeps Score’s light warning pill (decision 186)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(protectedClasses).toContain('bold-quota-floor')
+  expect(protectedClasses).toContain('bold-quota-floor-note')
+  expect(css).toMatch(
+    /html\[data-look='custom'\] \[data-ui='bold'\] \.bold-quota-floor\[data-protected\] \{[^}]*background-color: #ececf1 !important;[^}]*color: #12131a !important;/,
+  )
+  expect(css).toMatch(
+    /\.bold-quota-floor\[data-protected\] \.bold-quota-track \{[^}]*background-color: #c9cbd3 !important;/,
+  )
+  expect(css).toMatch(
+    /\.bold-quota-floor\[data-protected\] \.bold-quota-fill \{[^}]*background-color: #b01e43 !important;/,
+  )
+})

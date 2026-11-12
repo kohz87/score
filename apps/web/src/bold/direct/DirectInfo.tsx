@@ -17,6 +17,8 @@ import { AddSomeone } from './direct-parts.tsx'
 import { DirectAssigned } from './DirectAssigned.tsx'
 import { InfoSection } from '../chats/InfoSection.tsx'
 import { FilesAndResults } from '../chats/FilesResults.tsx'
+import { DirectQuotaInfo } from '../quota/DirectQuotaInfo.tsx'
+import { isCodingRuntime } from '../../routes/team/quota-view.ts'
 import './bold-direct.css'
 
 /**
@@ -77,6 +79,9 @@ export function DirectInfo({
   return (
     <div className="sidebody bold-chat-info bold-dm-info" aria-label={`${name}, chat info`}>
       {roomId && <DirectEffortBlock agent={agent} roomId={roomId} />}
+      {isCodingRuntime(agent.runtime) && (
+        <DirectQuotaInfo agent={agent} runtime={agent.runtime} onNavigate={onNavigate} />
+      )}
       <InfoSection kind="agent" headingId="dm-info-agent" title="Agent" summary={name}>
         <ul className="bold-chat-members">
           <li>

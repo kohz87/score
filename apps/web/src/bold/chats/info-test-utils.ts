@@ -9,6 +9,7 @@ const KINDS = [
   'agent',
   'chats',
   'add',
+  'quota',
 ]
 
 export function openAllInfoSections(): void {

@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { contrast } from './contrast.ts'
+
+export { contrast }
 
 // Shared by the pack and built-in theme contrast tests: the colour pairs the app draws, and a reader of the custom
 // properties in tokens.css and the pack files.
@@ -13,21 +16,6 @@ export function declarations(css: string, selector: string): Record<string, stri
   const out: Record<string, string> = {}
   for (const match of body.matchAll(/(--[\w-]+):\s*([^;]+);/g)) out[match[1]!] = match[2]!.trim()
   return out
-}
-
-function channel(value: number): number {
-  const c = value / 255
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-}
-function luminance(hex: string): number {
-  const h = hex.replace('#', '')
-  const full = h.length === 3 ? [...h].map((c) => c + c).join('') : h
-  const [r, g, b] = [0, 2, 4].map((i) => channel(parseInt(full.slice(i, i + 2), 16)))
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
-}
-export function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-  return (hi! + 0.05) / (lo! + 0.05)
 }
 
 // [foreground, background, minimum ratio, what it is]. 4.5 is WCAG AA for text, 3 for focus rings and graphics.

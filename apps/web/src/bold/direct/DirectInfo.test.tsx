@@ -127,6 +127,14 @@ test('Info names the agent and its state, links its page and its memory, and Kno
   expect(within(info).getByRole('link', { name: "Look at builder's screen" })).toBeTruthy()
 })
 
+test('a Hermes agent’s Chat info has no plan quota section', async () => {
+  stub()
+  renderInfo()
+  await screen.findByText('The cursor bug')
+  expect(screen.queryByRole('button', { name: /Quota/ })).toBeNull()
+  expect(screen.queryByText(/Shared with every agent on the same/)).toBeNull()
+})
+
 test('Info shows the room’s workspace, or says none is set', async () => {
   stub([newer], undefined, { ...directRoom, workspaceId: 'ws-1' })
   const view = renderInfo()

@@ -295,6 +295,7 @@ export function LoadedDirect({
               agents={[agent]}
               ownerId={null}
               topic={aside ? undefined : current}
+              onChatInfo={onChatInfo}
             />
           )}
           onClosedJob={reopenForComposer}

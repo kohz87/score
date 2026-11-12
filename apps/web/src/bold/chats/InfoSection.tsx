@@ -13,6 +13,7 @@ export type InfoSectionKind =
   | 'add'
   | 'subagents'
   | 'assigned'
+  | 'quota'
 
 const DEFAULT_OPEN: Record<InfoSectionKind, boolean> = {
   assigned: true,
@@ -26,6 +27,7 @@ const DEFAULT_OPEN: Record<InfoSectionKind, boolean> = {
   chats: false,
   add: false,
   subagents: true,
+  quota: true,
 }
 
 const storageKey = (kind: InfoSectionKind) => `score.info-fold.${kind}`

@@ -139,6 +139,9 @@ export const protectedClasses = [
   'bold-sc-control',
   // 3.35.0: the warning before an agent's model changes while repeating jobs follow it
   'bold-model-jobs-warning',
+  // Decision 186: a coding agent below its quota floor, in the composer and in Chat info
+  'bold-quota-floor',
+  'bold-quota-floor-note',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',
