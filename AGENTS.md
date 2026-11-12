@@ -97,10 +97,13 @@ docs/                plan, architecture, contract, setup, spike, design referenc
 1. Score is licensed under **PolyForm Noncommercial 1.0.0** (`LICENSE.md`, `NOTICE`; commercial use needs a separate
    license, see `COMMERCIAL.md`; owner decision 2026-10-08). The owner must be able to relicense it commercially, so
    all code stays ours or MIT-compatible.
-2. You MAY read, copy and adapt code from these MIT sources, cloned **outside** this repo in `../reference/`:
-   JPeetz/Hermes-Studio, outsourc-e/hermes-workspace, NousResearch/hermes-agent,
-   NousResearch/hermes-example-plugins, nesquena/hermes-webui (MIT, added by the owner 2026-10-09).
-   **kohz87/artemis** (`../reference/artemis`) is the owner's own code (AGPL there, but the owner is the copyright
+2. You MAY read, copy and adapt code from these MIT sources: JPeetz/Hermes-Studio, outsourc-e/hermes-workspace,
+   NousResearch/hermes-agent, NousResearch/hermes-example-plugins, nesquena/hermes-webui (MIT, added by the owner
+   2026-10-09). Clone one only when a task needs it, **outside** this repo (e.g. `../reference/<name>`), and delete it
+   after (owner, 2026-11-12: the standing `../reference/` folder is gone). **Hermes itself:** read the live install's
+   source at `~/.hermes/hermes-agent` (read-only, that folder only; it is the exact version Score runs against). Nothing
+   else under `~/.hermes` is ever read: `.env`, `auth.json` and the profiles live there.
+   **kohz87/artemis** is the owner's own code (AGPL there, but the owner is the copyright
    holder and contributes it to Score under Score's license, owner 2026-10-09): reuse it freely, note the source file in
    a one-line comment, and still check each *dependency* it uses against rule 4 (e.g. BlockNote is MPL-2.0: flag it).
    Its commit author names include persona names: never copy those into Score (rule 5). When you copy or closely adapt code, add the source file path and its
